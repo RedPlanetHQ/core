@@ -2,10 +2,7 @@ import { redirect, type MetaFunction } from "@remix-run/node";
 import { type LoaderFunctionArgs } from "@remix-run/server-runtime";
 
 import { requireUser } from "~/services/session.server";
-import {
-  conversationPath,
-  onboardingPath,
-} from "~/utils/pathBuilder";
+import { onboardingPath } from "~/utils/pathBuilder";
 
 export const meta: MetaFunction = () => {
   return [
@@ -20,7 +17,7 @@ export const loader = async ({ request }: LoaderFunctionArgs) => {
   if (!user.onboardingComplete) {
     return redirect(onboardingPath());
   } else {
-    return redirect(conversationPath());
+    return redirect("/home/daily");
   }
 };
 

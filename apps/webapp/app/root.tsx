@@ -122,7 +122,7 @@ export const meta: MetaFunction = ({ data }) => {
 
 export function ErrorBoundary() {
   return (
-    <>
+    <ThemeProvider specifiedTheme={null} themeAction="/action/set-theme">
       <html lang="en" className="h-full">
         <head>
           <meta charSet="utf-8" />
@@ -139,7 +139,7 @@ export function ErrorBoundary() {
           <Scripts />
         </body>
       </html>
-    </>
+    </ThemeProvider>
   );
 }
 
@@ -183,7 +183,7 @@ function AppWithProviders() {
 
   return (
     <ThemeProvider
-      specifiedTheme={theme}
+      specifiedTheme={theme ?? Theme.LIGHT}
       disableTransitionOnThemeChange={true}
       themeAction="/action/set-theme"
     >

@@ -1,3 +1,5 @@
+import React from "react";
+import { useTauri } from "~/hooks/use-tauri";
 import {
   ArrowLeft,
   Code,
@@ -11,6 +13,7 @@ import {
   Server,
   MessageSquare,
   Cpu,
+  Brain,
 } from "lucide-react";
 
 import {
@@ -51,6 +54,29 @@ export const loader = async ({ request }: LoaderFunctionArgs) => {
 
 export default function Settings() {
   const location = useLocation();
+  const { isDesktop } = useTauri();
+
+  const workspaceNav = [
+    {
+      name: "Overview",
+      icon: Building,
+      path: "/settings/workspace",
+      strict: true,
+    },
+    { name: "Labels", icon: Tag, path: "/settings/labels" },
+    { name: "Activity", icon: Activity, path: "/settings/activity" },
+    { name: "Agent", icon: Bot, path: "/settings/workspace/agent" },
+    { name: "Models", icon: Cpu, path: "/settings/workspace/models" },
+    { name: "Gateway", icon: Server, path: "/settings/workspace/gateway" },
+    {
+      name: "Channels",
+      icon: MessageSquare,
+      path: "/settings/workspace/channels",
+    },
+    ...(isDesktop
+      ? [{ name: "Memory", icon: Brain, path: "/settings/workspace/memory" }]
+      : []),
+  ];
 
   const data = {
     nav: [
@@ -59,24 +85,7 @@ export default function Settings() {
       { name: "API", icon: Code, path: "api" },
       { name: "Webhooks", icon: Webhook, path: "webhooks" },
     ],
-    workspace: [
-      {
-        name: "Overview",
-        icon: Building,
-        path: "/settings/workspace",
-        strict: true,
-      },
-      { name: "Labels", icon: Tag, path: "/settings/labels" },
-      { name: "Activity", icon: Activity, path: "/settings/activity" },
-      { name: "Agent", icon: Bot, path: "/settings/workspace/agent" },
-      { name: "Models", icon: Cpu, path: "/settings/workspace/models" },
-      { name: "Gateway", icon: Server, path: "/settings/workspace/gateway" },
-      {
-        name: "Channels",
-        icon: MessageSquare,
-        path: "/settings/workspace/channels",
-      },
-    ],
+    workspace: workspaceNav,
   };
   const navigate = useNavigate();
 
@@ -127,7 +136,7 @@ export default function Settings() {
                   {data.nav.map((item) => (
                     <SidebarMenuItem key={item.name}>
                       <Button
-                        variant="secondary"
+                        variant="ghost"
                         isActive={isActive(item)}
                         onClick={() => navigate(`/settings/${item.path}`)}
                         className={cn(
@@ -150,7 +159,7 @@ export default function Settings() {
                   {data.workspace.map((item) => (
                     <SidebarMenuItem key={item.name}>
                       <Button
-                        variant="secondary"
+                        variant="ghost"
                         isActive={isActive(item)}
                         onClick={() => navigate(`${item.path}`)}
                         className={cn(

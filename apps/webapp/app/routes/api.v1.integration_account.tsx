@@ -15,7 +15,7 @@ const IntegrationAccountBodySchema = z.object({
   integrationDefinitionId: z.string(),
   apiKey: z.string(),
   // Additional fields from multi-field API key auth (e.g., ghost_url)
-  fields: z.record(z.string()).optional(),
+  fields: z.record(z.string(), z.string()).optional(),
 });
 
 /**
@@ -29,7 +29,6 @@ const loader = createHybridLoaderApiRoute(
     findResource: async () => 1,
   },
   async ({ authentication }) => {
-
     if (!authentication.workspaceId) {
       throw new Error("User workspace not found");
     }
@@ -60,7 +59,6 @@ const { action } = createHybridActionApiRoute(
     const { integrationDefinitionId, apiKey, fields } = body;
     const { userId } = authentication;
 
-
     try {
       // Get the integration definition
       const integrationDefinition = await getIntegrationDefinitionWithId(
@@ -77,9 +75,7 @@ const { action } = createHybridActionApiRoute(
       // Build eventBody: if fields are provided, spread them for multi-field auth
       // For multi-field auth (e.g., Ghost), all values come from fields
       const hasFields = fields && Object.keys(fields).length > 0;
-      const eventBody = hasFields
-        ? { apiKey: "", ...fields }
-        : { apiKey };
+      const eventBody = hasFields ? { apiKey: "", ...fields } : { apiKey };
 
       // Trigger the SETUP event for the integration
       const messages = await IntegrationRunner.setup({

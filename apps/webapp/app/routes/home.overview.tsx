@@ -10,18 +10,14 @@ import { ClientOnly } from "remix-utils/client-only";
 import { LoaderCircle, Plus } from "lucide-react";
 
 import { requireUser, requireWorkpace } from "~/services/session.server";
-import { getOrCreatePersonalAccessToken } from "~/services/personalAccessToken.server";
 import { prisma } from "~/db.server";
+import { getOrCreateWidgetPat, getWidgetOptions } from "~/services/widgets.server";
 import { PageHeader } from "~/components/common/page-header";
 import { OverviewGrid, type OverviewGridHandle } from "~/components/overview/overview-grid.client";
 import type { OverviewCell, WidgetOption } from "~/components/overview/types";
 
-interface WidgetMeta {
-  name: string;
-  slug: string;
-  description: string;
-  support: Array<"tui" | "webapp">;
-}
+export const meta = () => [{ title: "Overview" }];
+
 
 export async function loader({ request }: LoaderFunctionArgs) {
   const user = await requireUser(request);
@@ -39,68 +35,12 @@ export async function loader({ request }: LoaderFunctionArgs) {
   const meta = (workspace.metadata ?? {}) as Record<string, unknown>;
   if (!meta.widgetsEnabled) throw redirect("/home/conversation");
 
-  // All connected accounts that belong to an integration with a frontendUrl.
-  const accounts = await prisma.integrationAccount.findMany({
-    where: {
-      integratedById: user.id,
-      workspaceId: workspace.id,
-      isActive: true,
-      integrationDefinition: { frontendUrl: { not: null } },
-    },
-    select: {
-      id: true,
-      integrationDefinition: {
-        select: {
-          name: true,
-          slug: true,
-          icon: true,
-          frontendUrl: true,
-          spec: true,
-        },
-      },
-    },
-  });
-
-  // Flatten into individual widget options (webapp-supported only).
-  const widgetOptions: WidgetOption[] = [];
-  for (const account of accounts) {
-    const def = account.integrationDefinition;
-    const spec = def.spec as { widgets?: WidgetMeta[] } | null;
-    const widgets = spec?.widgets ?? [];
-    for (const w of widgets) {
-      if (!w.support.includes("webapp")) continue;
-      widgetOptions.push({
-        widgetSlug: w.slug,
-        widgetName: w.name,
-        widgetDescription: w.description,
-        integrationSlug: def.slug,
-        integrationName: def.name,
-        integrationIcon: def.icon ?? null,
-        frontendUrl: def.frontendUrl!,
-        integrationAccountId: account.id,
-      });
-    }
-  }
+  const [widgetOptions, widgetPat] = await Promise.all([
+    getWidgetOptions(user.id, workspace.id),
+    getOrCreateWidgetPat(workspace.id, user.id),
+  ]);
 
   const cells = (meta.overviewLayout ?? []) as OverviewCell[];
-
-  // Ensure a widget PAT exists; store the plain token once in workspace.widgetPat.
-  let widgetPat = workspace.widgetPat ?? null;
-  if (!widgetPat) {
-    const result = await getOrCreatePersonalAccessToken({
-      name: "widget",
-      userId: user.id,
-      workspaceId: workspace.id,
-      returnDecrypted: true,
-    });
-    widgetPat = result.token ?? null;
-    if (widgetPat) {
-      await prisma.workspace.update({
-        where: { id: workspace.id },
-        data: { widgetPat },
-      });
-    }
-  }
 
   return typedjson({
     cells,
@@ -159,7 +99,7 @@ export default function Overview() {
           },
         ]}
       />
-      <div className="flex h-[calc(100vh_-_56px)] w-full flex-col overflow-auto">
+      <div className="flex h-page w-full flex-col overflow-auto">
         <ClientOnly
           fallback={
             <div className="flex h-full items-center justify-center">

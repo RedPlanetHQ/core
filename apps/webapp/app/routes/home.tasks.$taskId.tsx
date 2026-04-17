@@ -1,0 +1,395 @@
+import { json, redirect } from "@remix-run/node";
+import type { ActionFunctionArgs, LoaderFunctionArgs, MetaFunction } from "@remix-run/node";
+import { Outlet, useNavigate, useFetcher, useLocation } from "@remix-run/react";
+import { Plus } from "lucide-react";
+import { typedjson, useTypedLoaderData } from "remix-typedjson";
+import { ClientOnly } from "remix-utils/client-only";
+import { LoaderCircle, Trash2 } from "lucide-react";
+import {
+  CodingActionsProvider,
+  CodingActions,
+} from "~/components/coding/coding-actions-context";
+import { z } from "zod";
+import type { TaskStatus } from "@core/database";
+
+import { getWorkspaceId, requireUser } from "~/services/session.server";
+import {
+  getTaskFull,
+  createTask,
+  updateTask,
+  changeTaskStatus,
+  deleteTask,
+} from "~/services/task.server";
+import { getTaskRuns } from "~/services/conversation.server";
+import { prisma } from "~/db.server";
+import {
+  removeScheduledTask,
+  enqueueScheduledTask,
+} from "~/lib/queue-adapter.server";
+import {
+  extractScheduleFromText,
+  applyScheduleToTask,
+  detectAndApplyRecurrence,
+} from "~/services/tasks/recurrence.server";
+import { getIntegrationAccounts } from "~/services/integrationAccount.server";
+import { hasCodingSessions } from "~/services/coding/coding-session.server";
+import { getWidgetOptions, getOrCreateWidgetPat } from "~/services/widgets.server";
+import { getButlerName } from "~/models/workspace.server";
+import { findOrCreateTaskPage } from "~/services/page.server";
+import { generateCollabToken } from "~/services/collab-token.server";
+import { PageHeader } from "~/components/common/page-header";
+import { Button } from "~/components/ui/button";
+import { DeleteTaskDialog } from "~/components/tasks/delete-task-dialog";
+import { ScheduleDialog } from "~/components/tasks/schedule-dialog";
+import React from "react";
+
+export const meta: MetaFunction<typeof loader> = ({ data }) => {
+  const title = data?.task?.title;
+  return [{ title: title ? `${title} | Tasks` : "Tasks" }];
+};
+
+// ─── Loader ───────────────────────────────────────────────────────────────────
+
+export async function loader({ request, params }: LoaderFunctionArgs) {
+  const user = await requireUser(request);
+  const workspaceId = (await getWorkspaceId(
+    request,
+    user.id,
+    user.workspaceId,
+  )) as string;
+
+  const { taskId } = params;
+  if (!taskId) return redirect("/home/tasks");
+
+  const [task, integrationAccounts, butlerName, runs, hasCoding, widgetOptions, widgetPat] =
+    await Promise.all([
+      getTaskFull(taskId, workspaceId),
+      getIntegrationAccounts(user.id, workspaceId),
+      getButlerName(workspaceId),
+      getTaskRuns(taskId, workspaceId),
+      hasCodingSessions(taskId, workspaceId),
+      getWidgetOptions(user.id, workspaceId),
+      getOrCreateWidgetPat(workspaceId, user.id),
+    ]);
+
+  if (!task) return redirect("/home/tasks");
+
+  const taskPage = await findOrCreateTaskPage(workspaceId, user.id, taskId);
+
+  const integrationAccountMap: Record<string, string> = {};
+  for (const acc of integrationAccounts) {
+    integrationAccountMap[acc.id] = acc.integrationDefinition.slug;
+  }
+
+  const integrationFrontendMap: Record<string, string> = {};
+  for (const acc of integrationAccounts) {
+    if (acc.integrationDefinition.frontendUrl) {
+      integrationFrontendMap[acc.id] = acc.integrationDefinition.frontendUrl;
+    }
+  }
+
+  return typedjson({
+    task,
+    integrationAccountMap,
+    integrationFrontendMap,
+    butlerName,
+    taskPageId: taskPage.id,
+    collabToken: generateCollabToken(workspaceId, user.id),
+    runs,
+    hasCoding,
+    widgetOptions,
+    widgetPat,
+    baseUrl: new URL(request.url).origin,
+  });
+}
+
+// ─── Action ───────────────────────────────────────────────────────────────────
+
+const ActionSchema = z.discriminatedUnion("intent", [
+  z.object({
+    intent: z.literal("update"),
+    title: z.string().min(1),
+    description: z.string().optional(),
+  }),
+  z.object({
+    intent: z.literal("update-status"),
+    status: z.enum(["Todo", "Waiting", "Ready", "Working", "Review", "Done"]),
+  }),
+  z.object({
+    intent: z.literal("delete"),
+  }),
+  z.object({
+    intent: z.literal("create-subtask"),
+    title: z.string().min(1),
+    status: z
+      .enum(["Backlog", "Planning", "Waiting", "Ready", "Working", "Review", "Done"])
+      .optional(),
+  }),
+  z.object({
+    intent: z.literal("update-subtask-status"),
+    subtaskId: z.string(),
+    status: z.enum(["Todo", "Waiting", "Ready", "Working", "Review", "Done"]),
+  }),
+  z.object({
+    intent: z.literal("delete-subtask"),
+    subtaskId: z.string(),
+  }),
+  z.object({
+    intent: z.literal("update-schedule"),
+    text: z.string().optional(),
+    startTime: z.string().optional(),
+    currentTime: z.string().optional(),
+  }),
+  z.object({
+    intent: z.literal("remove-schedule"),
+  }),
+]);
+
+export async function action({ request, params }: ActionFunctionArgs) {
+  const user = await requireUser(request);
+  const workspaceId = (await getWorkspaceId(
+    request,
+    user.id,
+    user.workspaceId,
+  )) as string;
+
+  const { taskId } = params;
+  if (!taskId) return json({ error: "Missing taskId" }, { status: 400 });
+
+  const formData = await request.formData();
+  const parsed = ActionSchema.safeParse({
+    intent: formData.get("intent"),
+    title: formData.get("title") ?? undefined,
+    description: formData.get("description") ?? undefined,
+    status: formData.get("status") ?? undefined,
+    subtaskId: formData.get("subtaskId") ?? undefined,
+    text: formData.get("text") ?? undefined,
+    startTime: formData.get("startTime") ?? undefined,
+    currentTime: formData.get("currentTime") ?? undefined,
+  });
+
+  if (!parsed.success) return json({ error: "Invalid input" }, { status: 400 });
+
+  if (parsed.data.intent === "update") {
+    const task = await updateTask(taskId, {
+      title: parsed.data.title,
+      ...(parsed.data.description !== undefined && { description: parsed.data.description }),
+    });
+    detectAndApplyRecurrence(taskId, workspaceId, user.id, parsed.data.title);
+    return json({ task });
+  }
+
+  if (parsed.data.intent === "update-status") {
+    const task = await changeTaskStatus(
+      taskId,
+      parsed.data.status as TaskStatus,
+      workspaceId,
+      user.id,
+      "user",
+    );
+    return json({ task });
+  }
+
+  if (parsed.data.intent === "delete") {
+    await deleteTask(taskId, workspaceId);
+    return redirect("/home/tasks");
+  }
+
+  if (parsed.data.intent === "create-subtask") {
+    const subtask = await createTask(
+      workspaceId,
+      user.id,
+      parsed.data.title,
+      undefined,
+      {
+        status: (parsed.data.status as TaskStatus) ?? "Todo",
+        parentTaskId: taskId,
+      },
+    );
+    return json({ subtask });
+  }
+
+  if (parsed.data.intent === "update-subtask-status") {
+    const task = await changeTaskStatus(
+      parsed.data.subtaskId,
+      parsed.data.status as TaskStatus,
+      workspaceId,
+      user.id,
+      "user",
+    );
+    return json({ task });
+  }
+
+  if (parsed.data.intent === "delete-subtask") {
+    await deleteTask(parsed.data.subtaskId, workspaceId);
+    return json({ deleted: true });
+  }
+
+  if (parsed.data.intent === "update-schedule") {
+    const { text, startTime, currentTime } = parsed.data;
+
+    if (startTime) {
+      const nextRunAt = new Date(startTime);
+      const task = await prisma.task.findUnique({ where: { id: taskId } });
+      await prisma.task.update({
+        where: { id: taskId },
+        data: { schedule: null, nextRunAt, isActive: true, maxOccurrences: 1 },
+      });
+      await removeScheduledTask(taskId);
+      await enqueueScheduledTask(
+        {
+          taskId,
+          workspaceId,
+          userId: user.id,
+          channel: task?.channel ?? "email",
+        },
+        nextRunAt,
+      );
+    } else if (text) {
+      const time = currentTime ?? new Date().toISOString();
+      const result = await extractScheduleFromText(text, time, workspaceId);
+      if (result) {
+        await applyScheduleToTask(taskId, workspaceId, user.id, result);
+      }
+    }
+
+    return json({ success: true });
+  }
+
+  if (parsed.data.intent === "remove-schedule") {
+    await prisma.task.update({
+      where: { id: taskId },
+      data: {
+        schedule: null,
+        nextRunAt: null,
+        isActive: false,
+        startDate: null,
+        maxOccurrences: null,
+      },
+    });
+    await removeScheduledTask(taskId);
+    return json({ success: true });
+  }
+
+  return json({ error: "Unknown intent" }, { status: 400 });
+}
+
+// ─── Layout ───────────────────────────────────────────────────────────────────
+
+function TaskDetailLayout() {
+  const { task, hasCoding } = useTypedLoaderData<typeof loader>();
+  const navigate = useNavigate();
+  const location = useLocation();
+  const fetcher = useFetcher<typeof action>();
+  const [deleteOpen, setDeleteOpen] = React.useState(false);
+  const [scheduleOpen, setScheduleOpen] = React.useState(false);
+
+  const truncate = (s: string, max = 24) =>
+    s.length > max ? s.slice(0, max) + "…" : s;
+
+  const breadcrumbs = [
+    { label: "Tasks", href: "/home/tasks" },
+    ...(task.parentTask
+      ? [
+          {
+            label: truncate(task.parentTask.title),
+            href: `/home/tasks/${task.parentTask.id}`,
+          },
+        ]
+      : []),
+    { label: truncate(task.title || "Untitled") },
+  ];
+
+  const isRunsTab = location.pathname.endsWith("/runs");
+  const isCodingTab = location.pathname.endsWith("/coding");
+  const isScheduled = task.isActive && (task.schedule || task.nextRunAt);
+
+  return (
+    <CodingActionsProvider>
+    <div className="flex h-page-xs flex-col">
+      <PageHeader
+        title={task.title || "Untitled"}
+        breadcrumbs={breadcrumbs}
+        tabs={[
+          {
+            label: "Info",
+            value: "info",
+            isActive: !isRunsTab && !isCodingTab,
+            onClick: () => navigate(`/home/tasks/${task.id}`),
+          },
+          ...(hasCoding
+            ? [
+                {
+                  label: "Coding",
+                  value: "coding",
+                  isActive: isCodingTab,
+                  onClick: () => navigate(`/home/tasks/${task.id}/coding`),
+                },
+              ]
+            : []),
+          ...(isScheduled
+            ? [
+                {
+                  label: "Runs",
+                  value: "runs",
+                  isActive: isRunsTab,
+                  onClick: () => navigate(`/home/tasks/${task.id}/runs`),
+                },
+              ]
+            : []),
+        ]}
+        showChatToggle={!isCodingTab}
+        actionsNode={
+          isCodingTab ? (
+            <CodingActions />
+          ) : (
+            <Button
+              variant="ghost"
+              className="text-destructive hover:text-destructive gap-2 rounded"
+              onClick={() => setDeleteOpen(true)}
+              disabled={fetcher.state !== "idle"}
+            >
+              <Trash2 size={14} /> Delete
+            </Button>
+          )
+        }
+      />
+
+      <div className="flex flex-1 overflow-hidden">
+        <Outlet />
+      </div>
+
+      <DeleteTaskDialog
+        open={deleteOpen}
+        onOpenChange={setDeleteOpen}
+        onConfirm={() =>
+          fetcher.submit({ intent: "delete" }, { method: "POST" })
+        }
+      />
+
+      {scheduleOpen && (
+        <ScheduleDialog
+          onClose={() => setScheduleOpen(false)}
+          taskId={task.id}
+        />
+      )}
+    </div>
+    </CodingActionsProvider>
+  );
+}
+
+export default function TaskDetailPage() {
+  if (typeof window === "undefined") return null;
+
+  return (
+    <ClientOnly
+      fallback={
+        <div className="flex h-full w-full items-center justify-center">
+          <LoaderCircle className="h-4 w-4 animate-spin" />
+        </div>
+      }
+    >
+      {() => <TaskDetailLayout />}
+    </ClientOnly>
+  );
+}

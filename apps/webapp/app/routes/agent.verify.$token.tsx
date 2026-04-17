@@ -150,6 +150,7 @@ export const action = async ({ request }: ActionFunctionArgs) => {
     );
 
     await setPhoneNumber(codeDetails.identifier, userId);
+    await ensureWhatsAppChannel(workspaceId, codeDetails.identifier);
 
     // Update session with new workspaceId
     const headers = await saveSession(request, {

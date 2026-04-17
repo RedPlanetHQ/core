@@ -103,13 +103,17 @@ export class HttpOrchestratorTools extends OrchestratorTools {
 
   async getSkill(skillId: string, _workspaceId: string): Promise<string> {
     try {
-      const response = await this.client.getDocument({ documentId: skillId });
-      if (!response.document) return "Skill not found";
-      const doc = response.document as any;
-      return `## Skill: ${doc.title ?? ""}\n\n${doc.content ?? ""}`;
+      const response = await this.client.getSkill({ skillId });
+      if (!response.skill) return "Skill not found";
+      const skill = response.skill as any;
+      return `## Skill: ${skill.title ?? ""}\n\n${skill.content ?? ""}`;
     } catch (error) {
-      logger.warn("HttpOrchestratorTools: failed to load skill", { error });
-      return "Failed to load skill";
+      const msg = error instanceof Error ? error.message : String(error);
+      logger.warn("HttpOrchestratorTools: failed to load skill", {
+        skillId,
+        error: msg,
+      });
+      return `Failed to load skill: ${msg}`;
     }
   }
 

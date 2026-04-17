@@ -1,26 +1,45 @@
 {
   "name": "@core/metabase",
-  "version": "0.1.1",
+  "version": "0.1.2",
   "description": "Metabase integration for CORE - sync dashboards, questions, databases, and analytics activity",
   "main": "./bin/index.js",
   "module": "./bin/index.mjs",
   "type": "module",
   "files": [
     "metabase",
-    "bin"
+    "bin",
+    "dist"
   ],
   "bin": {
     "metabase": "./bin/index.js"
   },
+  "exports": {
+    "./widgets": {
+      "import": {
+        "types": "./dist/widgets/index.d.mts",
+        "default": "./dist/widgets/index.mjs"
+      },
+      "types": "./dist/widgets/index.d.ts"
+    },
+    "./package.json": "./package.json"
+  },
   "scripts": {
-    "build": "rimraf dist && bun build src/index.ts --outfile dist/index.js --target node --minify",
+    "build": "pnpm run build:cli && pnpm run build:frontend",
+    "build:cli": "rimraf bin && bun build src/index.ts --outfile bin/index.js --target node --minify",
+    "build:frontend": "tsup",
+    "dev:frontend": "tsup --watch",
     "lint": "eslint --ext js,ts,tsx src/ --fix",
     "prettier": "prettier --config .prettierrc --write .",
     "register": "tsx scripts/register.ts"
   },
+  "peerDependencies": {
+    "react": "^18.2.0",
+    "react-dom": "^18.2.0"
+  },
   "devDependencies": {
     "@types/node": "^18.0.20",
     "@types/pg": "^8.10.9",
+    "@types/react": "^19.2.13",
     "eslint": "^9.24.0",
     "prettier": "^3.4.2",
     "rimraf": "^3.0.2",
@@ -32,7 +51,8 @@
     "access": "public"
   },
   "dependencies": {
-    "@redplanethq/sdk": "0.1.9",
+    "@redplanethq/sdk": "0.1.17",
+    "@redplanethq/ui": "2.1.5",
     "axios": "^1.7.9",
     "commander": "^12.0.0",
     "pg": "^8.11.3",

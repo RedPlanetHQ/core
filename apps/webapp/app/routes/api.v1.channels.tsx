@@ -4,16 +4,13 @@ import {
   createHybridLoaderApiRoute,
   createActionApiRoute,
 } from "~/services/routeBuilders/apiBuilder.server";
-import {
-  createChannel,
-  getChannels,
-} from "~/services/channel.server";
+import { createChannel, getChannels } from "~/services/channel.server";
 import { logger } from "~/services/logger.service";
 
 const ChannelCreateSchema = z.object({
   name: z.string().min(1, "Name is required"),
   type: z.enum(["slack", "telegram", "whatsapp", "email"]),
-  config: z.record(z.string()),
+  config: z.record(z.string(), z.string()),
   isDefault: z.boolean().optional().default(false),
 });
 

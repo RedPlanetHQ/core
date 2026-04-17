@@ -1,8 +1,9 @@
 import { useNavigate, useNavigation } from "@remix-run/react";
 import { Button } from "~/components/ui/button";
-import { ArrowLeft, ArrowRight } from "lucide-react";
+import { ArrowLeft, ArrowRight, MessageSquare } from "lucide-react";
 import { SidebarTrigger } from "~/components/ui/sidebar";
 import { cn } from "~/lib/utils";
+import { useChatPanel } from "~/components/chat-panel/chat-panel-context";
 
 export interface BreadcrumbItem {
   label: string | React.ReactNode;
@@ -29,8 +30,10 @@ export interface PageHeaderProps {
   breadcrumbs?: BreadcrumbItem[];
   actions?: PageHeaderAction[];
   actionsNode?: React.ReactNode;
+  leftActionsNode?: React.ReactNode;
   tabs?: PageHeaderTab[];
   showTrigger?: boolean;
+  showChatToggle?: boolean;
 }
 
 // Back and Forward navigation component
@@ -69,10 +72,13 @@ export function PageHeader({
   actions,
   tabs,
   showTrigger = true,
+  showChatToggle = true,
   actionsNode,
+  leftActionsNode,
 }: PageHeaderProps) {
   const navigation = useNavigation();
   const navigate = useNavigate();
+  const chatPanel = useChatPanel();
 
   const isLoading =
     navigation.state === "loading" || navigation.state === "submitting";
@@ -106,7 +112,7 @@ export function PageHeader({
                 <div
                   key={index}
                   className={cn(
-                    "flex items-center truncate",
+                    "flex cursor-default items-center truncate",
                     // On mobile hide all but the last breadcrumb
                     index < breadcrumbs.length - 1 && "hidden md:flex",
                   )}
@@ -135,13 +141,15 @@ export function PageHeader({
             <h1 className="text-base">{title}</h1>
           )}
 
+          {leftActionsNode && leftActionsNode}
+
           {/* Tabs */}
           {tabs && tabs.length > 0 && (
             <div className="ml-2 flex items-center gap-0.5">
               {tabs.map((tab) => (
                 <Button
                   key={tab.value}
-                  variant="secondary"
+                  variant="ghost"
                   className="rounded"
                   isActive={tab.isActive}
                   onClick={tab.onClick}
@@ -154,7 +162,7 @@ export function PageHeader({
           )}
         </div>
 
-        <div className="flex gap-1">
+        <div className="flex items-center gap-1">
           {/* Actions */}
           {actions && actions.length > 0 && (
             <div className="flex items-center gap-2">
@@ -173,6 +181,25 @@ export function PageHeader({
             </div>
           )}
           {actionsNode && actionsNode}
+
+          {/* Global chat toggle — visible on every page */}
+          {showChatToggle && chatPanel && (
+            <Button
+              variant="ghost"
+              isActive={chatPanel.chatOpen}
+              className="gap-1.5 rounded"
+              onClick={chatPanel.toggleChat}
+              title={
+                chatPanel.chatOpen
+                  ? "Close chat (Cmd/Ctrl+J)"
+                  : "Open chat (Cmd/Ctrl+J)"
+              }
+              aria-label={chatPanel.chatOpen ? "Close chat" : "Open chat"}
+            >
+              <MessageSquare size={14} />
+              <span className="hidden md:inline">Chat</span>
+            </Button>
+          )}
         </div>
       </div>
 

@@ -33,9 +33,9 @@
     <img width="200px" alt="CORE logo" src="https://github.com/user-attachments/assets/bd4e5e79-05b8-4d40-9aff-f1cf9e5d70de" />
   </a>
 
-# The first AI butler you actually own.
+# An AI butler that acts.
 
-**Open source. Named. Persistent. Yours.**
+**Write what needs doing. Your AI butler handles the rest.**
 
 <p align="center">
     <a href="https://getcore.me">
@@ -52,58 +52,57 @@
 
 ---
 
-> **Today you use tools. Soon, you'll describe outcomes and your butler uses the tools.**
-
+> You use specialized agents like Claude Code and Cursor. You gather the context, kick off
+> the session, babysit the output. You're the context middleman — and that makes you the
+> bottleneck. CORE's butler gathers the context, runs the agents, coordinates the work.
+> You stop babysitting. You start operating.
 
 https://github.com/user-attachments/assets/10197ad0-d7d4-44e3-9ea3-504aef81f65f
+
+---
 
 ## Why we're building this
 
 Every AI agent you use today is smart. And every single one forgets you the moment the conversation ends.
 
-We think that's broken. We think your AI should know you deeply, persistently, across every tool and every conversation. And once it knows you, it shouldn't sit there waiting for you to type. It should act.
+### You shouldn't have to open a chat window to get things done.
 
-Not recklessly. Intelligently. Sometimes it suggests and waits for your approval. Sometimes it just handles work because it's learned your patterns over weeks and months.
+Your EA doesn't wait for you to open a chat window and explain what you need. They already know. They're already on it. Chat forces you to context-switch, explain yourself, and stay in the loop on things that shouldn't need your attention.
 
-**That's CORE.** An AI butler that learns who you are, connects to your apps, and does the work before you ask. Open source, self-hostable, fully yours.
+We think the right interface is a scratchpad, a shared page, like a note you and a colleague both have open at the same time. You write what's on your mind: tasks, thoughts, half-formed ideas. Butler reads it alongside you, picks up what's meant for it, works in the background, and updates you when something needs your attention or a job is done. No prompting required, no workflow to configure. When you need to go deep on something specific, tasks and direct chat are there, but the default should be the scratchpad.
 
----
+### Your AI doesn't actually know you.
 
-## What this actually looks like
+Every agent starts fresh. No preferences, no past decisions, no team context, no patterns. So it can't act proactively, because proactivity requires context that accumulates over time. Without persistent memory, agents are reactive tools waiting for your next prompt. CORE builds a persistent memory from every conversation, task, and connected app — so butler already knows your context before you open a task.
 
-**Your tasks are everywhere.** A bug comes in on GitHub. A feature request lands in Linear. An action item is buried in a Slack thread. Another one hiding in an email you haven't read. Right now, you're the one tracking all of this in your head. CORE watches all of them and funnels everything into one place — tasks created automatically, nothing falls through cracks.
+### You are the bottleneck.
 
-**You're the glue between your tools and your coding agents.** Before you can even start a Claude Code session, you spend 15 minutes gathering context — find the issue, read the thread, check related PRs, look at the error logs, then paste it all in. CORE does that job for you. Tell it *"fix the checkout bug from issue #312"* — CORE pulls the issue details from GitHub, searches memory for past decisions about that service, checks Sentry for the error trace, and spins up a Claude Code session with all that context already loaded. You come back to a PR.
-
-**You're running multiple agent sessions and losing track.** Three Claude Code terminals, each working on something different, and you're context-switching between them trying to remember what's where. CORE is the orchestrator — kick off sessions from WhatsApp, Slack, or the dashboard. Each one gets the right context from memory and toolkit. CORE tracks what's running, reports back when things are done, and you stay focused.
-
-**At 2 AM, a Sentry alert fires.** CORE has seen you triage these before — you always check the deployment diff first, then the error trace, then assign to whoever last touched that file. **It does exactly that.** Spins up a Claude Code session, investigates, creates the issue, assigns the right engineer. You wake up to: *"Handled. Issue #847, assigned to Harshith."* You didn't ask for any of this.
-
-**The difference?** Every interaction makes CORE smarter. It learns your patterns, your codebase preferences, your team structure. It knows when to ask you for approval and when to just handle it — because it's been watching and learning. That's what a butler with memory does that a tool without memory can't.
+Right now you are the glue. You gather the GitHub issue, read the Slack thread, check the error logs, paste it all into Claude Code, wait for output, and review it. That's not delegating, that's operating as an agent yourself. Every workflow starts with you. Every session depends on you explaining things from scratch. CORE is built to break that loop.
 
 ---
 
-## CORE is right for you if
+## Butler in action
 
-- ✅ You're tired of being the glue between your AI tools — re-explaining context, copying information, manually kicking off workflows
-- ✅ You want an AI that actually **remembers** your preferences, decisions, and relationships and gets better over time
-- ✅ You want proactive automation, not just reactive chat — an AI that watches your apps and acts on what matters
-- ✅ You want to say *"fix the checkout bug"* on WhatsApp and it comes back with a PR
-- ✅ You care about **owning** your AI — self-hosted, open source, your data never leaves your infra
-- ✅ You want one brain across WhatsApp, Slack, email, and your coding tools — not five separate contexts
+### You described it once. It ran every night since.
 
----
+`[ ] Delegate my backlog to Claude Code every night and open PRs` — you wrote that once.
+Every morning, PRs are waiting. You review, approve, move on. Butler never needed reminding.
 
-## Without CORE vs. With CORE
+### You closed your laptop. Your meeting already produced results.
 
-| Without CORE | With CORE |
-|---|---|
-| ❌ You re-explain your project, stack, and preferences to every AI tool, every session. | ✅ CORE remembers everything — preferences, decisions, relationships, project context — and it gets sharper over time. |
-| ❌ Your AI tools can take actions, but they can't *decide* which action to take for you. They don't know you. | ✅ CORE's temporal memory means it understands nuance: who this client is, how you handle Sentry alerts, what your morning priorities look like. |
-| ❌ You are the bottleneck. Every workflow starts with you typing something. | ✅ CORE watches webhooks, polls your tools, and acts proactively — sends you a morning brief, triages alerts, drafts replies. |
-| ❌ You have an idea at midnight. You have to find the repo, open a terminal, set up context, babysit the agent. | ✅ Message CORE on WhatsApp: *"migrate the auth service to Postgres."* Come back to a PR. |
-| ❌ Your chat history is a graveyard. Decisions, preferences, and context die with every session. | ✅ Every conversation feeds a knowledge graph. Facts are classified (preference, decision, goal, directive) and connected over time. |
-| ❌ Different AI tools, different contexts, no shared understanding of who you are. | ✅ One brain. WhatsApp, Slack, email, Claude Code, Cursor — same memory, same butler. |
+Butler read the transcript, extracted the follow-ups, created the tasks, and drafted the emails. You open the scratchpad and review. Done in four minutes.
+
+### You wrote one line. You came back to a PR.
+
+`[ ] fix the checkout bug from issue #312` — Butler loaded the context, spun up a Claude Code session, and handled it. You never left the terminal.
+
+### You opened your inbox to review, not to triage.
+
+Butler flagged what needs you, drafted replies for the rest, and turned action items into tasks. Your inbox is a decision queue now.
+
+### You slept. The Sentry alert got handled.
+
+CORE investigated, created the issue, and assigned the right engineer. You woke up to: *"Handled. Issue #847, assigned to Harshith."*
 
 ---
 
@@ -111,40 +110,14 @@ Not recklessly. Intelligently. Sometimes it suggests and waits for your approval
 
 | | |
 |---|---|
-| **Not a chatbot.** | Your butler has a name, a memory, and a job. It's not waiting for your prompt — it's watching your apps and acting on what matters. |
 | **Not a RAG wrapper.** | Memory isn't "embed chunks and search." It's a temporal knowledge graph where facts are classified, connected, and updated over time. It knows *when* you decided something and *why*. |
-| **Not a copilot plugin.** | Copilots assist when you're working. CORE works when you're *not*. It's proactive, not reactive. |
-| **Not a workflow builder.** | No drag-and-drop. You talk to CORE in natural language. It figures out the workflow. |
-
----
-
-## What your butler can do
-
-### 🗂️ Task management that actually works
-
-Your tasks are scattered — GitHub issues, Linear tickets, email action items, Slack requests. CORE watches all of them and funnels everything into one place (Todoist, Google Tasks). A GitHub issue gets assigned to you? Task created. An email has an action item buried in paragraph three? Task created. No manual entry, no things falling through cracks.
-
-### 📋 Plan your day from one source of truth
-
-Once your tasks are in one place, CORE helps you plan. It knows your calendar, your deadlines, your priorities. Ask it to plan your day and it builds a schedule from actual data — not a generic to-do list.
-
-### 🚀 Hand off tasks to your butler — it does the work
-
-This is where it gets powerful. CORE doesn't just track tasks — it can *do* them. A user reports a bug over email → CORE alerts you, creates a Todoist task, and when you say "handle it" → it spins up a Claude Code session, investigates the issue, writes the fix, opens a PR. You come back to a summary and a link.
-
-### ⚡ Proactive work — while you sleep
-
-Tell CORE your rules once: *"When a Sentry alert fires at night, investigate it."* *"When an email needs a response, draft one for me."* CORE watches your tools 24/7, evaluates events against what it knows about you, and either acts or queues things for your morning review. You wake up to work already done — not a pile of notifications.
-
----
-
->Every use case above gets better over time. The more you use CORE, the more it learns — your preferences, your patterns, your relationships. That's what the [temporal knowledge graph](https://docs.getcore.me/concepts/memory/overview) is for. Not just storing information, but understanding *you*.
+| **Not a workflow builder.** | No drag-and-drop. You write what needs doing. Butler figures out the workflow. |
 
 ---
 
 ## Quickstart
 
-Open source. Self-hosted. No account required.
+Open source, self-hosted. Your data never leaves your infra.
 
 ```bash
 git clone https://github.com/RedPlanetHQ/core.git
@@ -169,7 +142,7 @@ OPENAI_BASE_URL=https://your-proxy.com   # Any OpenAI-compatible endpoint
 
 [Full self-hosting guide →](https://docs.getcore.me/self-hosting/docker)
 
-> ☁️ Prefer cloud? CORE cloud is in early access. [Join the waitlist →](https://app.getcore.me)
+> ☁️ Prefer cloud? Try CORE cloud free, 3,000 credits included. [Get started →](https://app.getcore.me)
 
 [![Deploy on Railway](https://railway.app/button.svg)](https://railway.com/deploy/core)
 
@@ -220,7 +193,7 @@ We're building the future of personal AI in the open. Come build with us.
 
 <div align="center">
 
-**Own your AI, not just use one.**
+**Write it. Butler handles it.**
 
 [⭐ Star this repo](https://github.com/RedPlanetHQ/core) · [📖 Read the docs](https://docs.getcore.me) · [💬 Join Discord](https://discord.gg/YGUZcvDjUa)
 

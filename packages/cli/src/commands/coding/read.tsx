@@ -7,9 +7,6 @@ import {executeCodingTool} from '@/server/tools/coding-tools';
 
 export const options = zod.object({
 	sessionId: zod.string().optional().describe('Session ID to read'),
-	lines: zod.number().optional().describe('Number of lines to return'),
-	offset: zod.number().optional().describe('Line offset to start from'),
-	tail: zod.boolean().optional().describe('Return last N lines'),
 	follow: zod.boolean().optional().describe('Follow output (like tail -f)'),
 });
 
@@ -17,11 +14,9 @@ type Props = {
 	options: zod.infer<typeof options>;
 };
 
-interface SessionEntry {
-	type: string;
-	message?: {role: string; content: string | Array<{type: string; text?: string}>};
-	timestamp?: string;
-	[key: string]: unknown;
+interface ConversationTurn {
+	role: 'user' | 'assistant';
+	content: string;
 }
 
 interface SessionListItem {
@@ -37,12 +32,19 @@ interface SessionReadResult {
 	dir: string;
 	status: string;
 	running: boolean;
-	entries: SessionEntry[];
+	turns: ConversationTurn[];
 	error?: string;
 	totalLines: number;
-	returnedLines: number;
 	fileSizeBytes: number;
 	fileSizeHuman: string;
+}
+
+function printTurn(turn: ConversationTurn): void {
+	const prefix = turn.role === 'user'
+		? chalk.bold.cyan('user')
+		: chalk.bold.green('assistant');
+	console.log(`${prefix}: ${turn.content}`);
+	console.log();
 }
 
 async function runReadSession(opts: zod.infer<typeof options>): Promise<void> {
@@ -83,9 +85,6 @@ async function runReadSession(opts: zod.infer<typeof options>): Promise<void> {
 	const readOnce = async (): Promise<SessionReadResult | null> => {
 		const result = await executeCodingTool('coding_read_session', {
 			sessionId,
-			lines: opts.lines,
-			offset: opts.offset,
-			tail: opts.tail,
 		});
 
 		if (!result.success) {
@@ -98,18 +97,18 @@ async function runReadSession(opts: zod.infer<typeof options>): Promise<void> {
 
 	if (opts.follow) {
 		p.log.info(`Following session ${sessionId}... (Ctrl+C to stop)`);
-		let lastEntryCount = 0;
+		let lastTurnCount = 0;
 
 		let running = true;
 		while (running) {
 			const res = await readOnce();
 			if (!res) break;
 
-			if (res.entries.length > lastEntryCount) {
-				for (const entry of res.entries.slice(lastEntryCount)) {
-					console.log(JSON.stringify(entry));
+			if (res.turns.length > lastTurnCount) {
+				for (const turn of res.turns.slice(lastTurnCount)) {
+					printTurn(turn);
 				}
-				lastEntryCount = res.entries.length;
+				lastTurnCount = res.turns.length;
 			}
 
 			running = res.running;
@@ -126,11 +125,11 @@ async function runReadSession(opts: zod.infer<typeof options>): Promise<void> {
 	const statusColor = res.status === 'running' ? chalk.blue : res.status === 'completed' ? chalk.green : chalk.red;
 
 	console.log(chalk.dim(`--- Session ${res.sessionId.slice(0, 8)} | ${statusColor(res.status)} ---`));
-	console.log(chalk.dim(`Lines: ${res.returnedLines}/${res.totalLines} | Size: ${res.fileSizeHuman} | Dir: ${res.dir}`));
+	console.log(chalk.dim(`Turns: ${res.turns.length} | Size: ${res.fileSizeHuman} | Dir: ${res.dir}`));
 	console.log();
 
-	for (const entry of res.entries) {
-		console.log(JSON.stringify(entry));
+	for (const turn of res.turns) {
+		printTurn(turn);
 	}
 
 	if (res.error) {

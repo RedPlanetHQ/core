@@ -1,0 +1,13 @@
+{
+  "extends": "./tsconfig.json",
+  "compilerOptions": {
+    "moduleResolution": "node16",
+    "module": "node16",
+    "resolveJsonModule": false,
+    "jsx": "react-jsx",
+    "noUnusedParameters": false,
+    "noUnusedLocals": false,
+    "target": "ES2022"
+  },
+  "include": ["src/widgets/**/*"]
+}

@@ -3,45 +3,27 @@ import {
   type ActionFunctionArgs,
   type LoaderFunctionArgs,
 } from "@remix-run/node";
-import {
-  useFetcher,
-  useNavigate,
-  useRevalidator,
-  useSearchParams,
-} from "@remix-run/react";
-import React, { useEffect, useRef } from "react";
-import { ResizablePanelGroup, ResizablePanel } from "~/components/ui/resizable";
+import { useFetcher, useNavigate } from "@remix-run/react";
 import { getWorkspaceId, requireUser } from "~/services/session.server";
-import {
-  getTasks,
-  createTask,
-  changeTaskStatus,
-  deleteTask,
-} from "~/services/task.server";
-import { getButlerName } from "~/models/workspace.server";
-import {
-  getConversationAndHistory,
-  readConversation,
-} from "~/services/conversation.server";
-import { getIntegrationAccounts } from "~/services/integrationAccount.server";
+import { getTasks, changeTaskStatus, deleteTask } from "~/services/task.server";
 import { Button } from "~/components/ui";
 import { PageHeader } from "~/components/common/page-header";
-import { NewTaskDialog } from "~/components/tasks/new-task-dialog.client";
-import { TaskDetail } from "~/components/tasks/task-detail.client";
 import { TaskListPanel } from "~/components/tasks/task-list-panel";
 import {
-  TaskViewOptions,
-  DEFAULT_VISIBLE,
+  TaskFilterButton,
+  StatusFilterChip,
+  RecurringFilterChip,
+  ViewOptionsButton,
 } from "~/components/tasks/task-view-options";
-import { LoaderCircle, Plus } from "lucide-react";
-import { useTypedLoaderData } from "remix-typedjson";
+import { Plus } from "lucide-react";
+import { typedjson, useTypedLoaderData } from "remix-typedjson";
 import { useLocalCommonState } from "~/hooks/use-local-state";
 import { z } from "zod";
 import type { TaskStatus } from "@core/database";
-import { prisma } from "~/db.server";
-import { ClientOnly } from "remix-utils/client-only";
 
 // ─── Loader / Action ──────────────────────────────────────────────────────────
+
+export const meta = () => [{ title: "Tasks" }];
 
 export async function loader({ request }: LoaderFunctionArgs) {
   const user = await requireUser(request);
@@ -51,60 +33,15 @@ export async function loader({ request }: LoaderFunctionArgs) {
     user.workspaceId,
   )) as string;
 
-  const url = new URL(request.url);
-  const selectedTaskId = url.searchParams.get("taskId");
-
-  const [tasks, integrationAccounts, butlerName] = await Promise.all([
-    getTasks(workspaceId),
-    getIntegrationAccounts(user.id, workspaceId),
-    getButlerName(workspaceId),
-  ]);
-
-  let selectedTask: (typeof tasks)[number] | null = null;
-  let taskConversations: Awaited<ReturnType<typeof getConversationAndHistory>>[] = [];
-
-  if (selectedTaskId) {
-    selectedTask = tasks.find((t) => t.id === selectedTaskId) ?? null;
-    if (selectedTask?.conversationIds?.length) {
-      const results = await Promise.all(
-        selectedTask.conversationIds.map((id) =>
-          getConversationAndHistory(id, user.id),
-        ),
-      );
-      taskConversations = results.filter(Boolean) as typeof taskConversations;
-      // Mark all unread as read
-      await Promise.all(
-        taskConversations
-          .filter((c) => c?.unread)
-          .map((c) => readConversation(c!.id)),
-      );
-    }
-  }
-
-  const integrationAccountMap: Record<string, string> = {};
-  for (const acc of integrationAccounts) {
-    integrationAccountMap[acc.id] = acc.integrationDefinition.slug;
-  }
-
-  return { tasks, selectedTask, taskConversations, integrationAccountMap, butlerName };
+  const tasks = await getTasks(workspaceId);
+  return typedjson({ tasks });
 }
 
 const ActionSchema = z.discriminatedUnion("intent", [
   z.object({
-    intent: z.literal("create"),
-    title: z.string().min(1),
-    description: z.string().optional(),
-  }),
-  z.object({
-    intent: z.literal("update"),
-    taskId: z.string(),
-    title: z.string().min(1),
-    description: z.string().optional(),
-  }),
-  z.object({
     intent: z.literal("update-status"),
     taskId: z.string(),
-    status: z.enum(["Backlog", "Todo", "InProgress", "Blocked", "Completed"]),
+    status: z.enum(["Todo", "Waiting", "Ready", "Working", "Review", "Done"]),
   }),
   z.object({
     intent: z.literal("delete"),
@@ -123,34 +60,11 @@ export async function action({ request }: ActionFunctionArgs) {
   const formData = await request.formData();
   const parsed = ActionSchema.safeParse({
     intent: formData.get("intent"),
-    title: formData.get("title") ?? undefined,
-    description: formData.get("description") ?? undefined,
     taskId: formData.get("taskId") ?? undefined,
     status: formData.get("status") ?? undefined,
   });
 
   if (!parsed.success) return json({ error: "Invalid input" }, { status: 400 });
-
-  if (parsed.data.intent === "create") {
-    const task = await createTask(
-      workspaceId,
-      user.id,
-      parsed.data.title,
-      parsed.data.description,
-    );
-    return json({ task });
-  }
-
-  if (parsed.data.intent === "update") {
-    const task = await prisma.task.update({
-      where: { id: parsed.data.taskId },
-      data: {
-        title: parsed.data.title,
-        description: parsed.data.description ?? null,
-      },
-    });
-    return json({ task });
-  }
 
   if (parsed.data.intent === "update-status") {
     const task = await changeTaskStatus(
@@ -158,6 +72,7 @@ export async function action({ request }: ActionFunctionArgs) {
       parsed.data.status as TaskStatus,
       workspaceId,
       user.id,
+      "user",
     );
     return json({ task });
   }
@@ -173,61 +88,31 @@ export async function action({ request }: ActionFunctionArgs) {
 // ─── Page ─────────────────────────────────────────────────────────────────────
 
 export default function TasksIndex() {
-  const { tasks, selectedTask, taskConversations, integrationAccountMap, butlerName } =
-    useTypedLoaderData<typeof loader>();
+  const { tasks } = useTypedLoaderData<typeof loader>();
   const fetcher = useFetcher<typeof action>();
   const navigate = useNavigate();
-  const [searchParams] = useSearchParams();
-  const [dialogOpen, setDialogOpen] = React.useState(false);
-  const [visibleStatuses, setVisibleStatuses] = useLocalCommonState<
-    TaskStatus[]
-  >("task-view-filter", DEFAULT_VISIBLE);
-
-  const filteredTasks = tasks.filter((t) =>
-    visibleStatuses.includes(t.status as TaskStatus),
+  const [activeFilters, setActiveFilters] = useLocalCommonState<TaskStatus[]>(
+    "task-status-filters",
+    [],
+  );
+  const [recurringFilter, setRecurringFilter] = useLocalCommonState<boolean>(
+    "task-recurring-filter",
+    false,
+  );
+  const [showDone, setShowDone] = useLocalCommonState<boolean>(
+    "task-show-done",
+    true,
   );
 
-  const selectedTaskId = searchParams.get("taskId");
-
-  // Poll loader every 3s while selected task is InProgress
-  const { revalidate } = useRevalidator();
-  const pollRef = useRef<ReturnType<typeof setInterval> | null>(null);
-  useEffect(() => {
-    if (selectedTask?.status === "InProgress") {
-      pollRef.current = setInterval(() => revalidate(), 3000);
-    }
-    return () => {
-      if (pollRef.current) clearInterval(pollRef.current);
-    };
-  }, [selectedTask?.id, selectedTask?.status]);
-
-  const isCreating =
-    fetcher.state !== "idle" &&
-    (fetcher.formData?.get("intent") as string) === "create";
+  const filteredTasks = tasks.filter((t) => {
+    if (!showDone && t.status === "Done") return false;
+    if (recurringFilter && !t.schedule) return false;
+    if (activeFilters.length > 0 && !activeFilters.includes(t.status as TaskStatus)) return false;
+    return true;
+  });
 
   const handleSelect = (id: string) => {
-    navigate(`?taskId=${id}`, { replace: true });
-  };
-
-  const handleCreate = (title: string, description: string) => {
-    fetcher.submit(
-      { intent: "create", title, description },
-      { method: "POST" },
-    );
-    setDialogOpen(false);
-  };
-
-  const handleSave = (title: string, description: string) => {
-    if (!selectedTask) return;
-    fetcher.submit(
-      { intent: "update", taskId: selectedTask.id, title, description },
-      { method: "POST" },
-    );
-  };
-
-  const handleDelete = (taskId: string) => {
-    fetcher.submit({ intent: "delete", taskId }, { method: "POST" });
-    navigate("?", { replace: true });
+    navigate(`/home/tasks/${id}`);
   };
 
   const handleStatusChange = (taskId: string, status: string) => {
@@ -237,104 +122,58 @@ export default function TasksIndex() {
     );
   };
 
-  // Navigate to newly created task
-  useEffect(() => {
-    if (fetcher.state === "idle" && fetcher.data) {
-      const data = fetcher.data as any;
-      if (data.task?.id) {
-        navigate(`?taskId=${data.task.id}`, { replace: true });
-      }
-    }
-  }, [fetcher.state, fetcher.data]);
-
   if (typeof window === "undefined") return null;
 
   return (
-    <div className="flex h-[calc(100vh-16px)] flex-col">
+    <div className="flex h-[calc(100vh-56px)] flex-col">
       <PageHeader
         title="Tasks"
         actionsNode={
-          <div className="flex items-center gap-2">
-            <TaskViewOptions
-              visibleStatuses={visibleStatuses}
-              onChange={setVisibleStatuses}
-            />
-            <Button
-              variant="secondary"
-              className="gap-2 rounded"
-              onClick={() => setDialogOpen(true)}
-            >
-              <Plus size={16} /> Add task
-            </Button>
-          </div>
+          <Button
+            variant="secondary"
+            className="gap-2 rounded"
+            onClick={() => navigate("/home/conversation?msg=Create+a+new+task")}
+          >
+            <Plus size={16} /> Add task
+          </Button>
         }
       />
 
-      <NewTaskDialog
-        open={dialogOpen}
-        onOpenChange={setDialogOpen}
-        onSubmit={handleCreate}
-        isSubmitting={isCreating}
-      />
-
-      {selectedTask ? (
-        <ResizablePanelGroup
-          orientation="horizontal"
-          className="w-full flex-1 overflow-hidden"
-        >
-          <ResizablePanel defaultSize={50} minSize={50} maxSize={50}>
-            <div className="h-full overflow-hidden">
-              <TaskListPanel
-                tasks={filteredTasks}
-                selectedTaskId={selectedTaskId}
-                onSelect={handleSelect}
-                onNew={() => setDialogOpen(true)}
-                onStatusChange={handleStatusChange}
-              />
-            </div>
-          </ResizablePanel>
-
-          <ResizablePanel
-            defaultSize={50}
-            minSize={30}
-            maxSize={50}
-            className="border-l border-gray-300"
-          >
-            <ClientOnly
-              fallback={
-                <div className="flex w-full justify-center">
-                  <LoaderCircle className="mr-2 h-4 w-4 animate-spin" />
-                </div>
+      <div className="mb-1 flex w-full items-center justify-between gap-2 px-3 pt-3">
+        <div className="flex items-center gap-2">
+          <TaskFilterButton
+            activeFilters={activeFilters}
+            recurringFilter={recurringFilter}
+            onChange={setActiveFilters}
+            onRecurringChange={setRecurringFilter}
+          />
+          {activeFilters.map((status) => (
+            <StatusFilterChip
+              key={status}
+              status={status}
+              onRemove={() =>
+                setActiveFilters(activeFilters.filter((s) => s !== status))
               }
-            >
-              {() => (
-                <TaskDetail
-                  task={selectedTask}
-                  conversations={taskConversations}
-                  integrationAccountMap={integrationAccountMap}
-                  onSave={handleSave}
-                  onDelete={() => handleDelete(selectedTask.id)}
-                  onClose={() => navigate("?", { replace: true })}
-                  isSubmitting={fetcher.state !== "idle"}
-                  butlerName={butlerName}
-                />
-              )}
-            </ClientOnly>
-          </ResizablePanel>
-        </ResizablePanelGroup>
-      ) : (
-        <div className="flex flex-1 overflow-hidden">
-          <div className="w-full shrink-0 overflow-hidden border-r">
-            <TaskListPanel
-              tasks={filteredTasks}
-              selectedTaskId={null}
-              onSelect={handleSelect}
-              onNew={() => setDialogOpen(true)}
-              onStatusChange={handleStatusChange}
             />
-          </div>
+          ))}
+          {recurringFilter && (
+            <RecurringFilterChip onRemove={() => setRecurringFilter(false)} />
+          )}
         </div>
-      )}
+        <ViewOptionsButton showDone={showDone} onShowDoneChange={setShowDone} />
+      </div>
+
+      <div className="flex flex-1 overflow-hidden">
+        <div className="w-full overflow-hidden">
+          <TaskListPanel
+            tasks={filteredTasks}
+            selectedTaskId={null}
+            onSelect={handleSelect}
+            onNew={() => navigate("/home/conversation?msg=Create+a+new+task")}
+            onStatusChange={handleStatusChange}
+          />
+        </div>
+      </div>
     </div>
   );
 }

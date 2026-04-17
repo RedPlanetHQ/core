@@ -38,6 +38,9 @@ import {
 } from "~/components/ui/card";
 import { useToast } from "~/hooks/use-toast";
 
+export const meta = () => [{ title: "Integrations" }];
+
+
 export async function loader({ request }: LoaderFunctionArgs) {
   const userId = await requireUserId(request);
   const workspace = await requireWorkpace(request);
@@ -419,7 +422,7 @@ export default function Integrations() {
   return (
     <div className="flex h-full flex-col">
       <PageHeader title="Integrations" />
-      <div className="home flex h-[calc(100vh_-_40px)] justify-center overflow-y-auto p-4 px-5 md:h-[calc(100vh_-_56px)]">
+      <div className="home flex h-page-sm justify-center overflow-y-auto p-4 px-5 md:h-page">
         <div className="flex w-full max-w-3xl flex-col items-center gap-6">
           {/* Integrations Section */}
           <div className="w-full space-y-3">

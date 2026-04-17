@@ -5,6 +5,8 @@ import {
   getTaskById,
   updateTaskConversationIds,
 } from "~/services/task.server";
+import { getTaskPhase } from "~/services/task.phase";
+import { getPageContentAsHtml } from "~/services/hocuspocus/content.server";
 import { logger } from "~/services/logger.service";
 import { env } from "~/env.server";
 import { getOrCreatePersonalAccessToken } from "~/services/personalAccessToken.server";
@@ -34,27 +36,41 @@ export async function processTask(payload: TaskPayload): Promise<TaskResult> {
   try {
     logger.info(`Processing task ${taskId}`, { workspaceId });
 
-    await markTaskInProcess(taskId);
-
     const task = await getTaskById(taskId);
     if (!task) throw new Error(`Task ${taskId} not found`);
 
-    const intent = task.description ?? task.title;
+    // Only flip status to Working when we're actually executing. When this
+    // handler runs for a buffer-expiry (startPrepFromBuffer), the task should
+    // stay in Todo so the agent's prep rules engage via phase=prep. The agent
+    // will transition to Waiting or Ready via its normal tool calls.
+    const phase = getTaskPhase(task);
+    if (phase === "execute") {
+      await markTaskInProcess(taskId);
+    }
 
-    // Always create a new conversation for each background run
-    const result = await createConversation(workspaceId, userId, {
-      message: intent,
-      parts: [{ text: intent, type: "text" }],
-      userType: UserTypeEnum.User,
-      asyncJobId: task.id,
-      source: "task",
-    });
-    const conversationId = result.conversationId;
-    // Append to existing conversation history for this task
-    await updateTaskConversationIds(taskId, [
-      ...(task.conversationIds ?? []),
-      conversationId,
-    ]);
+    const intent = (task.pageId ? await getPageContentAsHtml(task.pageId) : null) ?? task.title;
+
+    // Reuse the last conversation if one exists, otherwise create new
+    let conversationId: string;
+    const existingConversationIds = task.conversationIds ?? [];
+
+    if (existingConversationIds.length > 0) {
+      // Reuse the last conversation — preserves full context
+      conversationId = existingConversationIds[existingConversationIds.length - 1];
+      logger.info(`Task ${taskId} reusing conversation ${conversationId}`);
+    } else {
+      // First run — create a new conversation
+      const result = await createConversation(workspaceId, userId, {
+        message: intent,
+        parts: [{ text: intent, type: "text" }],
+        userType: UserTypeEnum.User,
+        asyncJobId: task.id,
+        source: "task",
+      });
+      conversationId = result.conversationId;
+      await updateTaskConversationIds(taskId, [conversationId]);
+      logger.info(`Task ${taskId} created new conversation ${conversationId}`);
+    }
 
     const { token } = await getOrCreatePersonalAccessToken({
       name: "task-internal",
@@ -70,7 +86,10 @@ export async function processTask(payload: TaskPayload): Promise<TaskResult> {
 
     // Prefix intent with task context so the agent knows its own taskId
     // and can embed it in any reminders it creates (e.g. after starting a coding session)
-    const taskMessage = `[background-task taskId:${taskId}]\n${intent}`;
+    const metadata = (task.metadata as Record<string, unknown>) ?? {};
+    const rescheduleCount = (metadata.rescheduleCount as number) ?? 0;
+    const rescheduleNote = rescheduleCount > 0 ? ` [reschedule:${rescheduleCount}/10]` : "";
+    const taskMessage = `[background-task taskId:${taskId}${rescheduleNote}]\n${intent}`;
 
     try {
       await processInboundMessage({

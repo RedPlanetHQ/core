@@ -12,7 +12,6 @@
  * - Has gather_context tool to query orchestrator (read-only)
  */
 
-import { stepCountIs } from "ai";
 import { Agent } from "@mastra/core/agent";
 import { toRouterString, resolveModelString } from "~/lib/model.server";
 import { type ModelConfig } from "~/services/llm-provider.server";
@@ -22,16 +21,11 @@ import {
   type Trigger,
   type DecisionContext,
   type ActionPlan,
-  type DecisionAgentResult,
 } from "../types/decision-agent";
-import { buildDecisionAgentPrompt } from "../prompts";
-import { logger } from "../../logger.service";
-import { createCoreTools } from "./core";
-import { createOrchestratorAgent } from "./orchestrator";
-import { prisma } from "~/db.server";
-import { type OrchestratorTools } from "../executors/base";
 import { getSkillTool } from "../tools/skill-tools";
-import { getReminderTools } from "../tools/reminder-tools";
+import { buildDecisionAgentPrompt } from "../prompts/decision-prompt";
+import { type SkillRef } from "../types";
+import { getDefaultSkill } from "~/services/skills.server";
 
 /**
  * Default action plan when Decision Agent fails or produces invalid output
@@ -43,8 +37,8 @@ const DEFAULT_ACTION_PLAN: ActionPlan = {
     context: {},
     tone: "neutral",
   },
-  createReminders: [],
-  updateReminders: [],
+  createFollowUps: [],
+  updateTasks: [],
   silentActions: [],
   reasoning: "Default plan - Decision Agent produced no valid output",
 };
@@ -105,9 +99,9 @@ function isValidActionPlan(obj: unknown): obj is ActionPlan {
   if (plan.shouldMessage && !plan.message) return false;
 
   // Arrays should be arrays (or undefined/null)
-  if (plan.createReminders && !Array.isArray(plan.createReminders))
+  if (plan.createFollowUps && !Array.isArray(plan.createFollowUps))
     return false;
-  if (plan.updateReminders && !Array.isArray(plan.updateReminders))
+  if (plan.updateTasks && !Array.isArray(plan.updateTasks))
     return false;
   if (plan.silentActions && !Array.isArray(plan.silentActions)) return false;
 
@@ -121,8 +115,8 @@ export function normalizeActionPlan(plan: ActionPlan): ActionPlan {
   return {
     shouldMessage: plan.shouldMessage,
     message: plan.message,
-    createReminders: plan.createReminders || [],
-    updateReminders: plan.updateReminders || [],
+    createFollowUps: plan.createFollowUps || [],
+    updateTasks: plan.updateTasks || [],
     silentActions: plan.silentActions || [],
     reasoning: plan.reasoning || "No reasoning provided",
   };
@@ -144,31 +138,54 @@ export interface DecisionAgentOptions {
 export async function createThinkAgent(
   gatherContextAgent: Agent,
   workspaceId: string,
-  channel: string,
+  _userId: string,
+  _channel: string,
   timezone: string,
-  availableChannels: Array<"whatsapp" | "slack" | "email">,
-  minRecurrenceMinutes: number,
+  _availableChannels: string[],
+  _minRecurrenceMinutes: number,
   modelConfig?: ModelConfig,
+  triggerContext?: {
+    trigger: Trigger;
+    context: DecisionContext;
+    userPersona?: string;
+  },
+  skills?: SkillRef[],
 ): Promise<Agent> {
+  // Think only has gather_context (subagent) and get_skill for informed reasoning.
+  // All execution (create_task, send_message, etc.) is done by the core agent
+  // based on the ActionPlan that think returns.
   const tools: Record<string, any> = {};
   tools["get_skill"] = getSkillTool(workspaceId);
 
-  const reminderTools = getReminderTools(
-    workspaceId,
-    channel,
-    timezone,
-    availableChannels,
-    minRecurrenceMinutes,
-  );
+  // Load Watch Rules skill in parallel with prompt building
+  const watchRulesSkill = await getDefaultSkill(workspaceId, "watch-rules");
+
+  // Build the full decision prompt with trigger + context
+  const currentTime = new Date().toLocaleString("en-US", {
+    timeZone: timezone,
+    dateStyle: "full",
+    timeStyle: "short",
+  });
+  const instructions = triggerContext
+    ? buildDecisionAgentPrompt(
+        JSON.stringify(triggerContext.trigger, null, 2),
+        JSON.stringify(triggerContext.context, null, 2),
+        currentTime,
+        timezone,
+        triggerContext.userPersona,
+        skills,
+        watchRulesSkill?.content ?? undefined,
+      )
+    : "Analyze triggers and produce structured JSON action plans.";
 
   const model = await resolveModelString("chat", "low");
   const thinkAgent = new Agent({
     id: "thinking-agent",
     name: "Think",
     model: modelConfig ?? toRouterString(model),
-    instructions: "Analyze triggers and produce structured JSON action plans.",
+    instructions,
     agents: { gather_context: gatherContextAgent },
-    tools: { ...tools, ...reminderTools },
+    tools,
   });
 
   const mastra = getMastra();
@@ -193,8 +210,8 @@ export function createFallbackPlan(trigger: Trigger): ActionPlan {
           },
           tone: "neutral",
         },
-        createReminders: [],
-        updateReminders: [],
+        createFollowUps: [],
+        updateTasks: [],
         silentActions: [],
         reasoning:
           "Fallback: Decision Agent failed, defaulting to message for reminder",
@@ -212,8 +229,8 @@ export function createFallbackPlan(trigger: Trigger): ActionPlan {
           },
           tone: "casual",
         },
-        createReminders: [],
-        updateReminders: [],
+        createFollowUps: [],
+        updateTasks: [],
         silentActions: [],
         reasoning:
           "Fallback: Decision Agent failed, defaulting to follow-up message",
@@ -227,8 +244,8 @@ export function createFallbackPlan(trigger: Trigger): ActionPlan {
           context: { syncType: trigger.data.syncType },
           tone: "neutral",
         },
-        createReminders: [],
-        updateReminders: [],
+        createFollowUps: [],
+        updateTasks: [],
         silentActions: [],
         reasoning:
           "Fallback: Decision Agent failed, defaulting to daily sync message",
@@ -237,8 +254,8 @@ export function createFallbackPlan(trigger: Trigger): ActionPlan {
     case "integration_webhook":
       return {
         shouldMessage: false,
-        createReminders: [],
-        updateReminders: [],
+        createFollowUps: [],
+        updateTasks: [],
         silentActions: [
           {
             type: "log",
@@ -253,8 +270,8 @@ export function createFallbackPlan(trigger: Trigger): ActionPlan {
     case "scheduled_check":
       return {
         shouldMessage: false,
-        createReminders: [],
-        updateReminders: [],
+        createFollowUps: [],
+        updateTasks: [],
         silentActions: [
           {
             type: "log",
@@ -263,6 +280,24 @@ export function createFallbackPlan(trigger: Trigger): ActionPlan {
         ],
         reasoning:
           "Fallback: Decision Agent failed, defaulting to silent for scheduled check",
+      };
+
+    case "scheduled_task_fired":
+      return {
+        shouldMessage: true,
+        message: {
+          intent: `Execute scheduled task: ${trigger.data.action}`,
+          context: {
+            action: trigger.data.action,
+            taskId: trigger.data.taskId,
+          },
+          tone: "neutral",
+        },
+        createFollowUps: [],
+        updateTasks: [],
+        silentActions: [],
+        reasoning:
+          "Fallback: Decision Agent failed, defaulting to message for scheduled task",
       };
 
     default:

@@ -1,7 +1,13 @@
 import { json } from "@remix-run/node";
 import { z } from "zod";
-import { createHybridLoaderApiRoute, createHybridActionApiRoute } from "~/services/routeBuilders/apiBuilder.server";
-import { searchTasks, createTask } from "~/services/task.server";
+import {
+  createHybridLoaderApiRoute,
+  createHybridActionApiRoute,
+} from "~/services/routeBuilders/apiBuilder.server";
+import { searchTasks, getTasks, createTask } from "~/services/task.server";
+import { findOrCreateTaskPage } from "~/services/page.server";
+import { setPageContentFromHtml } from "~/services/hocuspocus/content.server";
+import { detectAndApplyRecurrence } from "~/services/tasks/recurrence.server";
 
 const loader = createHybridLoaderApiRoute(
   {
@@ -11,22 +17,26 @@ const loader = createHybridLoaderApiRoute(
     searchParams: z.object({ search: z.string().optional() }),
   },
   async ({ authentication, searchParams }) => {
-    if (!searchParams?.search) return json([]);
+    const workspaceId = authentication.workspaceId as string;
 
-    const tasks = await searchTasks(
-      authentication.workspaceId as string,
-      searchParams.search,
-    );
+    if (!searchParams?.search) {
+      const tasks = await getTasks(workspaceId);
+      return json(tasks);
+    }
 
+    const tasks = await searchTasks(workspaceId, searchParams.search);
     return json(tasks);
   },
 );
 
 const CreateTaskSchema = z.object({
   title: z.string().min(1),
-  pageId: z.string().optional(),
+  description: z.string().optional(),
   source: z.string().default("manual"),
-  status: z.enum(["Backlog", "Todo", "InProgress", "Blocked", "Completed"]).default("Backlog"),
+  status: z
+    .enum(["Todo", "Waiting", "Ready", "Working", "Review", "Done"])
+    .default("Todo"),
+  parentTaskId: z.string().optional(),
 });
 
 const { action } = createHybridActionApiRoute(
@@ -37,13 +47,28 @@ const { action } = createHybridActionApiRoute(
     corsStrategy: "all",
   },
   async ({ body, authentication }) => {
+    const workspaceId = authentication.workspaceId as string;
+    const userId = authentication.userId;
+
     const task = await createTask(
-      authentication.workspaceId as string,
-      authentication.userId,
+      workspaceId,
+      userId,
       body.title,
       undefined,
-      { pageId: body.pageId, source: body.source, status: body.status },
+      {
+        source: body.source,
+        status: body.status,
+        parentTaskId: body.parentTaskId,
+      },
     );
+
+    if (body.description) {
+      const page = await findOrCreateTaskPage(workspaceId, userId, task.id);
+      await setPageContentFromHtml(page.id, body.description);
+    }
+
+    // Feature 2: auto-detect schedule from title in background
+    detectAndApplyRecurrence(task.id, workspaceId, userId, task.title);
 
     return json(task);
   },

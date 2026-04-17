@@ -25,6 +25,7 @@ interface ConversationHistory {
   userType: string;
   message: string;
   parts: any;
+  createdAt?: string;
 }
 
 interface ConversationViewProps {
@@ -52,7 +53,16 @@ export function ConversationView({
 }: ConversationViewProps) {
   const history = historyProp ?? [];
   const readFetcher = useFetcher();
+  const skillsFetcher = useFetcher<{
+    skills: Array<{ id: string; title: string }>;
+  }>();
   const scrollContainerRef = useRef<HTMLDivElement>(null);
+
+  // Load skills once for slash command autocomplete
+  useEffect(() => {
+    skillsFetcher.load("/api/v1/skills?limit=100");
+  }, []);
+  const composerRef = useRef<HTMLDivElement>(null);
   const messageRefs = useRef<(HTMLDivElement | null)[]>([]);
   // initialize to history.length so mount doesn't trigger the scroll effect
   const prevMessageCountRef = useRef(history.length);
@@ -61,11 +71,11 @@ export function ConversationView({
   // keeps spacer alive after streaming ends until user scrolls back to bottom
   const [keepSpacer, setKeepSpacer] = useState(false);
 
-  const defaultModelId = modelsProp.find((m) => m.isDefault)?.id ?? modelsProp[0]?.id;
-  const [selectedModelId, setSelectedModelId] = useLocalCommonState<string | undefined>(
-    "selectedModelId",
-    defaultModelId,
-  );
+  const defaultModelId =
+    modelsProp.find((m) => m.isDefault)?.id ?? modelsProp[0]?.id;
+  const [selectedModelId, setSelectedModelId] = useLocalCommonState<
+    string | undefined
+  >("selectedModelId", defaultModelId);
   // Ref so prepareSendMessagesRequest always reads the latest selection
   const selectedModelRef = useRef<string | undefined>(selectedModelId);
   selectedModelRef.current = selectedModelId;
@@ -107,6 +117,7 @@ export function ConversationView({
     addToolApprovalResponse,
   } = useChat({
     id: conversationId,
+    resume: true,
     onFinish: () => {
       toolArgOverridesRef.current = {};
       pendingApprovalRequestsRef.current = [];
@@ -153,7 +164,11 @@ export function ConversationView({
   });
 
   useEffect(() => {
-    if (autoRegenerate && history.length === 1) {
+    if (
+      autoRegenerate &&
+      history.length === 1 &&
+      conversationStatus !== "running"
+    ) {
       regenerate();
     }
   }, []);
@@ -176,6 +191,20 @@ export function ConversationView({
       container.scrollTop = container.scrollHeight;
     }
   }, []);
+
+  useEffect(() => {
+    const timer = window.setTimeout(() => {
+      const input = composerRef.current?.querySelector(
+        "[contenteditable='true']",
+      );
+
+      if (input instanceof HTMLElement) {
+        input.focus();
+      }
+    }, 150);
+
+    return () => window.clearTimeout(timer);
+  }, [conversationId]);
 
   // Remove spacer when user scrolls back to bottom
   useEffect(() => {
@@ -264,6 +293,7 @@ export function ConversationView({
             >
               <ConversationItem
                 message={message}
+                createdAt={history[i]?.createdAt}
                 addToolApprovalResponse={handleToolApprovalResponse}
                 setToolArgOverride={setToolArgOverride}
                 isChatBusy={status === "streaming" || status === "submitted"}
@@ -279,14 +309,18 @@ export function ConversationView({
         </div>
       </div>
 
-      <div className="flex w-full flex-col items-center">
-        <div className="w-full max-w-[90ch] px-4">
+      <div className="flex w-full shrink-0 flex-col items-center">
+        <div ref={composerRef} className="w-full max-w-[90ch] px-4">
           <ThinkingIndicator
             isLoading={status === "streaming" || status === "submitted"}
           />
           <ConversationTextarea
-            className="bg-background-3 border-1 w-full border-gray-300"
-            isLoading={status === "streaming" || status === "submitted"}
+            className="pt-4"
+            isLoading={
+              status === "streaming" ||
+              status === "submitted" ||
+              conversationStatus === "running"
+            }
             disabled={needsApproval || conversationStatus === "running"}
             onConversationCreated={(message) => {
               if (message) sendMessage({ text: message });
@@ -295,6 +329,7 @@ export function ConversationView({
             models={modelsProp}
             selectedModelId={selectedModelId}
             onModelChange={handleModelChange}
+            skills={skillsFetcher.data?.skills}
           />
         </div>
       </div>

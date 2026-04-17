@@ -1,335 +1,211 @@
-import { ProviderFactory } from "@core/providers";
 import { prisma } from "~/db.server";
+import { DEFAULT_SKILL_DEFINITIONS } from "~/services/skills.defaults";
 
-const MIGRATION_KEY = "userWorkspaceMigrationCompleted";
+const DEFAULT_SKILLS_MIGRATION_KEY = "defaultSkillsV1Seeded";
 
-export const migration = async () => {
-  // Find all workspaces that have a userId set
+async function migrateDefaultSkills() {
   const allWorkspaces = await prisma.workspace.findMany({
-    where: {
-      userId: {
-        not: null,
-      },
-    },
-    select: {
-      id: true,
-      userId: true,
-      metadata: true,
-    },
+    select: { id: true, metadata: true },
   });
 
   const workspacesNeedingMigration = allWorkspaces.filter((workspace) => {
     const metadata = workspace.metadata as Record<string, any>;
-    return !metadata || metadata[MIGRATION_KEY] !== true;
+    return !metadata?.[DEFAULT_SKILLS_MIGRATION_KEY];
   });
 
   if (workspacesNeedingMigration.length === 0) {
-    console.log("No workspaces need UserWorkspace migration.");
+    console.log("No workspaces need default skill seeding.");
     return;
   }
 
-  console.log(
-    `Found ${workspacesNeedingMigration.length} workspaces that need UserWorkspace records`,
-  );
+  console.log(`Seeding default skills for ${workspacesNeedingMigration.length} workspaces...`);
 
-  // Filter out workspaces that already have UserWorkspace records
   const workspaceIds = workspacesNeedingMigration.map((w) => w.id);
-  const existingUserWorkspaces = await prisma.userWorkspace.findMany({
+
+  // Migrate existing persona documents (source=persona-v2) to type=skill with skill metadata.
+  // All signed-up users have a persona doc — we just ensure it's typed correctly.
+  const personaDef = DEFAULT_SKILL_DEFINITIONS.find((d) => d.skillType === "persona")!;
+  await prisma.document.updateMany({
     where: {
-      workspaceId: {
-        in: workspaceIds,
-      },
+      workspaceId: { in: workspaceIds },
+      source: "persona-v2",
+      deleted: null,
     },
-    select: {
-      workspaceId: true,
-      userId: true,
+    data: {
+      type: "skill",
+      metadata: {
+        skillType: personaDef.skillType,
+        shortDescription: personaDef.shortDescription,
+      },
     },
   });
 
-  const existingMap = new Set(
-    existingUserWorkspaces.map((uw) => `${uw.workspaceId}:${uw.userId}`),
-  );
+  // For the remaining non-persona default skills, seed only if missing
+  const nonPersonaDefs = DEFAULT_SKILL_DEFINITIONS.filter((d) => d.skillType !== "persona");
+  const nonPersonaTitles = nonPersonaDefs.map((s) => s.title);
 
-  const workspacesToMigrate = workspacesNeedingMigration.filter(
-    (w) => !existingMap.has(`${w.id}:${w.userId}`),
-  );
+  const existingSkills = await prisma.document.findMany({
+    where: {
+      workspaceId: { in: workspaceIds },
+      type: "skill",
+      title: { in: nonPersonaTitles },
+      deleted: null,
+    },
+    select: { workspaceId: true, title: true },
+  });
 
-  if (workspacesToMigrate.length === 0) {
-    console.log(
-      "All workspaces already have UserWorkspace records. Updating metadata...",
-    );
-    await updateWorkspaceMetadata(workspaceIds);
-    return;
+  const existingSet = new Set(existingSkills.map((s) => `${s.workspaceId}:${s.title}`));
+
+  const userWorkspaces = await prisma.userWorkspace.findMany({
+    where: { workspaceId: { in: workspaceIds }, isActive: true },
+    select: { workspaceId: true, userId: true },
+    orderBy: { createdAt: "asc" },
+  });
+
+  const ownerMap = new Map<string, string>();
+  for (const uw of userWorkspaces) {
+    if (!ownerMap.has(uw.workspaceId)) {
+      ownerMap.set(uw.workspaceId, uw.userId);
+    }
   }
 
-  console.log(
-    `Creating UserWorkspace records for ${workspacesToMigrate.length} workspaces...`,
-  );
+  let created = 0;
 
-  // Create UserWorkspace records in batches using transaction
-  const batchSize = 100;
-  let createdCount = 0;
+  for (const workspace of workspacesNeedingMigration) {
+    const userId = ownerMap.get(workspace.id);
+    if (!userId) continue;
 
-  for (let i = 0; i < workspacesToMigrate.length; i += batchSize) {
-    const batch = workspacesToMigrate.slice(i, i + batchSize);
-    const batchWorkspaceIds = batch.map((w) => w.id);
+    const toCreate = nonPersonaDefs.filter(
+      (def) => !existingSet.has(`${workspace.id}:${def.title}`),
+    );
 
-    await prisma.$transaction(async (tx) => {
-      // Create UserWorkspace records
-      await tx.userWorkspace.createMany({
-        data: batch.map((workspace) => ({
-          userId: workspace.userId!,
+    if (toCreate.length > 0) {
+      await prisma.document.createMany({
+        data: toCreate.map((def) => ({
           workspaceId: workspace.id,
-          role: "OWNER",
-          acceptedAt: new Date(),
-          isActive: true,
+          type: "skill",
+          title: def.title,
+          content: def.content,
+          source: "system",
+          labelIds: [],
+          metadata: {
+            skillType: def.skillType,
+            shortDescription: def.shortDescription,
+          },
+          editedBy: userId,
+          ...(def.sessionIdPrefix
+            ? { sessionId: `${def.sessionIdPrefix}-${workspace.id}` }
+            : {}),
         })),
         skipDuplicates: true,
       });
-
-      // Update workspace metadata using efficient JSON merge
-      await tx.$executeRaw`
-        UPDATE "Workspace"
-        SET metadata = metadata || ${JSON.stringify({ [MIGRATION_KEY]: true })}::jsonb
-        WHERE id = ANY(${batchWorkspaceIds}::text[])
-      `;
-    });
-
-    createdCount += batch.length;
-    console.log(
-      `Progress: ${createdCount}/${workspacesToMigrate.length} workspaces migrated`,
-    );
+      created += toCreate.length;
+    }
   }
 
-  console.log(
-    `Migration complete! Created ${createdCount} UserWorkspace records and updated metadata.`,
-  );
-
-  // Build user-workspace mapping from all workspaces
-  const userWorkspaceMap = allWorkspaces
-    .filter((w) => w.userId)
-    .map((w) => ({
-      userId: w.userId!,
-      workspaceId: w.id,
-    }));
-
-  // Populate workspaceId in embedding tables
-  await populateEmbeddingWorkspaceIds(userWorkspaceMap);
-
-  // Populate workspaceId in graph nodes
-  await populateGraphWorkspaceIds(userWorkspaceMap);
-};
-
-async function updateWorkspaceMetadata(workspaceIds: string[]) {
-  if (workspaceIds.length === 0) return;
-
-  // Use raw SQL with PostgreSQL's JSON merge operator for efficient bulk update
+  // Mark workspaces as migrated
   await prisma.$executeRaw`
     UPDATE "Workspace"
-    SET metadata = metadata || ${JSON.stringify({ [MIGRATION_KEY]: true })}::jsonb
+    SET metadata = metadata || ${JSON.stringify({ [DEFAULT_SKILLS_MIGRATION_KEY]: true })}::jsonb
     WHERE id = ANY(${workspaceIds}::text[])
   `;
 
-  console.log(`Updated metadata for ${workspaceIds.length} workspaces.`);
+  console.log(`Default skills migration complete! Created ${created} skill documents.`);
 }
 
-export async function populateEmbeddingWorkspaceIds(
-  userWorkspaceMap: Array<{ userId: string; workspaceId: string }>,
-) {
-  if (userWorkspaceMap.length === 0) {
-    console.log("No user-workspace mappings found.");
+const READINESS_SKILLS_MIGRATION_KEY = "readinessSkillsV1Seeded";
+
+async function migrateReadinessSkills() {
+  const { READINESS_SKILL_DEFINITIONS } = await import("~/services/skills.readiness");
+
+  if (READINESS_SKILL_DEFINITIONS.length === 0) return;
+
+  const allWorkspaces = await prisma.workspace.findMany({
+    select: { id: true, metadata: true },
+  });
+
+  const workspacesNeedingMigration = allWorkspaces.filter((workspace) => {
+    const metadata = workspace.metadata as Record<string, any>;
+    return !metadata?.[READINESS_SKILLS_MIGRATION_KEY];
+  });
+
+  if (workspacesNeedingMigration.length === 0) {
+    console.log("No workspaces need readiness skill seeding.");
     return;
   }
 
-  console.log("Populating workspaceId in embedding tables...");
-  console.log(`Found ${userWorkspaceMap.length} user-workspace mappings`);
+  console.log(`Seeding readiness skills for ${workspacesNeedingMigration.length} workspaces...`);
 
-  let totalEpisodes = 0;
-  let totalStatements = 0;
-  let totalEntities = 0;
+  const workspaceIds = workspacesNeedingMigration.map((w) => w.id);
+  const readinessTitles = READINESS_SKILL_DEFINITIONS.map((d) => d.title);
 
-  // Process in batches to avoid transaction timeouts
-  const batchSize = 5;
-  for (let i = 0; i < userWorkspaceMap.length; i += batchSize) {
-    const batch = userWorkspaceMap.slice(i, i + batchSize);
+  // Check which readiness skills already exist
+  const existingSkills = await prisma.document.findMany({
+    where: {
+      workspaceId: { in: workspaceIds },
+      type: "skill",
+      title: { in: readinessTitles },
+      deleted: null,
+    },
+    select: { workspaceId: true, title: true },
+  });
 
-    // Build CASE statement for this batch
-    const userIds = batch.map((uw) => uw.userId);
-    const caseStatements = batch
-      .map((uw) => `WHEN "userId" = '${uw.userId}' THEN '${uw.workspaceId}'`)
-      .join(" ");
+  const existingSet = new Set(existingSkills.map((s) => `${s.workspaceId}:${s.title}`));
 
-    // Format userIds as a SQL array literal
-    const userIdArray = `ARRAY[${userIds.map((id) => `'${id}'`).join(",")}]::text[]`;
+  const userWorkspaces = await prisma.userWorkspace.findMany({
+    where: { workspaceId: { in: workspaceIds }, isActive: true },
+    select: { workspaceId: true, userId: true },
+    orderBy: { createdAt: "asc" },
+  });
 
-    // Update EpisodeEmbedding
-    const episodeResult = await prisma.$executeRawUnsafe(
-      `UPDATE "episode_embeddings" SET "workspaceId" = CASE ${caseStatements} END WHERE "userId" = ANY(${userIdArray}) AND "workspaceId" IS NULL`,
-    );
-    totalEpisodes += Number(episodeResult);
-
-    // Update StatementEmbedding
-    const statementResult = await prisma.$executeRawUnsafe(
-      `UPDATE "statement_embeddings" SET "workspaceId" = CASE ${caseStatements} END WHERE "userId" = ANY(${userIdArray}) AND "workspaceId" IS NULL`,
-    );
-    totalStatements += Number(statementResult);
-
-    // Update EntityEmbedding
-    const entityResult = await prisma.$executeRawUnsafe(
-      `UPDATE "entity_embeddings" SET "workspaceId" = CASE ${caseStatements} END WHERE "userId" = ANY(${userIdArray}) AND "workspaceId" IS NULL`,
-    );
-    totalEntities += Number(entityResult);
-
-    console.log(
-      `Progress: ${Math.min(i + batchSize, userWorkspaceMap.length)}/${userWorkspaceMap.length} users processed`,
-    );
-  }
-
-  console.log(`Updated ${totalEpisodes} EpisodeEmbedding records`);
-  console.log(`Updated ${totalStatements} StatementEmbedding records`);
-  console.log(`Updated ${totalEntities} EntityEmbedding records`);
-  console.log("Embedding workspaceId population complete!");
-}
-
-export async function populateGraphWorkspaceIds(
-  userWorkspaceMap: Array<{ userId: string; workspaceId: string }>,
-) {
-  if (userWorkspaceMap.length === 0) {
-    console.log("No user-workspace mappings found for graph migration.");
-    return;
-  }
-
-  console.log("Populating workspaceId in Neo4j graph nodes...");
-  console.log(`Found ${userWorkspaceMap.length} user-workspace mappings`);
-
-  try {
-    const graphProvider = ProviderFactory.getGraphProvider() as any;
-
-    let totalUpdated = 0;
-
-    // Process in batches to avoid overwhelming Neo4j
-    const batchSize = 100;
-    for (let i = 0; i < userWorkspaceMap.length; i += batchSize) {
-      const batch = userWorkspaceMap.slice(i, i + batchSize);
-
-      for (const { userId, workspaceId } of batch) {
-        // Update Episode nodes
-        const episodeQuery = `
-          MATCH (e:Episode {userId: $userId})
-          WHERE e.workspaceId IS NULL
-          SET e.workspaceId = $workspaceId
-          RETURN count(e) as count
-        `;
-        const episodeResult = await graphProvider.runQuery(episodeQuery, {
-          userId,
-          workspaceId,
-        });
-        const episodeCount = episodeResult[0]?.get("count")?.toNumber() || 0;
-
-        // Update Statement nodes
-        const statementQuery = `
-          MATCH (s:Statement {userId: $userId})
-          WHERE s.workspaceId IS NULL
-          SET s.workspaceId = $workspaceId
-          RETURN count(s) as count
-        `;
-        const statementResult = await graphProvider.runQuery(statementQuery, {
-          userId,
-          workspaceId,
-        });
-        const statementCount =
-          statementResult[0]?.get("count")?.toNumber() || 0;
-
-        // Update Entity nodes
-        const entityQuery = `
-          MATCH (e:Entity {userId: $userId})
-          WHERE e.workspaceId IS NULL
-          SET e.workspaceId = $workspaceId
-          RETURN count(e) as count
-        `;
-        const entityResult = await graphProvider.runQuery(entityQuery, {
-          userId,
-          workspaceId,
-        });
-        const entityCount = entityResult[0]?.get("count")?.toNumber() || 0;
-
-        // Update HAS_PROVENANCE relationships
-        const provenanceQuery = `
-          MATCH ()-[r:HAS_PROVENANCE {userId: $userId}]->()
-          WHERE r.workspaceId IS NULL
-          SET r.workspaceId = $workspaceId
-          RETURN count(r) as count
-        `;
-        const provenanceResult = await graphProvider.runQuery(provenanceQuery, {
-          userId,
-          workspaceId,
-        });
-        const provenanceCount =
-          provenanceResult[0]?.get("count")?.toNumber() || 0;
-
-        // Update HAS_SUBJECT relationships
-        const subjectQuery = `
-          MATCH ()-[r:HAS_SUBJECT {userId: $userId}]->()
-          WHERE r.workspaceId IS NULL
-          SET r.workspaceId = $workspaceId
-          RETURN count(r) as count
-        `;
-        const subjectResult = await graphProvider.runQuery(subjectQuery, {
-          userId,
-          workspaceId,
-        });
-        const subjectCount = subjectResult[0]?.get("count")?.toNumber() || 0;
-
-        // Update HAS_PREDICATE relationships
-        const predicateQuery = `
-          MATCH ()-[r:HAS_PREDICATE {userId: $userId}]->()
-          WHERE r.workspaceId IS NULL
-          SET r.workspaceId = $workspaceId
-          RETURN count(r) as count
-        `;
-        const predicateResult = await graphProvider.runQuery(predicateQuery, {
-          userId,
-          workspaceId,
-        });
-        const predicateCount =
-          predicateResult[0]?.get("count")?.toNumber() || 0;
-
-        // Update HAS_OBJECT relationships
-        const objectQuery = `
-          MATCH ()-[r:HAS_OBJECT {userId: $userId}]->()
-          WHERE r.workspaceId IS NULL
-          SET r.workspaceId = $workspaceId
-          RETURN count(r) as count
-        `;
-        const objectResult = await graphProvider.runQuery(objectQuery, {
-          userId,
-          workspaceId,
-        });
-        const objectCount = objectResult[0]?.get("count")?.toNumber() || 0;
-
-        const nodeCount = episodeCount + statementCount + entityCount;
-        const relationshipCount =
-          provenanceCount + subjectCount + predicateCount + objectCount;
-        const userTotal = nodeCount + relationshipCount;
-        totalUpdated += userTotal;
-
-        if (userTotal > 0) {
-          console.log(
-            `User ${userId}: ${nodeCount} nodes (${episodeCount} episodes, ${statementCount} statements, ${entityCount} entities), ${relationshipCount} relationships`,
-          );
-        }
-      }
-
-      console.log(
-        `Progress: ${Math.min(i + batchSize, userWorkspaceMap.length)}/${userWorkspaceMap.length} users processed`,
-      );
+  const ownerMap = new Map<string, string>();
+  for (const uw of userWorkspaces) {
+    if (!ownerMap.has(uw.workspaceId)) {
+      ownerMap.set(uw.workspaceId, uw.userId);
     }
-
-    console.log(
-      `Graph workspaceId population complete! Updated ${totalUpdated} total nodes.`,
-    );
-  } catch (error) {
-    console.error("Error populating graph workspaceIds:", error);
-    throw error;
   }
+
+  let created = 0;
+
+  for (const workspace of workspacesNeedingMigration) {
+    const userId = ownerMap.get(workspace.id);
+    if (!userId) continue;
+
+    const toCreate = READINESS_SKILL_DEFINITIONS.filter(
+      (def) => !existingSet.has(`${workspace.id}:${def.title}`),
+    );
+
+    if (toCreate.length > 0) {
+      await prisma.document.createMany({
+        data: toCreate.map((def) => ({
+          workspaceId: workspace.id,
+          type: "skill",
+          title: def.title,
+          content: def.content,
+          source: "system",
+          labelIds: [],
+          metadata: {
+            shortDescription: def.shortDescription,
+          },
+          editedBy: userId,
+        })),
+        skipDuplicates: true,
+      });
+      created += toCreate.length;
+    }
+  }
+
+  // Mark workspaces as migrated
+  await prisma.$executeRaw`
+    UPDATE "Workspace"
+    SET metadata = metadata || ${JSON.stringify({ [READINESS_SKILLS_MIGRATION_KEY]: true })}::jsonb
+    WHERE id = ANY(${workspaceIds}::text[])
+  `;
+
+  console.log(`Readiness skills migration complete! Created ${created} skill documents.`);
 }
+
+export const migration = async () => {
+  await migrateDefaultSkills();
+  await migrateReadinessSkills();
+};

@@ -1,0 +1,54 @@
+{
+  "productName": "CORE",
+  "identifier": "me.getcore.app",
+  "version": "0.1.1",
+  "build": {
+    "devUrl": "http://localhost:3033",
+    "frontendDist": "https://app.getcore.me"
+  },
+  "bundle": {
+    "active": true,
+    "targets": "all",
+    "icon": [
+      "icons/32x32.png",
+      "icons/128x128.png",
+      "icons/128x128@2x.png",
+      "icons/icon.icns",
+      "icons/icon.ico"
+    ],
+    "macOS": {
+      "hardenedRuntime": true,
+      "entitlements": "entitlements.mac.plist"
+    },
+    "linux": {
+      "deb": {
+        "depends": []
+      }
+    }
+  },
+  "plugins": {
+    "updater": {
+      "pubkey": "dW50cnVzdGVkIGNvbW1lbnQ6IG1pbmlzaWduIHB1YmxpYyBrZXk6IEYwMUIyQkY2NTk0QTdCNEEKUldSS2UwcFo5aXNiOEFnN0hjYTZENjBJWWQ5cUZSeVZpRThzKzkwcVVaeE5UTkdHQlhETDZIODAK",
+      "endpoints": ["https://github.com/redplanethq/core/releases/latest/download/latest.json"]
+    }
+  },
+  "app": {
+    "windows": [
+      {
+        "label": "main",
+        "title": "",
+        "width": 1280,
+        "height": 800,
+        "minWidth": 800,
+        "minHeight": 600,
+        "resizable": true,
+        "fullscreen": false,
+        "titleBarStyle": "Overlay",
+        "trafficLightPosition": { "x": 18, "y": 25 }
+      }
+    ],
+    "security": {
+      "csp": null
+    }
+  }
+}

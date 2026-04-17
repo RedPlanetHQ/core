@@ -7,6 +7,9 @@ import { useTypedLoaderData } from "remix-typedjson";
 import { LoaderCircle } from "lucide-react";
 import { GraphVisualizationClient } from "~/components/graph/graph-client";
 
+export const meta = () => [{ title: "Memory" }];
+
+
 export async function loader({ request }: LoaderFunctionArgs) {
   const userId = await requireUserId(request);
   return { userId };
@@ -38,7 +41,7 @@ export default function MemoryGraph() {
   }
 
   return (
-    <div className="flex h-[calc(100vh_-_56px)] grow items-center justify-center rounded">
+    <div className="flex h-page grow items-center justify-center rounded">
       {loading ? (
         <div className="flex h-full w-full flex-col items-center justify-center p-3">
           <LoaderCircle size={18} className="mr-1 animate-spin" />

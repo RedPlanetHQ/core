@@ -1,14 +1,15 @@
 /**
  * Gateway Agent Factory
  *
- * Creates Mastra Agent instances for connected gateways.
- * Each gateway becomes a sub-subagent under the orchestrator,
- * with direct tools (browser, coding, exec) that can be called by the agent.
+ * Gateway tool helpers — converts gateway JSON schema tools into AI SDK tools
+ * that are registered directly on the core agent (not via the orchestrator).
  */
 
 import { Agent } from "@mastra/core/agent";
 import { createTool } from "@mastra/core/tools";
 import { z } from "zod";
+
+import { createCodingSession } from "~/services/coding/coding-session.server";
 
 import { logger } from "~/services/logger.service";
 import { getGateway } from "~/services/gateway.server";
@@ -41,7 +42,7 @@ interface JsonSchemaProperty {
 /**
  * Convert a JSON Schema property to a Zod schema
  */
-function jsonSchemaPropertyToZod(prop: JsonSchemaProperty): any {
+export function jsonSchemaPropertyToZod(prop: JsonSchemaProperty): any {
   switch (prop.type) {
     case "string":
       return z.string().describe(prop.description || "");
@@ -64,7 +65,7 @@ function jsonSchemaPropertyToZod(prop: JsonSchemaProperty): any {
 /**
  * Convert a gateway tool's JSON Schema to a Zod object schema
  */
-function gatewayToolToZodSchema(
+export function gatewayToolToZodSchema(
   gatewayTool: GatewayTool,
 ): z.ZodObject<Record<string, any>> {
   const schema = gatewayTool.inputSchema;
@@ -96,11 +97,19 @@ function requiresApproval(toolName: string): boolean {
  * Create Mastra tools from a gateway's tool definitions.
  * Each gateway tool becomes a Mastra createTool() with proper Zod schema.
  */
+interface SessionContext {
+  conversationId?: string;
+  taskId?: string;
+  workspaceId: string;
+  userId: string;
+}
+
 function createGatewayTools(
   gatewayId: string,
   gatewayTools: GatewayTool[],
   executorTools?: OrchestratorTools,
   interactive: boolean = true,
+  sessionCtx?: SessionContext,
 ) {
   const tools: Record<string, any> = {};
 
@@ -118,6 +127,15 @@ function createGatewayTools(
             `GatewayAgent: Executing ${gatewayId}/${gatewayTool.name} with params: ${JSON.stringify(params)}`,
           );
 
+          // Handle sleep server-side instead of forwarding to gateway CLI
+          if (gatewayTool.name === "sleep") {
+            const { seconds } = params as { seconds: number; reason?: string };
+            await new Promise<void>((resolve) =>
+              setTimeout(resolve, seconds * 1000),
+            );
+            return JSON.stringify({ waited: seconds });
+          }
+
           const result = executorTools
             ? await executorTools.executeGatewayTool(
                 gatewayId,
@@ -130,6 +148,29 @@ function createGatewayTools(
                 params as Record<string, unknown>,
                 60000,
               );
+
+          // Record coding session only on successful coding_ask (result has sessionId)
+          if (gatewayTool.name === "coding_ask" && sessionCtx) {
+            const r = result as Record<string, unknown>;
+            if (r.sessionId) {
+              const p = params as Record<string, unknown>;
+              createCodingSession({
+                workspaceId: sessionCtx.workspaceId,
+                userId: sessionCtx.userId,
+                taskId: sessionCtx.taskId,
+                conversationId: sessionCtx.conversationId,
+                gatewayId,
+                agent: (p.agent as string) ?? "claude-code",
+                prompt: p.prompt as string | undefined,
+                dir: p.dir as string | undefined,
+                externalSessionId: r.sessionId as string,
+                worktreePath: r.worktreePath as string | undefined,
+                worktreeBranch: r.worktreeBranch as string | undefined,
+              }).catch((err) =>
+                logger.warn("Failed to record coding session", { err }),
+              );
+            }
+          }
 
           const r = result as Record<string, unknown>;
           if (r?.screenshot && typeof r.screenshot === "string" && r.mimeType) {
@@ -174,16 +215,71 @@ ${gatewayDescription ? `\nPurpose: ${gatewayDescription}\n` : ""}
 AVAILABLE TOOLS:
 ${toolsList}
 
-EXECUTION:
-1. Analyze the intent
-2. Select the right tool(s)
-3. Execute with correct parameters
-4. Chain tools if needed for multi-step tasks
-
 TOOL CATEGORIES:
 - **Browser tools** (browser_*): Web automation - open pages, click, fill forms, take screenshots
 - **Coding tools** (coding_*): Spawn coding agents for development tasks
 - **Shell tools** (exec_*): Run commands and scripts
+
+CODING TASK WORKFLOW:
+When the intent is a coding task (writing code, building features, fixing bugs, refactoring):
+
+RESUMING vs STARTING vs POLLING:
+- If there is no sessionId → this is a NEW session. Start fresh with coding_ask, passing dir and worktree: true.
+- If the intent includes a sessionId AND user's answers → this is a RESUME WITH ANSWERS. Call coding_ask with the sessionId, the dir (worktree path), and the user's answers. Do NOT pass worktree: true — the worktree already exists.
+- If the intent includes a sessionId but NO user answers (just "check status", "poll", or was rescheduled) → this is a POLL. Do NOT call coding_ask. Go straight to coding_read_session to check the session output. Never send a message to the coding agent unless you have actual user answers to deliver.
+
+**Phase 1 — Brainstorm (task status: Todo or no status mentioned):**
+1. If no sessionId: Call coding_ask with EXACTLY this prompt format:
+   "/brainstorming {paste the task title and description here}"
+   That's it. Nothing else. Do NOT add "please implement", "locate code", "add tests", numbered steps, or any instructions. The brainstorming skill handles everything. Pass dir, worktree: true.
+   If sessionId + user answers: Call coding_ask with the sessionId, the dir, and the user's answers.
+   If sessionId but no answers (poll/reschedule): Skip coding_ask — go directly to step 2.
+2. Poll with sleep(20) + coding_read_session to check progress. Use max 20-second sleeps — brainstorming produces output quickly.
+3. When the session is completed or has new output, READ THE TURNS — look at the last assistant turn's content:
+   - If it contains questions (numbered lists, "?", "Questions for you") → return the ACTUAL QUESTIONS (copy them from the turn content) to the caller. Do NOT answer them yourself. Do NOT just say "session completed."
+4. When the user's answers come back (intent contains a sessionId + answers), call coding_ask with the sessionId and the answers. Continue polling.
+5. Repeat until the coding agent is satisfied and brainstorming is complete.
+
+IMPORTANT: A "completed" session does NOT mean brainstorming is done. It means the coding agent stopped and is waiting for input. Always read the last assistant turn to understand what it's waiting for.
+If you run out of steps and the session is still running, return "session still running" with the sessionId to the caller so it can reschedule.
+
+**Phase 2 — Plan (brainstorm complete):**
+1. Call coding_ask with the same sessionId and tell the coding agent to run /writing-plans to produce a structured implementation plan.
+2. Poll with sleep(20) + coding_read_session. Use max 20-second sleeps — planning produces output quickly.
+3. When the session completes, READ THE TURNS — look at the last assistant turn's content:
+   - If it contains questions → handle the same way as brainstorm (answer from context or escalate with the actual questions).
+   - If it contains a plan → extract and return to the caller:
+     - Goal and approach summary
+     - File map (which files are changing and why)
+     - Task list (the ordered steps)
+     Do NOT include code blocks or full file contents — the user needs to review the plan, not read code.
+
+IMPORTANT: Always parse the turn content. Never just report "session completed" — extract what the coding agent actually said.
+If you run out of steps and the session is still running, return "session still running" with the sessionId to the caller so it can reschedule.
+
+**Phase 3 — Execute (task status: Ready, or intent says "execute the plan"):**
+1. Call coding_ask with the sessionId and tell the coding agent to run /executing-plans to execute the approved plan.
+2. Poll with sleep(60) + coding_read_session — repeat up to 3 times (max 3 minutes). Execution takes longer — use 60-second sleeps.
+3. If still running after 3 polls, return "session still running" with the sessionId to the caller so it can reschedule.
+4. When completed, return the result to the caller.
+
+YOUR ROLE — YOU ARE A RELAY, NOT AN ANALYST:
+- When returning output from the coding agent, extract and return the coding agent's ACTUAL content (questions, plan, analysis) verbatim or lightly formatted.
+- Do NOT reinterpret, rewrite, add your own analysis, or editorialize on what the coding agent said.
+- Do NOT suggest restarting sessions, propose alternative approaches, or second-guess the coding agent's output.
+- If the coding agent asks "Shall I proceed?" → that's a question to relay to the user, not a signal that something is wrong.
+- If the coding agent produced an analysis with questions → return those questions as-is. The caller decides what to do.
+
+DECIDING WHAT TO ANSWER:
+- Do NOT answer brainstorming or planning questions yourself. Always relay them to the caller.
+- You may only answer logistical questions about tool usage (e.g., "what's the dir?") from context you already have.
+
+NON-CODING TASKS:
+For browser automation, shell commands, and other non-coding work, proceed normally:
+1. Analyze the intent
+2. Select the right tool(s)
+3. Execute with correct parameters
+4. Chain tools if needed for multi-step tasks
 
 RESPONSE:
 After execution, provide a clear summary of:
@@ -203,6 +299,7 @@ export async function createGatewayAgent(
   executorTools?: OrchestratorTools,
   interactive: boolean = true,
   modelConfig?: ModelConfig,
+  sessionCtx?: SessionContext,
 ): Promise<{ agent: Agent; connected: boolean }> {
   const gateway = await getGateway(gatewayId);
 
@@ -227,6 +324,7 @@ export async function createGatewayAgent(
     gatewayTools,
     executorTools,
     interactive,
+    sessionCtx,
   );
 
   const agentId = `gateway_${gateway.name.toLowerCase().replace(/[^a-z0-9]/g, "_")}`;
@@ -259,6 +357,7 @@ export async function createGatewayAgents(
   executorTools?: OrchestratorTools,
   interactive: boolean = true,
   modelConfig?: ModelConfig,
+  sessionCtx?: SessionContext,
 ): Promise<{ agents: Record<string, Agent>; agentList: Agent[] }> {
   const agents: Record<string, Agent> = {};
   const agentList: Agent[] = [];
@@ -270,6 +369,8 @@ export async function createGatewayAgents(
       gw.id,
       executorTools,
       interactive,
+      modelConfig,
+      sessionCtx,
     );
     if (connected) {
       const agentId = `gateway_${gw.name.toLowerCase().replace(/[^a-z0-9]/g, "_")}`;

@@ -1,5 +1,5 @@
 import { RiGithubFill, RiMailFill, RiLinkedinFill } from "@remixicon/react";
-import { Chromium, Code, Globe, LayoutGrid } from "lucide-react";
+import { Chromium, Code, Globe, LayoutGrid, RefreshCw } from "lucide-react";
 import { LinearIcon, SlackIcon } from "./icons";
 import { Cursor } from "./icons/cursor";
 import { Claude } from "./icons/claude";
@@ -43,6 +43,7 @@ import { TaskStatus } from "@core/database";
 import { Task } from "./icons/task";
 import { Spotify } from "./icons/spotify";
 import { Stripe } from "./icons/stripe";
+import { InReviewLine } from "./icons/in-review-line";
 
 export const ICON_MAPPING = {
   slack: SlackIcon,
@@ -137,9 +138,11 @@ export const getIconForAuthorise = (
 };
 
 export const TaskStatusIcons: Record<TaskStatus, React.ElementType> = {
-  Backlog: BacklogLine,
   Todo: TodoLine,
-  InProgress: InProgressLine,
-  Blocked: BlockedLine,
-  Completed: DoneFill,
+  Waiting: BlockedLine,
+  Ready: TodoLine,
+  Working: InProgressLine,
+  Review: InReviewLine,
+  Done: DoneFill,
+  Recurring: RefreshCw,
 };

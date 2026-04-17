@@ -1,24 +1,8 @@
-import {
-  type ActionFunctionArgs,
-  type LoaderFunctionArgs,
-} from "@remix-run/server-runtime";
+import { type LoaderFunctionArgs } from "@remix-run/server-runtime";
 import { useTypedLoaderData } from "remix-typedjson";
-import { parseWithZod } from "@conform-to/zod/v4";
-import { redirect, json } from "@remix-run/node";
-import {
-  requireUser,
-  requireUserId,
-  requireWorkpace,
-} from "~/services/session.server";
-
+import { requireUser, requireWorkpace } from "~/services/session.server";
 import { ConversationNew } from "~/components/conversation";
-import {
-  createConversation,
-  CreateConversationSchema,
-} from "~/services/conversation.server";
 import { getAvailableModels } from "~/services/llm-provider.server";
-
-import { PageHeader } from "~/components/common/page-header";
 
 export async function loader({ request }: LoaderFunctionArgs) {
   // Only return userId, not the heavy nodeLinks
@@ -39,72 +23,25 @@ export async function loader({ request }: LoaderFunctionArgs) {
 
   const meta = (workspace?.metadata ?? {}) as Record<string, unknown>;
   const accentColor = (meta.accentColor as string) || "#c87844";
-  return { user, models, workspace, accentColor };
+  const url = new URL(request.url);
+  const defaultMessage = url.searchParams.get("msg") ?? undefined;
+  return { user, models, workspace, accentColor, defaultMessage };
 }
 
-export async function action({ request }: ActionFunctionArgs) {
-  if (request.method.toUpperCase() !== "POST") {
-    return new Response("Method Not Allowed", { status: 405 });
-  }
-
-  const userId = await requireUserId(request);
-  const workspace = await requireWorkpace(request);
-  const formData = await request.formData();
-
-  const submission = parseWithZod(formData, {
-    schema: CreateConversationSchema,
-  });
-
-  if (submission.status !== "success") {
-    return json(submission.reply());
-  }
-
-  const conversation = await createConversation(
-    workspace?.id as string,
-    userId,
-    {
-      message: submission.value.message,
-      title: submission.value.title ?? "Untitled",
-      incognito: Boolean(submission.value.incognito),
-      parts: [{ text: submission.value.message, type: "text" }],
-    },
-  );
-
-  // If conversationId exists in submission, return the conversation data (don't redirect)
-  if (submission.value.conversationId) {
-    return json({ conversation });
-  }
-
-  // For new conversations (no conversationId), redirect to the conversation page
-  const conversationId = conversation?.conversationId;
-
-  if (conversationId) {
-    const modelId = submission.value.modelId;
-    const url = modelId
-      ? `/home/conversation/${conversationId}?modelId=${encodeURIComponent(modelId)}`
-      : `/home/conversation/${conversationId}`;
-    return redirect(url);
-  }
-
-  // fallback: just return the conversation object
-  return json({ conversation });
-}
 
 export default function Chat() {
-  const { user, models, workspace, accentColor } =
+  const { user, models, workspace, accentColor, defaultMessage } =
     useTypedLoaderData<typeof loader>();
 
+  if (typeof window === "undefined") return null;
+
   return (
-    <>
-      <PageHeader title="Conversation" />
-      {typeof window !== "undefined" && (
-        <ConversationNew
-          user={user}
-          models={models}
-          name={workspace?.name ?? "core"}
-          accentColor={accentColor}
-        />
-      )}
-    </>
+    <ConversationNew
+      user={user}
+      models={models}
+      name={workspace?.name ?? "core"}
+      accentColor={accentColor}
+      defaultMessage={defaultMessage}
+    />
   );
 }

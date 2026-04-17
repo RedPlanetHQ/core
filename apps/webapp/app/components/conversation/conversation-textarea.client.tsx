@@ -17,6 +17,10 @@ import {
   SelectTrigger,
   SelectValue,
 } from "../ui/select";
+import {
+  createSkillSlashCommand,
+  SkillSlashPluginKey,
+} from "./slash-command-extension";
 
 export interface LLMModel {
   id: string;
@@ -39,6 +43,8 @@ interface ConversationTextareaProps {
   selectedModelId?: string;
   onModelChange?: (modelId: string) => void;
   needsApproval?: boolean;
+  leftActions?: React.ReactNode;
+  skills?: Array<{ id: string; title: string }>;
 }
 
 export function ConversationTextarea({
@@ -53,12 +59,21 @@ export function ConversationTextarea({
   models,
   selectedModelId,
   onModelChange,
+  leftActions,
+  className,
+  skills,
 }: ConversationTextareaProps) {
   const [text, setText] = useState(defaultValue ?? "");
   const submit = useSubmit();
 
   // Use a ref so the keyboard handler always sees current values without stale closures
   const sendRef = useRef<() => void>(() => {});
+
+  // Skills ref for slash command (updated when skills prop changes)
+  const skillsRef = useRef<Array<{ id: string; title: string }>>(skills ?? []);
+  useEffect(() => {
+    skillsRef.current = skills ?? [];
+  }, [skills]);
 
   const editor = useEditor({
     extensions: [
@@ -76,6 +91,7 @@ export function ConversationTextarea({
         includeChildren: true,
       }),
       History,
+      createSkillSlashCommand(skillsRef),
     ],
     immediatelyRender: false,
     editorProps: {
@@ -88,9 +104,9 @@ export function ConversationTextarea({
         }
 
         if (event.key === "Enter" && !event.shiftKey) {
-          // eslint-disable-next-line @typescript-eslint/no-explicit-any
-          const target = event.target as any;
-          if (target.innerHTML.includes("suggestion")) {
+          // Let the slash command suggestion handle Enter when active
+          const suggestionState = SkillSlashPluginKey.getState(view.state);
+          if (suggestionState?.active) {
             return false;
           }
           event.preventDefault();
@@ -154,9 +170,12 @@ export function ConversationTextarea({
     <div className="bg-background-3 rounded-xl">
       <EditorContent
         editor={editor}
-        className="max-h-[200px] min-h-[48px] w-full overflow-auto px-4 pt-4 text-base"
+        className={cn(
+          "max-h-[200px] min-h-[48px] w-full overflow-auto px-4 text-base",
+          className,
+        )}
       />
-      <div className="flex items-center justify-between px-3 pb-3 pt-1">
+      <div className="flex items-center justify-between px-3 pb-2 pt-1">
         <div>
           {showModelSelector && (
             <Select value={selectedModelId} onValueChange={onModelChange}>

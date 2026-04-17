@@ -6,8 +6,9 @@ import {
   MessageSquare,
   Tag,
   Brain,
-  Clock,
   Library,
+  MessagesSquare,
+  CalendarDays,
 } from "lucide-react";
 import {
   CommandDialog,
@@ -22,10 +23,15 @@ import {
 
 import { useNavigate } from "@remix-run/react";
 import { useDebounce } from "~/hooks/use-debounce";
-import { NewTaskDialog } from "~/components/tasks/new-task-dialog.client";
 import { Task } from "../icons/task";
 
 const NAV_ITEMS = [
+  {
+    label: "Go to Chats",
+    url: "/home/conversation",
+    icon: MessagesSquare,
+    shortcut: "G C",
+  },
   {
     label: "Go to Tasks",
     url: "/home/tasks",
@@ -39,9 +45,9 @@ const NAV_ITEMS = [
     shortcut: "G M",
   },
   {
-    label: "Go to Documents",
-    url: "/home/memory/documents",
-    icon: File,
+    label: "Go to Daily",
+    url: "/home/daily",
+    icon: CalendarDays,
     shortcut: "G D",
   },
   {
@@ -49,12 +55,6 @@ const NAV_ITEMS = [
     url: "/home/agent/skills",
     icon: Library,
     shortcut: "G S",
-  },
-  {
-    label: "Go to Automations",
-    url: "/home/agent/automations",
-    icon: Clock,
-    shortcut: "G A",
   },
 ];
 
@@ -101,8 +101,6 @@ export function CommandBar({ open, onOpenChange }: CommandBarProps) {
   const [labelResults, setLabelResults] = useState<LabelResult[]>([]);
   const [taskResults, setTaskResults] = useState<TaskResult[]>([]);
   const [isSearching, setIsSearching] = useState(false);
-  const [newTaskOpen, setNewTaskOpen] = useState(false);
-  const [isCreatingTask, setIsCreatingTask] = useState(false);
   const navigate = useNavigate();
 
   // Search documents and conversations when debounced query changes
@@ -170,35 +168,7 @@ export function CommandBar({ open, onOpenChange }: CommandBarProps) {
 
   const handleAddTask = () => {
     onOpenChange(false);
-    setNewTaskOpen(true);
-  };
-
-  const handleTaskCreate = async (title: string, description: string) => {
-    setIsCreatingTask(true);
-    try {
-      const formData = new FormData();
-      formData.set("intent", "create");
-      formData.set("title", title);
-      if (description) formData.set("description", description);
-
-      const res = await fetch("/home/tasks", {
-        method: "POST",
-        body: formData,
-      });
-      if (res.ok) {
-        const data = await res.json();
-        setNewTaskOpen(false);
-        if (data?.task?.id) {
-          navigate(`/home/tasks?taskId=${data.task.id}`);
-        } else {
-          navigate(`/home/tasks`);
-        }
-      }
-    } catch (error) {
-      console.error("Task creation failed:", error);
-    } finally {
-      setIsCreatingTask(false);
-    }
+    navigate("/home/conversation?msg=Create+a+new+task");
   };
 
   const handleDocumentClick = (documentId: string) => {
@@ -217,211 +187,205 @@ export function CommandBar({ open, onOpenChange }: CommandBarProps) {
   };
 
   const handleTaskClick = (taskId: string) => {
-    navigate(`/home/tasks?taskId=${taskId}`);
+    navigate(`/home/tasks/${taskId}`);
     onOpenChange(false);
   };
 
   return (
-    <>
-      <CommandDialog open={open} onOpenChange={onOpenChange}>
-        <Command shouldFilter={false}>
-          <CommandInput
-            placeholder="Search conversations, tasks and documents..."
-            className="py-1"
-            value={searchQuery}
-            onValueChange={setSearchQuery}
-          />
-          <CommandList className="h-72">
-            <CommandEmpty className="text-muted-foreground p-4 text-center text-sm">
-              {debouncedQuery.length >= 2 &&
-              !isSearching &&
-              documentResults.length === 0
-                ? "No documents found."
-                : ""}
-            </CommandEmpty>
+    <CommandDialog open={open} onOpenChange={onOpenChange}>
+      <Command shouldFilter={false}>
+        <CommandInput
+          placeholder="Search conversations, tasks and documents..."
+          className="py-1"
+          value={searchQuery}
+          onValueChange={setSearchQuery}
+        />
+        <CommandList className="h-72">
+          <CommandEmpty className="text-muted-foreground p-4 text-center text-sm">
+            {debouncedQuery.length >= 2 &&
+            !isSearching &&
+            documentResults.length === 0
+              ? "No documents found."
+              : ""}
+          </CommandEmpty>
 
-            <CommandGroup heading="Navigate" className="p-2">
-              {NAV_ITEMS.filter(
-                (item) =>
+          <CommandGroup heading="Navigate" className="p-2">
+            {NAV_ITEMS.filter(
+              (item) =>
+                !searchQuery.trim() ||
+                item.label.toLowerCase().includes(searchQuery.toLowerCase()),
+            ).map((item) => (
+              <CommandItem
+                key={item.url}
+                onSelect={() => {
+                  navigate(item.url);
+                  onOpenChange(false);
+                }}
+                className="flex w-full items-center gap-2 py-1"
+              >
+                <item.icon className="mr-2 h-4 w-4" />
+                <span className="flex-1">{item.label}</span>
+                <span className="text-muted-foreground ml-auto flex gap-1 text-xs">
+                  {item.shortcut.split(" ").map((key, i) => (
+                    <div
+                      key={i}
+                      className="bg-grayAlpha-100 rounded px-1.5 py-0.5 font-mono"
+                    >
+                      {key}
+                    </div>
+                  ))}
+                </span>
+              </CommandItem>
+            ))}
+          </CommandGroup>
+
+          <CommandSeparator />
+
+          <CommandGroup heading="Actions" className="p-2">
+            {[
+              {
+                label: "New Chat",
+                icon: MessageSquare,
+                onSelect: handleNewChat,
+              },
+              { label: "Add Task", icon: Task, onSelect: handleAddTask },
+              {
+                label: "Add Document",
+                icon: Plus,
+                onSelect: handleAddDocument,
+              },
+            ]
+              .filter(
+                (action) =>
                   !searchQuery.trim() ||
-                  item.label
+                  action.label
                     .toLowerCase()
                     .includes(searchQuery.toLowerCase()),
-              ).map((item) => (
+              )
+              .map((action) => (
                 <CommandItem
-                  key={item.url}
-                  onSelect={() => {
-                    navigate(item.url);
-                    onOpenChange(false);
-                  }}
-                  className="flex w-full items-center gap-2 py-1"
+                  key={action.label}
+                  onSelect={action.onSelect}
+                  className="flex items-center gap-2 py-1"
                 >
-                  <item.icon className="mr-2 h-4 w-4" />
-                  <span className="flex-1">{item.label}</span>
-                  <span className="text-muted-foreground ml-auto flex gap-1 text-xs">
-                    {item.shortcut.split(" ").map((key, i) => (
-                      <div
-                        key={i}
-                        className="bg-grayAlpha-100 rounded px-1.5 py-0.5 font-mono"
-                      >
-                        {key}
-                      </div>
-                    ))}
+                  <action.icon className="mr-2 h-4 w-4" />
+                  <span>{action.label}</span>
+                </CommandItem>
+              ))}
+          </CommandGroup>
+
+          {/* Labels */}
+          {labelResults.length > 0 && (
+            <CommandGroup heading="Labels" className="max-w-[700px] p-2">
+              {labelResults.map((label) => (
+                <CommandItem
+                  key={label.id}
+                  value={label.id}
+                  onSelect={() => handleLabelClick(label.id)}
+                  className="flex items-center gap-2 py-2"
+                >
+                  <Tag
+                    className="h-4 w-4 flex-shrink-0"
+                    style={{ color: label.color }}
+                  />
+                  <span className="text-foreground truncate text-sm">
+                    {label.name}
                   </span>
                 </CommandItem>
               ))}
             </CommandGroup>
+          )}
 
-            <CommandSeparator />
-
-            <CommandGroup heading="Actions" className="p-2">
-              {[
-                { label: "New Chat", icon: MessageSquare, onSelect: handleNewChat },
-                { label: "Add Task", icon: Task, onSelect: handleAddTask },
-                { label: "Add Document", icon: Plus, onSelect: handleAddDocument },
-              ]
-                .filter(
-                  (action) =>
-                    !searchQuery.trim() ||
-                    action.label.toLowerCase().includes(searchQuery.toLowerCase()),
-                )
-                .map((action) => (
-                  <CommandItem
-                    key={action.label}
-                    onSelect={action.onSelect}
-                    className="flex items-center gap-2 py-1"
-                  >
-                    <action.icon className="mr-2 h-4 w-4" />
-                    <span>{action.label}</span>
-                  </CommandItem>
-                ))}
+          {/* Tasks */}
+          {taskResults.length > 0 && (
+            <CommandGroup heading="Tasks" className="max-w-[700px] p-2">
+              {taskResults.map((task) => (
+                <CommandItem
+                  key={task.id}
+                  value={task.id}
+                  onSelect={() => handleTaskClick(task.id)}
+                  className="flex items-center gap-2 py-2"
+                >
+                  <Task className="h-4 w-4 flex-shrink-0" />
+                  <span className="text-foreground truncate text-sm">
+                    {task.title}
+                  </span>
+                </CommandItem>
+              ))}
             </CommandGroup>
+          )}
 
-            {/* Labels */}
-            {labelResults.length > 0 && (
-              <CommandGroup heading="Labels" className="max-w-[700px] p-2">
-                {labelResults.map((label) => (
-                  <CommandItem
-                    key={label.id}
-                    value={label.id}
-                    onSelect={() => handleLabelClick(label.id)}
-                    className="flex items-center gap-2 py-2"
-                  >
-                    <Tag
-                      className="h-4 w-4 flex-shrink-0"
-                      style={{ color: label.color }}
-                    />
-                    <span className="text-foreground truncate text-sm">
-                      {label.name}
-                    </span>
-                  </CommandItem>
-                ))}
-              </CommandGroup>
+          {/* Conversations */}
+          {conversationResults.length > 0 && (
+            <CommandGroup heading="Conversations" className="max-w-[700px] p-2">
+              {conversationResults.map((conv) => (
+                <CommandItem
+                  key={conv.id}
+                  value={conv.id}
+                  onSelect={() => handleConversationClick(conv.id)}
+                  className="flex items-center gap-2 py-2"
+                >
+                  <MessageSquare className="h-4 w-4 flex-shrink-0" />
+                  <div className="min-w-0 flex-1">
+                    <p className="text-foreground truncate text-sm">
+                      {conv.title || "Untitled Conversation"}
+                    </p>
+                    <p className="text-muted-foreground text-xs">
+                      {new Date(conv.updatedAt).toLocaleDateString("en-US", {
+                        month: "short",
+                        day: "numeric",
+                        year: "numeric",
+                      })}
+                    </p>
+                  </div>
+                </CommandItem>
+              ))}
+            </CommandGroup>
+          )}
+
+          {/* Documents */}
+          <CommandGroup heading="Documents" className="max-w-[700px] p-2">
+            {isSearching && (
+              <div className="flex items-center justify-center py-4">
+                <Loader2 className="text-muted-foreground h-4 w-4 animate-spin" />
+              </div>
             )}
 
-            {/* Tasks */}
-            {taskResults.length > 0 && (
-              <CommandGroup heading="Tasks" className="max-w-[700px] p-2">
-                {taskResults.map((task) => (
-                  <CommandItem
-                    key={task.id}
-                    value={task.id}
-                    onSelect={() => handleTaskClick(task.id)}
-                    className="flex items-center gap-2 py-2"
-                  >
-                    <Task className="h-4 w-4 flex-shrink-0" />
-                    <span className="text-foreground truncate text-sm">
-                      {task.title}
-                    </span>
-                  </CommandItem>
-                ))}
-              </CommandGroup>
-            )}
+            {!isSearching &&
+              documentResults.map((doc) => (
+                <CommandItem
+                  key={doc.id}
+                  value={doc.id}
+                  onSelect={() => handleDocumentClick(doc.id)}
+                  className="flex items-center gap-2 py-2"
+                  disabled={false}
+                >
+                  <File className="h-4 w-4 flex-shrink-0" />
+                  <div className="min-w-0 flex-1">
+                    <p className="text-foreground truncate text-sm">
+                      {doc.title}
+                    </p>
+                    <p className="text-muted-foreground text-xs">
+                      {new Date(doc.updatedAt).toLocaleDateString("en-US", {
+                        month: "short",
+                        day: "numeric",
+                        year: "numeric",
+                      })}
+                    </p>
+                  </div>
+                </CommandItem>
+              ))}
 
-            {/* Conversations */}
-            {conversationResults.length > 0 && (
-              <CommandGroup
-                heading="Conversations"
-                className="max-w-[700px] p-2"
-              >
-                {conversationResults.map((conv) => (
-                  <CommandItem
-                    key={conv.id}
-                    value={conv.id}
-                    onSelect={() => handleConversationClick(conv.id)}
-                    className="flex items-center gap-2 py-2"
-                  >
-                    <MessageSquare className="h-4 w-4 flex-shrink-0" />
-                    <div className="min-w-0 flex-1">
-                      <p className="text-foreground truncate text-sm">
-                        {conv.title || "Untitled Conversation"}
-                      </p>
-                      <p className="text-muted-foreground text-xs">
-                        {new Date(conv.updatedAt).toLocaleDateString("en-US", {
-                          month: "short",
-                          day: "numeric",
-                          year: "numeric",
-                        })}
-                      </p>
-                    </div>
-                  </CommandItem>
-                ))}
-              </CommandGroup>
-            )}
-
-            {/* Documents */}
-            <CommandGroup heading="Documents" className="max-w-[700px] p-2">
-              {isSearching && (
-                <div className="flex items-center justify-center py-4">
-                  <Loader2 className="text-muted-foreground h-4 w-4 animate-spin" />
+            {!isSearching &&
+              documentResults.length === 0 &&
+              debouncedQuery.length < 2 && (
+                <div className="text-muted-foreground py-4 text-center text-sm">
+                  Start typing to search
                 </div>
               )}
-
-              {!isSearching &&
-                documentResults.map((doc) => (
-                  <CommandItem
-                    key={doc.id}
-                    value={doc.id}
-                    onSelect={() => handleDocumentClick(doc.id)}
-                    className="flex items-center gap-2 py-2"
-                    disabled={false}
-                  >
-                    <File className="h-4 w-4 flex-shrink-0" />
-                    <div className="min-w-0 flex-1">
-                      <p className="text-foreground truncate text-sm">
-                        {doc.title}
-                      </p>
-                      <p className="text-muted-foreground text-xs">
-                        {new Date(doc.updatedAt).toLocaleDateString("en-US", {
-                          month: "short",
-                          day: "numeric",
-                          year: "numeric",
-                        })}
-                      </p>
-                    </div>
-                  </CommandItem>
-                ))}
-
-              {!isSearching &&
-                documentResults.length === 0 &&
-                debouncedQuery.length < 2 && (
-                  <div className="text-muted-foreground py-4 text-center text-sm">
-                    Start typing to search
-                  </div>
-                )}
-            </CommandGroup>
-          </CommandList>
-        </Command>
-      </CommandDialog>
-
-      {newTaskOpen && (
-        <NewTaskDialog
-          open={newTaskOpen}
-          onOpenChange={setNewTaskOpen}
-          onSubmit={handleTaskCreate}
-          isSubmitting={isCreatingTask}
-        />
-      )}
-    </>
+          </CommandGroup>
+        </CommandList>
+      </Command>
+    </CommandDialog>
   );
 }

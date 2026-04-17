@@ -21,6 +21,7 @@ interface Skill {
   title: string | null;
   content: string | null;
   metadata: Record<string, unknown> | null;
+  source?: string | null;
 }
 
 interface SkillEditorProps {
@@ -29,6 +30,7 @@ interface SkillEditorProps {
 
 export const SkillEditor = ({ skill }: SkillEditorProps) => {
   const isEditMode = !!skill;
+  const isDefaultSkill = !!skill?.metadata?.skillType;
   const [name, setName] = useState(skill?.title ?? "");
   const [shortDescription, setShortDescription] = useState(
     (skill?.metadata?.shortDescription as string) ?? "",
@@ -48,8 +50,7 @@ export const SkillEditor = ({ skill }: SkillEditorProps) => {
       api: "/api/v1/skills/generate",
       prepareSendMessagesRequest({ messages: msgs }) {
         const lastUser = msgs.findLast((m: any) => m.role === "user");
-        const prompt =
-          lastUser?.parts?.[0]?.text ?? lastUser?.content ?? "";
+        const prompt = lastUser?.parts?.[0]?.text ?? lastUser?.content ?? "";
         return {
           body: {
             prompt,
@@ -103,8 +104,9 @@ export const SkillEditor = ({ skill }: SkillEditorProps) => {
 
   const handleGenerateDesc = () => {
     if (!descIntent.trim()) return;
-    existingDescRef.current =
-      (editor?.storage.markdown.getMarkdown() ?? "").trim();
+    existingDescRef.current = (
+      editor?.storage.markdown.getMarkdown() ?? ""
+    ).trim();
     sendMessage({ text: descIntent.trim() });
   };
 
@@ -199,7 +201,7 @@ export const SkillEditor = ({ skill }: SkillEditorProps) => {
   };
 
   return (
-    <div className="flex h-[calc(100vh-56px)] w-full max-w-full flex-col items-center space-y-6 pt-3">
+    <div className="flex w-full max-w-full flex-1 flex-col items-center space-y-6 overflow-hidden pt-3">
       <div className="flex h-full w-full flex-1 flex-col items-center overflow-y-auto">
         <div className="md:min-w-3xl min-w-[0px] max-w-4xl">
           <div>
@@ -277,8 +279,8 @@ export const SkillEditor = ({ skill }: SkillEditorProps) => {
           </div>
         </div>
       </div>
-      <div className="flex w-full justify-between gap-2 border-t border-gray-300 p-2">
-        {isEditMode ? (
+      <div className="flex w-full shrink-0 justify-between gap-2 border-t border-gray-300 p-2">
+        {isEditMode && skill?.source !== "persona-v2" ? (
           <DeleteSkillAlert onDelete={handleDelete} isLoading={isLoading} />
         ) : (
           <div />

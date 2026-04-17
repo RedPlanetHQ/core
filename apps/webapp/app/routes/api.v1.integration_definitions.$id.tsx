@@ -31,7 +31,7 @@ const UpdateIntegrationDefinitionBodySchema = z.object({
       mcp: z.object({
         type: z.enum(["cli", "http"]),
         url: z.string().optional(),
-        headers: z.record(z.string()).optional(),
+        headers: z.record(z.string(), z.string()).optional(),
         needsAuth: z.boolean().optional(),
       }),
       schedule: z
@@ -39,7 +39,7 @@ const UpdateIntegrationDefinitionBodySchema = z.object({
           frequency: z.string(),
         })
         .optional(),
-      auth: z.record(z.any()),
+      auth: z.record(z.string(), z.any()),
     })
     .optional(),
   _method: z.enum(["PUT", "DELETE"]).optional(),

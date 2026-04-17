@@ -1,0 +1,46 @@
+[package]
+name = "core-desktop"
+version = "0.1.0"
+description = "CORE Desktop App"
+authors = []
+edition = "2021"
+default-run = "core-desktop"
+
+[lib]
+name = "core_desktop_lib"
+crate-type = ["staticlib", "cdylib", "rlib"]
+
+[[bin]]
+name = "core-desktop"
+path = "src/main.rs"
+
+[[bin]]
+name = "ax_debug"
+path = "src/bin/ax_debug.rs"
+required-features = ["ax-debug"]
+
+[build-dependencies]
+tauri-build = { version = "2", features = [] }
+
+[dependencies]
+tauri = { version = "2", features = ["tray-icon"] }
+tauri-plugin-shell = "2"
+tauri-plugin-updater = "2"
+serde = { version = "1", features = ["derive"] }
+serde_json = "1"
+base64 = "0.21"
+portable-pty = "0.8"
+ureq = { version = "2", features = ["json"] }
+chrono = "0.4"
+uuid = { version = "1", features = ["v4"] }
+
+[target.'cfg(target_os = "macos")'.dependencies]
+objc = "0.2"
+core-foundation = "0.9"
+
+[profile.release]
+panic = "abort"
+codegen-units = 1
+lto = true
+opt-level = "s"
+strip = true

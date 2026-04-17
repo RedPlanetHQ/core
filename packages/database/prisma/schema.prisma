@@ -101,10 +101,12 @@ model Conversation {
   workspace   Workspace? @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
   workspaceId String?
 
-  status String @default("pending") // Can be "pending", "running", "completed", "failed", "need_attention"
+  status         String  @default("pending") // Can be "pending", "running", "completed", "failed", "need_attention"
+  activeStreamId String? // Set while background stream is active; cleared on completion
 
   ConversationHistory ConversationHistory[]
   RecallLog           RecallLog[]
+  codingSessions      CodingSession[]
 }
 
 model CompactedSessionEmbedding {
@@ -420,6 +422,8 @@ model Gateway {
 
   @@unique([workspaceId, name])
   @@index([workspaceId, status])
+
+  codingSessions CodingSession[]
 }
 
 enum GatewayStatus {
@@ -697,17 +701,18 @@ model RecallLog {
 }
 
 model Channel {
-  id          String    @id @default(uuid())
+  id          String     @id @default(uuid())
   workspaceId String
-  workspace   Workspace @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+  workspace   Workspace  @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
   name        String
   type        String // "slack" | "telegram" | "whatsapp" | "email"
   config      Json // type-specific: Slack: { bot_token, user_token?, channel_id?, team_id?, team_name? } Telegram: { bot_token, chat_id, username? }
-  isDefault   Boolean   @default(false)
-  isActive    Boolean   @default(true)
-  createdAt   DateTime  @default(now())
-  updatedAt   DateTime  @updatedAt
+  isDefault   Boolean    @default(false)
+  isActive    Boolean    @default(true)
+  createdAt   DateTime   @default(now())
+  updatedAt   DateTime   @updatedAt
   reminders   Reminder[]
+  tasks       Task[]
 
   @@index([workspaceId])
   @@index([workspaceId, type])
@@ -1041,17 +1046,21 @@ model Workspace {
   channels                Channel[]
   tasks                   Task[]
   pages                   Page[]
+  butlerComments          ButlerComment[]
   voiceAspects            VoiceAspect[]
   voiceAspectEmbeddings   VoiceAspectEmbedding[]
   llmProviders            LLMProvider[]
+  codingSessions          CodingSession[]
 }
 
 enum TaskStatus {
-  Backlog
   Todo
-  InProgress
-  Blocked
-  Completed
+  Waiting
+  Ready
+  Working
+  Review
+  Done
+  Recurring
 }
 
 model Task {
@@ -1061,7 +1070,7 @@ model Task {
 
   title       String
   description String?
-  status      TaskStatus @default(Backlog)
+  status      TaskStatus @default(Todo)
 
   conversationIds String[]
 
@@ -1075,12 +1084,48 @@ model Task {
   jobId    String?
   metadata Json?   @default("{}")
 
-  pageId String?
+  // Scheduling fields (unified with reminders)
+  schedule         String? // RRule string for recurring (null = one-time or immediate)
+  nextRunAt        DateTime? // When to fire next (one-time scheduled or recurring)
+  lastRunAt        DateTime?
+  occurrenceCount  Int       @default(0)
+  maxOccurrences   Int? // null = unlimited, 1 = one-shot
+  isActive         Boolean   @default(true)
+  startDate        DateTime? // Don't fire before this date
+  endDate          DateTime? // Auto-deactivate after this date
+  confirmedActive  Boolean   @default(false)
+  unrespondedCount Int       @default(0)
+
+  channel    String? // Delivery channel name/type
+  channelId  String? // FK to Channel table
+  channelRef Channel? @relation(fields: [channelId], references: [id], onDelete: SetNull)
+
+  parentTaskId String? // FK to self (subtasks/follow-ups)
+  parentTask   Task?   @relation("TaskSubtasks", fields: [parentTaskId], references: [id], onDelete: SetNull)
+  subtasks     Task[]  @relation("TaskSubtasks")
+
+  displayId String? // Hierarchical human-readable ID e.g. tk-abcde, tk-abcde.1.2
+
+  pageId String? @unique
+  page   Page?   @relation("TaskPage", fields: [pageId], references: [id], onDelete: SetNull)
   source String  @default("manual")
 
+  codingSessions CodingSession[]
+
+
+  @@unique([workspaceId, displayId])
   @@index([workspaceId])
   @@index([workspaceId, status])
   @@index([userId, status])
+  @@index([nextRunAt])
+  @@index([isActive])
+  @@index([parentTaskId])
+  @@index([workspaceId, isActive, nextRunAt])
+}
+
+enum PageType {
+  Daily
+  Task
 }
 
 model Page {
@@ -1089,16 +1134,44 @@ model Page {
   updatedAt DateTime  @updatedAt
   deleted   DateTime?
 
-  date             DateTime
-  description      String?
+  type              PageType  @default(Daily)
+  date              DateTime?
+  description       String?
   descriptionBinary Bytes?
+  butlerLastSeen    Bytes?
+  outlinks          Json?     @default("[]")
 
   workspaceId String
   workspace   Workspace @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
   userId      String
 
+  task   Task? @relation("TaskPage")
+  butlerComments ButlerComment[]
+
   @@unique([workspaceId, userId, date])
   @@index([workspaceId, userId])
+}
+
+model ButlerComment {
+  id         String    @id @default(uuid())
+  createdAt  DateTime  @default(now())
+  updatedAt  DateTime  @updatedAt
+  resolved   Boolean   @default(false)
+  resolvedAt DateTime?
+
+  selectedText   String
+  content        String
+  relativeStart  Json?
+  relativeEnd    Json?
+
+  pageId         String
+  conversationId String?
+  workspaceId    String
+
+  page      Page      @relation(fields: [pageId], references: [id], onDelete: Cascade)
+  workspace Workspace @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+
+  @@index([pageId, resolved])
 }
 
 enum PlanType {
@@ -1190,4 +1263,39 @@ model LLMModel {
 
   @@index([providerId])
   @@index([complexity])
+}
+
+// ---------------------------------------------------------------------------
+// Coding Sessions
+// ---------------------------------------------------------------------------
+
+model CodingSession {
+  id        String   @id @default(cuid())
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  externalSessionId String?
+  agent             String
+  prompt            String?
+  dir               String?
+  worktreePath      String?
+  worktreeBranch    String?
+
+  task           Task?         @relation(fields: [taskId], references: [id], onDelete: Cascade)
+  taskId         String?
+
+  conversation   Conversation? @relation(fields: [conversationId], references: [id], onDelete: SetNull)
+  conversationId String?
+
+  gateway   Gateway? @relation(fields: [gatewayId], references: [id], onDelete: SetNull)
+  gatewayId String?
+
+  workspace   Workspace @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+  workspaceId String
+  userId      String
+
+  @@index([taskId])
+  @@index([workspaceId])
+  @@index([conversationId])
+  @@index([gatewayId])
 }

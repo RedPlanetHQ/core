@@ -15,6 +15,8 @@ import type {
   GetDocumentsResponse,
   GetDocumentInput,
   GetDocumentResponse,
+  GetSkillInput,
+  GetSkillResponse,
   GetGatewaysResponse,
   ExecuteGatewayInput,
   ExecuteGatewayToolInput,
@@ -73,10 +75,15 @@ export class CoreClient {
     if (!response.ok) {
       let errorMessage: string;
       try {
-        const errorBody = await response.json();
-        errorMessage = errorBody.error || JSON.stringify(errorBody);
+        const rawText = await response.text();
+        try {
+          const errorBody = JSON.parse(rawText);
+          errorMessage = errorBody.error || JSON.stringify(errorBody);
+        } catch {
+          errorMessage = rawText || `HTTP ${response.status}`;
+        }
       } catch {
-        errorMessage = await response.text();
+        errorMessage = `HTTP ${response.status}`;
       }
       throw new CoreClientError(errorMessage, response.status);
     }
@@ -106,10 +113,15 @@ export class CoreClient {
     if (!response.ok) {
       let errorMessage: string;
       try {
-        const errorBody = await response.json();
-        errorMessage = errorBody.error || JSON.stringify(errorBody);
+        const rawText = await response.text();
+        try {
+          const errorBody = JSON.parse(rawText);
+          errorMessage = errorBody.error || JSON.stringify(errorBody);
+        } catch {
+          errorMessage = rawText || `HTTP ${response.status}`;
+        }
       } catch {
-        errorMessage = await response.text();
+        errorMessage = `HTTP ${response.status}`;
       }
       throw new CoreClientError(errorMessage, response.status);
     }
@@ -229,6 +241,19 @@ export class CoreClient {
     return this.request<GetDocumentResponse>(
       "GET",
       `/api/v1/documents/${params.documentId}`,
+    );
+  }
+
+  /**
+   * Get a single skill by ID.
+   * GET /api/v1/skills/:skillId
+   */
+  async getSkill(
+    params: GetSkillInput,
+  ): Promise<GetSkillResponse> {
+    return this.request<GetSkillResponse>(
+      "GET",
+      `/api/v1/skills/${params.skillId}`,
     );
   }
 

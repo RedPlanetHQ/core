@@ -73,3 +73,8 @@ maintenance/
 # Dolt database files (added by bd init)
 .dolt/
 *.db
+
+docs/superpowers/
+docs/brainstorms
+docs/ideation
+docs/plans

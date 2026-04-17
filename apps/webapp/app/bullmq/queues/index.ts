@@ -264,6 +264,43 @@ export const activityCaseQueue = new Queue("activity-case-queue", {
 });
 
 /**
+ * Scheduled task queue
+ * Handles scheduled/recurring tasks (unified with reminders)
+ */
+export const scheduledTaskQueue = new Queue("scheduled-task-queue", {
+  connection: getRedisConnection(),
+  defaultJobOptions: {
+    attempts: 3,
+    backoff: {
+      type: "exponential",
+      delay: 5000,
+    },
+    removeOnComplete: {
+      count: 100,
+    },
+    removeOnFail: {
+      count: 500,
+    },
+  },
+});
+
+/**
+ * Scratchpad scan queue
+ * Handles mention and proactive scratchpad processing (LLM + agent execution)
+ */
+export const scratchpadScanQueue = new Queue("scratchpad-scan-queue", {
+  connection: getRedisConnection(),
+  defaultJobOptions: {
+    attempts: 1,
+    // Remove immediately on complete so the same jobId can be reused for debouncing
+    removeOnComplete: true,
+    removeOnFail: {
+      age: 86400,
+    },
+  },
+});
+
+/**
  * Task queue
  * Handles long-running tasks
  */

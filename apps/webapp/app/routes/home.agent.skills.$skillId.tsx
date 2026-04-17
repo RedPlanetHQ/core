@@ -1,4 +1,4 @@
-import { json, type LoaderFunctionArgs } from "@remix-run/node";
+import { json, type LoaderFunctionArgs, type MetaFunction } from "@remix-run/node";
 import { useLoaderData, useNavigate } from "@remix-run/react";
 import { ArrowLeft, Inbox, LoaderCircle } from "lucide-react";
 import { PageHeader } from "~/components/common/page-header";
@@ -6,6 +6,11 @@ import { ClientOnly } from "remix-utils/client-only";
 import { SkillEditor } from "~/components/editor/skill-editor.client";
 import { prisma } from "~/db.server";
 import { getUser, getWorkspaceId } from "~/services/session.server";
+
+export const meta: MetaFunction<typeof loader> = ({ data }) => {
+  const title = data?.skill?.title;
+  return [{ title: title ? `${title} | Skills` : "Skills" }];
+};
 
 export async function loader({ request, params }: LoaderFunctionArgs) {
   const user = await getUser(request);
@@ -41,7 +46,7 @@ export default function SkillDetail() {
             },
           ]}
         />
-        <div className="flex h-[calc(100vh)] flex-col items-center justify-center gap-2 p-4 md:h-[calc(100vh_-_56px)]">
+        <div className="md:h-page flex h-[calc(100vh)] flex-col items-center justify-center gap-2 p-4">
           <Inbox size={30} />
           Skill not found
         </div>
@@ -51,7 +56,7 @@ export default function SkillDetail() {
 
   return (
     <>
-      <div className="flex h-full flex-col">
+      <div className="h-page-xs flex flex-col">
         <PageHeader title="Edit skill" />
 
         <ClientOnly
@@ -69,6 +74,7 @@ export default function SkillDetail() {
                   title: skill.title,
                   content: skill.content,
                   metadata: skill.metadata as Record<string, unknown> | null,
+                  source: skill.source,
                 }}
               />
             );

@@ -14,7 +14,7 @@ const ParamsSchema = z.object({
 
 const ChannelUpdateSchema = z.object({
   name: z.string().optional(),
-  config: z.record(z.string()).optional(),
+  config: z.record(z.string(), z.string()).optional(),
   isDefault: z.boolean().optional(),
   isActive: z.boolean().optional(),
 });
@@ -52,7 +52,10 @@ const { action, loader } = createActionApiRoute(
       // PATCH / PUT - Update
       if (request.method === "PATCH" || request.method === "PUT") {
         if (!body) {
-          return json({ success: false, message: "Request body is required" }, { status: 400 });
+          return json(
+            { success: false, message: "Request body is required" },
+            { status: 400 },
+          );
         }
 
         await updateChannel(channelId, workspaceId, body);
@@ -68,7 +71,10 @@ const { action, loader } = createActionApiRoute(
         return json({ success: true, message: "Channel deactivated" });
       }
 
-      return json({ success: false, message: "Method not supported" }, { status: 405 });
+      return json(
+        { success: false, message: "Method not supported" },
+        { status: 405 },
+      );
     } catch (error) {
       logger.error("Failed to manage channel", {
         error,

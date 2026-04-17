@@ -21,7 +21,6 @@ import {
   type StatementAspect,
   type StatementNode,
   type EpisodicNode,
-  type VoiceAspect,
   VOICE_ASPECTS,
 } from "@core/types";
 import { ProviderFactory } from "@core/providers";
@@ -30,7 +29,6 @@ import { getActiveVoiceAspects } from "~/services/aspectStore.server";
 import { createAgent, resolveModelString } from "~/lib/model.server";
 import { type ModelMessage } from "ai";
 import { type MessageListInput } from "@mastra/core/agent/message-list";
-import { Message } from "@anthropic-ai/sdk/resources";
 
 /**
  * Direct LLM call helper — replaces batch for single/few requests.
@@ -101,6 +99,36 @@ const MARKER_TO_ASPECT: Record<string, StatementAspect> = {
 export interface ParsedPersonaSections {
   header: string; // Everything before the first ## section (# PERSONA, metadata)
   sections: Map<StatementAspect, string>; // aspect → full section content (including ## header)
+  pinnedSections: Set<StatementAspect>; // aspects whose content is user-pinned (skip LLM regeneration)
+}
+
+/**
+ * Minimum Jaccard similarity required between an existing section and the
+ * post-delta merged section. Below this threshold the delta is rejected and
+ * the existing section is kept verbatim — guards against the LLM rewriting
+ * the whole section instead of applying a small patch.
+ *
+ * 0.5 means at least half the word-tokens must overlap. Tune if needed.
+ */
+const INCREMENTAL_JACCARD_THRESHOLD = 0.5;
+
+/**
+ * Word-level Jaccard similarity between two strings.
+ * Returns 1.0 if both are empty, 0.0 if one is empty and the other isn't.
+ */
+function jaccardSimilarity(a: string, b: string): number {
+  const tokenize = (s: string) =>
+    new Set(s.toLowerCase().match(/\b\w+\b/g) ?? []);
+  const setA = tokenize(a);
+  const setB = tokenize(b);
+  if (setA.size === 0 && setB.size === 0) return 1.0;
+  if (setA.size === 0 || setB.size === 0) return 0.0;
+  let intersection = 0;
+  for (const token of setA) {
+    if (setB.has(token)) intersection++;
+  }
+  const union = setA.size + setB.size - intersection;
+  return intersection / union;
 }
 
 /**
@@ -111,6 +139,7 @@ export function parsePersonaDocument(doc: string): ParsedPersonaSections {
   const result: ParsedPersonaSections = {
     header: "",
     sections: new Map(),
+    pinnedSections: new Set(),
   };
 
   // Try marker-based splitting first
@@ -154,6 +183,11 @@ export function parsePersonaDocument(doc: string): ParsedPersonaSections {
       // Section ends at the marker (inclusive)
       const sectionContent = doc.slice(sectionStart, markerEnd).trim();
       result.sections.set(marker.aspect, sectionContent);
+
+      // Detect user-pinned sections — <!-- pinned --> anywhere in section content
+      if (sectionContent.includes("<!-- pinned -->")) {
+        result.pinnedSections.add(marker.aspect);
+      }
     }
 
     return result;
@@ -307,6 +341,24 @@ export const ASPECT_SECTION_MAP: Record<
 const SectionContentSchema = z.object({
   content: z.string(),
 });
+
+// Zod schema for incremental delta output — LLM returns only what to add/replace
+const IncrementalDeltaSchema = z.object({
+  add: z.array(
+    z.object({
+      bullet: z.string(),
+      group: z.string().optional(),
+    }),
+  ),
+  replace: z.array(
+    z.object({
+      old: z.string(),
+      new: z.string(),
+    }),
+  ),
+});
+
+export type IncrementalDelta = z.infer<typeof IncrementalDeltaSchema>;
 
 export interface AspectData {
   aspect: StatementAspect;
@@ -844,79 +896,6 @@ async function generateSectionWithChunking(
 }
 
 /**
- * Generate a single aspect section
- */
-async function generateAspectSection(
-  aspectData: AspectData,
-  userContext: UserContext,
-): Promise<PersonaSectionResult | null> {
-  const { aspect, statements, episodes } = aspectData;
-  const sectionInfo = ASPECT_SECTION_MAP[aspect];
-
-  if (!sectionInfo) {
-    logger.warn(`No section mapping for aspect "${aspect}" — skipping`);
-    return null;
-  }
-
-  // Skip if insufficient data
-  if (statements.length < MIN_STATEMENTS_PER_SECTION) {
-    logger.info(`Skipping ${aspect} section - insufficient data`, {
-      statementCount: statements.length,
-      minRequired: MIN_STATEMENTS_PER_SECTION,
-    });
-    return null;
-  }
-
-  const prompt = buildAspectSectionPrompt(aspectData, userContext);
-
-  const batchRequest = {
-    customId: `persona-section-${aspect}-${Date.now()}`,
-    messages: [prompt],
-    systemPrompt: "",
-  };
-
-  const { batchId } = await createBatch({
-    requests: [batchRequest],
-    outputSchema: SectionContentSchema,
-    maxRetries: 3,
-    timeoutMs: 1200000,
-  });
-
-  // Poll for completion
-  const batch = await pollBatchCompletion(batchId, 1200000);
-
-  if (!batch.results || batch.results.length === 0) {
-    logger.warn(`No results for ${aspect} section`);
-    return null;
-  }
-
-  const result = batch.results[0];
-  if (result.error || !result.response) {
-    logger.warn(`Error generating ${aspect} section`, { error: result.error });
-    return null;
-  }
-
-  const content =
-    typeof result.response === "string"
-      ? result.response
-      : result.response.content || "";
-
-  // Check for insufficient data response
-  if (content.includes("INSUFFICIENT_DATA")) {
-    logger.info(`${aspect} section returned INSUFFICIENT_DATA`);
-    return null;
-  }
-
-  return {
-    aspect,
-    title: sectionInfo.title,
-    content,
-    statementCount: statements.length,
-    episodeCount: episodes.length,
-  };
-}
-
-/**
  * Generate all aspect sections in parallel batches
  */
 async function generateAllAspectSections(
@@ -1095,18 +1074,20 @@ function combineIntoPersonaDocument(
     "Directive",
   ];
 
-  const sortedSections = sections.sort((a, b) => {
-    return sectionOrder.indexOf(a.aspect) - sectionOrder.indexOf(b.aspect);
-  });
+  const sectionsByAspect = new Map(sections.map((s) => [s.aspect, s]));
 
   // Build document
   let document = "# PERSONA\n\n";
 
-  // Add each section with markers
-  for (const section of sortedSections) {
-    document += `## ${section.title}\n\n`;
-    document += `${section.content}\n\n`;
-    document += `${sectionMarker(section.aspect)}\n\n`;
+  // Add each section with markers — always emit all 3, even if empty
+  for (const aspect of sectionOrder) {
+    const section = sectionsByAspect.get(aspect);
+    const title = ASPECT_SECTION_MAP[aspect].title;
+    document += `## ${title}\n\n`;
+    if (section) {
+      document += `${section.content}\n\n`;
+    }
+    document += `${sectionMarker(aspect)}\n\n`;
   }
 
   return document.trim();
@@ -1253,10 +1234,11 @@ export async function getStatementsForEpisodeByAspect(
 }
 
 /**
- * Build prompt for incremental update of a SINGLE section.
- * Only the affected section is sent to the LLM — unchanged sections are stitched back in code.
+ * Build prompt for incremental delta update of a SINGLE section.
+ * The LLM returns a JSON delta ({ add: [...], replace: [...] }) — NOT a rewritten section.
+ * Code applies the delta to the existing section text via applyDelta().
  */
-function buildSectionUpdatePrompt(
+function buildDeltaPrompt(
   aspect: StatementAspect,
   existingSectionContent: string,
   newStatements: StatementNode[],
@@ -1270,13 +1252,9 @@ function buildSectionUpdatePrompt(
     .join("\n");
 
   const content = `
-You are performing a MINIMAL UPDATE to the **${sectionInfo.title}** section of a persona document. A few new facts were learned. Your job is to merge ONLY those new facts into this section.
+You are updating the **${sectionInfo.title}** section of a persona document. A few new facts were learned. Your job is to produce a JSON delta describing ONLY what to add or replace — you must NOT rewrite the section.
 
-## CRITICAL: This is a MERGE, NOT a rewrite
-
-⚠️ You MUST preserve ALL existing content. You are adding/updating a few lines, not regenerating.
-
-## Existing Section Content
+## Existing Section Content (READ-ONLY — do not reproduce this)
 
 ${existingSectionContent}
 
@@ -1284,37 +1262,130 @@ ${existingSectionContent}
 
 ${factsText}
 
-## How to Merge
-
-1. **Add** new facts that don't exist yet — insert as new bullet points
-2. **Update** existing entries only if a new fact directly contradicts them (e.g., new role replaces old role)
-3. **Never remove** existing entries unless explicitly contradicted by a new fact above
-4. **Never rephrase** existing entries — keep them word-for-word
-5. **Keep existing confidence level** unless the new facts significantly change the section
-
 ## Section Rules
 
 ${sectionInfo.filterGuidance}
 
-## Output Requirements
+## Instructions
 
-- Preserve all existing content verbatim — do not shorten, summarize, or rephrase existing bullets
-- Only add new bullets or update bullets that are directly contradicted by a new fact
-- The section may grow — that is expected and correct
-${
-  isPreferencesSection
-    ? "- Group related preferences under sub-headers if helpful"
-    : ""
-}
+Analyze the new facts against the existing section content and produce a JSON object with two arrays:
 
-## Format
+1. **add** — New bullets to insert. Each entry: \`{ "bullet": "text", "group": "Sub-Header Name" }\`.
+   - \`group\` is optional. ${isPreferencesSection ? 'For the Preferences section, set `group` to the name of the sub-header (e.g., "Communication Style") where this bullet belongs. If no matching sub-header exists, omit `group` and it will be appended at the end.' : "Omit `group` for this section."}
+   - Do NOT include the leading "- " in the bullet text — it will be added automatically.
 
-Return ONLY the updated section content (including the ## ${sectionInfo.title} header).
-End with [Confidence: HIGH|MEDIUM|LOW].
-Do NOT include the section marker comment — it will be added automatically.
+2. **replace** — Bullets that directly contradict an existing entry. Each entry: \`{ "old": "existing bullet text", "new": "replacement text" }\`.
+   - \`old\` should match the existing bullet text (without the leading "- ").
+   - \`new\` is the replacement text (without the leading "- ").
+   - **Be conservative**: only replace when a new fact DIRECTLY contradicts an existing entry with HIGH confidence (e.g., role changed, location changed). When uncertain, ADD as a new bullet instead.
+
+## CRITICAL Rules
+
+- Output ONLY a JSON object: \`{ "add": [...], "replace": [...] }\`
+- Both arrays may be empty if no changes are needed
+- NEVER rephrase, reorder, or summarize existing bullets
+- NEVER include bullets that already exist in the section
+- When in doubt, ADD rather than REPLACE
+- Do NOT wrap in markdown code fences — output raw JSON only
+
+## Example Output
+
+{ "add": [{ "bullet": "Prefers dark mode in all applications" }], "replace": [{ "old": "Works as a frontend developer", "new": "Works as a senior frontend developer" }] }
   `.trim();
 
   return { role: "user", content };
+}
+
+/**
+ * Normalize a bullet string for fuzzy matching:
+ * strip leading bullet markers (- , * , • ), trim whitespace.
+ */
+function normalizeBullet(text: string): string {
+  return text.replace(/^[\s]*[-*•]\s*/, "").trim();
+}
+
+/**
+ * Apply a validated delta to existing section text.
+ * Pure function — no IO, highly testable.
+ *
+ * 1. Replacements first: find matching bullet via fuzzy match, swap in-place.
+ *    If no match found, log warning and skip (no corruption).
+ * 2. Additions second: insert at end of named group (sub-header) if `group` specified,
+ *    otherwise insert before the [Confidence: ...] line or at end.
+ */
+export function applyDelta(
+  existingSection: string,
+  delta: IncrementalDelta,
+): string {
+  const lines = existingSection.split("\n");
+
+  // --- Replacements ---
+  for (const rep of delta.replace) {
+    const normalizedOld = normalizeBullet(rep.old);
+    if (!normalizedOld) continue;
+
+    let matched = false;
+    for (let i = 0; i < lines.length; i++) {
+      const normalizedLine = normalizeBullet(lines[i]);
+      if (normalizedLine && normalizedLine === normalizedOld) {
+        // Preserve the original bullet prefix (e.g., "- ", "* ")
+        const prefixMatch = lines[i].match(/^([\s]*[-*•]\s*)/);
+        const prefix = prefixMatch ? prefixMatch[1] : "- ";
+        lines[i] = `${prefix}${rep.new}`;
+        matched = true;
+        break;
+      }
+    }
+    if (!matched) {
+      logger.warn("applyDelta: replacement old text not found, skipping", {
+        old: rep.old,
+      });
+    }
+  }
+
+  // --- Additions ---
+  for (const add of delta.add) {
+    const bulletLine = `- ${add.bullet}`;
+
+    if (add.group) {
+      // Find the sub-header matching the group name
+      const groupHeaderIdx = lines.findIndex((line) => {
+        const trimmed = line.trim();
+        return (
+          trimmed.startsWith("### ") &&
+          trimmed.slice(4).trim().toLowerCase() === add.group!.toLowerCase()
+        );
+      });
+
+      if (groupHeaderIdx !== -1) {
+        // Find the last bullet under this group (before next header or end)
+        let insertIdx = groupHeaderIdx + 1;
+        for (let i = groupHeaderIdx + 1; i < lines.length; i++) {
+          const trimmed = lines[i].trim();
+          if (trimmed.startsWith("## ") || trimmed.startsWith("### ")) break;
+          if (trimmed.startsWith("[Confidence:")) break;
+          if (trimmed.startsWith("- ") || trimmed.startsWith("* ")) {
+            insertIdx = i + 1;
+          }
+        }
+        lines.splice(insertIdx, 0, bulletLine);
+        continue;
+      }
+      // Group not found — fall through to default insertion
+    }
+
+    // Default: insert before [Confidence: ...] line, or at end
+    const confidenceIdx = lines.findIndex((line) =>
+      line.trim().startsWith("[Confidence:"),
+    );
+    if (confidenceIdx !== -1) {
+      lines.splice(confidenceIdx, 0, bulletLine);
+    } else {
+      lines.push(bulletLine);
+    }
+  }
+
+  return lines.join("\n");
 }
 
 /**
@@ -1410,13 +1481,23 @@ export async function generateIncrementalPersona(
     existingDocPreview: existingPersonaContent.slice(0, 300),
   });
 
-  // Step 4: Build section update prompts for affected sections
+  // Step 4: Build delta prompts for affected sections (skip pinned)
   const sectionUpdates: {
     aspect: StatementAspect;
     prompt: MessageListInput;
+    existingClean: string;
   }[] = [];
 
   for (const [aspect, data] of episodeStatements) {
+    if (parsed.pinnedSections.has(aspect)) {
+      logger.info(`Skipping pinned section during incremental generation`, {
+        userId,
+        episodeUuid,
+        aspect,
+      });
+      continue;
+    }
+
     const existingSection = parsed.sections.get(aspect);
 
     // Strip the marker from existing section content before sending to LLM
@@ -1425,7 +1506,7 @@ export async function generateIncrementalPersona(
       ? existingSection.replace(marker, "").trim()
       : "";
 
-    const prompt = buildSectionUpdatePrompt(
+    const prompt = buildDeltaPrompt(
       aspect,
       cleanSection ||
         `## ${ASPECT_SECTION_MAP[aspect].title}\n\n(No existing content)`,
@@ -1433,24 +1514,73 @@ export async function generateIncrementalPersona(
       userContext,
     );
 
-    sectionUpdates.push({ aspect, prompt });
+    sectionUpdates.push({ aspect, prompt, existingClean: cleanSection });
   }
 
-  // Step 5: Direct LLM calls in parallel (faster than batch for 1-3 sections)
+  // Step 5: Direct LLM calls in parallel, parse JSON delta, apply to section
   const updateResults = await Promise.all(
-    sectionUpdates.map(async ({ aspect, prompt }) => {
-      const content = await directLLMCall(prompt, `incremental-${aspect}`);
-      if (!content) {
-        logger.warn(`Error updating ${aspect} section, keeping existing`);
+    sectionUpdates.map(async ({ aspect, prompt, existingClean }) => {
+      const rawResponse = await directLLMCall(
+        prompt,
+        `incremental-delta-${aspect}`,
+      );
+
+      if (!rawResponse) {
+        logger.warn(
+          `LLM call failed for ${aspect} delta, keeping existing section`,
+        );
+        return { aspect, mergedSection: null };
       }
-      return { aspect, content };
+
+      // Parse JSON and validate with Zod
+      try {
+        const parsed = JSON.parse(rawResponse);
+        const delta = IncrementalDeltaSchema.parse(parsed);
+
+        const mergedSection = applyDelta(existingClean, delta);
+
+        // Jaccard check: reject if merged section diverges too much from existing.
+        // This catches cases where the LLM rewrites the section instead of patching it.
+        if (existingClean.trim().length > 0) {
+          const similarity = jaccardSimilarity(existingClean, mergedSection);
+          if (similarity < INCREMENTAL_JACCARD_THRESHOLD) {
+            logger.warn(
+              `Jaccard similarity too low for ${aspect} — rejecting delta, keeping existing section`,
+              {
+                similarity,
+                threshold: INCREMENTAL_JACCARD_THRESHOLD,
+                adds: delta.add.length,
+                replacements: delta.replace.length,
+              },
+            );
+            return { aspect, mergedSection: null };
+          }
+        }
+
+        logger.info(`Delta applied for ${aspect}`, {
+          adds: delta.add.length,
+          replacements: delta.replace.length,
+        });
+
+        return { aspect, mergedSection };
+      } catch (error) {
+        logger.warn(
+          `Failed to parse/validate delta for ${aspect}, keeping existing section`,
+          {
+            error:
+              error instanceof Error ? error.message : String(error),
+            rawResponsePreview: rawResponse.slice(0, 200),
+          },
+        );
+        return { aspect, mergedSection: null };
+      }
     }),
   );
 
-  // Step 6: Replace only affected sections, keep unchanged ones verbatim
-  for (const { aspect, content } of updateResults) {
-    if (content) {
-      parsed.sections.set(aspect, content.trim());
+  // Step 6: Replace only affected sections with merged content
+  for (const { aspect, mergedSection } of updateResults) {
+    if (mergedSection !== null) {
+      parsed.sections.set(aspect, mergedSection);
     }
   }
 

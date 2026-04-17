@@ -14,7 +14,7 @@ const SkillParamsSchema = z.object({
 const UpdateSkillBody = z.object({
   title: z.string().min(1).optional(),
   content: z.string().min(1).optional(),
-  metadata: z.record(z.unknown()).optional(),
+  metadata: z.record(z.string(), z.unknown()).optional(),
 });
 
 export const loader = createHybridLoaderApiRoute(
@@ -51,6 +51,19 @@ const { action } = createHybridActionApiRoute(
     }
 
     if (request.method === "DELETE") {
+      const skillToDelete = await getSkill(
+        params.skillId,
+        authentication.workspaceId,
+      );
+
+      if (!skillToDelete) {
+        throw new Response("Skill not found", { status: 404 });
+      }
+
+      if (skillToDelete.source === "persona-v2") {
+        throw new Response("Persona skill cannot be deleted", { status: 403 });
+      }
+
       const result = await deleteSkill(
         params.skillId,
         authentication.workspaceId,

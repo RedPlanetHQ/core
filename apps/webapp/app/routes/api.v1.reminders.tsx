@@ -25,7 +25,7 @@ const ReminderCreateSchema = z.object({
   maxOccurrences: z.number().optional().nullable(),
   endDate: z.string().optional().nullable(),
   startDate: z.string().optional().nullable(),
-  metadata: z.record(z.any()).optional().nullable(),
+  metadata: z.record(z.string(), z.any()).optional().nullable(),
 });
 
 // GET - List reminders
@@ -116,7 +116,7 @@ const { action } = createActionApiRoute(
 
       // Validate channel is available
       const availableChannels = await getAvailableChannels(
-        authentication.workspaceId
+        authentication.workspaceId,
       );
       if (!availableChannels.includes(body.channel)) {
         return json(
@@ -124,7 +124,7 @@ const { action } = createActionApiRoute(
             success: false,
             message: `Channel "${body.channel}" is not available. Available channels: ${availableChannels.join(", ")}`,
           },
-          { status: 400 }
+          { status: 400 },
         );
       }
 

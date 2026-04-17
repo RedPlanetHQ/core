@@ -11,32 +11,27 @@ import {
   SidebarMenuItem,
 } from "../ui/sidebar";
 import {
-  MessageCircle,
-  BookOpen,
-  Mail,
-  Phone,
   Search,
   Brain,
   Library,
-  Plug,
   CalendarDays,
   LayoutDashboard,
+  MessageSquare,
+  ArrowLeft,
+  ArrowRight,
 } from "lucide-react";
 import { NavMain } from "./nav-main";
 import { useUser } from "~/hooks/useUser";
 import { NavUser } from "./nav-user";
 import { Button } from "../ui";
 import { CommandBar } from "../command-bar/command-bar";
-import {
-  DropdownMenu,
-  DropdownMenuContent,
-  DropdownMenuItem,
-  DropdownMenuTrigger,
-} from "../ui/dropdown-menu";
 
 import { useNavigate, useParams } from "@remix-run/react";
+import { useTauri } from "~/hooks/use-tauri";
 import { IngestionStatus } from "./ingestion-status";
 import { Task } from "../icons/task";
+import { TryIt } from "./try-it";
+import { ButlerStatusPill } from "../common/butler-status-pill";
 
 const data = {
   navMain: [
@@ -44,6 +39,11 @@ const data = {
       title: "Daily",
       url: "/home/daily",
       icon: CalendarDays,
+    },
+    {
+      title: "Chat",
+      url: "/home/conversation",
+      icon: MessageSquare,
     },
     {
       title: "Overview",
@@ -83,6 +83,15 @@ export function AppSidebar({
   const user = useUser();
   const navigate = useNavigate();
   const params = useParams();
+  const { isDesktop } = useTauri();
+  const tauriWindowRef = React.useRef<any>(null);
+
+  React.useEffect(() => {
+    if (!isDesktop) return;
+    import("@tauri-apps/api/window").then(({ getCurrentWindow }) => {
+      tauriWindowRef.current = getCurrentWindow();
+    });
+  }, [isDesktop]);
 
   const [commandBar, setCommandBar] = React.useState(false);
 
@@ -110,6 +119,7 @@ export function AppSidebar({
         e.preventDefault();
         setCommandBar(true);
       },
+      "g c": whenNotEditing(() => navigate("/home/conversation")),
       "g d": whenNotEditing(() => navigate("/home/daily")),
       "g t": whenNotEditing(() => navigate("/home/tasks")),
       "g m": whenNotEditing(() => navigate("/home/memory")),
@@ -119,11 +129,44 @@ export function AppSidebar({
         : {}),
     });
     return unsub;
-  }, [navigate]);
+  }, [navigate, widgetsEnabled]);
 
   return (
     <>
-      <Sidebar variant="inset" className="bg-background py-2">
+      <Sidebar variant="inset" className="bg-background pb-2 pt-1">
+        {isDesktop && (
+          <div
+            className="flex h-9 shrink-0 items-center justify-between px-3"
+            onMouseDown={(e) => {
+              if (e.buttons === 1 && tauriWindowRef.current) {
+                tauriWindowRef.current.startDragging();
+              }
+            }}
+          >
+            {/* Left: space for macOS traffic lights (~70px) */}
+            <div className="w-[70px]" />
+
+            {/* Right: back / forward */}
+            <div className="flex gap-0.5">
+              <Button
+                variant="ghost"
+                size="sm"
+                className="rounded"
+                onClick={() => window.history.back()}
+              >
+                <ArrowLeft size={14} />
+              </Button>
+              <Button
+                variant="ghost"
+                size="sm"
+                className="rounded"
+                onClick={() => window.history.forward()}
+              >
+                <ArrowRight size={14} />
+              </Button>
+            </div>
+          </div>
+        )}
         <SidebarHeader className="pb-0">
           <SidebarMenu>
             <SidebarMenuItem className="flex justify-center">
@@ -133,6 +176,7 @@ export function AppSidebar({
                   agentName={agentName}
                   accentColor={accentColor}
                 />
+                <ButlerStatusPill />
               </div>
 
               <div className="flex gap-1">
@@ -148,73 +192,29 @@ export function AppSidebar({
             </SidebarMenuItem>
           </SidebarMenu>
         </SidebarHeader>
-        <SidebarContent>
+        <SidebarContent className="mt-2">
           <NavMain
             items={data.navMain.filter(
               (item) => item.url !== "/home/overview" || widgetsEnabled,
             )}
           />
+          <TryIt />
         </SidebarContent>
 
-        <SidebarFooter className="flex flex-col gap-1 px-2">
+        <SidebarFooter className="flex flex-col gap-1 px-2 pb-0">
           <IngestionStatus />
-          <Button
-            variant="ghost"
-            className="justify-end"
-            onClick={() => {
-              navigate("/settings/billing");
-            }}
-          >
-            <div>{user.availableCredits} credits</div>
-          </Button>
-          <Button
-            variant="secondary"
-            className="w-full justify-start gap-2 rounded"
-            onClick={() => {
-              navigate("/home/agent/connect");
-            }}
-          >
-            <Plug size={18} />
-            Connect
-          </Button>
-          <DropdownMenu>
-            <DropdownMenuTrigger asChild>
-              <Button
-                variant="secondary"
-                className="w-full justify-start gap-2 rounded"
-              >
-                <MessageCircle size={16} />
-                Help
-              </Button>
-            </DropdownMenuTrigger>
-            <DropdownMenuContent side="top" align="start" className="w-[200px]">
-              <DropdownMenuItem
-                className="flex gap-2 rounded"
-                onClick={() => window.open("https://docs.getcore.me", "_blank")}
-              >
-                <BookOpen size={16} />
-                Documentation
-              </DropdownMenuItem>
-              <DropdownMenuItem
-                className="flex gap-2 rounded"
-                onClick={() =>
-                  (window.location.href = "mailto:harshith@poozle.dev")
-                }
-              >
-                <Mail size={16} />
-                Email Us
-              </DropdownMenuItem>
-              <DropdownMenuItem
-                className="flex gap-2 rounded"
-                onClick={() =>
-                  (window.location.href = "https://cal.com/core-memory/15min")
-                }
-              >
-                <Phone size={16} />
-                Book a call
-              </DropdownMenuItem>
-            </DropdownMenuContent>
-          </DropdownMenu>
+
+          <div className="flex justify-end">
+            <Button
+              variant="ghost"
+              className="w-fit"
+              onClick={() => {
+                navigate("/settings/billing");
+              }}
+            >
+              <div>{user.availableCredits} credits</div>
+            </Button>
+          </div>
         </SidebarFooter>
       </Sidebar>
 

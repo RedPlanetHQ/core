@@ -9,6 +9,7 @@ import { prisma } from "~/db.server";
 import {
   type Trigger,
   type ReminderTrigger,
+  type ScheduledTaskTrigger,
   type DecisionContext,
   type TodayState,
   type ReminderSummary,
@@ -233,6 +234,58 @@ export function createFollowUpTrigger(reminder: {
       confirmedActive: reminder.confirmedActive,
     },
   };
+}
+
+/**
+ * Create a scheduled task trigger from database task
+ */
+export function createTaskTriggerFromDb(task: {
+  id: string;
+  userId: string;
+  workspaceId: string;
+  title: string;
+  description?: string | null;
+  channel: string;
+  channelId?: string | null;
+  unrespondedCount: number;
+  confirmedActive: boolean;
+  occurrenceCount: number;
+  metadata?: Record<string, unknown> | null;
+}): ScheduledTaskTrigger {
+  const meta = task.metadata;
+  const data: ScheduledTaskTrigger["data"] = {
+    taskId: task.id,
+    action: task.description || task.title,
+    occurrenceNumber: task.occurrenceCount + 1,
+    previousResponses: [],
+    unrespondedCount: task.unrespondedCount,
+    confirmedActive: task.confirmedActive,
+  };
+
+  if (meta?.skillId) {
+    data.skillId = meta.skillId as string;
+    data.skillName = (meta.skillName as string) || undefined;
+  }
+
+  return {
+    type: "scheduled_task_fired",
+    timestamp: new Date(),
+    workspaceId: task.workspaceId,
+    userId: task.userId,
+    channel: task.channel as any,
+    channelId: task.channelId,
+    data,
+  };
+}
+
+/**
+ * Build context for scheduled task triggers
+ */
+export async function buildScheduledTaskContext(
+  trigger: ScheduledTaskTrigger,
+  timezone: string,
+): Promise<DecisionContext> {
+  return buildDecisionContext(trigger, timezone);
 }
 
 // ============================================================================

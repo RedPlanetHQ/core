@@ -1,7 +1,7 @@
 import zod from 'zod';
 import {randomUUID} from 'node:crypto';
 import {execSync} from 'node:child_process';
-import {existsSync, mkdirSync} from 'node:fs';
+import {existsSync, mkdirSync, cpSync} from 'node:fs';
 import {resolve} from 'node:path';
 import type {GatewayTool} from './browser-tools';
 import {getPreferences} from '@/config/preferences';
@@ -21,7 +21,7 @@ import {
 	type Logger,
 } from '@/utils/coding-runner';
 import {
-	readAgentSessionOutput,
+	readAgentSessionTurns,
 	agentSessionExists,
 	getAgentReader,
 	scanAllSessions,
@@ -49,9 +49,6 @@ const CloseSessionSchema = zod.object({
 
 const ReadSessionSchema = zod.object({
 	sessionId: zod.string(),
-	lines: zod.number().optional(),
-	offset: zod.number().optional(),
-	tail: zod.boolean().optional(),
 });
 
 const ListSessionsSchema = zod.object({
@@ -135,15 +132,6 @@ const jsonSchemas: Record<string, Record<string, unknown>> = {
 				type: 'string',
 				description: 'Session ID to read output from',
 			},
-			lines: {type: 'number', description: 'Number of lines to return'},
-			offset: {
-				type: 'number',
-				description: 'Line offset to start from (0-indexed)',
-			},
-			tail: {
-				type: 'boolean',
-				description: 'If true, return the last N lines instead of first N',
-			},
 		},
 		required: ['sessionId'],
 	},
@@ -220,7 +208,7 @@ export const codingTools: GatewayTool[] = [
 	{
 		name: 'coding_read_session',
 		description:
-			'Read current output from a coding session (works while running)',
+			'Read conversation turns (user/assistant messages) from a coding session. Returns structured turns instead of raw log lines.',
 		inputSchema: jsonSchemas.coding_read_session!,
 	},
 	{
@@ -306,6 +294,21 @@ function setupWorktree(
 	const encodedBranch = branch.replace(/\//g, '-');
 	const worktreePath = resolve(dir, '..', 'worktrees', encodedBranch);
 
+	// If the worktree already exists (valid git worktree), reuse it so multiple
+	// sessions can run against the same branch without hitting "already checked out".
+	if (existsSync(resolve(worktreePath, '.git'))) {
+		const sourceClaude = resolve(dir, '.claude');
+		const destClaude = resolve(worktreePath, '.claude');
+		if (existsSync(sourceClaude) && !existsSync(destClaude)) {
+			try {
+				cpSync(sourceClaude, destClaude, {recursive: true});
+			} catch {
+				// Non-fatal
+			}
+		}
+		return {worktreePath, worktreeBranch: branch};
+	}
+
 	try {
 		mkdirSync(worktreePath, {recursive: true});
 		execSync(
@@ -314,6 +317,17 @@ function setupWorktree(
 			)} -b ${JSON.stringify(branch)} ${JSON.stringify(baseBranch)}`,
 			{stdio: 'pipe'},
 		);
+		// Copy .claude settings to worktree so plugins are available
+		const sourceClaude = resolve(dir, '.claude');
+		const destClaude = resolve(worktreePath, '.claude');
+		if (existsSync(sourceClaude) && !existsSync(destClaude)) {
+			try {
+				cpSync(sourceClaude, destClaude, {recursive: true});
+			} catch {
+				// Non-fatal — plugins just won't be available
+			}
+		}
+
 		return {worktreePath, worktreeBranch: branch};
 	} catch (err) {
 		const stderr = (err as {stderr?: Buffer}).stderr?.toString().trim();
@@ -393,6 +407,25 @@ async function handleAsk(params: zod.infer<typeof AskSchema>, logger?: Logger) {
 	let workingDir = params.dir;
 	let worktreePath: string | undefined;
 	let worktreeBranch: string | undefined;
+
+	// On resume, use the stored worktree path so we don't run in the main repo.
+	// Fall back to scanning agent session files — the session dir is embedded in the
+	// file path (claude-code) or session_meta (codex), so we can recover it even
+	// after the running-session record has been cleaned up.
+	if (isResume) {
+		const storedSession = getSession(sessionId);
+		if (storedSession?.worktreePath) {
+			workingDir = storedSession.worktreePath;
+			worktreePath = storedSession.worktreePath;
+			worktreeBranch = storedSession.worktreeBranch;
+		} else {
+			const {sessions: allSessions} = await scanAllSessions({});
+			const scanned = allSessions.find(s => s.sessionId === sessionId);
+			if (scanned?.dir) {
+				workingDir = scanned.dir;
+			}
+		}
+	}
 
 	if (params.worktree && !isResume) {
 		const wt = setupWorktree(params.dir, params.baseBranch!, params.branch!);
@@ -514,7 +547,7 @@ async function handleAsk(params: zod.infer<typeof AskSchema>, logger?: Logger) {
 						pid,
 						resumed: isResume,
 						message:
-							'Session started. Come back in ~1 minute, then use coding_read_session to check output.',
+							'Session started. Poll with sleep(60) + coding_read_session, up to 3 times. If still running, use reschedule_self(10) for long polling.',
 					},
 				};
 			}
@@ -528,7 +561,7 @@ async function handleAsk(params: zod.infer<typeof AskSchema>, logger?: Logger) {
 			pid,
 			resumed: isResume,
 			message:
-				'Session started. Come back in ~1 minute, then use coding_read_session to check output.',
+				'Session started. Poll with sleep(60) + coding_read_session, up to 3 times. If still running, use reschedule_self(10) for long polling.',
 			...(worktreePath ? {worktreePath, worktreeBranch} : {}),
 		},
 	};
@@ -620,18 +653,13 @@ async function handleReadSession(params: zod.infer<typeof ReadSessionSchema>) {
 	const agent = detectAgentForSession(params.sessionId, sessionDir);
 
 	const {
-		entries,
+		turns,
 		totalLines,
-		returnedLines,
 		fileExists,
 		fileSizeBytes,
 		fileSizeHuman,
 		error: readError,
-	} = await readAgentSessionOutput(agent, sessionDir, params.sessionId, {
-		lines: params.lines,
-		offset: params.offset,
-		tail: params.tail,
-	});
+	} = await readAgentSessionTurns(agent, sessionDir, params.sessionId);
 
 	let status: string;
 	let statusMessage: string | undefined;
@@ -655,10 +683,9 @@ async function handleReadSession(params: zod.infer<typeof ReadSessionSchema>) {
 			status,
 			...(statusMessage ? {statusMessage} : {}),
 			running,
-			entries,
+			turns,
 			error: readError,
 			totalLines,
-			returnedLines,
 			fileExists,
 			fileSizeBytes,
 			fileSizeHuman,

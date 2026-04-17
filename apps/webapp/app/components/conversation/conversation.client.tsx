@@ -1,8 +1,8 @@
 import { useState, useRef, useCallback, useEffect } from "react";
 import { useLocalCommonState } from "~/hooks/use-local-state";
-import { Form, useSubmit } from "@remix-run/react";
+import { Form, useFetcher, useSubmit } from "@remix-run/react";
 import { cn } from "~/lib/utils";
-import { EyeOff } from "lucide-react";
+import { ArrowUp, EyeOff } from "lucide-react";
 import { Document } from "@tiptap/extension-document";
 import HardBreak from "@tiptap/extension-hard-break";
 import { History } from "@tiptap/extension-history";
@@ -12,7 +12,6 @@ import Placeholder from "@tiptap/extension-placeholder";
 import { useEditor, EditorContent } from "@tiptap/react";
 import { Button } from "../ui";
 import { ExampleUseCases } from "./example-usecases";
-import { ArrowUp } from "lucide-react";
 import { RiGithubFill } from "@remixicon/react";
 import { Gmail } from "../icons/gmail";
 import { LinearIcon } from "../icons/linear-icon";
@@ -26,8 +25,12 @@ import {
 } from "../ui/select";
 import type { LLMModel } from "./conversation-textarea.client";
 import Avatar from "boring-avatars";
+import {
+  createSkillSlashCommand,
+  SkillSlashPluginKey,
+} from "./slash-command-extension";
 
-const SUGGESTED = [
+export const SUGGESTED = [
   {
     icon: RiGithubFill,
     prompt:
@@ -72,6 +75,18 @@ export const ConversationNew = ({
   >("selectedModelId", defaultModelId);
 
   const submit = useSubmit();
+  const skillsFetcher = useFetcher<{
+    skills: Array<{ id: string; title: string }>;
+  }>();
+  const skillsRef = useRef<Array<{ id: string; title: string }>>([]);
+
+  useEffect(() => {
+    skillsFetcher.load("/api/v1/skills?limit=100");
+  }, []);
+
+  useEffect(() => {
+    skillsRef.current = skillsFetcher.data?.skills ?? [];
+  }, [skillsFetcher.data]);
 
   // Refs so handleKeyDown always sees the latest values without stale closures
   const doSubmitRef = useRef<(messageContent: string) => void>(() => {});
@@ -109,6 +124,7 @@ export const ConversationNew = ({
       Text,
       HardBreak.configure({ keepMarks: true }),
       History,
+      createSkillSlashCommand(skillsRef),
     ],
     immediatelyRender: false,
     autofocus: true,
@@ -116,8 +132,13 @@ export const ConversationNew = ({
       attributes: {
         class: `prose prose-base dark:prose-invert focus:outline-none max-w-full`,
       },
-      handleKeyDown: (_view, event) => {
+      handleKeyDown: (view, event) => {
         if (event.key === "Enter" && !event.shiftKey) {
+          const suggestionState = SkillSlashPluginKey.getState(view.state);
+          if (suggestionState?.active) {
+            return false;
+          }
+
           event.preventDefault();
           if (contentRef.current.trim()) {
             doSubmitRef.current(contentRef.current);
@@ -134,6 +155,17 @@ export const ConversationNew = ({
       setTitle(updatedEditor.getText());
     },
   });
+
+  // Set default message content in editor on mount
+  useEffect(() => {
+    if (editor && defaultMessage) {
+      const htmlContent = `<p>${defaultMessage}</p>`;
+      editor.commands.setContent(htmlContent);
+      setContent(htmlContent);
+      setTitle(defaultMessage);
+      contentRef.current = htmlContent;
+    }
+  }, [editor]);
 
   // Focus on mount
   useEffect(() => {
@@ -176,7 +208,7 @@ export const ConversationNew = ({
       action="/home/conversation"
       method="post"
       onSubmit={(e) => submitForm(e)}
-      className="flex h-[calc(100vh_-_56px)] flex-col"
+      className="flex h-page flex-col"
     >
       {/* Centered hero */}
       <div className="flex flex-1 flex-col items-center justify-center gap-3">
@@ -221,7 +253,7 @@ export const ConversationNew = ({
               editor={editor}
               className="max-h-[200px] min-h-[48px] w-full overflow-auto px-4 pt-4 text-base"
             />
-            <div className="flex items-center justify-between px-3 pb-3 pt-1">
+            <div className="flex items-center justify-between px-3 pb-2 pt-1">
               <div className="flex items-center gap-1">
                 <Button
                   type="button"
@@ -271,7 +303,7 @@ export const ConversationNew = ({
                 disabled={!content.trim()}
               >
                 <ArrowUp size={16} />
-                Chat
+                {incognito ? "Incognito Chat" : "Chat"}
               </Button>
             </div>
           </div>

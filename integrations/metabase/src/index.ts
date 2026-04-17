@@ -61,12 +61,38 @@ class MetabaseCLI extends IntegrationCLI {
       description:
         'Connect your Metabase instance to access dashboards, questions, database connections, and analytics activity. Execute queries and track data insights directly from your workspace.',
       icon: 'metabase',
-      schedule: {
-        frequency: '*/15 * * * *',
-      },
-      mcp: {
-        type: 'cli',
-      },
+      widgets: [
+        {
+          name: 'Query Result',
+          slug: 'metabase-query',
+          description: 'Execute a saved Metabase question and display results as a table',
+          support: ['webapp'],
+          configSchema: [
+            {
+              key: 'question_id',
+              label: 'Question ID',
+              type: 'input',
+              placeholder: 'e.g. 42',
+              required: true,
+            },
+          ],
+        },
+        {
+          name: 'Dashboard',
+          slug: 'metabase-dashboard',
+          description: 'Show questions from a Metabase dashboard with expandable results',
+          support: ['webapp'],
+          configSchema: [
+            {
+              key: 'dashboard_id',
+              label: 'Dashboard ID',
+              type: 'input',
+              placeholder: 'e.g. 1',
+              required: true,
+            },
+          ],
+        },
+      ],
       auth: {
         api_key: {
           fields: [

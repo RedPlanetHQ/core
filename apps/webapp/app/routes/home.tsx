@@ -4,18 +4,38 @@ import {
 } from "@remix-run/server-runtime";
 import { requireUser, requireWorkpace } from "~/services/session.server";
 
-import { Outlet, useLoaderData } from "@remix-run/react";
+import { Outlet, useLoaderData, useLocation } from "@remix-run/react";
 import { typedjson } from "remix-typedjson";
 import { clearRedirectTo, commitSession } from "~/services/redirectTo.server";
 
 import { AppSidebar } from "~/components/sidebar/app-sidebar";
 import { SidebarInset, SidebarProvider } from "~/components/ui/sidebar";
+import {
+  ResizablePanelGroup,
+  ResizablePanel,
+  ResizableHandle,
+} from "~/components/ui/resizable";
 
 import { json, redirect } from "@remix-run/node";
 import { onboardingPath } from "~/utils/pathBuilder";
 import { getConversationSources } from "~/services/conversation.server";
 import { prisma } from "~/db.server";
 import { SetButlerNameModal } from "~/components/onboarding/set-butler-name-modal";
+import { ClientOnly } from "remix-utils/client-only";
+import { GlobalChatPanel } from "~/components/chat-panel/global-chat-panel.client";
+import { CollabSocketProvider } from "~/components/editor/collab-socket-context";
+import {
+  ChatPanelProvider,
+  useChatPanel,
+} from "~/components/chat-panel/chat-panel-context";
+import React from "react";
+import { getIntegrationAccounts } from "~/services/integrationAccount.server";
+import { getAvailableModels } from "~/services/llm-provider.server";
+import { type LLMModel } from "~/components/conversation";
+import { tinykeys } from "tinykeys";
+import { useTauri } from "~/hooks/use-tauri";
+import { DesktopTabsProvider } from "~/components/desktop/tabs-context";
+import { DesktopTabBar } from "~/components/desktop/tab-bar";
 
 export async function action({ request }: ActionFunctionArgs) {
   const { workspaceId } = await requireUser(request);
@@ -63,6 +83,32 @@ export const loader = async ({ request }: LoaderFunctionArgs) => {
     user.id,
   );
 
+  const [integrationAccounts, allModels] = await Promise.all([
+    getIntegrationAccounts(user.id, workspace?.id as string),
+    getAvailableModels(),
+  ]);
+
+  const models = allModels
+    .filter(
+      (m) => m.capabilities.length === 0 || m.capabilities.includes("chat"),
+    )
+    .map((m) => ({
+      id: `${m.provider.type}/${m.modelId}`,
+      modelId: m.modelId,
+      label: m.label,
+      provider: m.provider.type,
+      isDefault: m.isDefault,
+    }));
+
+  const integrationAccountMap: Record<string, string> = {};
+  const integrationFrontendMap: Record<string, string> = {};
+  for (const acc of integrationAccounts) {
+    integrationAccountMap[acc.id] = acc.integrationDefinition.slug;
+    if (acc.integrationDefinition.frontendUrl) {
+      integrationFrontendMap[acc.id] = acc.integrationDefinition.frontendUrl;
+    }
+  }
+
   if (!user.onboardingComplete) {
     return redirect(onboardingPath());
   } else {
@@ -71,6 +117,9 @@ export const loader = async ({ request }: LoaderFunctionArgs) => {
         user,
         workspace,
         conversationSources,
+        models,
+        integrationAccountMap,
+        integrationFrontendMap,
       },
       {
         headers: {
@@ -81,13 +130,52 @@ export const loader = async ({ request }: LoaderFunctionArgs) => {
   }
 };
 
-export default function Home() {
-  const { conversationSources, workspace } = useLoaderData<
-    typeof loader
-  >() as any;
-  const meta = (workspace?.metadata ?? {}) as Record<string, unknown>;
-  const needsButlerName = !meta.onboardingV2Complete;
-  const accentColor = (meta.accentColor as string) || "#c87844";
+function HomeInner({
+  conversationSources,
+  workspace,
+  meta,
+  agentName,
+  accentColor,
+  needsButlerName,
+  models,
+  integrationAccountMap,
+}: {
+  conversationSources: any;
+  workspace: any;
+  meta: Record<string, unknown>;
+  agentName: string;
+  accentColor: string;
+  needsButlerName: boolean;
+  models: LLMModel[];
+  integrationAccountMap: Record<string, string>;
+}) {
+  const { panelRef, closeChat, onPanelCollapse, chatOpen, toggleChat } =
+    useChatPanel()!;
+  const { isDesktop } = useTauri();
+  const location = useLocation();
+  const isConversationRoute =
+    location.pathname.startsWith("/home/conversation");
+
+  React.useEffect(() => {
+    if (isConversationRoute) return;
+
+    const whenNotEditing = (fn: () => void) => (event: KeyboardEvent) => {
+      const target = event.target as HTMLElement | null;
+      if (
+        target?.tagName === "INPUT" ||
+        target?.tagName === "TEXTAREA" ||
+        target?.isContentEditable
+      ) {
+        return;
+      }
+
+      fn();
+    };
+
+    return tinykeys(window, {
+      "$mod+j": whenNotEditing(() => toggleChat()),
+    });
+  }, [isConversationRoute, toggleChat]);
 
   return (
     <SidebarProvider
@@ -109,18 +197,83 @@ export default function Home() {
       <AppSidebar
         conversationSources={conversationSources}
         widgetsEnabled={!!meta.widgetsEnabled}
-        agentName={workspace?.name ?? "butler"}
+        agentName={agentName}
         accentColor={accentColor}
       />
-      <SidebarInset className="bg-background-2 h-full rounded pr-0">
-        <div className="flex h-full flex-col rounded">
-          <div className="flex h-full flex-col gap-2 @container/main">
-            <div className="flex h-full flex-col">
-              <Outlet />
-            </div>
+      <SidebarInset className="h-[calc(100vh_-_16px)] border-none bg-transparent pr-0 !shadow-none outline-none">
+        {isDesktop && (
+          <div className="flex w-full flex-col overflow-hidden">
+            <DesktopTabBar />
           </div>
-        </div>
+        )}
+        <ResizablePanelGroup
+          orientation="horizontal"
+          className="bg-background-2 shadow-1 border-border h-page-xs !rounded-xl"
+        >
+          <ResizablePanel defaultSize="100%" minSize="50%">
+            <div className="flex h-full flex-col">
+              <div className="flex h-full flex-col gap-2 @container/main">
+                <div className="flex h-full flex-col">
+                  <Outlet />
+                </div>
+              </div>
+            </div>
+          </ResizablePanel>
+
+          {!isConversationRoute && <ResizableHandle withHandle />}
+
+          {chatOpen && !isConversationRoute && (
+            <ResizablePanel
+              ref={panelRef}
+              defaultSize="50%"
+              minSize="30%"
+              maxSize="50%"
+              collapsible
+              collapsedSize={0}
+              onCollapse={onPanelCollapse}
+            >
+              <ClientOnly fallback={null}>
+                {() => (
+                  <GlobalChatPanel
+                    agentName={agentName}
+                    onClose={closeChat}
+                    models={models}
+                    integrationAccountMap={integrationAccountMap}
+                  />
+                )}
+              </ClientOnly>
+            </ResizablePanel>
+          )}
+        </ResizablePanelGroup>
       </SidebarInset>
     </SidebarProvider>
+  );
+}
+
+export default function Home() {
+  const { conversationSources, workspace, models, integrationAccountMap } =
+    useLoaderData<typeof loader>() as any;
+  const meta = (workspace?.metadata ?? {}) as Record<string, unknown>;
+  const needsButlerName = !meta.onboardingV2Complete;
+  const accentColor = (meta.accentColor as string) || "#c87844";
+  const agentName = (workspace?.name as string) ?? "butler";
+
+  return (
+    <CollabSocketProvider>
+      <ChatPanelProvider>
+        <DesktopTabsProvider>
+          <HomeInner
+            conversationSources={conversationSources}
+            workspace={workspace}
+            meta={meta}
+            agentName={agentName}
+            accentColor={accentColor}
+            needsButlerName={needsButlerName}
+            models={models}
+            integrationAccountMap={integrationAccountMap}
+          />
+        </DesktopTabsProvider>
+      </ChatPanelProvider>
+    </CollabSocketProvider>
   );
 }

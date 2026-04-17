@@ -1,7 +1,10 @@
 import { useEffect, useRef, useState } from "react";
 import { type ChatAddToolApproveResponseFunction } from "ai";
 import { LayoutGrid, Zap } from "lucide-react";
-import { loadIntegrationBundle, type ToolUIComponent } from "~/utils/integration-loader.client";
+import {
+  loadIntegrationBundle,
+  type ToolUIComponent,
+} from "~/utils/integration-loader.client";
 import { ApprovalComponent } from "./approval-component";
 import {
   type ConversationToolPart,
@@ -10,6 +13,7 @@ import {
 } from "./conversation-utils";
 import { ICON_MAPPING } from "../icon-utils";
 import type { IconType } from "../icon-utils";
+import { AskUserQuestion } from "./tool-ui/ask-user-question";
 
 interface ToolApprovalCardProps {
   part: ConversationToolPart;
@@ -26,6 +30,7 @@ interface ToolApprovalCardProps {
     toolCallId: string,
     args: Record<string, unknown>,
   ) => void;
+  onQuestionProgress?: (answered: number, total: number) => void;
 }
 
 function ToolApprovalCard({
@@ -156,6 +161,24 @@ function ToolApprovalCard({
     );
   }
 
+  // ask_user → render rich question UI instead of generic approve/reject
+  if (toolName === "ask_user") {
+    const wrappedApproval: ChatAddToolApproveResponseFunction = ({
+      id,
+      approved,
+    }) => {
+      onApproval(id, approved, part.toolCallId);
+    };
+    return (
+      <AskUserQuestion
+        part={part}
+        addToolApprovalResponse={wrappedApproval}
+        setToolArgOverride={setToolArgOverride}
+        isChatBusy={isChatBusy}
+      />
+    );
+  }
+
   return (
     <div className="px-3 py-3">
       <div className="mb-2 flex items-center gap-2">
@@ -221,7 +244,6 @@ export function ToolApprovalPanel({
   const [localDecisions, setLocalDecisions] = useState<Map<string, boolean>>(
     new Map(),
   );
-
   if (pendingApprovals.length === 0) return null;
 
   const handleApproval = (
@@ -274,9 +296,9 @@ export function ToolApprovalPanel({
         <div className="bg-grayAlpha-50 border-border flex items-center gap-2 border-b px-3 py-2">
           <Zap size={14} className="text-muted-foreground" />
           <span className="text-sm font-medium">
-            {pendingApprovals.length} action
-            {pendingApprovals.length > 1 ? "s" : ""} require
-            {pendingApprovals.length === 1 ? "s" : ""} approval
+            {pendingApprovals.every((p) => p.type.includes("ask_user"))
+              ? "Question"
+              : `${pendingApprovals.length} action${pendingApprovals.length > 1 ? "s" : ""} require${pendingApprovals.length === 1 ? "s" : ""} approval`}
           </span>
         </div>
         {pendingApprovals.map((part, idx) => {

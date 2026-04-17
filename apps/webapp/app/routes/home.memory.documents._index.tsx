@@ -72,7 +72,7 @@ export default function MemoryDocuments() {
 
   return (
     <>
-      <div className="flex h-[calc(100vh)] w-full flex-col items-center space-y-6 pt-3 md:h-[calc(100vh_-_56px)]">
+      <div className="flex h-[calc(100vh)] w-full flex-col items-center space-y-6 pt-3 md:h-page">
         {isInitialLoad ? (
           <LoaderCircle className="text-primary h-4 w-4 animate-spin" />
         ) : (

@@ -66,7 +66,7 @@ export const UnreadConversations = ({
 
   return (
     <div className="mb-4 flex flex-col px-2 pt-1">
-      <div className="mb-1 flex items-center justify-between px-2 pr-0">
+      <div className="mb-1 flex items-center justify-between pl-2">
         <p className="text-muted-foreground text-sm">Unread</p>
         <DropdownMenu>
           <DropdownMenuTrigger asChild>

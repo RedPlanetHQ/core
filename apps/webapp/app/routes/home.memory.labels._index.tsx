@@ -132,7 +132,7 @@ export default function MemoryLabelsIndex() {
 
   return (
     <div className="flex h-full flex-col">
-      <div className="flex h-[calc(100vh)] w-full flex-col p-2 md:h-[calc(100vh_-_56px)]">
+      <div className="flex h-[calc(100vh)] w-full flex-col p-2 md:h-page">
         {labels.length === 0 ? (
           <div className="mt-20 flex flex-col items-center justify-center">
             <Tag className="text-muted-foreground mb-2 h-6 w-6" />

@@ -18,6 +18,20 @@ export interface AgentReadResult {
 	error?: string;
 }
 
+export interface ConversationTurn {
+	role: 'user' | 'assistant';
+	content: string;
+}
+
+export interface AgentTurnsResult {
+	turns: ConversationTurn[];
+	totalLines: number;
+	fileExists: boolean;
+	fileSizeBytes: number;
+	fileSizeHuman: string;
+	error?: string;
+}
+
 export interface AgentReadOptions {
 	lines?: number;
 	offset?: number;
@@ -33,6 +47,7 @@ export interface ScannedSession {
 	fileSizeBytes: number;
 	createdAt: number;
 	updatedAt: number;
+	turnCount: number;
 }
 
 export interface ScanOptions {
@@ -59,6 +74,12 @@ export abstract class BaseCodingAgentReader {
 		sessionId: string,
 		options?: AgentReadOptions,
 	): Promise<AgentReadResult>;
+
+	abstract readSessionTurns(
+		dir: string,
+		sessionId: string,
+		options?: AgentReadOptions,
+	): Promise<AgentTurnsResult>;
 
 	abstract scanSessions(options?: ScanOptions): Promise<ScannedSession[]>;
 

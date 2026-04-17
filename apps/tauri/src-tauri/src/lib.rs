@@ -1,0 +1,359 @@
+#[cfg(target_os = "macos")]
+mod screen_context;
+#[cfg(target_os = "macos")]
+mod apps;
+#[cfg(target_os = "macos")]
+mod capture;
+mod coding_config;
+mod pty;
+
+use std::collections::{HashMap, HashSet};
+use std::sync::{Arc, Mutex};
+
+use base64::Engine as _;
+use serde::{Deserialize, Serialize};
+use tauri::menu::{Menu, MenuItem, PredefinedMenuItem};
+use tauri::tray::TrayIconBuilder;
+use tauri::{Manager, State};
+
+#[cfg(target_os = "macos")]
+use objc::{class, msg_send, sel, sel_impl, runtime::Object};
+
+// ── Shared state ──────────────────────────────────────────────────────────────
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct ScreenContextSettings {
+    /// Whether screen context capture is active. Off by default.
+    #[serde(default = "default_paused")]
+    pub paused: bool,
+    /// Allowlist — only capture from these apps. Empty = capture nothing.
+    #[serde(default)]
+    pub enabled_apps: HashSet<String>,
+    /// Runtime-only: all UI apps seen on this machine. Not persisted.
+    #[serde(skip)]
+    pub seen_apps: Vec<String>,
+}
+
+fn default_paused() -> bool { true }
+
+impl Default for ScreenContextSettings {
+    fn default() -> Self {
+        Self {
+            paused: true, // off by default
+            enabled_apps: HashSet::new(),
+            seen_apps: Vec::new(),
+        }
+    }
+}
+
+pub type SharedScreenContextSettings = Arc<Mutex<ScreenContextSettings>>;
+
+// ── Auth state ────────────────────────────────────────────────────────────────
+
+#[derive(Debug, Default)]
+pub struct AuthState {
+    /// PAT stored after desktop login. Used for outbound API calls from Rust.
+    pub pat: Option<String>,
+}
+
+pub type SharedAuthState = Arc<Mutex<AuthState>>;
+
+// ── Settings persistence (~/.corebrain/config.json) ──────────────────────────
+
+fn corebrain_config_path() -> Option<std::path::PathBuf> {
+    std::env::var("HOME")
+        .ok()
+        .map(|h| std::path::PathBuf::from(h).join(".corebrain").join("config.json"))
+}
+
+fn load_screen_context_settings() -> ScreenContextSettings {
+    let path = match corebrain_config_path() {
+        Some(p) => p,
+        None => return ScreenContextSettings::default(),
+    };
+    let json: serde_json::Value = std::fs::read_to_string(&path)
+        .ok()
+        .and_then(|s| serde_json::from_str(&s).ok())
+        .unwrap_or_default();
+    let sc = &json["preferences"]["screenContext"];
+    if sc.is_null() {
+        return ScreenContextSettings::default();
+    }
+    serde_json::from_value(sc.clone()).unwrap_or_default()
+}
+
+fn save_screen_context_settings(settings: &ScreenContextSettings) {
+    let path = match corebrain_config_path() {
+        Some(p) => p,
+        None => return,
+    };
+    let mut json: serde_json::Value = std::fs::read_to_string(&path)
+        .ok()
+        .and_then(|s| serde_json::from_str(&s).ok())
+        .unwrap_or_else(|| serde_json::json!({}));
+
+    if !json["preferences"].is_object() {
+        json["preferences"] = serde_json::json!({});
+    }
+    json["preferences"]["screenContext"] = serde_json::json!({
+        "paused": settings.paused,
+        "enabled_apps": settings.enabled_apps.iter().collect::<Vec<_>>(),
+    });
+
+    if let Some(parent) = path.parent() {
+        let _ = std::fs::create_dir_all(parent);
+    }
+    if let Ok(content) = serde_json::to_string_pretty(&json) {
+        let _ = std::fs::write(&path, content);
+    }
+}
+
+// ── Running apps helpers ──────────────────────────────────────────────────────
+
+#[derive(Serialize)]
+pub struct RunningApp {
+    pub name: String,
+}
+
+#[cfg(target_os = "macos")]
+unsafe fn icon_base64_for_app(app: *mut Object) -> Option<String> {
+    let icon: *mut Object = msg_send![app, icon];
+    if icon.is_null() { return None; }
+
+    let tiff: *mut Object = msg_send![icon, TIFFRepresentation];
+    if tiff.is_null() { return None; }
+
+    let rep: *mut Object =
+        msg_send![class!(NSBitmapImageRep), imageRepWithData: tiff];
+    if rep.is_null() { return None; }
+
+    let props: *mut Object = msg_send![class!(NSDictionary), dictionary];
+    // NSBitmapImageFileTypePNG = 4
+    let png: *mut Object =
+        msg_send![rep, representationUsingType: 4usize properties: props];
+    if png.is_null() { return None; }
+
+    let length: usize = msg_send![png, length];
+    let bytes: *const u8 = msg_send![png, bytes];
+    let slice = std::slice::from_raw_parts(bytes, length);
+    Some(base64::engine::general_purpose::STANDARD.encode(slice))
+}
+
+// ── Tauri commands ────────────────────────────────────────────────────────────
+
+/// Returns all visible (regular activation policy) running apps — names only.
+/// Fast: no icon conversion.
+#[cfg(target_os = "macos")]
+#[tauri::command]
+fn get_running_apps() -> Vec<RunningApp> {
+    unsafe {
+        let ws: *mut Object = msg_send![class!(NSWorkspace), sharedWorkspace];
+        let all: *mut Object = msg_send![ws, runningApplications];
+        let count: usize = msg_send![all, count];
+        let mut result = Vec::new();
+
+        for i in 0..count {
+            let app: *mut Object = msg_send![all, objectAtIndex: i];
+            // NSApplicationActivationPolicyRegular == 0
+            let policy: i64 = msg_send![app, activationPolicy];
+            if policy != 0 { continue; }
+
+            let name_obj: *mut Object = msg_send![app, localizedName];
+            if name_obj.is_null() { continue; }
+            let bytes: *const std::os::raw::c_char = msg_send![name_obj, UTF8String];
+            if bytes.is_null() { continue; }
+            let name = std::ffi::CStr::from_ptr(bytes).to_string_lossy().into_owned();
+            result.push(RunningApp { name });
+        }
+        result
+    }
+}
+
+#[cfg(not(target_os = "macos"))]
+#[tauri::command]
+fn get_running_apps() -> Vec<RunningApp> { vec![] }
+
+/// Returns the base64 PNG icon for a single running app by name. Called lazily per app.
+#[cfg(target_os = "macos")]
+#[tauri::command]
+fn get_app_icon(name: String) -> Option<String> {
+    unsafe {
+        let ws: *mut Object = msg_send![class!(NSWorkspace), sharedWorkspace];
+        let all: *mut Object = msg_send![ws, runningApplications];
+        let count: usize = msg_send![all, count];
+
+        for i in 0..count {
+            let app: *mut Object = msg_send![all, objectAtIndex: i];
+            let name_obj: *mut Object = msg_send![app, localizedName];
+            if name_obj.is_null() { continue; }
+            let bytes: *const std::os::raw::c_char = msg_send![name_obj, UTF8String];
+            if bytes.is_null() { continue; }
+            let app_name = std::ffi::CStr::from_ptr(bytes).to_string_lossy();
+            if app_name == name {
+                return icon_base64_for_app(app);
+            }
+        }
+        None
+    }
+}
+
+#[cfg(not(target_os = "macos"))]
+#[tauri::command]
+fn get_app_icon(_name: String) -> Option<String> { None }
+
+#[tauri::command]
+fn get_screen_context_settings(
+    state: State<SharedScreenContextSettings>,
+) -> serde_json::Value {
+    let s = state.lock().unwrap();
+    serde_json::json!({
+        "paused": s.paused,
+        "enabled_apps": s.enabled_apps.iter().collect::<Vec<_>>(),
+        "seen_apps": s.seen_apps,
+    })
+}
+
+#[tauri::command]
+fn set_screen_context_paused(paused: bool, state: State<SharedScreenContextSettings>) {
+    let snapshot = {
+        let mut s = state.lock().unwrap();
+        s.paused = paused;
+        s.clone()
+    };
+    save_screen_context_settings(&snapshot);
+}
+
+#[tauri::command]
+fn set_enabled_apps(enabled: Vec<String>, state: State<SharedScreenContextSettings>) {
+    let snapshot = {
+        let mut s = state.lock().unwrap();
+        s.enabled_apps = enabled.into_iter().collect();
+        s.clone()
+    };
+    save_screen_context_settings(&snapshot);
+}
+
+/// Returns the local gateway ID from ~/.corebrain/config.json, if configured.
+#[tauri::command]
+fn get_gateway_id() -> Option<String> {
+    let path = corebrain_config_path()?;
+    let json: serde_json::Value = std::fs::read_to_string(&path)
+        .ok()
+        .and_then(|s| serde_json::from_str(&s).ok())?;
+    json["preferences"]["gateway"]["id"]
+        .as_str()
+        .map(|s| s.to_string())
+}
+
+/// Called from the frontend after desktop login to persist the PAT for Rust API calls.
+#[tauri::command]
+fn store_pat(token: String, state: State<SharedAuthState>) {
+    state.lock().unwrap().pat = Some(token);
+}
+
+// ── System tray ───────────────────────────────────────────────────────────────
+
+fn build_tray_menu<R: tauri::Runtime>(
+    manager: &impl Manager<R>,
+    paused: bool,
+) -> tauri::Result<Menu<R>> {
+    let toggle_label = if paused { "Enable Capture" } else { "Pause Capture" };
+    let toggle_i = MenuItem::with_id(manager, "toggle_capture", toggle_label, true, None::<&str>)?;
+    let open_i = MenuItem::with_id(manager, "open", "Open CORE", true, None::<&str>)?;
+    let quit_i = MenuItem::with_id(manager, "quit", "Quit CORE", true, None::<&str>)?;
+    let sep1 = PredefinedMenuItem::separator(manager)?;
+    let sep2 = PredefinedMenuItem::separator(manager)?;
+    let items: &[&dyn tauri::menu::IsMenuItem<R>] = &[&toggle_i, &sep1, &open_i, &sep2, &quit_i];
+    Menu::with_items(manager, items)
+}
+
+// ── App entry point ───────────────────────────────────────────────────────────
+
+pub fn run() {
+    let settings: SharedScreenContextSettings =
+        Arc::new(Mutex::new(ScreenContextSettings::default()));
+    let auth: SharedAuthState =
+        Arc::new(Mutex::new(AuthState::default()));
+    let pty_state: pty::PtyState =
+        Arc::new(Mutex::new(HashMap::new()));
+    let login_path = pty::SharedLoginPath(
+        Arc::new(Mutex::new(pty::capture_login_path()))
+    );
+
+    let pty_state_exit = pty_state.clone();
+
+    tauri::Builder::default()
+        .plugin(tauri_plugin_shell::init())
+        .plugin(tauri_plugin_updater::Builder::new().build())
+        .manage(settings.clone())
+        .manage(auth.clone())
+        .manage(pty_state.clone())
+        .manage(login_path)
+        .invoke_handler(tauri::generate_handler![
+            get_screen_context_settings,
+            set_screen_context_paused,
+            set_enabled_apps,
+            get_running_apps,
+            get_app_icon,
+            store_pat,
+            get_gateway_id,
+            coding_config::check_corebrain_installed,
+            coding_config::get_coding_agents,
+            pty::spawn_pty,
+            pty::write_pty,
+            pty::resize_pty,
+            pty::kill_pty,
+        ])
+        .setup(move |app| {
+            *settings.lock().unwrap() = load_screen_context_settings();
+            #[cfg(target_os = "macos")]
+            screen_context::start_polling(settings.clone());
+
+            // Build system tray icon
+            let paused = settings.lock().unwrap().paused;
+            let tray_settings = settings.clone();
+
+            let tray_menu = build_tray_menu(app.handle(), paused)?;
+
+            TrayIconBuilder::with_id("main-tray")
+                .icon(tauri::include_image!("icons/tray-icon@2x.png"))
+                .icon_as_template(true)
+                .tooltip("CORE")
+                .menu(&tray_menu)
+                .on_menu_event(move |app, event| match event.id.as_ref() {
+                    "toggle_capture" => {
+                        let new_paused = {
+                            let mut s = tray_settings.lock().unwrap();
+                            s.paused = !s.paused;
+                            s.paused
+                        };
+                        save_screen_context_settings(&tray_settings.lock().unwrap());
+                        if let Some(tray) = app.tray_by_id("main-tray") {
+                            if let Ok(menu) = build_tray_menu(app, new_paused) {
+                                let _ = tray.set_menu(Some(menu));
+                            }
+                        }
+                    }
+                    "open" => {
+                        if let Some(window) = app.get_webview_window("main") {
+                            let _ = window.show();
+                            let _ = window.set_focus();
+                        }
+                    }
+                    "quit" => {
+                        app.exit(0);
+                    }
+                    _ => {}
+                })
+                .build(app)?;
+
+            Ok(())
+        })
+        .on_window_event(move |_window, event| {
+            if let tauri::WindowEvent::Destroyed = event {
+                pty::kill_all_ptys(&pty_state_exit);
+            }
+        })
+        .run(tauri::generate_context!())
+        .expect("error while running tauri application");
+}

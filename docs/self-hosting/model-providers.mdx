@@ -1,0 +1,292 @@
+---
+title: "Model Providers"
+description: "Configure AI model providers for your self-hosted CORE instance."
+---
+
+CORE supports multiple AI model providers. Set your provider and API key in your environment variables, then choose which models to use for chat and embeddings.
+
+## Configuration
+
+Two environment variables control which provider and model CORE uses:
+
+```bash
+CHAT_PROVIDER=openai       # openai | anthropic | google | azure | ollama
+MODEL=gpt-5-2025-08-07     # model ID for the selected provider
+```
+
+---
+
+## OpenAI
+
+Get your API key from [platform.openai.com](https://platform.openai.com).
+
+```bash
+CHAT_PROVIDER=openai
+OPENAI_API_KEY=sk-...
+MODEL=gpt-5-2025-08-07
+```
+
+**Chat models**
+
+| Model ID | Label | Complexity |
+|---|---|---|
+| `gpt-5.2-2025-12-11` | GPT-5.2 | Medium |
+| `gpt-5-2025-08-07` | GPT-5 | Medium |
+| `gpt-5-mini-2025-08-07` | GPT-5 Mini | Low |
+
+**Embedding models**
+
+| Model ID | Label | Dimensions |
+|---|---|---|
+| `text-embedding-3-small` | Text Embedding 3 Small | 1536 |
+| `text-embedding-3-large` | Text Embedding 3 Large | 3072 |
+
+```bash
+EMBEDDINGS_PROVIDER=openai
+EMBEDDING_MODEL=text-embedding-3-small
+EMBEDDING_MODEL_SIZE=1536
+```
+
+**Optional: OpenAI-compatible proxy**
+
+If you're using a proxy or a service with an OpenAI-compatible API, set `OPENAI_BASE_URL` and `OPENAI_API_MODE`:
+
+```bash
+OPENAI_BASE_URL=https://your-proxy.example.com/v1
+OPENAI_API_MODE=chat_completions   # use chat_completions for most proxies
+```
+
+---
+
+## Anthropic
+
+Get your API key from [console.anthropic.com](https://console.anthropic.com).
+
+```bash
+CHAT_PROVIDER=anthropic
+ANTHROPIC_API_KEY=sk-ant-...
+MODEL=claude-sonnet-4-6
+```
+
+**Chat models**
+
+| Model ID | Label | Complexity |
+|---|---|---|
+| `claude-sonnet-4-6` | Claude Sonnet 4.6 | Medium |
+| `claude-haiku-4-5` | Claude Haiku 4.5 | Low |
+
+---
+
+## Google
+
+Get your API key from [aistudio.google.com](https://aistudio.google.com).
+
+```bash
+CHAT_PROVIDER=google
+GOOGLE_GENERATIVE_AI_API_KEY=AIza...
+MODEL=gemini-2.5-pro-preview-03-25
+```
+
+**Chat models**
+
+| Model ID | Label | Complexity |
+|---|---|---|
+| `gemini-2.5-pro-preview-03-25` | Gemini 2.5 Pro | Medium |
+| `gemini-2.5-flash-preview-04-17` | Gemini 2.5 Flash | Low |
+
+**Embedding models**
+
+| Model ID | Label | Dimensions |
+|---|---|---|
+| `text-embedding-004` | Text Embedding 004 | 768 |
+
+```bash
+EMBEDDINGS_PROVIDER=google
+EMBEDDING_MODEL=text-embedding-004
+EMBEDDING_MODEL_SIZE=768
+```
+
+---
+
+## Azure OpenAI
+
+Set up a deployment in the [Azure portal](https://portal.azure.com), then configure:
+
+```bash
+CHAT_PROVIDER=azure
+AZURE_API_KEY=...
+AZURE_BASE_URL=https://<your-resource>.openai.azure.com
+MODEL=azure/gpt-4.1
+```
+
+**Chat models**
+
+| Model ID | Label | Complexity |
+|---|---|---|
+| `azure/gpt-4o` | GPT-4o (Azure) | Medium |
+| `azure/gpt-4o-mini` | GPT-4o Mini (Azure) | Low |
+| `azure/gpt-4.1` | GPT-4.1 (Azure) | High |
+
+---
+
+## Ollama (Local)
+
+Run models locally with [Ollama](https://ollama.com). No API key required.
+
+```bash
+CHAT_PROVIDER=ollama
+OLLAMA_URL=http://ollama:11434
+MODEL=llama3.2
+```
+
+Pull a model before starting CORE:
+
+```bash
+ollama pull llama3.2
+```
+
+Ollama can also be used for embeddings and reranking:
+
+```bash
+EMBEDDINGS_PROVIDER=ollama
+EMBEDDING_MODEL=mxbai-embed-large
+EMBEDDING_MODEL_SIZE=1024
+
+RERANK_PROVIDER=ollama
+OLLAMA_RERANK_MODEL=dengcao/Qwen3-Reranker-8B:Q5_K_M
+```
+
+---
+
+## OpenRouter
+
+[OpenRouter](https://openrouter.ai) gives access to models from many providers through a single API. It uses an OpenAI-compatible interface.
+
+```bash
+CHAT_PROVIDER=openai
+OPENAI_API_KEY=sk-or-...
+OPENAI_BASE_URL=https://openrouter.ai/api/v1
+OPENAI_API_MODE=chat_completions
+MODEL=openrouter/anthropic/claude-3.5-sonnet
+```
+
+---
+
+## DeepSeek
+
+Get your API key from [platform.deepseek.com](https://platform.deepseek.com).
+
+```bash
+CHAT_PROVIDER=openai
+OPENAI_API_KEY=sk-...
+OPENAI_BASE_URL=https://api.deepseek.com/v1
+OPENAI_API_MODE=chat_completions
+MODEL=deepseek-chat
+```
+
+**Models**
+
+| Model ID | Description |
+|---|---|
+| `deepseek-chat` | DeepSeek V3 — fast, general-purpose |
+| `deepseek-reasoner` | DeepSeek R1 — reasoning model |
+
+---
+
+## Groq
+
+Get your API key from [console.groq.com](https://console.groq.com).
+
+```bash
+CHAT_PROVIDER=openai
+OPENAI_API_KEY=gsk_...
+OPENAI_BASE_URL=https://api.groq.com/openai/v1
+OPENAI_API_MODE=chat_completions
+MODEL=llama-3.3-70b-versatile
+```
+
+**Models**
+
+| Model ID | Description |
+|---|---|
+| `llama-3.3-70b-versatile` | Llama 3.3 70B — fast, general-purpose |
+| `llama-3.1-8b-instant` | Llama 3.1 8B — ultra-fast |
+| `gemma2-9b-it` | Gemma 2 9B |
+
+---
+
+## Mistral
+
+Get your API key from [console.mistral.ai](https://console.mistral.ai).
+
+```bash
+CHAT_PROVIDER=openai
+OPENAI_API_KEY=...
+OPENAI_BASE_URL=https://api.mistral.ai/v1
+OPENAI_API_MODE=chat_completions
+MODEL=mistral-large-latest
+```
+
+**Models**
+
+| Model ID | Description |
+|---|---|
+| `mistral-large-latest` | Mistral Large — most capable |
+| `mistral-small-latest` | Mistral Small — fast, cost-efficient |
+
+---
+
+## xAI (Grok)
+
+Get your API key from [console.x.ai](https://console.x.ai).
+
+```bash
+CHAT_PROVIDER=openai
+OPENAI_API_KEY=xai-...
+OPENAI_BASE_URL=https://api.x.ai/v1
+OPENAI_API_MODE=chat_completions
+MODEL=grok-3
+```
+
+**Models**
+
+| Model ID | Description |
+|---|---|
+| `grok-3` | Grok 3 — flagship model |
+| `grok-3-mini` | Grok 3 Mini — fast, lightweight |
+
+---
+
+## Kimi (Moonshot)
+
+Get your API key from [platform.moonshot.cn](https://platform.moonshot.cn).
+
+```bash
+CHAT_PROVIDER=openai
+OPENAI_API_KEY=sk-...
+OPENAI_BASE_URL=https://api.moonshot.cn/v1
+OPENAI_API_MODE=chat_completions
+MODEL=moonshot-v1-8k
+```
+
+**Models**
+
+| Model ID | Context | Description |
+|---|---|---|
+| `moonshot-v1-8k` | 8K | Fast, short context |
+| `moonshot-v1-32k` | 32K | Balanced |
+| `moonshot-v1-128k` | 128K | Long context |
+
+---
+
+## Any OpenAI-compatible API
+
+CORE can connect to any provider that exposes an OpenAI-compatible API (e.g. LM Studio, vLLM, Together AI, Fireworks, etc.):
+
+```bash
+CHAT_PROVIDER=openai
+OPENAI_API_KEY=<your-key>
+OPENAI_BASE_URL=https://<provider-endpoint>/v1
+OPENAI_API_MODE=chat_completions
+MODEL=<model-id>
+```

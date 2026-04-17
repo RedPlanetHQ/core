@@ -6,20 +6,20 @@
 @custom-variant dark (&:is(.dark *));
 
 :root {
-  --background: oklch(91.28% 0 0);
-  --background-2: oklch(95.21% 0 0);
+  --background: oklch(94.28% 0 0);
+  --background-2: oklch(97.21% 0 0);
   --background-3: oklch(100% 0 0);
-  --foreground: oklch(0% 0 0);
-  --popover: oklch(95.21% 0 0);
+  --foreground: oklch(30.87% 0 0);
+  --popover: oklch(97.21% 0 0);
   --popover-foreground: oklch(0% 0 0);
-  --primary: oklch(60% 0.13 30);
+  --primary: oklch(60.21% 0.1823 252.59);
   --primary-foreground: oklch(100% 0 0);
   --secondary: 210 40% 96.1%;
   --secondary-foreground: oklch(0% 0 0);
   --muted: oklch(0% 0 0 / 19.22%);
-  --muted-foreground: oklch(49.26% 0 0);
-  --accent: oklch(100% 0 0);
-  --accent-foreground: oklch(0% 0 0);
+  --muted-foreground: oklch(55.26% 0 0);
+  --accent: oklch(0% 0 0 / 9.02%);
+  --accent-foreground: oklch(20.87% 0 0);
   --destructive: oklch(61.34% 0.162 23.58);
   --destructive-foreground: oklch(100% 0 0);
   --warning: oklch(70.43% 0.14390424619548714 87.9634104985311);
@@ -49,13 +49,13 @@
   --foreground: oklch(92.8% 0 0);
   --popover: oklch(25.2% 0 0);
   --popover-foreground: oklch(92.8% 0 0);
-  --primary: oklch(60% 0.13 30);
+  --primary: oklch(60.21% 0.1823 252.59);
   --primary-foreground: oklch(92.8% 0 0);
   --secondary: 210 40% 96.1%;
   --secondary-foreground: oklch(92.8% 0 0);
   --muted: oklch(100% 0 0 / 13.33%);
   --muted-foreground: oklch(76.99% 0 0);
-  --accent: oklch(95.81% 0 0);
+  --accent: oklch(97.81% 0 0);
   --accent-foreground: oklch(0% 0 0);
   --warning: oklch(70.43% 0.14390424619548714 87.9634104985311);
   --warning-foreground: oklch(100% 0 0);
@@ -312,13 +312,13 @@
   --color-yellow-900: #6b4118;
   --color-yellow-950: #3e220a;
 
-  --text-xs: 12px;
-  --text-sm: 13px;
-  --text-base: 14px;
+  --text-xs: 11px;
+  --text-sm: 12px;
+  --text-base: 13px;
   --text-md: 15px;
   --text-lg: 18px;
-  --text-xl: 24px;
-  --text-2xl: 26px;
+  --text-xl: 22px;
+  --text-2xl: 24px;
 
   --btn-h-xs: 20px;
   --btn-h-sm: 24px;
@@ -385,7 +385,23 @@
   }
 }
 
+@layer utilities {
+  .h-page {
+    height: calc(100vh - 56px - var(--tabbar-height, 0px));
+  }
+  .h-page-sm {
+    height: calc(100vh - 40px - var(--tabbar-height, 0px));
+  }
+  .h-page-xs {
+    height: calc(100vh - 16px - var(--tabbar-height, 0px));
+  }
+}
+
 @layer base {
+  :root {
+    --tabbar-height: 0px;
+  }
+
   * {
     @apply border-border outline-ring/50;
     --header-height: 40px;
@@ -408,7 +424,7 @@
     .overflow-x-auto,
     .overflow-auto {
       overflow-anchor: none;
-      scrollbar-color: var(--gray-500) transparent;
+      scrollbar-color: oklch(var(--grayAlpha-300)) transparent;
       scrollbar-width: thin;
     }
   }
@@ -418,12 +434,13 @@
     .overflow-y-auto::-webkit-scrollbar-thumb,
     .overflow-x-auto::-webkit-scrollbar-thumb,
     .overflow-auto::-webkit-scrollbar-thumb {
-      background: transparent;
+      background: oklch(var(--grayAlpha-300));
+      border-radius: 9999px;
     }
     .overflow-y-auto::-webkit-scrollbar-track,
     .overflow-x-auto::-webkit-scrollbar-track,
     .overflow-auto::-webkit-scrollbar-track {
-      background: var(--gray-600);
+      background: transparent;
     }
 
     .overflow-y-auto::-webkit-scrollbar,
@@ -440,7 +457,7 @@
   p.is-editor-empty:before {
     @apply text-muted-foreground/70;
 
-    font-size: 14px !important;
+    font-size: 13px !important;
     content: attr(data-placeholder);
     float: left;
     height: 0;
@@ -479,6 +496,19 @@
 
 .editor-container .paragraph-node:first-child {
   margin-top: 0 !important;
+}
+
+.paragraph-node {
+  text-wrap-mode: wrap;
+
+  unicode-bidi: isolate;
+  user-select: text;
+  vertical-align: baseline;
+  white-space-collapse: preserve;
+}
+
+.node-butlerTask {
+  display: inline;
 }
 
 .list-item--task {
@@ -639,7 +669,7 @@
     }
 
     pre {
-      @apply bg-grayAlpha-100 text-foreground w-fit rounded-md p-4;
+      @apply bg-grayAlpha-50 text-foreground w-fit rounded-md p-4;
       margin: 1.5rem 0;
 
       code {

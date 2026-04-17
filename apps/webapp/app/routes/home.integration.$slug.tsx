@@ -3,6 +3,7 @@ import {
   json,
   type LoaderFunctionArgs,
   type ActionFunctionArgs,
+  type MetaFunction,
 } from "@remix-run/node";
 import { useLoaderData } from "@remix-run/react";
 import { requireUser, requireWorkpace } from "~/services/session.server";
@@ -21,6 +22,11 @@ import { prisma } from "~/db.server";
 import { scheduler, unschedule } from "~/services/oauth/scheduler";
 import { Plus } from "lucide-react";
 import { isBillingEnabled, isPaidPlan } from "~/config/billing.server";
+
+export const meta: MetaFunction<typeof loader> = ({ data }) => {
+  const name = data?.integration?.name;
+  return [{ title: name ? `${name} | Integrations` : "Integrations" }];
+};
 
 export async function loader({ request, params }: LoaderFunctionArgs) {
   const user = await requireUser(request);
@@ -155,7 +161,7 @@ export function IntegrationDetail({
           },
         ]}
       />
-      <div className="flex h-[calc(100vh)] flex-col items-center overflow-y-auto p-4 px-5 md:h-[calc(100vh_-_56px)]">
+      <div className="flex h-[calc(100vh)] flex-col items-center overflow-y-auto p-4 px-5 md:h-page">
         <div className="w-full md:max-w-5xl">
           <Section
             title={integration.name}

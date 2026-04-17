@@ -19,7 +19,7 @@ import {
   DropdownMenuSubContent,
   DropdownMenuPortal,
 } from "../ui/dropdown-menu";
-import { SidebarMenu, SidebarMenuItem, useSidebar } from "../ui/sidebar";
+import { useSidebar } from "../ui/sidebar";
 import { Button } from "../ui";
 import { useNavigate, useFetcher } from "@remix-run/react";
 import { type ExtendedUser } from "~/hooks/useUser";
@@ -46,105 +46,93 @@ export function NavUser({
   };
 
   return (
-    <SidebarMenu>
-      <SidebarMenuItem className="flex justify-between">
-        <DropdownMenu>
-          <DropdownMenuTrigger asChild>
-            <Button variant="link" className="mb-2 gap-2 px-0">
-              <Avatar
-                name={agentName}
-                variant="pixel"
-                colors={["var(--background-3)", accentColor]}
-                size={24}
-              />
-            </Button>
-          </DropdownMenuTrigger>
-          <DropdownMenuContent
-            className="w-(--radix-dropdown-menu-trigger-width) min-w-56 rounded-lg"
-            side={isMobile ? "bottom" : "top"}
-            align="start"
-            sideOffset={4}
-          >
-            <DropdownMenuLabel className="p-0 font-normal">
-              <div className="flex items-center gap-2 px-1 py-1.5 text-left text-sm">
-                <div className="grid flex-1 text-left text-sm leading-tight">
-                  <span className="truncate font-medium">
-                    {user.displayName}
-                  </span>
-                  <span className="text-muted-foreground truncate text-sm">
-                    {user.email}
-                  </span>
-                  <span className="text-muted-foreground truncate text-sm">
-                    Credits: {user.availableCredits}
-                  </span>
-                </div>
-              </div>
-            </DropdownMenuLabel>
-            <DropdownMenuSeparator />
-            <DropdownMenuItem
-              className="flex gap-2"
-              onClick={() => navigate("/settings/account")}
-            >
-              <Settings size={16} />
-              Settings
-            </DropdownMenuItem>
-            <DropdownMenuItem
-              className="flex gap-2"
-              onClick={() => navigate("/home/integrations")}
-            >
-              <LayoutGrid size={16} />
-              Integrations
-            </DropdownMenuItem>
-            <DropdownMenuSub>
-              <DropdownMenuSubTrigger className="flex gap-2">
-                <AvatarText
-                  text={user.name ?? "User"}
-                  className="h-5 w-5 rounded text-xs"
-                />
-                Switch workspace
-              </DropdownMenuSubTrigger>
-              <DropdownMenuPortal>
-                <DropdownMenuSubContent className="min-w-[200px]">
-                  {user.workspaces?.map((workspace) => (
-                    <DropdownMenuItem
-                      key={workspace.id}
-                      className="flex items-center justify-between gap-2"
-                      onClick={() => handleSwitchWorkspace(workspace.id)}
-                      disabled={workspace.id === user.currentWorkspace?.id}
-                    >
-                      <div className="flex items-center gap-2">
-                        <AvatarText
-                          text={user.name ?? "User"}
-                          className="h-5.5 w-5.5 rounded text-xs"
-                        />
-                        <span className="truncate">{workspace.name}</span>
-                      </div>
-                      {workspace.id === user.currentWorkspace?.id && (
-                        <Check size={14} className="text-primary" />
-                      )}
-                    </DropdownMenuItem>
-                  ))}
-                  <DropdownMenuSeparator />
-                  <DropdownMenuItem
-                    className="flex gap-2"
-                    onClick={() => navigate("/workspace/join")}
-                  >
-                    <Plus size={16} />
-                    Create or join a workspace
-                  </DropdownMenuItem>
-                </DropdownMenuSubContent>
-              </DropdownMenuPortal>
-            </DropdownMenuSub>
-            <DropdownMenuItem
-              className="flex gap-2"
-              onClick={() => navigate("/logout")}
-            >
-              <LogOut size={16} />
-              Log out
-            </DropdownMenuItem>
-          </DropdownMenuContent>
-        </DropdownMenu>
-      </SidebarMenuItem>
-    </SidebarMenu>
+    <DropdownMenu>
+      <DropdownMenuTrigger asChild>
+        <Button variant="link" className="gap-2 px-0">
+          <Avatar
+            name={agentName}
+            variant="pixel"
+            colors={["var(--background-3)", accentColor]}
+            size={24}
+          />
+        </Button>
+      </DropdownMenuTrigger>
+      <DropdownMenuContent
+        className="w-(--radix-dropdown-menu-trigger-width) min-w-56 rounded-lg"
+        side={isMobile ? "bottom" : "top"}
+        align="start"
+        sideOffset={4}
+      >
+        <DropdownMenuLabel className="p-0 font-normal">
+          <div className="flex items-center gap-2 px-1 py-1.5 text-left text-sm">
+            <div className="grid flex-1 text-left text-sm leading-tight">
+              <span className="truncate font-medium">{user.displayName}</span>
+              <span className="text-muted-foreground truncate text-sm">
+                {user.email}
+              </span>
+              <span className="text-muted-foreground truncate text-sm">
+                Credits: {user.availableCredits}
+              </span>
+            </div>
+          </div>
+        </DropdownMenuLabel>
+        <DropdownMenuSeparator />
+        <DropdownMenuItem
+          className="flex gap-2"
+          onClick={() => navigate("/settings/account")}
+        >
+          <Settings size={16} />
+          Settings
+        </DropdownMenuItem>
+
+        <DropdownMenuSub>
+          <DropdownMenuSubTrigger className="flex gap-2">
+            <AvatarText
+              text={user.name ?? "User"}
+              className="h-5 w-5 rounded text-xs"
+            />
+            Switch workspace
+          </DropdownMenuSubTrigger>
+          <DropdownMenuPortal>
+            <DropdownMenuSubContent className="min-w-[200px]">
+              {user.workspaces?.map((workspace) => (
+                <DropdownMenuItem
+                  key={workspace.id}
+                  className="flex items-center justify-between gap-2"
+                  onClick={() => handleSwitchWorkspace(workspace.id)}
+                  disabled={workspace.id === user.currentWorkspace?.id}
+                >
+                  <div className="flex items-center gap-2">
+                    <AvatarText
+                      text={user.name ?? "User"}
+                      className="h-5.5 w-5.5 rounded text-xs"
+                    />
+                    <span className="truncate">{workspace.name}</span>
+                  </div>
+                  {workspace.id === user.currentWorkspace?.id && (
+                    <Check size={14} className="text-primary" />
+                  )}
+                </DropdownMenuItem>
+              ))}
+              <DropdownMenuSeparator />
+              <DropdownMenuItem
+                className="flex gap-2"
+                onClick={() => navigate("/workspace/join")}
+              >
+                <Plus size={16} />
+                Create or join a workspace
+              </DropdownMenuItem>
+            </DropdownMenuSubContent>
+          </DropdownMenuPortal>
+        </DropdownMenuSub>
+        <DropdownMenuItem
+          className="flex gap-2"
+          onClick={() => navigate("/logout")}
+        >
+          <LogOut size={16} />
+          Log out
+        </DropdownMenuItem>
+      </DropdownMenuContent>
+    </DropdownMenu>
   );
 }

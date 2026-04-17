@@ -8,7 +8,7 @@ import { tool, type Tool } from "ai";
 import { z } from "zod";
 import { prisma } from "~/db.server";
 import { logger } from "~/services/logger.service";
-import { createSkill, updateSkill } from "~/services/skills.server";
+import { createSkill, updateSkill, getSkill } from "~/services/skills.server";
 import { createAgent, resolveModelString } from "~/lib/model.server";
 import { getConnectedIntegrationAccounts } from "~/services/integrationAccount.server";
 import { SKILL_GENERATOR_SYSTEM_PROMPT } from "~/utils/skill-generator-prompt";
@@ -43,21 +43,29 @@ export function getSkillTool(workspaceId: string): Tool {
 /**
  * Create a new skill
  *
- * The butler provides the intent — the tool internally runs the skill generator
- * to produce a properly structured workflow, then saves it.
+ * Two paths:
+ * 1. `content` provided — saves directly (context skills: preferences, rules, persona, domain knowledge)
+ * 2. `intent` provided — runs the skill generator to produce a structured workflow, then saves
  */
 export function createSkillTool(workspaceId: string, userId: string): Tool {
   return tool({
     description:
-      "Create a new skill (reusable workflow). Provide the title and a description of what the workflow should do — the system will generate the structured workflow content automatically. You don't need to write the full workflow yourself.",
+      "Save a reusable capability — structured knowledge, rules, preferences, or a repeatable workflow. Use this ONLY when there is something worth reusing in future conversations. NEVER use this for reminders, follow-ups, or scheduled notifications — those are tasks (use create_task with a schedule instead).",
     inputSchema: z.object({
       title: z
         .string()
-        .describe("The skill title (5-8 words, action-oriented)"),
+        .describe("The skill title — concise and descriptive"),
       intent: z
         .string()
+        .optional()
         .describe(
-          "Describe what this workflow should do — the steps, rules, tools to use, and expected output. Be specific about the workflow logic.",
+          "For repeatable workflow skills only: describe the reusable procedure — what it does, the steps involved, which tools to use, and when to apply it. Example: 'How to draft and send investor updates: pull last email for format reference, gather metrics, draft following the 6-section structure, confirm numbers with user, send.' Do NOT use this field for one-time actions, reminders, or scheduling requests.",
+        ),
+      content: z
+        .string()
+        .optional()
+        .describe(
+          "For knowledge/context skills: the full content to save directly — use this for captured knowledge, format templates, preferences, rules, persona, or domain expertise. Saved as-is without running through the generator. Example: the investor update format structure, email tone rules, code review checklist.",
         ),
       short_description: z
         .string()
@@ -66,28 +74,40 @@ export function createSkillTool(workspaceId: string, userId: string): Tool {
           "1-2 sentence description with trigger phrases (under 200 chars)",
         ),
     }),
-    execute: async ({ title, intent, short_description }) => {
+    execute: async ({ title, intent, content, short_description }) => {
       try {
-        // Fetch connected tools for context
-        const accounts = await getConnectedIntegrationAccounts(userId, workspaceId);
-        const connectedTools = accounts.map((a) => a.integrationDefinition.name);
-        const toolsContext = connectedTools.length > 0
-          ? `\n\nUser's connected tools: ${connectedTools.join(", ")}`
-          : "";
+        if (!content && !intent) {
+          return "Failed to create skill: provide either content (for context skills) or intent (for workflow skills).";
+        }
 
-        const userMessage = `User intent: ${intent}${toolsContext}`;
+        let skillContent: string;
 
-        // Generate structured workflow via the skill generator
-        const agent = createAgent(await resolveModelString("chat", "low"), SKILL_GENERATOR_SYSTEM_PROMPT);
-        const { text: generatedContent } = await agent.generate(userMessage);
+        if (content) {
+          // Direct save path — context skills bypass the generator
+          skillContent = content;
+        } else {
+          // Generator path — workflow skills get structured content
+          const accounts = await getConnectedIntegrationAccounts(userId, workspaceId);
+          const connectedTools = accounts.map((a) => a.integrationDefinition.name);
+          const toolsContext = connectedTools.length > 0
+            ? `\n\nUser's connected tools: ${connectedTools.join(", ")}`
+            : "";
 
-        if (!generatedContent) {
-          return "Failed to generate skill workflow — generator produced no output.";
+          const userMessage = `User intent: ${intent}${toolsContext}`;
+
+          const agent = createAgent(await resolveModelString("chat", "low"), SKILL_GENERATOR_SYSTEM_PROMPT);
+          const { text: generatedContent } = await agent.generate(userMessage);
+
+          if (!generatedContent) {
+            return "Failed to generate skill content — generator produced no output.";
+          }
+
+          skillContent = generatedContent;
         }
 
         const skill = await createSkill(workspaceId, userId, {
           title,
-          content: generatedContent,
+          content: skillContent,
           source: "agent",
           metadata: short_description
             ? { shortDescription: short_description }
@@ -104,15 +124,23 @@ export function createSkillTool(workspaceId: string, userId: string): Tool {
 
 /**
  * Update an existing skill
+ *
+ * Content updates are always APPENDED to existing content — never replaced.
+ * This preserves the user's original skill description and accumulated knowledge.
  */
 export function updateSkillTool(workspaceId: string, userId: string): Tool {
   return tool({
     description:
-      "Update an existing skill's title, content, or short description. Use get_skill first to load the current content before making changes.",
+      "Update an existing skill's title, content, or short description. Content is always APPENDED to existing content — pass only the new additions, not the full skill. No need to call get_skill first for content updates.",
     inputSchema: z.object({
       skill_id: z.string().describe("The ID of the skill to update"),
       title: z.string().optional().describe("New title for the skill"),
-      content: z.string().optional().describe("New content/instructions"),
+      content: z
+        .string()
+        .optional()
+        .describe(
+          "New content to APPEND to the skill. This is merged with existing content — just pass what's new.",
+        ),
       short_description: z
         .string()
         .optional()
@@ -120,9 +148,19 @@ export function updateSkillTool(workspaceId: string, userId: string): Tool {
     }),
     execute: async ({ skill_id, title, content, short_description }) => {
       try {
+        // Always append content to existing — never replace
+        let mergedContent: string | undefined;
+        if (content) {
+          const existing = await getSkill(skill_id, workspaceId);
+          if (!existing) return "Skill not found or update failed";
+          mergedContent = existing.content
+            ? `${existing.content}\n\n${content}`
+            : content;
+        }
+
         const updated = await updateSkill(skill_id, workspaceId, userId, {
           ...(title && { title }),
-          ...(content && { content }),
+          ...(mergedContent !== undefined && { content: mergedContent }),
           ...(short_description && {
             metadata: { shortDescription: short_description },
           }),

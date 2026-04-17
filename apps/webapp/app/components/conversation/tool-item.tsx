@@ -128,7 +128,7 @@ export const Tool = ({
   const hasNestedApproval =
     hasNestedTools && hasNeedsApprovalDeep(nestedToolParts);
 
-  const [isOpen, setIsOpen] = useState(needsApproval || hasNestedApproval);
+  const [isOpen, setIsOpen] = useState(!needsApproval && hasNestedApproval);
 
   // ── ToolUI ──────────────────────────────────────────────────────────────────
   // For execute_integration_action tools, the effective action is input.action.
@@ -232,7 +232,9 @@ export const Tool = ({
     .join("\n");
 
   useEffect(() => {
-    if (needsApproval || hasNestedApproval) {
+    if (needsApproval) {
+      setIsOpen(false);
+    } else if (hasNestedApproval) {
       setIsOpen(true);
     }
   }, [needsApproval, hasNestedApproval]);
@@ -557,7 +559,7 @@ export const Tool = ({
             "text-muted-foreground/80 -ml-2 flex items-center gap-2 py-1 text-left hover:cursor-pointer",
             isDisabled && "cursor-not-allowed",
           )}
-          disabled={isDisabled}
+          disabled={isDisabled || needsApproval}
         >
           {getIcon()}
           <span>{displayName}</span>
