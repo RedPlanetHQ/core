@@ -252,7 +252,9 @@ export function TaskDetailFull({
               className="gap-1"
               onClick={() => setScheduleOpen(true)}
             >
-              {task.isActive && task.schedule ? (
+              {task.isActive &&
+              task.schedule &&
+              (!task.maxOccurrences || task.maxOccurrences > 1) ? (
                 <RefreshCw size={14} />
               ) : task.isActive && task.nextRunAt ? (
                 <Bot size={14} />
@@ -260,7 +262,9 @@ export function TaskDetailFull({
                 <Clock size={14} />
               )}
               <span>
-                {task.isActive && task.schedule
+                {task.isActive &&
+                task.schedule &&
+                (!task.maxOccurrences || task.maxOccurrences > 1)
                   ? ((task.metadata as Record<string, string> | null)
                       ?.scheduleText ?? "Recurring")
                   : task.isActive && task.nextRunAt

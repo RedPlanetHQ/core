@@ -14,11 +14,6 @@ crate-type = ["staticlib", "cdylib", "rlib"]
 name = "core-desktop"
 path = "src/main.rs"
 
-[[bin]]
-name = "ax_debug"
-path = "src/bin/ax_debug.rs"
-required-features = ["ax-debug"]
-
 [build-dependencies]
 tauri-build = { version = "2", features = [] }
 
