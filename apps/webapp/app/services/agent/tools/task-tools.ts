@@ -28,6 +28,7 @@ import {
 import { upsertPageSection } from "~/services/coding-task.server";
 import { logger } from "~/services/logger.service";
 import type { TaskStatus } from "@prisma/client";
+import { getTaskPhase } from "~/services/task.phase";
 import { env } from "~/env.server";
 import {
   computeNextRun,
@@ -694,8 +695,15 @@ REPARENTING: Pass newParentId to move a task under a different parent (or null t
               await setPageContentFromHtml(task.pageId, mergedHtml);
             }
 
-            await changeTaskStatus(taskId, "Ready", workspaceId, userId, "user");
-            return `Task "${task.title}" approved and moved to Ready. Reason appended to description.`;
+            // Phase-aware: prep → back to Todo (continue planning),
+            // execute → Ready (auto-enqueues, resumes execution)
+            const phase = getTaskPhase(task);
+            const targetStatus = phase === "prep" ? "Todo" : "Ready";
+
+            await changeTaskStatus(taskId, targetStatus, workspaceId, userId, "user");
+            return phase === "prep"
+              ? `Task "${task.title}" unblocked and moved back to Todo (prep phase continues). Reason appended to description.`
+              : `Task "${task.title}" approved and moved to Ready. Reason appended to description.`;
           } catch (error) {
             return `Failed to unblock task: ${error instanceof Error ? error.message : "Unknown error"}`;
           }

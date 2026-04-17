@@ -4,6 +4,7 @@ import {
 } from "~/services/hocuspocus/content.server";
 import { prisma } from "~/db.server";
 import { changeTaskStatus } from "~/services/task.server";
+import { getTaskPhase } from "~/services/task.phase";
 import { logger } from "~/services/logger.service";
 
 // ─── upsertPageSection ───────────────────────────────────────────────
@@ -184,11 +185,14 @@ export async function checkWaitingTaskReply(
   });
 
   for (const task of tasks) {
-    // Move to Ready — changeTaskStatus handles auto-enqueue. This is
-    // triggered by a user reply, so it's a user-driven transition.
-    await changeTaskStatus(task.id, "Ready", workspaceId, userId, "user");
+    // Phase-aware: prep → back to Todo (continue planning),
+    // execute → Ready (auto-enqueues, resumes execution)
+    const phase = getTaskPhase(task);
+    const targetStatus = phase === "prep" ? "Todo" : "Ready";
 
-    logger.info("Waiting task reply detected, moved to Ready", {
+    await changeTaskStatus(task.id, targetStatus, workspaceId, userId, "user");
+
+    logger.info(`Waiting task reply detected, moved to ${targetStatus} (phase: ${phase})`, {
       taskId: task.id,
       conversationId,
     });

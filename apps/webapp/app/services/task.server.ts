@@ -368,8 +368,10 @@ export async function changeTaskStatus(
     }
   }
 
-  // If moving a recurring/scheduled task to Done or Waiting, deactivate scheduling
-  if (status === "Done" || status === "Waiting") {
+  // If moving a recurring/scheduled task to Done, deactivate scheduling.
+  // Waiting does NOT deactivate — the schedule is the user's intent and should
+  // keep ticking. If the user doesn't unblock, the task still fires at the scheduled time.
+  if (status === "Done") {
     if (current.nextRunAt || current.schedule) {
       await removeScheduledTask(taskId);
       await prisma.task.update({

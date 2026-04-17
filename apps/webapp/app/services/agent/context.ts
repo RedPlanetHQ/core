@@ -103,6 +103,7 @@ export async function buildAgentContext({
     workspace,
     customPersonalities,
     channelCtx,
+    waitingTasks,
   ] = await Promise.all([
     getUserById(userId),
     getPersonaDocumentForUser(workspaceId),
@@ -122,6 +123,15 @@ export async function buildAgentContext({
     }),
     getCustomPersonalities(workspaceId),
     getWorkspaceChannelContext(workspaceId),
+    // Waiting tasks — surfaced in channel context so agent can unblock them
+    !["web", "core", "task"].includes(source)
+      ? prisma.task.findMany({
+          where: { workspaceId, status: "Waiting" },
+          select: { id: true, title: true, updatedAt: true },
+          orderBy: { updatedAt: "desc" },
+          take: 10,
+        })
+      : ([] as { id: string; title: string; updatedAt: Date }[]),
   ]);
 
   // Exclude default skills (those with skillType in metadata) from the dynamic skills list
@@ -337,6 +347,28 @@ export async function buildAgentContext({
     This came in from an external channel. Metadata:
     ${metadataEntries}
     </channel_context>`;
+  }
+
+  // Waiting tasks context — helps channel agent recognize replies to blocked tasks
+  if (waitingTasks.length > 0) {
+    const waitingList = waitingTasks
+      .map(
+        (t) =>
+          `- "${t.title}" (ID: ${t.id}) — Waiting since ${t.updatedAt.toLocaleString("en-US", { timeZone: timezone, month: "short", day: "numeric", hour: "numeric", minute: "2-digit" })}`,
+      )
+      .join("\n");
+    systemPrompt += `
+    <waiting_tasks>
+    You have tasks waiting for user input. When the user's message responds to one of these, call unblock_task — do NOT just reply conversationally or create a new task.
+
+    ${waitingList}
+
+    Rules:
+    - If the reply clearly addresses one task: call unblock_task(taskId, reason) immediately
+    - If ambiguous: list the waiting tasks and ask which one they mean
+    - The reason should capture the user's reply/decision (e.g., "User approved: go ahead with the deployment")
+    - After unblock_task, the task resumes in its own conversation — you don't need to do anything else
+    </waiting_tasks>`;
   }
 
   // Task context (when conversation was created from a task)
