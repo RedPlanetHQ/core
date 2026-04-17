@@ -39,6 +39,7 @@ export interface ScheduledTaskData {
   startDate?: Date | null;
   parentTaskId?: string | null;
   metadata?: Record<string, unknown> | null;
+  source?: string;
 }
 
 export interface ScheduledTaskUpdateData {
@@ -138,7 +139,7 @@ export async function getTaskById(id: string): Promise<Task | null> {
 }
 
 export type TaskWithRelations = Task & {
-  subtasks: Pick<Task, "id" | "status">[];
+  subtasks: Pick<Task, "id" | "status" | "source">[];
   parentTask: Pick<Task, "id" | "title"> | null;
 };
 
@@ -189,7 +190,7 @@ export async function getTasks(
     },
     orderBy: { createdAt: "desc" },
     include: {
-      subtasks: { select: { id: true, status: true } },
+      subtasks: { select: { id: true, status: true, source: true } },
       parentTask: { select: { id: true, title: true } },
     },
   }) as Promise<TaskWithRelations[]>;
@@ -588,6 +589,7 @@ export async function createScheduledTask(
       endDate: data.endDate ?? null,
       parentTaskId: data.parentTaskId ?? null,
       isActive: true,
+      source: data.source ?? "manual",
       metadata: setTaskPhaseInMetadata(data.metadata ?? null, "execute"),
     },
   });

@@ -138,23 +138,23 @@ function TaskRowItem({
               </div>
 
               <div className="flex shrink-0 items-center gap-1.5">
-                {task.schedule && (
-                  <RefreshCw
-                    size={13}
-                    className="text-muted-foreground shrink-0"
-                  />
-                )}
+                {task.schedule &&
+                  (!task.maxOccurrences || task.maxOccurrences > 1) && (
+                    <RefreshCw
+                      size={13}
+                      className="text-muted-foreground shrink-0"
+                    />
+                  )}
                 {task.nextRunAt && (
                   <ButlerRunBadge
                     nextRunAt={task.nextRunAt as unknown as string}
-                    isRecurring={!!task.schedule}
+                    isRecurring={
+                      !!task.schedule &&
+                      (!task.maxOccurrences || task.maxOccurrences > 1)
+                    }
                   />
                 )}
-                {task.source && task.source !== "manual" && (
-                  <Badge variant="secondary" className="gap-1 text-xs">
-                    <span className="text-muted-foreground">{task.source}</span>
-                  </Badge>
-                )}
+
                 {task.parentTask && (
                   <Badge
                     variant="secondary"

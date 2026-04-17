@@ -11,13 +11,18 @@ import { LoaderCircle, Plus } from "lucide-react";
 
 import { requireUser, requireWorkpace } from "~/services/session.server";
 import { prisma } from "~/db.server";
-import { getOrCreateWidgetPat, getWidgetOptions } from "~/services/widgets.server";
+import {
+  getOrCreateWidgetPat,
+  getWidgetOptions,
+} from "~/services/widgets.server";
 import { PageHeader } from "~/components/common/page-header";
-import { OverviewGrid, type OverviewGridHandle } from "~/components/overview/overview-grid.client";
+import {
+  OverviewGrid,
+  type OverviewGridHandle,
+} from "~/components/overview/overview-grid.client";
 import type { OverviewCell, WidgetOption } from "~/components/overview/types";
 
 export const meta = () => [{ title: "Overview" }];
-
 
 export async function loader({ request }: LoaderFunctionArgs) {
   const user = await requireUser(request);
@@ -99,7 +104,7 @@ export default function Overview() {
           },
         ]}
       />
-      <div className="flex h-page w-full flex-col overflow-auto">
+      <div className="h-page flex w-full flex-col overflow-auto">
         <ClientOnly
           fallback={
             <div className="flex h-full items-center justify-center">

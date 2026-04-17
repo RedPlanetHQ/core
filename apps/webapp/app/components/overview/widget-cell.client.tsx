@@ -43,7 +43,13 @@ export function WidgetCell({
         const ctx = {
           placement: "webapp" as const,
           pat,
-          accounts: [{ id: integrationAccountId, slug: integrationSlug, name: integrationName }],
+          accounts: [
+            {
+              id: integrationAccountId,
+              slug: integrationSlug,
+              name: integrationName,
+            },
+          ],
           baseUrl,
         };
 
@@ -53,7 +59,15 @@ export function WidgetCell({
         setError(err instanceof Error ? err.message : String(err));
       }
     })();
-  }, [frontendUrl, widgetSlug, pat, baseUrl, integrationAccountId, integrationSlug, integrationName]);
+  }, [
+    frontendUrl,
+    widgetSlug,
+    pat,
+    baseUrl,
+    integrationAccountId,
+    integrationSlug,
+    integrationName,
+  ]);
 
   if (error) {
     return (
@@ -71,5 +85,11 @@ export function WidgetCell({
     );
   }
 
-  return <Component />;
+  return (
+    <div className="flex h-full flex-col overflow-hidden">
+      <div className="flex h-full flex-col overflow-y-auto">
+        <Component />
+      </div>
+    </div>
+  );
 }
