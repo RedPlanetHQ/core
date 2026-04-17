@@ -106,6 +106,7 @@ model Conversation {
 
   ConversationHistory ConversationHistory[]
   RecallLog           RecallLog[]
+  codingSessions      CodingSession[]
 }
 
 model CompactedSessionEmbedding {
@@ -418,6 +419,8 @@ model Gateway {
 
   user   User   @relation(fields: [userId], references: [id], onDelete: Cascade)
   userId String
+
+  codingSessions CodingSession[]
 
   @@unique([workspaceId, name])
   @@index([workspaceId, status])
@@ -1047,14 +1050,16 @@ model Workspace {
   voiceAspects            VoiceAspect[]
   voiceAspectEmbeddings   VoiceAspectEmbedding[]
   llmProviders            LLMProvider[]
+  codingSessions          CodingSession[]
 }
 
 enum TaskStatus {
-  Backlog
   Todo
-  InProgress
-  Blocked
-  Completed
+  Waiting
+  Ready
+  Working
+  Review
+  Done
   Recurring
 }
 
@@ -1065,7 +1070,7 @@ model Task {
 
   title       String
   description String?
-  status      TaskStatus @default(Backlog)
+  status      TaskStatus @default(Todo)
 
   conversationIds String[]
 
@@ -1104,6 +1109,8 @@ model Task {
   pageId String? @unique
   page   Page?   @relation("TaskPage", fields: [pageId], references: [id], onDelete: SetNull)
   source String  @default("manual")
+
+  codingSessions CodingSession[]
 
   @@unique([workspaceId, displayId])
   @@index([workspaceId])
@@ -1255,4 +1262,39 @@ model LLMModel {
 
   @@index([providerId])
   @@index([complexity])
+}
+
+// ---------------------------------------------------------------------------
+// Coding Sessions
+// ---------------------------------------------------------------------------
+
+model CodingSession {
+  id        String   @id @default(cuid())
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  externalSessionId String?
+  agent             String
+  prompt            String?
+  dir               String?
+  worktreePath      String?
+  worktreeBranch    String?
+
+  task   Task?   @relation(fields: [taskId], references: [id], onDelete: Cascade)
+  taskId String?
+
+  conversation   Conversation? @relation(fields: [conversationId], references: [id], onDelete: SetNull)
+  conversationId String?
+
+  gateway   Gateway? @relation(fields: [gatewayId], references: [id], onDelete: SetNull)
+  gatewayId String?
+
+  workspace   Workspace @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+  workspaceId String
+  userId      String
+
+  @@index([taskId])
+  @@index([workspaceId])
+  @@index([conversationId])
+  @@index([gatewayId])
 }

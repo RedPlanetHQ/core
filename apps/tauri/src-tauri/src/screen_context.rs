@@ -1,4 +1,4 @@
-use std::collections::HashSet;
+use std::collections::{HashMap, HashSet};
 use std::ffi::c_void;
 use std::sync::{Arc, Mutex};
 use std::thread;
@@ -266,6 +266,60 @@ fn is_substantive(title: &Option<String>, text: &Option<String>) -> bool {
     }
 }
 
+// ── Episode API ───────────────────────────────────────────────────────────────
+
+// Only send if content changed by more than this fraction of words.
+const SIMILARITY_THRESHOLD: f64 = 0.85;
+
+/// Jaccard similarity over word sets. Returns 1.0 for identical, 0.0 for disjoint.
+fn jaccard_similarity(a: &str, b: &str) -> f64 {
+    let words_a: HashSet<&str> = a.split_whitespace().collect();
+    let words_b: HashSet<&str> = b.split_whitespace().collect();
+    let union = words_a.union(&words_b).count();
+    if union == 0 { return 1.0; }
+    let intersection = words_a.intersection(&words_b).count();
+    intersection as f64 / union as f64
+}
+
+fn today_str() -> String {
+    chrono::Utc::now().format("%Y-%m-%d").to_string()
+}
+
+fn read_api_config() -> Option<(String, String)> {
+    let home = std::env::var("HOME").ok()?;
+    let path = std::path::PathBuf::from(home)
+        .join(".corebrain")
+        .join("config.json");
+    let content = std::fs::read_to_string(path).ok()?;
+    let json: serde_json::Value = serde_json::from_str(&content).ok()?;
+    let token = json["core"]["auth"]["apiKey"].as_str()?.to_string();
+    let url = json["core"]["auth"]["url"].as_str()?.to_string();
+    Some((token, url))
+}
+
+fn send_episode(app_name: &str, text: &str, session_id: &str) {
+    let Some((token, api_url)) = read_api_config() else { return };
+    let title = format!("{} - {}", app_name, today_str());
+
+    let body = serde_json::json!({
+        "episodeBody": text,
+        "referenceTime": chrono::Utc::now().to_rfc3339(),
+        "source": "mac",
+        "type": "CONVERSATION",
+        "sessionId": session_id,
+        "title": title,
+    });
+
+    let url = format!("{}/api/v1/add", api_url.trim_end_matches('/'));
+    if let Err(e) = ureq::post(&url)
+        .set("Authorization", &format!("Bearer {}", token))
+        .set("Content-Type", "application/json")
+        .send_json(body)
+    {
+        eprintln!("screen_context: failed to send episode: {}", e);
+    }
+}
+
 // ── Public entry point ────────────────────────────────────────────────────────
 
 pub fn start_polling(settings: Arc<Mutex<ScreenContextSettings>>) {
@@ -273,6 +327,10 @@ pub fn start_polling(settings: Arc<Mutex<ScreenContextSettings>>) {
         let mut granted = request_permission();
         let mut observed_pid: i32 = -1;
         let mut observer: Option<AppObserver> = None;
+        // "{app}-{date}" -> all texts sent that day; skip if too similar to any of them
+        let mut sent_today: HashMap<String, Vec<String>> = HashMap::new();
+        // session UUID per (app, date) — one session per app per day
+        let mut sessions: HashMap<String, String> = HashMap::new();
 
         loop {
             // Respect pause state
@@ -341,14 +399,22 @@ pub fn start_polling(settings: Arc<Mutex<ScreenContextSettings>>) {
                     .map(|raw| cleaner.clean(raw))
                     .filter(|s| !s.is_empty());
 
-                println!("=== Screen Context ===");
-                println!("  App:    {}", app_name);
-                if let Some(ref t) = title { println!("  Window: {}", t); }
-                match &cleaned {
-                    Some(t) => println!("  Text:\n{}", t),
-                    None    => println!("  (no text via AX)"),
+                if let Some(ref text) = cleaned {
+                    let today = today_str();
+                    let day_key = format!("{}-{}", app_name, today);
+                    let already_sent = sent_today.get(&day_key);
+                    let too_similar = already_sent.map_or(false, |prev_texts| {
+                        prev_texts.iter().any(|prev| jaccard_similarity(prev, text) >= SIMILARITY_THRESHOLD)
+                    });
+                    if !too_similar {
+                        let session_id = sessions
+                            .entry(day_key.clone())
+                            .or_insert_with(|| uuid::Uuid::new_v4().to_string())
+                            .clone();
+                        send_episode(&app_name, text, &session_id);
+                        sent_today.entry(day_key).or_default().push(text.clone());
+                    }
                 }
-                println!("======================");
             }
 
             thread::sleep(Duration::from_secs(5));

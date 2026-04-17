@@ -328,6 +328,7 @@
             "group": "Configuration",
             "pages": [
               "self-hosting/environment-variables",
+              "self-hosting/model-providers",
               "self-hosting/embeddings",
               "self-hosting/ai-providers"
             ]

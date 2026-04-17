@@ -12,7 +12,9 @@ use std::sync::{Arc, Mutex};
 
 use base64::Engine as _;
 use serde::{Deserialize, Serialize};
-use tauri::State;
+use tauri::menu::{Menu, MenuItem, PredefinedMenuItem};
+use tauri::tray::TrayIconBuilder;
+use tauri::{Manager, State};
 
 #[cfg(target_os = "macos")]
 use objc::{class, msg_send, sel, sel_impl, runtime::Object};
@@ -249,6 +251,22 @@ fn store_pat(token: String, state: State<SharedAuthState>) {
     state.lock().unwrap().pat = Some(token);
 }
 
+// ── System tray ───────────────────────────────────────────────────────────────
+
+fn build_tray_menu<R: tauri::Runtime>(
+    manager: &impl Manager<R>,
+    paused: bool,
+) -> tauri::Result<Menu<R>> {
+    let toggle_label = if paused { "Enable Capture" } else { "Pause Capture" };
+    let toggle_i = MenuItem::with_id(manager, "toggle_capture", toggle_label, true, None::<&str>)?;
+    let open_i = MenuItem::with_id(manager, "open", "Open CORE", true, None::<&str>)?;
+    let quit_i = MenuItem::with_id(manager, "quit", "Quit CORE", true, None::<&str>)?;
+    let sep1 = PredefinedMenuItem::separator(manager)?;
+    let sep2 = PredefinedMenuItem::separator(manager)?;
+    let items: &[&dyn tauri::menu::IsMenuItem<R>] = &[&toggle_i, &sep1, &open_i, &sep2, &quit_i];
+    Menu::with_items(manager, items)
+}
+
 // ── App entry point ───────────────────────────────────────────────────────────
 
 pub fn run() {
@@ -286,10 +304,49 @@ pub fn run() {
             pty::resize_pty,
             pty::kill_pty,
         ])
-        .setup(move |_app| {
+        .setup(move |app| {
             *settings.lock().unwrap() = load_screen_context_settings();
             #[cfg(target_os = "macos")]
             screen_context::start_polling(settings.clone());
+
+            // Build system tray icon
+            let paused = settings.lock().unwrap().paused;
+            let tray_settings = settings.clone();
+
+            let tray_menu = build_tray_menu(app.handle(), paused)?;
+
+            TrayIconBuilder::with_id("main-tray")
+                .icon(tauri::include_image!("icons/tray-icon@2x.png"))
+                .icon_as_template(true)
+                .tooltip("CORE")
+                .menu(&tray_menu)
+                .on_menu_event(move |app, event| match event.id.as_ref() {
+                    "toggle_capture" => {
+                        let new_paused = {
+                            let mut s = tray_settings.lock().unwrap();
+                            s.paused = !s.paused;
+                            s.paused
+                        };
+                        save_screen_context_settings(&tray_settings.lock().unwrap());
+                        if let Some(tray) = app.tray_by_id("main-tray") {
+                            if let Ok(menu) = build_tray_menu(app, new_paused) {
+                                let _ = tray.set_menu(Some(menu));
+                            }
+                        }
+                    }
+                    "open" => {
+                        if let Some(window) = app.get_webview_window("main") {
+                            let _ = window.show();
+                            let _ = window.set_focus();
+                        }
+                    }
+                    "quit" => {
+                        app.exit(0);
+                    }
+                    _ => {}
+                })
+                .build(app)?;
+
             Ok(())
         })
         .on_window_event(move |_window, event| {
