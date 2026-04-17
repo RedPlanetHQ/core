@@ -21,6 +21,7 @@ export function ButlerRunBadge({
 }) {
   const date =
     nextRunAt instanceof Date ? nextRunAt : new Date(nextRunAt as string);
+  if (date.getTime() < Date.now()) return null;
   return (
     <Badge variant="secondary" className="gap-1 text-xs">
       <Bot size={14} className="text-muted-foreground shrink-0" />

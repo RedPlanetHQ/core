@@ -216,20 +216,26 @@ export function NeedsAttentionWidget() {
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
-    fetch("/api/v1/tasks?status=Waiting")
-      .then((r) => r.json())
-      .then((data: TaskItem[]) => {
-        // Exclude tasks that already have an active (non-Done) reminder subtask
-        const filtered = data.filter(
-          (t) =>
-            !t.subtasks?.some(
-              (s) => s.source === "reminder" && s.status !== "Done",
-            ),
-        );
-        setTasks(filtered);
-      })
-      .catch(() => {})
-      .finally(() => setLoading(false));
+    const fetchTasks = () => {
+      fetch("/api/v1/tasks?status=Waiting")
+        .then((r) => r.json())
+        .then((data: TaskItem[]) => {
+          // Exclude tasks that already have an active (non-Done) reminder subtask
+          const filtered = data.filter(
+            (t) =>
+              !t.subtasks?.some(
+                (s) => s.source === "reminder" && s.status !== "Done",
+              ),
+          );
+          setTasks(filtered);
+        })
+        .catch(() => {})
+        .finally(() => setLoading(false));
+    };
+
+    fetchTasks();
+    const interval = setInterval(fetchTasks, 30_000);
+    return () => clearInterval(interval);
   }, []);
 
   const visible = tasks.filter((t) => !hidden.has(t.id));
