@@ -659,9 +659,8 @@ REPARENTING: Pass newParentId to move a task under a different parent (or null t
       },
     }),
 
-    // unblock_task — only available in channel flows, not webapp chat
-    // In webapp chat, checkWaitingTaskReply handles auto-unblocking on user reply
-    ...(source && !["web", "core"].includes(source) && {
+    // unblock_task — available in all flows (web chat, channels, etc.)
+    ...(source && {
       unblock_task: tool({
         description: `Approve a Waiting task and move it to Ready so execution can start. Requires a reason explaining why the wait is resolved. The reason is appended to the task description. Only works on tasks currently in Waiting status.`,
         inputSchema: z.object({

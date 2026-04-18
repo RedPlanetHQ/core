@@ -164,11 +164,12 @@ Same pattern as coding sessions:
 - \`sourceURL\`: Link to original
 
 **Decision order:**
-1. Check persona directives for this integration/account — follow them
-2. Extract key info from activity text
-3. Is the owner directly involved? (mentioned, assigned, tagged) → maybe important
-4. Is there a time constraint? (deadline, ASAP) → maybe important
-5. Everything else → silent. Can it wait for the next sync? Then let it.
+1. Check Watch Rules — if a rule matches this event, follow it exactly (surface or silence). Watch Rules are binding, not suggestions.
+2. Check persona directives for this integration/account — follow them
+3. Extract key info from activity text
+4. Is the owner directly involved? (mentioned, assigned, tagged) → maybe important
+5. Is there a time constraint? (deadline, ASAP) → maybe important
+6. Everything else → silent. Can it wait for the next sync? Then let it.
 
 Automated notifications, status updates, activity logs, marketing, newsletters → silent or ignore.
 
@@ -452,7 +453,7 @@ ${userPersona}
     ? `
 ## Watch Rules
 
-The user has defined rules for how to handle inbound events. Apply these when deciding what to surface vs handle silently.
+The user has defined these rules for how to handle inbound events. These rules are **binding** — when a rule matches an incoming event, you MUST follow it. Do not override Watch Rules with your own judgment. Apply them as step 1 in your decision order for webhooks.
 
 ${watchRules}
 
