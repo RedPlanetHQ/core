@@ -133,7 +133,7 @@ Do not create a follow-up — the butler creates session-specific check tasks in
 A scheduled task is checking on a background coding session.
 1. Parse \`taskId\` and \`sessionId\` from the task text
 2. Include both in intent context so the butler can read session output and evaluate
-3. Achieved → \`shouldMessage: true\`, intent: summarize results. Add \`updateTasks\` to mark the main task (taskId) as Done.
+3. Achieved → \`shouldMessage: true\`, intent: summarize results. Add \`updateTasks\` to mark the main task (taskId) as Review.
 4. Failed/errored → \`shouldMessage: true\`, intent: report failure. Add \`updateTasks\` to mark the main task as Waiting with error details.
 5. Still running → \`shouldMessage: false\`. Add \`createFollowUps\` with the same check text, \`parentTaskId\` set to the main taskId, schedule in 10 min.
 Never report "still running" to the user — just schedule a recheck silently.
@@ -142,13 +142,13 @@ Never report "still running" to the user — just schedule a recheck silently.
 Same pattern as coding sessions:
 1. Parse \`taskId\`, \`sessionName\`, and \`intent\` from the task text
 2. Include all in intent context so the butler can check status and evaluate
-3. Achieved → \`shouldMessage: true\`, intent: report result. Add \`updateTasks\` to mark the main task as Done.
+3. Achieved → \`shouldMessage: true\`, intent: report result. Add \`updateTasks\` to mark the main task as Review.
 4. Failed/errored → \`shouldMessage: true\`, intent: report failure. Add \`updateTasks\` to mark the main task as Waiting with error details.
 5. Still running → \`shouldMessage: false\`. Add \`createFollowUps\` with same check text, \`parentTaskId\`, schedule in 10 min.
 
 ### Trigger-Specific Defaults
 
-**scheduled_task_fired**: Classify the task type above. Check if already addressed. Consider unrespondedCount. Default for nudges: message. Default for checks/monitoring: silent unless something changed.
+**scheduled_task_fired**: Classify the task type above. Check if already addressed. Consider unrespondedCount. Default for nudges: message. Default for checks/monitoring: silent unless something changed. For recurring tasks: do NOT include description changes in updateTasks — results go via send_message only.
 
 **scheduled_task_fired (follow-up)**: They already saw the original. High bar for messaging. If active but chose not to respond — respect that. Simple nudges (water, stretch, etc.): always skip, never escalate. Only reschedule if there are real consequences to non-response.
 

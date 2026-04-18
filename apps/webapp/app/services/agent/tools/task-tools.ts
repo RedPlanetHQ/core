@@ -502,7 +502,7 @@ REPARENTING: Pass newParentId to move a task under a different parent (or null t
       inputSchema: z.object({
         taskId: z.string().describe("The task ID"),
         status: z
-          .enum(["Todo", "Waiting", "Ready", "Working", "Review", "Done", "Recurring"])
+          .enum(["Todo", "Waiting", "Ready", "Working", "Review"])
           .optional()
           .describe(
             "New status. To approve a Waiting task and move it to Ready, use unblock_task instead.",
@@ -577,6 +577,10 @@ REPARENTING: Pass newParentId to move a task under a different parent (or null t
             return `Task reparented. New ID: ${newTask.id}, displayId: ${(newTask as { displayId?: string | null }).displayId ?? "pending"}.`;
           }
 
+          // Fetch task once for recurring check and reuse
+          const currentTask = await getTaskById(taskId);
+          const isRecurring = !!currentTask?.schedule;
+
           // Handle scheduling updates
           if (
             schedule !== undefined ||
@@ -594,21 +598,21 @@ REPARENTING: Pass newParentId to move a task under a different parent (or null t
               maxOccurrences: maxOccurrences ?? undefined,
               endDate: endDate ? new Date(endDate) : undefined,
             });
-          } else if (section && description !== undefined) {
+          } else if (!isRecurring && section && description !== undefined) {
             // Section-based update: upsert a named H2 section, preserving everything else
-            const existingTask = await getTaskById(taskId);
-            if (existingTask?.pageId) {
-              await upsertPageSection(existingTask.pageId, section, description, appendToSection);
+            // Silently skipped for recurring tasks
+            if (currentTask?.pageId) {
+              await upsertPageSection(currentTask.pageId, section, description, appendToSection);
             }
             if (title) {
               await updateTask(taskId, { title }, false);
             }
-          } else if (title || description !== undefined) {
+          } else if (!isRecurring && (title || description !== undefined)) {
+            // Description/title update — silently skipped for recurring tasks
             if (replaceDescription && description !== undefined) {
-              const existingTask = await getTaskById(taskId);
-              if (existingTask?.pageId) {
+              if (currentTask?.pageId) {
                 const existingHtml =
-                  (await getPageContentAsHtml(existingTask.pageId)) ?? "";
+                  (await getPageContentAsHtml(currentTask.pageId)) ?? "";
                 if (existingHtml.length > 0) {
                   const similarity = textSimilarity(existingHtml, description);
                   if (similarity < 0.3) {
@@ -621,14 +625,29 @@ REPARENTING: Pass newParentId to move a task under a different parent (or null t
             if (title) data.title = title;
             if (description !== undefined) data.description = description;
             await updateTask(taskId, data, !replaceDescription);
+          } else if (isRecurring && title) {
+            // Recurring tasks: allow title updates only (no description)
+            await updateTask(taskId, { title }, false);
           }
 
           if (status) {
-            const currentTask = await getTaskById(taskId);
-            // Only block status changes for tasks with an actual recurring schedule (RRule).
-            // Tasks that were rescheduled via reschedule_self have nextRunAt but no schedule — allow status changes for those.
-            const isRecurring = !!currentTask?.schedule;
-            if (!isRecurring) {
+            if (isRecurring) {
+              // Recurring tasks: silently map Done to Review, allow other statuses
+              const effectiveStatus = status === "Done" ? "Review" : status;
+              try {
+                await changeTaskStatus(
+                  taskId,
+                  effectiveStatus as TaskStatus,
+                  workspaceId,
+                  userId,
+                  "agent",
+                );
+              } catch (err) {
+                const msg =
+                  err instanceof Error ? err.message : String(err);
+                return `Status change rejected: ${msg}.`;
+              }
+            } else {
               try {
                 await changeTaskStatus(
                   taskId,
