@@ -67,10 +67,11 @@ export async function scanAllSessions(options: ScanOptions = {}): Promise<ScanRe
 	const total = merged.length;
 
 	const offset = options.offset ?? 0;
-	const limit = options.limit ?? 20;
-	const sessions = merged.slice(offset, offset + limit);
+	const sessions = options.limit !== undefined
+		? merged.slice(offset, offset + options.limit)
+		: merged.slice(offset);
 
-	return {sessions, total, hasMore: offset + limit < total};
+	return {sessions, total, hasMore: options.limit !== undefined && offset + options.limit < total};
 }
 
 /**

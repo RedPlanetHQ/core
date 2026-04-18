@@ -1,10 +1,13 @@
 import { json, redirect } from "@remix-run/node";
-import type { ActionFunctionArgs, LoaderFunctionArgs, MetaFunction } from "@remix-run/node";
+import type {
+  ActionFunctionArgs,
+  LoaderFunctionArgs,
+  MetaFunction,
+} from "@remix-run/node";
 import { Outlet, useNavigate, useFetcher, useLocation } from "@remix-run/react";
-import { Plus } from "lucide-react";
 import { typedjson, useTypedLoaderData } from "remix-typedjson";
 import { ClientOnly } from "remix-utils/client-only";
-import { LoaderCircle, Trash2 } from "lucide-react";
+import { LoaderCircle, Trash2, MessageSquare } from "lucide-react";
 import {
   CodingActionsProvider,
   CodingActions,
@@ -33,7 +36,10 @@ import {
 } from "~/services/tasks/recurrence.server";
 import { getIntegrationAccounts } from "~/services/integrationAccount.server";
 import { hasCodingSessions } from "~/services/coding/coding-session.server";
-import { getWidgetOptions, getOrCreateWidgetPat } from "~/services/widgets.server";
+import {
+  getWidgetOptions,
+  getOrCreateWidgetPat,
+} from "~/services/widgets.server";
 import { getButlerName } from "~/models/workspace.server";
 import { findOrCreateTaskPage } from "~/services/page.server";
 import { generateCollabToken } from "~/services/collab-token.server";
@@ -41,7 +47,13 @@ import { PageHeader } from "~/components/common/page-header";
 import { Button } from "~/components/ui/button";
 import { DeleteTaskDialog } from "~/components/tasks/delete-task-dialog";
 import { ScheduleDialog } from "~/components/tasks/schedule-dialog";
-import React from "react";
+import { TaskChatPanel } from "~/components/tasks/task-chat-panel.client";
+import {
+  ResizablePanelGroup,
+  ResizablePanel,
+  ResizableHandle,
+} from "~/components/ui/resizable";
+import React, { useState } from "react";
 
 export const meta: MetaFunction<typeof loader> = ({ data }) => {
   const title = data?.task?.title;
@@ -61,16 +73,23 @@ export async function loader({ request, params }: LoaderFunctionArgs) {
   const { taskId } = params;
   if (!taskId) return redirect("/home/tasks");
 
-  const [task, integrationAccounts, butlerName, runs, hasCoding, widgetOptions, widgetPat] =
-    await Promise.all([
-      getTaskFull(taskId, workspaceId),
-      getIntegrationAccounts(user.id, workspaceId),
-      getButlerName(workspaceId),
-      getTaskRuns(taskId, workspaceId),
-      hasCodingSessions(taskId, workspaceId),
-      getWidgetOptions(user.id, workspaceId),
-      getOrCreateWidgetPat(workspaceId, user.id),
-    ]);
+  const [
+    task,
+    integrationAccounts,
+    butlerName,
+    runs,
+    hasCoding,
+    widgetOptions,
+    widgetPat,
+  ] = await Promise.all([
+    getTaskFull(taskId, workspaceId),
+    getIntegrationAccounts(user.id, workspaceId),
+    getButlerName(workspaceId),
+    getTaskRuns(taskId, workspaceId),
+    hasCodingSessions(taskId, workspaceId),
+    getWidgetOptions(user.id, workspaceId),
+    getOrCreateWidgetPat(workspaceId, user.id),
+  ]);
 
   if (!task) return redirect("/home/tasks");
 
@@ -122,7 +141,15 @@ const ActionSchema = z.discriminatedUnion("intent", [
     intent: z.literal("create-subtask"),
     title: z.string().min(1),
     status: z
-      .enum(["Backlog", "Planning", "Waiting", "Ready", "Working", "Review", "Done"])
+      .enum([
+        "Backlog",
+        "Planning",
+        "Waiting",
+        "Ready",
+        "Working",
+        "Review",
+        "Done",
+      ])
       .optional(),
   }),
   z.object({
@@ -173,7 +200,9 @@ export async function action({ request, params }: ActionFunctionArgs) {
   if (parsed.data.intent === "update") {
     const task = await updateTask(taskId, {
       title: parsed.data.title,
-      ...(parsed.data.description !== undefined && { description: parsed.data.description }),
+      ...(parsed.data.description !== undefined && {
+        description: parsed.data.description,
+      }),
     });
     detectAndApplyRecurrence(taskId, workspaceId, user.id, parsed.data.title);
     return json({ task });
@@ -277,12 +306,16 @@ export async function action({ request, params }: ActionFunctionArgs) {
 // ─── Layout ───────────────────────────────────────────────────────────────────
 
 function TaskDetailLayout() {
-  const { task, hasCoding } = useTypedLoaderData<typeof loader>();
+  const { task, hasCoding, runs, integrationAccountMap } =
+    useTypedLoaderData<typeof loader>();
   const navigate = useNavigate();
   const location = useLocation();
   const fetcher = useFetcher<typeof action>();
   const [deleteOpen, setDeleteOpen] = React.useState(false);
   const [scheduleOpen, setScheduleOpen] = React.useState(false);
+  const [taskChatOpen, setTaskChatOpen] = useState(
+    task.status === "Waiting" || task.status === "Review",
+  );
 
   const truncate = (s: string, max = 24) =>
     s.length > max ? s.slice(0, max) + "…" : s;
@@ -304,76 +337,117 @@ function TaskDetailLayout() {
   const isCodingTab = location.pathname.endsWith("/coding");
   const isScheduled = task.isActive && (task.schedule || task.nextRunAt);
 
+  const toggleTaskChat = () => setTaskChatOpen((v) => !v);
+
   return (
     <CodingActionsProvider>
-    <div className="flex h-page-xs flex-col">
-      <PageHeader
-        title={task.title || "Untitled"}
-        breadcrumbs={breadcrumbs}
-        tabs={[
-          {
-            label: "Info",
-            value: "info",
-            isActive: !isRunsTab && !isCodingTab,
-            onClick: () => navigate(`/home/tasks/${task.id}`),
-          },
-          ...(hasCoding
-            ? [
-                {
-                  label: "Coding",
-                  value: "coding",
-                  isActive: isCodingTab,
-                  onClick: () => navigate(`/home/tasks/${task.id}/coding`),
-                },
-              ]
-            : []),
-          ...(isScheduled
-            ? [
-                {
-                  label: "Runs",
-                  value: "runs",
-                  isActive: isRunsTab,
-                  onClick: () => navigate(`/home/tasks/${task.id}/runs`),
-                },
-              ]
-            : []),
-        ]}
-        showChatToggle={!isCodingTab}
-        actionsNode={
-          isCodingTab ? (
-            <CodingActions />
-          ) : (
-            <Button
-              variant="ghost"
-              className="text-destructive hover:text-destructive gap-2 rounded"
-              onClick={() => setDeleteOpen(true)}
-              disabled={fetcher.state !== "idle"}
-            >
-              <Trash2 size={14} /> Delete
-            </Button>
-          )
-        }
-      />
-
-      <div className="flex flex-1 overflow-hidden">
-        <Outlet />
-      </div>
-
-      <DeleteTaskDialog
-        open={deleteOpen}
-        onOpenChange={setDeleteOpen}
-        onConfirm={() =>
-          fetcher.submit({ intent: "delete" }, { method: "POST" })
-        }
-      />
-
-      {scheduleOpen && (
-        <ScheduleDialog
-          onClose={() => setScheduleOpen(false)}
-          taskId={task.id}
+      <div className="h-page-xs flex flex-col">
+        <PageHeader
+          title={task.title || "Untitled"}
+          breadcrumbs={breadcrumbs}
+          tabs={[
+            {
+              label: "Info",
+              value: "info",
+              isActive: !isRunsTab && !isCodingTab,
+              onClick: () => navigate(`/home/tasks/${task.id}`),
+            },
+            ...(hasCoding
+              ? [
+                  {
+                    label: "Coding",
+                    value: "coding",
+                    isActive: isCodingTab,
+                    onClick: () => navigate(`/home/tasks/${task.id}/coding`),
+                  },
+                ]
+              : []),
+            ...(isScheduled
+              ? [
+                  {
+                    label: "Runs",
+                    value: "runs",
+                    isActive: isRunsTab,
+                    onClick: () => navigate(`/home/tasks/${task.id}/runs`),
+                  },
+                ]
+              : []),
+          ]}
+          showChatToggle={false}
+          actionsNode={
+            isCodingTab ? (
+              <CodingActions />
+            ) : (
+              <>
+                <Button
+                  variant="ghost"
+                  isActive={taskChatOpen}
+                  className="gap-1.5 rounded"
+                  onClick={toggleTaskChat}
+                >
+                  <MessageSquare size={14} />
+                  <span className="hidden md:inline">Task Chat</span>
+                </Button>
+                <Button
+                  variant="ghost"
+                  className="text-destructive hover:text-destructive gap-2 rounded"
+                  onClick={() => setDeleteOpen(true)}
+                  disabled={fetcher.state !== "idle"}
+                >
+                  <Trash2 size={14} /> Delete
+                </Button>
+              </>
+            )
+          }
         />
-      )}
-    </div>
+
+        <ResizablePanelGroup
+          orientation="horizontal"
+          className="flex-1 overflow-hidden"
+        >
+          <ResizablePanel
+            id="task-detail"
+            defaultSize={taskChatOpen ? "50%" : "100%"}
+            minSize="50%"
+          >
+            <div className="flex h-full overflow-hidden">
+              <Outlet />
+            </div>
+          </ResizablePanel>
+          {taskChatOpen && (
+            <>
+              <ResizableHandle withHandle />
+              <ResizablePanel
+                id="task-chat"
+                defaultSize="50%"
+                minSize="25%"
+                maxSize="50%"
+              >
+                <TaskChatPanel
+                  runs={runs}
+                  integrationAccountMap={integrationAccountMap}
+                  onClose={() => setTaskChatOpen(false)}
+                />
+              </ResizablePanel>
+            </>
+          )}
+        </ResizablePanelGroup>
+
+        <DeleteTaskDialog
+          open={deleteOpen}
+          onOpenChange={setDeleteOpen}
+          onConfirm={() =>
+            fetcher.submit({ intent: "delete" }, { method: "POST" })
+          }
+        />
+
+        {scheduleOpen && (
+          <ScheduleDialog
+            onClose={() => setScheduleOpen(false)}
+            taskId={task.id}
+          />
+        )}
+      </div>
     </CodingActionsProvider>
   );
 }

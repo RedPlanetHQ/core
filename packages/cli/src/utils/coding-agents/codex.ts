@@ -16,8 +16,6 @@ import {
 
 // ~/.codex/sessions/YYYY/MM/DD/rollout-<datetime>-<uuid>.jsonl
 const CODEX_SESSIONS_DIR = join(homedir(), '.codex', 'sessions');
-const MAX_FILE_SIZE_BYTES = 5 * 1024 * 1024;
-const DEFAULT_LARGE_FILE_LINES = 100;
 
 /**
  * Extract the session UUID from a codex rollout filename.
@@ -227,13 +225,8 @@ export class CodexReader extends BaseCodingAgentReader {
 		} catch { /* ignore */ }
 
 		const fileSizeHuman = this.formatBytes(fileSizeBytes);
-		let readOptions = {...options};
-		if (fileSizeBytes > MAX_FILE_SIZE_BYTES && !options.lines) {
-			readOptions = {...options, lines: DEFAULT_LARGE_FILE_LINES, tail: true};
-		}
-
 		try {
-			const {entries, totalLines} = await this.readJsonlLines(sessionPath, readOptions);
+			const {entries, totalLines} = await this.readJsonlLines(sessionPath, options);
 			return {entries, totalLines, returnedLines: entries.length, fileExists: true, fileSizeBytes, fileSizeHuman};
 		} catch (err) {
 			return {

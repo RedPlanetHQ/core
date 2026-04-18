@@ -4,7 +4,6 @@ import { History, Search } from "lucide-react";
 import { Button } from "../ui/button";
 import { Popover, PopoverContent, PopoverTrigger } from "../ui/popover";
 import { List, AutoSizer, type ListRowProps } from "react-virtualized";
-import { useChatPanel } from "~/components/chat-panel/chat-panel-context";
 
 type ConversationItem = {
   id: string;
@@ -33,7 +32,6 @@ export function ConversationHistoryPopover({
   onSelect: (conversationId: string) => void;
   currentConversationId?: string;
 }) {
-  const { currentTaskId } = useChatPanel()!;
   const [open, setOpen] = useState(false);
   const [query, setQuery] = useState("");
   const [conversations, setConversations] = useState<ConversationItem[]>([]);
@@ -46,15 +44,13 @@ export function ConversationHistoryPopover({
 
   const buildUrl = useCallback(
     (p: number, q?: string) => {
-      const base = currentTaskId
-        ? `/api/v1/conversations?asyncJobId=${encodeURIComponent(currentTaskId)}&unread=false&page=${p}&limit=30`
-        : `/api/v1/conversations?unread=false&page=${p}&limit=30`;
+      const base = `/api/v1/conversations?unread=false&page=${p}&limit=30`;
       return q ? `${base}&search=${encodeURIComponent(q)}` : base;
     },
-    [currentTaskId],
+    [],
   );
 
-  // Reset and reload when popover opens or taskId changes
+  // Reset and reload when popover opens
   useEffect(() => {
     if (!open) return;
     loadedIds.current = new Set();
@@ -64,7 +60,7 @@ export function ConversationHistoryPopover({
     fetcher.load(buildUrl(1, query || undefined));
     setTimeout(() => inputRef.current?.focus(), 50);
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [open, currentTaskId]);
+  }, [open]);
 
   // Debounced search
   useEffect(() => {
@@ -157,7 +153,7 @@ export function ConversationHistoryPopover({
         <Button
           variant="ghost"
           className="rounded"
-          title={currentTaskId ? "Task runs" : "Conversation history"}
+          title="Conversation history"
         >
           <History size={14} />
         </Button>
@@ -170,9 +166,7 @@ export function ConversationHistoryPopover({
             ref={inputRef}
             value={query}
             onChange={(e) => setQuery(e.target.value)}
-            placeholder={
-              currentTaskId ? "Search task runs…" : "Search conversations…"
-            }
+            placeholder="Search conversations…"
             className="placeholder:text-muted-foreground flex-1 bg-transparent text-sm outline-none"
           />
         </div>

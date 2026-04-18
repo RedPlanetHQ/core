@@ -3,6 +3,7 @@ import { AlertCircle, LoaderCircle, Bell } from "lucide-react";
 import {
   Popover,
   PopoverContent,
+  PopoverPortal,
   PopoverTrigger,
 } from "~/components/ui/popover";
 import { cn } from "~/lib/utils";
@@ -130,82 +131,84 @@ function RemindPopover({ taskId, taskTitle, onReminded }: RemindPopoverProps) {
     >
       <PopoverTrigger asChild>
         <Button variant="outline" className="gap-1">
-          <Bell size={16} />
+          <Bell size={14} />
           Remind
         </Button>
       </PopoverTrigger>
-      <PopoverContent className="w-52 p-2" align="start">
-        {!showCustom ? (
-          <div className="flex flex-col gap-1">
-            {PRESETS.map(({ label, schedule }) => (
-              <button
-                key={label}
-                disabled={loading}
-                onClick={() => handlePreset(schedule)}
-                className="hover:bg-muted w-full rounded px-2 py-1.5 text-left text-sm disabled:opacity-50"
-              >
-                {label}
-              </button>
-            ))}
-            <button
-              onClick={() => setShowCustom(true)}
-              className="hover:bg-muted w-full rounded px-2 py-1.5 text-left text-sm"
-            >
-              Custom…
-            </button>
-          </div>
-        ) : (
-          <div className="flex flex-col gap-2">
-            <div className="flex gap-1">
-              {(["minutes", "hours", "days", "date"] as const).map((u) => (
+      <PopoverPortal>
+        <PopoverContent className="w-52 p-2" align="end">
+          {!showCustom ? (
+            <div className="flex flex-col gap-1">
+              {PRESETS.map(({ label, schedule }) => (
                 <button
-                  key={u}
-                  onClick={() => setUnit(u)}
-                  className={`rounded px-2 py-0.5 text-xs capitalize ${unit === u ? "bg-muted font-medium" : "hover:bg-muted"}`}
+                  key={label}
+                  disabled={loading}
+                  onClick={() => handlePreset(schedule)}
+                  className="hover:bg-muted w-full rounded px-2 py-1.5 text-left text-sm disabled:opacity-50"
                 >
-                  {u === "date" ? "Date" : u}
+                  {label}
                 </button>
               ))}
-            </div>
-            {unit === "date" ? (
-              <input
-                type="datetime-local"
-                value={dateValue}
-                onChange={(e) => setDateValue(e.target.value)}
-                className="w-full rounded border border-gray-200 px-2 py-1 text-xs dark:border-gray-700"
-              />
-            ) : (
-              <input
-                type="number"
-                min={1}
-                placeholder={`${unit === "minutes" ? "30" : unit === "hours" ? "2" : "1"}`}
-                value={amount}
-                onChange={(e) => setAmount(e.target.value)}
-                className="w-full rounded border border-gray-200 px-2 py-1 text-xs dark:border-gray-700"
-              />
-            )}
-            <div className="flex gap-1">
               <button
-                onClick={() => setShowCustom(false)}
-                className="hover:bg-muted flex-1 rounded border border-gray-200 py-1 text-xs dark:border-gray-700"
+                onClick={() => setShowCustom(true)}
+                className="hover:bg-muted w-full rounded px-2 py-1.5 text-left text-sm"
               >
-                Back
-              </button>
-              <button
-                disabled={
-                  loading ||
-                  (unit !== "date" && !amount) ||
-                  (unit === "date" && !dateValue)
-                }
-                onClick={handleCustomSubmit}
-                className="bg-primary text-primary-foreground flex-1 rounded py-1 text-xs disabled:opacity-50"
-              >
-                {loading ? "…" : "Set"}
+                Custom…
               </button>
             </div>
-          </div>
-        )}
-      </PopoverContent>
+          ) : (
+            <div className="flex flex-col gap-2">
+              <div className="flex gap-1">
+                {(["minutes", "hours", "days", "date"] as const).map((u) => (
+                  <button
+                    key={u}
+                    onClick={() => setUnit(u)}
+                    className={`rounded px-2 py-0.5 text-xs capitalize ${unit === u ? "bg-muted font-medium" : "hover:bg-muted"}`}
+                  >
+                    {u === "date" ? "Date" : u}
+                  </button>
+                ))}
+              </div>
+              {unit === "date" ? (
+                <input
+                  type="datetime-local"
+                  value={dateValue}
+                  onChange={(e) => setDateValue(e.target.value)}
+                  className="w-full rounded border border-gray-200 px-2 py-1 text-xs dark:border-gray-700"
+                />
+              ) : (
+                <input
+                  type="number"
+                  min={1}
+                  placeholder={`${unit === "minutes" ? "30" : unit === "hours" ? "2" : "1"}`}
+                  value={amount}
+                  onChange={(e) => setAmount(e.target.value)}
+                  className="w-full rounded border border-gray-200 px-2 py-1 text-xs dark:border-gray-700"
+                />
+              )}
+              <div className="flex gap-1">
+                <button
+                  onClick={() => setShowCustom(false)}
+                  className="hover:bg-muted flex-1 rounded border border-gray-200 py-1 text-xs dark:border-gray-700"
+                >
+                  Back
+                </button>
+                <button
+                  disabled={
+                    loading ||
+                    (unit !== "date" && !amount) ||
+                    (unit === "date" && !dateValue)
+                  }
+                  onClick={handleCustomSubmit}
+                  className="bg-primary text-primary-foreground flex-1 rounded py-1 text-xs disabled:opacity-50"
+                >
+                  {loading ? "…" : "Set"}
+                </button>
+              </div>
+            </div>
+          )}
+        </PopoverContent>
+      </PopoverPortal>
     </Popover>
   );
 }

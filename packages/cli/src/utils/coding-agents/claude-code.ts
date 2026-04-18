@@ -4,8 +4,6 @@ import {homedir} from 'node:os';
 import {BaseCodingAgentReader, type AgentReadResult, type AgentReadOptions, type AgentTurnsResult, type ConversationTurn, type ScannedSession, type ScanOptions, type SessionEntry} from './types';
 
 const CLAUDE_PROJECTS_DIR = join(homedir(), '.claude', 'projects');
-const MAX_FILE_SIZE_BYTES = 5 * 1024 * 1024;
-const DEFAULT_LARGE_FILE_LINES = 100;
 
 /**
  * /Users/foo/bar  →  -Users-foo-bar
@@ -71,13 +69,8 @@ export class ClaudeCodeReader extends BaseCodingAgentReader {
 
 		const fileSizeHuman = this.formatBytes(fileSizeBytes);
 
-		let readOptions = {...options};
-		if (fileSizeBytes > MAX_FILE_SIZE_BYTES && !options.lines) {
-			readOptions = {...options, lines: DEFAULT_LARGE_FILE_LINES, tail: true};
-		}
-
 		try {
-			const {entries, totalLines} = await this.readJsonlLines(sessionPath, readOptions);
+			const {entries, totalLines} = await this.readJsonlLines(sessionPath, options);
 			return {entries, totalLines, returnedLines: entries.length, fileExists: true, fileSizeBytes, fileSizeHuman};
 		} catch (err) {
 			return {

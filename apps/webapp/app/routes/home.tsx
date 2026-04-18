@@ -4,35 +4,24 @@ import {
 } from "@remix-run/server-runtime";
 import { requireUser, requireWorkpace } from "~/services/session.server";
 
-import { Outlet, useLoaderData, useLocation } from "@remix-run/react";
+import { Outlet, useLoaderData } from "@remix-run/react";
 import { typedjson } from "remix-typedjson";
 import { clearRedirectTo, commitSession } from "~/services/redirectTo.server";
 
 import { AppSidebar } from "~/components/sidebar/app-sidebar";
 import { SidebarInset, SidebarProvider } from "~/components/ui/sidebar";
-import {
-  ResizablePanelGroup,
-  ResizablePanel,
-  ResizableHandle,
-} from "~/components/ui/resizable";
+import { ResizablePanelGroup, ResizablePanel } from "~/components/ui/resizable";
 
 import { json, redirect } from "@remix-run/node";
 import { onboardingPath } from "~/utils/pathBuilder";
 import { getConversationSources } from "~/services/conversation.server";
 import { prisma } from "~/db.server";
 import { SetButlerNameModal } from "~/components/onboarding/set-butler-name-modal";
-import { ClientOnly } from "remix-utils/client-only";
-import { GlobalChatPanel } from "~/components/chat-panel/global-chat-panel.client";
 import { CollabSocketProvider } from "~/components/editor/collab-socket-context";
-import {
-  ChatPanelProvider,
-  useChatPanel,
-} from "~/components/chat-panel/chat-panel-context";
 import React from "react";
 import { getIntegrationAccounts } from "~/services/integrationAccount.server";
 import { getAvailableModels } from "~/services/llm-provider.server";
 import { type LLMModel } from "~/components/conversation";
-import { tinykeys } from "tinykeys";
 import { useTauri } from "~/hooks/use-tauri";
 import { DesktopTabsProvider } from "~/components/desktop/tabs-context";
 import { DesktopTabBar } from "~/components/desktop/tab-bar";
@@ -149,33 +138,7 @@ function HomeInner({
   models: LLMModel[];
   integrationAccountMap: Record<string, string>;
 }) {
-  const { panelRef, closeChat, onPanelCollapse, chatOpen, toggleChat } =
-    useChatPanel()!;
   const { isDesktop } = useTauri();
-  const location = useLocation();
-  const isConversationRoute =
-    location.pathname.startsWith("/home/conversation");
-
-  React.useEffect(() => {
-    if (isConversationRoute) return;
-
-    const whenNotEditing = (fn: () => void) => (event: KeyboardEvent) => {
-      const target = event.target as HTMLElement | null;
-      if (
-        target?.tagName === "INPUT" ||
-        target?.tagName === "TEXTAREA" ||
-        target?.isContentEditable
-      ) {
-        return;
-      }
-
-      fn();
-    };
-
-    return tinykeys(window, {
-      "$mod+j": whenNotEditing(() => toggleChat()),
-    });
-  }, [isConversationRoute, toggleChat]);
 
   return (
     <SidebarProvider
@@ -219,31 +182,6 @@ function HomeInner({
               </div>
             </div>
           </ResizablePanel>
-
-          {!isConversationRoute && <ResizableHandle withHandle />}
-
-          {chatOpen && !isConversationRoute && (
-            <ResizablePanel
-              ref={panelRef}
-              defaultSize="50%"
-              minSize="30%"
-              maxSize="50%"
-              collapsible
-              collapsedSize={0}
-              onCollapse={onPanelCollapse}
-            >
-              <ClientOnly fallback={null}>
-                {() => (
-                  <GlobalChatPanel
-                    agentName={agentName}
-                    onClose={closeChat}
-                    models={models}
-                    integrationAccountMap={integrationAccountMap}
-                  />
-                )}
-              </ClientOnly>
-            </ResizablePanel>
-          )}
         </ResizablePanelGroup>
       </SidebarInset>
     </SidebarProvider>
@@ -260,20 +198,18 @@ export default function Home() {
 
   return (
     <CollabSocketProvider>
-      <ChatPanelProvider>
-        <DesktopTabsProvider>
-          <HomeInner
-            conversationSources={conversationSources}
-            workspace={workspace}
-            meta={meta}
-            agentName={agentName}
-            accentColor={accentColor}
-            needsButlerName={needsButlerName}
-            models={models}
-            integrationAccountMap={integrationAccountMap}
-          />
-        </DesktopTabsProvider>
-      </ChatPanelProvider>
+      <DesktopTabsProvider>
+        <HomeInner
+          conversationSources={conversationSources}
+          workspace={workspace}
+          meta={meta}
+          agentName={agentName}
+          accentColor={accentColor}
+          needsButlerName={needsButlerName}
+          models={models}
+          integrationAccountMap={integrationAccountMap}
+        />
+      </DesktopTabsProvider>
     </CollabSocketProvider>
   );
 }

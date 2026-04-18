@@ -4,36 +4,21 @@ import { useNavigate, useParams } from "@remix-run/react";
 import { typedjson, useTypedLoaderData } from "remix-typedjson";
 import { ClientOnly } from "remix-utils/client-only";
 import { useRef, useCallback, useEffect, useState } from "react";
-import {
-  AutoSizer,
-  List,
-  CellMeasurer,
-  CellMeasurerCache,
-  type ListRowProps,
-  type Index,
-} from "react-virtualized";
 import { format } from "date-fns";
-import { Terminal, Loader2, Plus } from "lucide-react";
+import { Terminal, Loader2, Plus, Copy, Check } from "lucide-react";
 
 import { EditorContent, useEditor } from "@tiptap/react";
 import { extensionsForConversation } from "~/components/conversation/editor-extensions";
 import { getWorkspaceId, requireUser } from "~/services/session.server";
 import { getCodingSessionsForTask } from "~/services/coding/coding-session.server";
 import type { CodingSessionListItem } from "~/services/coding/coding-session.server";
-import {
-  ResizablePanelGroup,
-  ResizablePanel,
-  ResizableHandle,
-} from "~/components/ui/resizable";
 import { Button } from "~/components/ui/button";
 import { Badge } from "~/components/ui/badge";
-import { cn } from "~/lib/utils";
 import { useTauri } from "~/hooks/use-tauri";
 import { TauriTerminal } from "~/components/coding/tauri-terminal";
 import { NewSessionDialog } from "~/components/coding/new-session-dialog";
 import { useSetCodingActions } from "~/components/coding/coding-actions-context";
 import { useSidebar } from "~/components/ui/sidebar";
-import { useChatPanel } from "~/components/chat-panel/chat-panel-context";
 
 // ─── Loader ───────────────────────────────────────────────────────────────────
 
@@ -50,57 +35,6 @@ export async function loader({ request, params }: LoaderFunctionArgs) {
 
   const sessions = await getCodingSessionsForTask(taskId, workspaceId);
   return typedjson({ sessions });
-}
-
-// ─── Session list item ────────────────────────────────────────────────────────
-
-function SessionListItem({
-  session,
-  selected,
-  index,
-  total,
-  onClick,
-}: {
-  session: CodingSessionListItem;
-  selected: boolean;
-  onClick: () => void;
-  index: number;
-  total: number;
-}) {
-  return (
-    <div
-      className={cn(
-        "px-2",
-        index === 0 && "pt-2",
-        index === total - 1 && "pb-2",
-      )}
-    >
-      <button
-        onClick={onClick}
-        className={cn(
-          "flex w-full flex-col gap-0.5 rounded-md px-3 py-2.5 text-left transition-colors",
-          selected ? "bg-grayAlpha-100" : "hover:bg-grayAlpha-50",
-        )}
-      >
-        <div className="flex items-center justify-between gap-2">
-          <span className="text-sm font-medium">
-            {format(new Date(session.createdAt), "MMM d")}
-            <span className="text-muted-foreground ml-1 text-xs font-normal">
-              {format(new Date(session.createdAt), "h:mm a")}
-            </span>
-          </span>
-          <Badge variant="secondary" className="text-xs">
-            {session.agent}
-          </Badge>
-        </div>
-        {session.prompt && (
-          <span className="text-muted-foreground line-clamp-2 text-xs">
-            {session.prompt.slice(0, 80)}
-          </span>
-        )}
-      </button>
-    </div>
-  );
 }
 
 // ─── Turn bubble ──────────────────────────────────────────────────────────────
@@ -164,6 +98,14 @@ function SessionDetail({
   const [turns, setTurns] = useState<ConversationTurn[] | null>(null);
   const [running, setRunning] = useState(false);
   const [turnsError, setTurnsError] = useState<string | null>(null);
+  const [copied, setCopied] = useState(false);
+
+  const handleCopySessionId = () => {
+    const idToCopy = session.externalSessionId ?? session.id;
+    navigator.clipboard.writeText(idToCopy);
+    setCopied(true);
+    setTimeout(() => setCopied(false), 1500);
+  };
   const scrollRef = useRef<HTMLDivElement>(null);
   const prevTurnCountRef = useRef(0);
   const canPoll = !!session.gatewayId && !!session.externalSessionId;
@@ -225,7 +167,7 @@ function SessionDetail({
 
   return (
     <div className="mb-1 flex h-full flex-col">
-      <div className="border-border flex shrink-0 items-center justify-between gap-4 border-b px-6 py-3">
+      <div className="border-border flex shrink-0 items-center justify-between gap-4 border-b px-4 py-2">
         <div className="flex flex-wrap items-center gap-2">
           <span className="text-sm font-medium">
             {format(new Date(session.createdAt), "EEEE, MMMM d · h:mm a")}
@@ -238,6 +180,15 @@ function SessionDetail({
               {session.worktreeBranch}
             </span>
           )}
+          <Button
+            variant="ghost"
+            size="icon"
+            className="h-6 w-6 rounded"
+            onClick={handleCopySessionId}
+            title="Copy session ID"
+          >
+            {copied ? <Check size={13} /> : <Copy size={13} />}
+          </Button>
           {running && (
             <span className="text-muted-foreground flex items-center gap-1 text-xs">
               <Loader2 size={11} className="animate-spin" />
@@ -249,7 +200,7 @@ function SessionDetail({
 
       <div
         ref={scrollRef}
-        className="flex min-h-0 flex-1 flex-col gap-5 overflow-y-auto px-6 py-5"
+        className="flex min-h-0 flex-1 flex-col gap-5 overflow-y-auto p-4"
       >
         {!canPoll ? (
           <p className="text-muted-foreground text-sm">
@@ -281,8 +232,6 @@ function CodingPage() {
   const { isDesktop, invoke } = useTauri();
   const setCodingActions = useSetCodingActions();
   const { setOpen: setSidebarOpen } = useSidebar();
-  const chatPanel = useChatPanel();
-
   // null = not yet checked, "" = installed, string = error message
   const [corebrainError, setCorebrainError] = useState<string | null>(null);
 
@@ -307,45 +256,6 @@ function CodingPage() {
 
   const selectedSession =
     sessions.find((s) => s.id === selectedId) ?? sessions[0] ?? null;
-
-  const cacheRef = useRef(
-    new CellMeasurerCache({ defaultHeight: 48, fixedWidth: true }),
-  );
-  const cache = cacheRef.current;
-
-  useEffect(() => {
-    cache.clearAll();
-  }, [sessions.length, cache]);
-
-  const rowHeight = ({ index }: Index) =>
-    Math.max(cache.getHeight(index, 0), 48);
-
-  const rowRenderer = useCallback(
-    ({ index, key, style, parent: listParent }: ListRowProps) => {
-      const session = sessions[index];
-      if (!session) return null;
-      return (
-        <CellMeasurer
-          key={key}
-          cache={cache}
-          columnIndex={0}
-          parent={listParent}
-          rowIndex={index}
-        >
-          <div style={style}>
-            <SessionListItem
-              session={session}
-              index={index}
-              total={sessions.length}
-              selected={session.id === selectedId}
-              onClick={() => setSelectedId(session.id)}
-            />
-          </div>
-        </CellMeasurer>
-      );
-    },
-    [sessions, selectedId, cache],
-  );
 
   const handleNewSessionCreated = (
     sessionId: string,
@@ -392,26 +302,29 @@ function CodingPage() {
     setTerminalKey((k) => k + 1);
   };
 
-  const handleNewSession = () => {
-    setNewSessionOpen(true);
-  };
-
   const lastDir = sessions.find((s) => s.dir)?.dir ?? "";
 
-  // Auto-collapse sidebar + close chat on mount, restore sidebar on unmount
+  // Auto-collapse sidebar on mount, restore on unmount
   useEffect(() => {
     setSidebarOpen(false);
-    chatPanel?.closeChat();
     return () => setSidebarOpen(true);
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
-  // Register new-session action in the PageHeader
+  // Register actions in the PageHeader (re-register whenever sessions/selectedId change)
   useEffect(() => {
-    setCodingActions({ onNewSession: () => setNewSessionOpen(true) });
+    setCodingActions({
+      onNewSession: () => setNewSessionOpen(true),
+      sessions,
+      selectedId,
+      onSelectSession: (id) => {
+        setSelectedId(id);
+        setTerminalKey((k) => k + 1);
+      },
+    });
     return () => setCodingActions(null);
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, []);
+  }, [sessions, selectedId]);
 
   if (isDesktop && corebrainError) {
     return (
@@ -478,65 +391,33 @@ function CodingPage() {
 
   return (
     <>
-      <ResizablePanelGroup orientation="horizontal" className="h-full w-full">
-        <ResizablePanel defaultSize="20%" minSize="20%" maxSize="20%">
-          <div className="flex h-full flex-col">
-            <div className="flex-1 overflow-hidden">
-              <AutoSizer>
-                {({ width, height }) => (
-                  <List
-                    height={height}
-                    width={width}
-                    rowCount={sessions.length}
-                    rowHeight={rowHeight}
-                    rowRenderer={rowRenderer}
-                    deferredMeasurementCache={cache}
-                    overscanRowCount={8}
-                  />
-                )}
-              </AutoSizer>
-            </div>
-          </div>
-        </ResizablePanel>
-
-        <ResizableHandle withHandle />
-
-        <ResizablePanel
-          defaultSize="80%"
-          minSize="80%"
-          className="overflow-hidden"
-        >
-          {selectedSession ? (
-            showTerminal ? (
-              <TauriTerminal
-                key={`${selectedSession.id}-${terminalKey}`}
-                sessionDbId={selectedSession.id}
-                agent={selectedSession.agent}
-                dir={selectedSession.worktreePath ?? selectedSession.dir ?? ""}
-                externalSessionId={
-                  selectedSession.externalSessionId ?? undefined
-                }
-                onNewSession={handleNewSession}
-                onResumeSession={handleResumeSession}
-                onSessionIdUpdated={handleSessionIdUpdated}
-              />
-            ) : (
-              <SessionDetail
-                session={selectedSession}
-                onOpenChat={() =>
-                  navigate(
-                    `/home/conversation/${selectedSession.conversationId}`,
-                  )
-                }
-              />
-            )
+      <div className="h-full w-full overflow-hidden">
+        {selectedSession ? (
+          showTerminal ? (
+            <TauriTerminal
+              key={`${selectedSession.id}-${terminalKey}`}
+              sessionDbId={selectedSession.id}
+              agent={selectedSession.agent}
+              dir={selectedSession.worktreePath ?? selectedSession.dir ?? ""}
+              externalSessionId={selectedSession.externalSessionId ?? undefined}
+              onNewSession={() => setNewSessionOpen(true)}
+              onResumeSession={handleResumeSession}
+              onSessionIdUpdated={handleSessionIdUpdated}
+            />
           ) : (
-            <div className="text-muted-foreground flex h-full items-center justify-center text-sm">
-              Select a session
-            </div>
-          )}
-        </ResizablePanel>
-      </ResizablePanelGroup>
+            <SessionDetail
+              session={selectedSession}
+              onOpenChat={() =>
+                navigate(`/home/conversation/${selectedSession.conversationId}`)
+              }
+            />
+          )
+        ) : (
+          <div className="text-muted-foreground flex h-full items-center justify-center text-sm">
+            Select a session
+          </div>
+        )}
+      </div>
 
       {isDesktop && (
         <NewSessionDialog

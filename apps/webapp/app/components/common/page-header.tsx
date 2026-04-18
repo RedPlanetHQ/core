@@ -1,9 +1,8 @@
 import { useNavigate, useNavigation } from "@remix-run/react";
 import { Button } from "~/components/ui/button";
-import { ArrowLeft, ArrowRight, MessageSquare } from "lucide-react";
+import { ArrowLeft, ArrowRight } from "lucide-react";
 import { SidebarTrigger } from "~/components/ui/sidebar";
 import { cn } from "~/lib/utils";
-import { useChatPanel } from "~/components/chat-panel/chat-panel-context";
 
 export interface BreadcrumbItem {
   label: string | React.ReactNode;
@@ -33,37 +32,8 @@ export interface PageHeaderProps {
   leftActionsNode?: React.ReactNode;
   tabs?: PageHeaderTab[];
   showTrigger?: boolean;
+  /** @deprecated no-op, kept for compatibility during migration */
   showChatToggle?: boolean;
-}
-
-// Back and Forward navigation component
-function NavigationBackForward() {
-  const navigate = useNavigate();
-
-  return (
-    <div className="mr-1 flex items-center gap-1">
-      <Button
-        variant="ghost"
-        size="xs"
-        aria-label="Back"
-        onClick={() => navigate(-1)}
-        className="rounded"
-        type="button"
-      >
-        <ArrowLeft size={16} />
-      </Button>
-      <Button
-        variant="ghost"
-        size="xs"
-        aria-label="Forward"
-        onClick={() => navigate(1)}
-        className="rounded"
-        type="button"
-      >
-        <ArrowRight size={16} />
-      </Button>
-    </div>
-  );
 }
 
 export function PageHeader({
@@ -72,13 +42,11 @@ export function PageHeader({
   actions,
   tabs,
   showTrigger = true,
-  showChatToggle = true,
   actionsNode,
   leftActionsNode,
 }: PageHeaderProps) {
   const navigation = useNavigation();
   const navigate = useNavigate();
-  const chatPanel = useChatPanel();
 
   const isLoading =
     navigation.state === "loading" || navigation.state === "submitting";
@@ -113,7 +81,6 @@ export function PageHeader({
                   key={index}
                   className={cn(
                     "flex cursor-default items-center truncate",
-                    // On mobile hide all but the last breadcrumb
                     index < breadcrumbs.length - 1 && "hidden md:flex",
                   )}
                 >
@@ -181,25 +148,6 @@ export function PageHeader({
             </div>
           )}
           {actionsNode && actionsNode}
-
-          {/* Global chat toggle — visible on every page */}
-          {showChatToggle && chatPanel && (
-            <Button
-              variant="ghost"
-              isActive={chatPanel.chatOpen}
-              className="gap-1.5 rounded"
-              onClick={chatPanel.toggleChat}
-              title={
-                chatPanel.chatOpen
-                  ? "Close chat (Cmd/Ctrl+J)"
-                  : "Open chat (Cmd/Ctrl+J)"
-              }
-              aria-label={chatPanel.chatOpen ? "Close chat" : "Open chat"}
-            >
-              <MessageSquare size={14} />
-              <span className="hidden md:inline">Chat</span>
-            </Button>
-          )}
         </div>
       </div>
 
