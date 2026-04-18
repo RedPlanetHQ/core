@@ -4,16 +4,10 @@ use serde::{Deserialize, Serialize};
 /// Returns an error string (suitable for displaying in the UI) when not found.
 #[tauri::command]
 pub fn check_corebrain_installed() -> Result<(), String> {
-    // Use the login-shell PATH so nvm / homebrew / fnm locations are included.
-    let path = std::process::Command::new("zsh")
-        .args(["-lc", "echo $PATH"])
-        .output()
-        .map(|o| String::from_utf8_lossy(&o.stdout).trim().to_string())
-        .unwrap_or_default();
-
-    let found = std::process::Command::new("which")
-        .arg("corebrain")
-        .env("PATH", &path)
+    // Run `which corebrain` inside a login shell so nvm / homebrew / fnm
+    // locations are on PATH without risking corruption from shell startup output.
+    let found = std::process::Command::new("zsh")
+        .args(["-lc", "which corebrain"])
         .output()
         .map(|o| o.status.success())
         .unwrap_or(false);
