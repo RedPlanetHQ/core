@@ -251,6 +251,7 @@ export function createTaskTriggerFromDb(task: {
   confirmedActive: boolean;
   occurrenceCount: number;
   metadata?: Record<string, unknown> | null;
+  schedule?: string | null;
 }): ScheduledTaskTrigger {
   const meta = task.metadata;
   const data: ScheduledTaskTrigger["data"] = {
@@ -260,6 +261,7 @@ export function createTaskTriggerFromDb(task: {
     previousResponses: [],
     unrespondedCount: task.unrespondedCount,
     confirmedActive: task.confirmedActive,
+    isRecurring: !!task.schedule,
   };
 
   if (meta?.skillId) {

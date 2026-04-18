@@ -77,78 +77,22 @@ export function setTaskPhaseInMetadata(
 export function canTransition(
   from: TaskStatus,
   to: TaskStatus,
-  phase: TaskPhase,
+  _phase: TaskPhase,
   actor: TransitionActor,
 ): boolean {
   if (from === to) return true;
 
-  // Done is user-only — full stop. Agent and system cannot set Done.
-  if (to === "Done") {
-    return actor === "user";
-  }
+  // Deny-list: only block transitions that are genuinely dangerous.
+  // Everything else is allowed — the system and prompts guide correct usage.
 
-  // Recurring Review → Ready loop is system-driven (scheduleNextTaskOccurrence)
-  // or user-driven (manual re-queue).
-  if (from === "Review" && to === "Ready") {
-    return actor === "system" || actor === "user";
-  }
-
-  // Phase 1 transitions.
-  if (phase === "prep") {
-    if (PHASE_1_STATUSES.includes(from) && PHASE_1_STATUSES.includes(to)) {
-      return true;
-    }
-    // Todo/Waiting → Ready: agent (butler decides ready) or user (force-promote).
-    if (PHASE_1_STATUSES.includes(from) && to === "Ready") {
-      return actor === "agent" || actor === "user";
-    }
-    // Todo/Waiting → Review: synchronous finish during prep — butler answered
-    // the user inline or the work turned out to be trivial/already-done and no
-    // execution step is needed. Allowed for agent and user.
-    if (PHASE_1_STATUSES.includes(from) && to === "Review") {
-      return actor === "agent" || actor === "user";
-    }
-    // System-only: fire-override from Phase 1 to Working.
-    if (PHASE_1_STATUSES.includes(from) && to === "Working") {
-      return actor === "system";
-    }
+  // Ready, Done, Todo — only user or system (code), not agent.
+  // Agent should not directly set these; the system manages them
+  // (enqueue → Ready, markTaskInProcess → Working, user approves → Done).
+  if ((to === "Ready" || to === "Done" || to === "Todo") && actor === "agent") {
     return false;
   }
 
-  // Phase 2 transitions.
-  if (phase === "execute") {
-    // Ready → Working is the normal fire path; allowed for system (schedule)
-    // and user (manual start-now).
-    if (from === "Ready" && to === "Working") {
-      return actor === "system" || actor === "user";
-    }
-    // Ready → Review (butler finished without needing an execution step —
-    // e.g., pure research/planning task done synchronously) or Ready → Waiting
-    // (butler needs input before it can even start).
-    if (from === "Ready" && (to === "Review" || to === "Waiting")) {
-      return true;
-    }
-    // Working → Waiting (butler blocked), Working → Review (butler done).
-    if (from === "Working" && (to === "Waiting" || to === "Review")) {
-      return true;
-    }
-    // Waiting → Working (user answered, butler resumes).
-    if (from === "Waiting" && to === "Working") {
-      return true;
-    }
-    // Waiting → Review (butler finished from a waiting state without needing
-    // more work — e.g., user answer made the task trivially complete).
-    if (from === "Waiting" && to === "Review") {
-      return true;
-    }
-    // Review → Waiting (user rejected, more work needed).
-    if (from === "Review" && to === "Waiting") {
-      return actor === "user" || actor === "agent";
-    }
-    return false;
-  }
-
-  return false;
+  return true;
 }
 
 /**

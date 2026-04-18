@@ -88,6 +88,7 @@ export interface ScheduledTaskTriggerData {
   confirmedActive: boolean;
   skillId?: string;
   skillName?: string;
+  isRecurring?: boolean;
 }
 
 export interface ScheduledTaskTrigger extends BaseTrigger {

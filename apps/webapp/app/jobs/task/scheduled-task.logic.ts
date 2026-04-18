@@ -221,6 +221,7 @@ async function runExecutionPipeline(
     confirmedActive: task.confirmedActive,
     occurrenceCount: task.occurrenceCount,
     metadata: task.metadata as Record<string, unknown> | null,
+    schedule: task.schedule,
   });
 
   const [context, userPersona] = await Promise.all([

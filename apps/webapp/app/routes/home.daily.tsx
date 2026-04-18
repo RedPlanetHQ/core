@@ -3,7 +3,7 @@ import type {
   ActionFunctionArgs,
   LoaderFunctionArgs,
 } from "@remix-run/server-runtime";
-import { useEffect, useCallback } from "react";
+import { useCallback } from "react";
 import { useLoaderData, useFetcher, type MetaFunction } from "@remix-run/react";
 import { typedjson } from "remix-typedjson";
 import { requireUser, requireWorkpace } from "~/services/session.server";
@@ -22,7 +22,6 @@ import {
   getOrCreateWidgetPat,
 } from "~/services/widgets.server";
 import { WidgetContext } from "~/components/editor/extensions/widget-node-extension";
-import { useChatPanel } from "~/components/chat-panel/chat-panel-context";
 import { useLocalCommonState } from "~/hooks/use-local-state";
 import { prisma } from "~/db.server";
 import type { OverviewCell } from "~/components/overview/types";
@@ -113,24 +112,15 @@ export default function DailyRoute() {
   } = useLoaderData<typeof loader>() as any;
 
   const fetcher = useFetcher();
-  const chatPanel = useChatPanel();
 
   const [panelOpen, setPanelOpen] = useLocalCommonState<boolean>(
     "daily-widget-panel-open",
     false,
   );
 
-  // If the global chat opens, close the widget panel
-  useEffect(() => {
-    if (chatPanel?.chatOpen) {
-      setPanelOpen(false);
-    }
-  }, [chatPanel?.chatOpen]);
-
   const openWidgetPanel = useCallback(() => {
-    chatPanel?.closeChat();
     setPanelOpen(true);
-  }, [chatPanel]);
+  }, [setPanelOpen]);
 
   const handleSaveWidgets = (cells: OverviewCell[]) => {
     fetcher.submit(

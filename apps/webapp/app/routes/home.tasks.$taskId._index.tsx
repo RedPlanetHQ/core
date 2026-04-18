@@ -1,19 +1,15 @@
 import { useNavigate, useFetcher, useRouteLoaderData } from "@remix-run/react";
 import { ClientOnly } from "remix-utils/client-only";
 import { LoaderCircle } from "lucide-react";
-import { useEffect, useRef } from "react";
 
 import type { loader } from "~/routes/home.tasks.$taskId";
 import { TaskDetailFull } from "~/components/tasks/task-detail-full.client";
-import { useChatPanel } from "~/components/chat-panel/chat-panel-context";
 import { WidgetContext } from "~/components/editor/extensions/widget-node-extension";
 
 function TaskDetailInner() {
   const data = useRouteLoaderData<typeof loader>("routes/home.tasks.$taskId");
   const navigate = useNavigate();
   const fetcher = useFetcher();
-  const { openChatWithConversation, setCurrentTaskId } = useChatPanel()!;
-  const openedRunRef = useRef<string | null>(null);
 
   if (!data) return null;
   const {
@@ -22,33 +18,10 @@ function TaskDetailInner() {
     butlerName,
     taskPageId,
     collabToken,
-    runs,
     widgetOptions,
     widgetPat,
     baseUrl,
   } = data;
-
-  const latestRun = runs?.[0] ?? null;
-
-  // Set current task ID so the history popover filters to this task's runs
-  // eslint-disable-next-line react-hooks/rules-of-hooks
-  useEffect(() => {
-    setCurrentTaskId(task.id);
-    return () => setCurrentTaskId(null);
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [task.id]);
-
-  // Open the latest run's conversation in the chat panel — only for scheduled/blocked tasks
-  // and only if a conversation already exists (don't create a new one)
-  // eslint-disable-next-line react-hooks/rules-of-hooks
-  useEffect(() => {
-    const shouldOpen = task.status === "Waiting";
-    if (shouldOpen && latestRun?.id && openedRunRef.current !== latestRun.id) {
-      openedRunRef.current = latestRun.id;
-      openChatWithConversation(latestRun.id);
-    }
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [latestRun?.id, task.status]);
 
   const handleSave = (title: string) => {
     fetcher.submit(
