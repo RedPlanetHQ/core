@@ -208,7 +208,7 @@ export const ConversationNew = ({
       action="/home/conversation"
       method="post"
       onSubmit={(e) => submitForm(e)}
-      className="flex h-page flex-col"
+      className="h-page flex flex-col"
     >
       {/* Centered hero */}
       <div className="flex flex-1 flex-col items-center justify-center gap-3">
@@ -253,7 +253,7 @@ export const ConversationNew = ({
               editor={editor}
               className="max-h-[200px] min-h-[48px] w-full overflow-auto px-4 pt-4 text-base"
             />
-            <div className="flex items-center justify-between px-3 pb-2 pt-1">
+            <div className="flex items-center justify-between px-2 pb-2 pt-1">
               <div className="flex items-center gap-1">
                 <Button
                   type="button"
@@ -275,7 +275,7 @@ export const ConversationNew = ({
                     value={selectedModelId}
                     onValueChange={setSelectedModelId}
                   >
-                    <SelectTrigger className="h-8 w-auto min-w-[140px] border-0 bg-transparent text-xs shadow-none focus:ring-0">
+                    <SelectTrigger className="h-8 w-auto min-w-[110px] border-0 bg-transparent text-xs shadow-none focus:ring-0">
                       <SelectValue placeholder="Select model" />
                     </SelectTrigger>
                     <SelectContent>

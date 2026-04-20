@@ -220,7 +220,7 @@ export async function noStreamProcess(
     async processInput({ messages }: any) {
       return messages;
     },
-    async processOutputResult({ messages }: any) {
+    async processOutputStep({ messages }: any) {
       const converted = convertMessages(messages).to("AIV5.UI") as any[];
       const lastMsg = converted[converted.length - 1];
       capturedParts = lastMsg?.parts ?? [];
@@ -253,12 +253,15 @@ export async function noStreamProcess(
     // user sees something instead of a silent drop, then mark the conversation
     // failed so status is accurate.
     const { kind, userMessage } = describeAgentError(error);
-    logger.warn("Agent generate failed after retries, posting fallback message", {
-      conversationId: body.id,
-      kind,
-      error: error instanceof Error ? error.message : String(error),
-      historyLength: conversationHistory.length,
-    });
+    logger.warn(
+      "Agent generate failed after retries, posting fallback message",
+      {
+        conversationId: body.id,
+        kind,
+        error: error instanceof Error ? error.message : String(error),
+        historyLength: conversationHistory.length,
+      },
+    );
 
     const fallbackMessageId = crypto.randomUUID();
     const fallbackParts = [{ type: "text", text: userMessage }];

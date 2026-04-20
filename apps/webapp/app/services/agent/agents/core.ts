@@ -215,11 +215,15 @@ export function createAskUserTool() {
           z.object({
             question: z
               .string()
-              .describe("The complete question to ask. Should be clear and specific, ending with a question mark."),
+              .describe(
+                "The complete question to ask. Should be clear and specific, ending with a question mark.",
+              ),
             header: z
               .string()
               .optional()
-              .describe("Very short label shown as a chip (max 12 chars). E.g. 'Auth method', 'Priority'."),
+              .describe(
+                "Very short label shown as a chip (max 12 chars). E.g. 'Auth method', 'Priority'.",
+              ),
             options: z
               .array(
                 z.object({
@@ -229,21 +233,29 @@ export function createAskUserTool() {
                   description: z
                     .string()
                     .optional()
-                    .describe("Explanation of what this option means or its trade-offs"),
+                    .describe(
+                      "Explanation of what this option means or its trade-offs",
+                    ),
                   markdown: z
                     .string()
                     .optional()
-                    .describe("Optional preview content (code snippet, ASCII mockup) shown when this option is focused"),
+                    .describe(
+                      "Optional preview content (code snippet, ASCII mockup) shown when this option is focused",
+                    ),
                 }),
               )
               .min(2)
               .max(4)
-              .describe("2–4 mutually exclusive options for the user to choose from"),
+              .describe(
+                "2–4 mutually exclusive options for the user to choose from",
+              ),
             multiSelect: z
               .boolean()
               .optional()
               .default(false)
-              .describe("Set true to allow the user to select multiple options"),
+              .describe(
+                "Set true to allow the user to select multiple options",
+              ),
           }),
         )
         .min(1)
@@ -252,7 +264,9 @@ export function createAskUserTool() {
       answers: z
         .record(z.string(), z.string())
         .optional()
-        .describe("The user's answers keyed by question text — set automatically when the user responds, do not set this yourself"),
+        .describe(
+          "The user's answers keyed by question text — set automatically when the user responds, do not set this yourself",
+        ),
       annotations: z
         .record(
           z.string(),
@@ -268,7 +282,10 @@ export function createAskUserTool() {
     execute: async (inputData, args) => {
       // The user's answers are sent as toolArgOverrides and must be read
       // from requestContext — they are NOT auto-applied to inputData.
-      const ctx = args as { agent?: { toolCallId?: string }; requestContext?: { get: (key: string) => unknown } };
+      const ctx = args as {
+        agent?: { toolCallId?: string };
+        requestContext?: { get: (key: string) => unknown };
+      };
       const callId = ctx?.agent?.toolCallId;
       const overrideRaw = ctx?.requestContext?.get("toolArgsOverride");
 
@@ -277,13 +294,18 @@ export function createAskUserTool() {
 
       if (callId && overrideRaw) {
         try {
-          const overrideMap: Record<string, Record<string, unknown>> =
-            typeof overrideRaw === "string"
-              ? JSON.parse(overrideRaw)
-              : (overrideRaw as Record<string, Record<string, unknown>>);
+          const overrideMap: Record<
+            string,
+            Record<string, unknown>
+          > = typeof overrideRaw === "string"
+            ? JSON.parse(overrideRaw)
+            : (overrideRaw as Record<string, Record<string, unknown>>);
           if (overrideMap[callId]) {
-            answers = (overrideMap[callId].answers as typeof answers) ?? answers;
-            annotations = (overrideMap[callId].annotations as typeof annotations) ?? annotations;
+            answers =
+              (overrideMap[callId].answers as typeof answers) ?? answers;
+            annotations =
+              (overrideMap[callId].annotations as typeof annotations) ??
+              annotations;
           }
         } catch {
           // fall through to original inputData
@@ -333,39 +355,38 @@ export async function createCoreAgents(
         select: { id: true, name: true, status: true, description: true },
       });
 
-  const [reader, writer, { agentList: gatewayAgents }] =
-    await Promise.all([
-      createOrchestratorAgent(
-        userId,
-        workspaceId,
-        "read",
-        timezone,
-        source,
-        persona,
-        skills,
-        executorTools,
-        interactive,
-        modelConfig,
-      ),
-      createOrchestratorAgent(
-        userId,
-        workspaceId,
-        "write",
-        timezone,
-        source,
-        persona,
-        skills,
-        executorTools,
-        interactive,
-        modelConfig,
-      ),
-      createGatewayAgents(gateways, executorTools, interactive, modelConfig, {
-        conversationId,
-        taskId,
-        workspaceId,
-        userId,
-      }),
-    ]);
+  const [reader, writer, { agentList: gatewayAgents }] = await Promise.all([
+    createOrchestratorAgent(
+      userId,
+      workspaceId,
+      "read",
+      timezone,
+      source,
+      persona,
+      skills,
+      executorTools,
+      interactive,
+      modelConfig,
+    ),
+    createOrchestratorAgent(
+      userId,
+      workspaceId,
+      "write",
+      timezone,
+      source,
+      persona,
+      skills,
+      executorTools,
+      interactive,
+      modelConfig,
+    ),
+    createGatewayAgents(gateways, executorTools, interactive, modelConfig, {
+      conversationId,
+      taskId,
+      workspaceId,
+      userId,
+    }),
+  ]);
 
   // Think agent — only when triggered (reminders, webhooks, scheduled jobs)
   const channel =

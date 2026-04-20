@@ -7,7 +7,6 @@ import {
   updateConversationStatus,
   upsertConversationHistory,
 } from "~/services/conversation.server";
-
 import {
   getDefaultChatModelId,
   resolveModelConfig,
@@ -18,16 +17,13 @@ import { buildAgentContext } from "~/services/agent/context";
 import { createAskUserTool } from "~/services/agent/agents/core";
 import { mastra } from "~/services/agent/mastra";
 import { logger } from "~/services/logger.service";
+
 import {
   saveConversationResult,
   streamToUIResponse,
   drainAgentResult,
 } from "~/services/agent/mastra-stream.server";
-import {
-  InputProcessor,
-  type OutputProcessor,
-  type Processor,
-} from "@mastra/core/processors";
+import { type OutputProcessor, type Processor } from "@mastra/core/processors";
 import { patchArgsDeep } from "~/services/agent/tool-args-patch-processor";
 import { checkWaitingTaskReply } from "~/services/coding-task.server";
 import {
@@ -35,7 +31,7 @@ import {
   describeAgentError,
   type MessageEntry,
 } from "~/services/agent/context-window";
-
+import { appendFileSync } from "fs";
 import { RequestContext } from "@mastra/core/request-context";
 const ChatRequestSchema = z.object({
   message: z
@@ -56,7 +52,7 @@ const ChatRequestSchema = z.object({
     .optional(),
   id: z.string(),
   needsApproval: z.boolean().optional(),
-  interactive: z.boolean().optional().default(true),
+  permissionMode: z.enum(["default", "full"]).optional().default("default"),
   toolArgOverrides: z
     .record(z.string(), z.record(z.string(), z.unknown()))
     .optional(),
@@ -133,10 +129,21 @@ const { loader, action } = createHybridActionApiRoute(
         const role =
           history.role ?? (history.userType === "Agent" ? "assistant" : "user");
         const normalized = normalizeParts(history.parts);
-        const parts =
+        const parts = (
           role === "assistant"
             ? normalized.filter((p: any) => p.type === "text")
-            : normalized;
+            : normalized
+        ).map((p: any) => {
+          if (!p?.providerMetadata?.openai) return p;
+          const { openai: _openai, ...restMeta } = p.providerMetadata;
+          const cleaned = { ...p };
+          if (Object.keys(restMeta).length > 0) {
+            cleaned.providerMetadata = restMeta;
+          } else {
+            delete cleaned.providerMetadata;
+          }
+          return cleaned;
+        });
         return { parts, role, id: history.id };
       },
     );
@@ -223,7 +230,7 @@ const { loader, action } = createHybridActionApiRoute(
       source: body.source as any,
       finalMessages: useEmptyMessages ? [] : finalMessages,
       conversationId: body.id,
-      interactive: body.interactive,
+      interactive: body.permissionMode !== "full",
       modelConfig,
     });
 
@@ -243,9 +250,12 @@ const { loader, action } = createHybridActionApiRoute(
       agents: subagents,
       // ask_user must be a direct agent tool (not in toolsets) so Mastra's
       // requireApproval middleware applies correctly on approveToolCall.
-      ...(!isBackgroundExecution && {
-        tools: { ask_user: createAskUserTool() },
-      }),
+      // In "full" permission mode, skip ask_user entirely — it has requireApproval:true
+      // hardcoded so it would still trigger approval dialogs even with interactive:false.
+      ...(!isBackgroundExecution &&
+        body.permissionMode !== "full" && {
+          tools: { ask_user: createAskUserTool() },
+        }),
     });
     agent.__registerMastra(mastra);
     gatherContextAgent.__registerMastra(mastra);
@@ -269,7 +279,8 @@ const { loader, action } = createHybridActionApiRoute(
         return messages;
       },
       async processOutputResult({ messages }) {
-        const convertedMessages = convertMessages(messages).to("AIV5.UI");
+        const convertedMessages = convertMessages(messages).to("AIV6.UI");
+
         await saveConversationResult({
           parts: convertedMessages[convertedMessages.length - 1]
             ? convertedMessages[convertedMessages.length - 1].parts

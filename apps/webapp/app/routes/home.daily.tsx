@@ -3,7 +3,7 @@ import type {
   ActionFunctionArgs,
   LoaderFunctionArgs,
 } from "@remix-run/server-runtime";
-import { useCallback } from "react";
+import { useCallback, useMemo } from "react";
 import { useLoaderData, useFetcher, type MetaFunction } from "@remix-run/react";
 import { typedjson } from "remix-typedjson";
 import { requireUser, requireWorkpace } from "~/services/session.server";
@@ -16,7 +16,6 @@ import {
   findOrCreateDailyPage,
   todayUTCMidnightInTimezone,
 } from "~/services/page.server";
-import { getTasks } from "~/services/task.server";
 import {
   getWidgetOptions,
   getOrCreateWidgetPat,
@@ -50,10 +49,9 @@ export const loader = async ({ request }: LoaderFunctionArgs) => {
   const dailyWidgetCells = (workspaceMeta.dailyWidgetLayout ??
     []) as OverviewCell[];
 
-  const [todayPage, blockedTasks, widgetOptions, widgetPat] = await Promise.all(
+  const [todayPage, widgetOptions, widgetPat] = await Promise.all(
     [
       findOrCreateDailyPage(workspaceId, user.id, todayUTC),
-      getTasks(workspaceId, { status: "Waiting", isScheduled: false }),
       getWidgetOptions(user.id, workspaceId),
       getOrCreateWidgetPat(workspaceId, user.id),
     ],
@@ -65,7 +63,6 @@ export const loader = async ({ request }: LoaderFunctionArgs) => {
     userId: user.id,
     collabToken: generateCollabToken(workspaceId, user.id),
     todayPage: { id: todayPage.id, date: todayPage.date?.toISOString() ?? "" },
-    blockedCount: blockedTasks.length,
     widgetOptions,
     widgetPat,
     baseUrl: new URL(request.url).origin,
@@ -104,7 +101,6 @@ export default function DailyRoute() {
     userId,
     collabToken,
     todayPage,
-    blockedCount,
     widgetOptions,
     widgetPat,
     baseUrl,
@@ -129,10 +125,14 @@ export default function DailyRoute() {
     );
   };
 
-  const widgetCtxValue =
-    widgetPat && baseUrl
-      ? { pat: widgetPat, baseUrl, widgetOptions: widgetOptions ?? [] }
-      : null;
+  const widgetCtxValue = useMemo(
+    () =>
+      widgetPat && baseUrl
+        ? { pat: widgetPat, baseUrl, widgetOptions: widgetOptions ?? [] }
+        : null,
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    [widgetPat, baseUrl, JSON.stringify(widgetOptions)],
+  );
 
   const page = (
     <div className="flex h-full flex-col overflow-hidden">
@@ -169,7 +169,6 @@ export default function DailyRoute() {
                   userId={userId}
                   collabToken={collabToken}
                   todayPage={todayPage}
-                  blockedCount={blockedCount}
                 />
               )}
             </ClientOnly>

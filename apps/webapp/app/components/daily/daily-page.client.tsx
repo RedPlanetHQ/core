@@ -6,8 +6,6 @@ import React, {
   useLayoutEffect,
 } from "react";
 import { format, addDays, isToday } from "date-fns";
-import { useNavigate } from "@remix-run/react";
-import { Button } from "~/components/ui";
 import { DayEditor } from "./day-editor.client";
 import { useTauri } from "~/hooks/use-tauri";
 
@@ -22,7 +20,6 @@ interface DailyPageProps {
   userId: string;
   collabToken: string;
   todayPage?: PageRecord;
-  blockedCount?: number;
 }
 
 const INITIAL_AFTER = 3;
@@ -39,14 +36,12 @@ function DaySection({
   butlerName,
   collabToken,
   prefetchedPage,
-  blockedCount,
   onRef,
 }: {
   date: Date;
   butlerName: string;
   collabToken: string;
   prefetchedPage?: PageRecord;
-  blockedCount?: number;
   onRef: (el: HTMLDivElement | null) => void;
 }) {
   const [page, setPage] = React.useState<PageRecord | null>(
@@ -54,7 +49,6 @@ function DaySection({
   );
   const [loading, setLoading] = React.useState(!prefetchedPage);
   const today = isToday(date);
-  const navigate = useNavigate();
 
   React.useEffect(() => {
     if (prefetchedPage) return;
@@ -82,23 +76,6 @@ function DaySection({
           {format(date, "EEE, MMMM do, yyyy")}
           {today && <span className="text-primary ml-2">•</span>}
         </h2>
-        {today && blockedCount != null && blockedCount > 0 && (
-          <Button
-            variant="destructive"
-            size="sm"
-            onClick={() => {
-              const saved = localStorage.getItem("userSettings");
-              const parsed = saved ? JSON.parse(saved) : {};
-              localStorage.setItem(
-                "userSettings",
-                JSON.stringify({ ...parsed, "task-view-filter": ["Waiting"] }),
-              );
-              navigate("/home/tasks");
-            }}
-          >
-            {blockedCount} blocked
-          </Button>
-        )}
       </div>
 
       {loading ? (
@@ -123,7 +100,6 @@ export function DailyPage({
   butlerName,
   collabToken,
   todayPage,
-  blockedCount,
 }: DailyPageProps) {
   const todayDate = useRef(new Date()).current;
   const scrollRef = useRef<HTMLDivElement>(null);
@@ -329,7 +305,6 @@ export function DailyPage({
             butlerName={butlerName}
             collabToken={collabToken}
             prefetchedPage={isToday(date) ? todayPage : undefined}
-            blockedCount={isToday(date) ? blockedCount : undefined}
             onRef={getRefCallback(date)}
           />
         ))}

@@ -328,6 +328,39 @@ export type GetConversationsListDto = z.infer<
   typeof GetConversationsListSchema
 >;
 
+/**
+ * Finds the latest assistant history entry and marks the tool call with the
+ * given toolCallId as approval-requested. Called when the stream detects a
+ * data-tool-call-approval chunk so the approval UI renders correctly after reload.
+ */
+export async function markToolCallApprovalRequested(
+  conversationId: string,
+  toolCallId: string,
+  approvalId: string,
+): Promise<void> {
+  const latest = await prisma.conversationHistory.findFirst({
+    where: { conversationId, userType: UserTypeEnum.Agent },
+    orderBy: { createdAt: "desc" },
+  });
+  if (!latest) return;
+
+  const parts = (latest.parts as any[]) ?? [];
+  let changed = false;
+  const updatedParts = parts.map((part: any) => {
+    if (part?.toolCallId === toolCallId) {
+      changed = true;
+      return { ...part, state: "approval-requested", approval: { id: approvalId } };
+    }
+    return part;
+  });
+  if (!changed) return;
+
+  await prisma.conversationHistory.update({
+    where: { id: latest.id },
+    data: { parts: updatedParts },
+  });
+}
+
 export async function getConversationSources(
   workspaceId: string,
   userId: string,

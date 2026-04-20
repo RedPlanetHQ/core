@@ -19,7 +19,6 @@ import { ClientOnly } from "remix-utils/client-only";
 
 export const meta = () => [{ title: "Skills" }];
 
-
 export async function loader({ request }: LoaderFunctionArgs) {
   const user = await getUser(request);
   const workspaceId = await getWorkspaceId(request, user?.id as string);
@@ -141,7 +140,7 @@ export default function Skills() {
   ];
 
   return (
-    <div className="flex h-full flex-col">
+    <div className="h-page flex flex-col">
       <PageHeader
         title="Skills"
         tabs={tabs}

@@ -30,6 +30,8 @@ export interface LLMModel {
   isDefault: boolean;
 }
 
+export type PermissionMode = "default" | "full";
+
 interface ConversationTextareaProps {
   defaultValue?: string;
   placeholder?: string;
@@ -44,6 +46,7 @@ interface ConversationTextareaProps {
   onModelChange?: (modelId: string) => void;
   needsApproval?: boolean;
   leftActions?: React.ReactNode;
+  rightActions?: React.ReactNode;
   skills?: Array<{ id: string; title: string }>;
 }
 
@@ -60,6 +63,7 @@ export function ConversationTextarea({
   selectedModelId,
   onModelChange,
   leftActions,
+  rightActions,
   className,
   skills,
 }: ConversationTextareaProps) {
@@ -175,11 +179,11 @@ export function ConversationTextarea({
           className,
         )}
       />
-      <div className="flex items-center justify-between px-3 pb-2 pt-1">
+      <div className="flex items-center justify-between px-2 pb-2 pt-1">
         <div>
           {showModelSelector && (
             <Select value={selectedModelId} onValueChange={onModelChange}>
-              <SelectTrigger className="h-8 w-auto min-w-[140px] border-0 bg-transparent text-xs shadow-none focus:ring-0">
+              <SelectTrigger className="h-8 w-auto min-w-[110px] border-0 bg-transparent text-sm shadow-none focus:ring-0">
                 <SelectValue placeholder="Select model" />
               </SelectTrigger>
               <SelectContent>
@@ -187,7 +191,7 @@ export function ConversationTextarea({
                   <SelectItem
                     key={model.id}
                     value={model.id}
-                    className="text-xs"
+                    className="text-sm"
                   >
                     <span className="font-medium">{model.label}</span>
                     <span className="text-muted-foreground ml-1 capitalize">
@@ -199,28 +203,31 @@ export function ConversationTextarea({
             </Select>
           )}
         </div>
-        <Button
-          variant="secondary"
-          className="gap-1 shadow-none transition-all duration-500 ease-in-out"
-          onClick={() => {
-            if (!isLoading && !disabled) {
-              handleSend();
-            } else if (!disabled) {
-              stop && stop();
-            }
-          }}
-          disabled={disabled}
-          size="lg"
-        >
-          {isLoading ? (
-            <>
-              <LoaderCircle size={18} className="mr-1 animate-spin" />
-              Stop
-            </>
-          ) : (
-            <>Chat</>
-          )}
-        </Button>
+        <div className="flex items-center gap-1">
+          {rightActions}
+          <Button
+            variant="secondary"
+            className="gap-1 shadow-none transition-all duration-500 ease-in-out"
+            onClick={() => {
+              if (!isLoading && !disabled) {
+                handleSend();
+              } else if (!disabled) {
+                stop && stop();
+              }
+            }}
+            disabled={disabled}
+            size="lg"
+          >
+            {isLoading ? (
+              <>
+                <LoaderCircle size={18} className="mr-1 animate-spin" />
+                Stop
+              </>
+            ) : (
+              <>Chat</>
+            )}
+          </Button>
+        </div>
       </div>
     </div>
   );

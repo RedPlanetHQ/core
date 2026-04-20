@@ -32,8 +32,19 @@ pub type PtyState = Arc<Mutex<HashMap<String, PtyHandle>>>;
 pub struct SharedLoginPath(pub Arc<Mutex<String>>);
 
 pub fn capture_login_path() -> String {
-    let output = std::process::Command::new("zsh")
-        .args(["-lc", "echo $PATH"])
+    // Use the user's own shell so nvm/homebrew/fnm paths are included.
+    // Source the rc file (~/.zshrc, ~/.bashrc, etc.) because most users put
+    // version-manager setup there rather than in the login profile.
+    let shell = std::env::var("SHELL").unwrap_or_else(|_| "/bin/sh".to_string());
+    let shell_name = std::path::Path::new(&shell)
+        .file_name()
+        .and_then(|n| n.to_str())
+        .unwrap_or("sh")
+        .to_string();
+    let cmd = format!("source ~/.{}rc 2>/dev/null; echo $PATH", shell_name);
+
+    let output = std::process::Command::new(&shell)
+        .args(["-lc", &cmd])
         .output();
 
     match output {

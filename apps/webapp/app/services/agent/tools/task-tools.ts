@@ -311,8 +311,7 @@ FOLLOW-UP: Set isFollowUp=true and parentTaskId to reschedule an existing task.`
                   "agent",
                 );
               } catch (err) {
-                const msg =
-                  err instanceof Error ? err.message : String(err);
+                const msg = err instanceof Error ? err.message : String(err);
                 return `Task created but initial status rejected: ${msg}. Task remains in Todo.`;
               }
             }
@@ -602,7 +601,12 @@ REPARENTING: Pass newParentId to move a task under a different parent (or null t
             // Section-based update: upsert a named H2 section, preserving everything else
             // Silently skipped for recurring tasks
             if (currentTask?.pageId) {
-              await upsertPageSection(currentTask.pageId, section, description, appendToSection);
+              await upsertPageSection(
+                currentTask.pageId,
+                section,
+                description,
+                appendToSection,
+              );
             }
             if (title) {
               await updateTask(taskId, { title }, false);
@@ -643,8 +647,7 @@ REPARENTING: Pass newParentId to move a task under a different parent (or null t
                   "agent",
                 );
               } catch (err) {
-                const msg =
-                  err instanceof Error ? err.message : String(err);
+                const msg = err instanceof Error ? err.message : String(err);
                 return `Status change rejected: ${msg}.`;
               }
             } else {
@@ -657,8 +660,7 @@ REPARENTING: Pass newParentId to move a task under a different parent (or null t
                   "agent",
                 );
               } catch (err) {
-                const msg =
-                  err instanceof Error ? err.message : String(err);
+                const msg = err instanceof Error ? err.message : String(err);
                 return `Status change rejected: ${msg}. Only the user can move a task to Done, and phase transitions must go through Ready (not Working directly).`;
               }
             }
@@ -718,7 +720,13 @@ REPARENTING: Pass newParentId to move a task under a different parent (or null t
             const phase = getTaskPhase(task);
             const targetStatus = phase === "prep" ? "Todo" : "Ready";
 
-            await changeTaskStatus(taskId, targetStatus, workspaceId, userId, "user");
+            await changeTaskStatus(
+              taskId,
+              targetStatus,
+              workspaceId,
+              userId,
+              "user",
+            );
             return phase === "prep"
               ? `Task "${task.title}" unblocked and moved back to Todo (prep phase continues). Reason appended to description.`
               : `Task "${task.title}" approved and moved to Ready. Reason appended to description.`;
