@@ -336,12 +336,11 @@ function CodingPage() {
         <p className="text-muted-foreground max-w-sm text-center text-sm">
           Install it to enable coding sessions:
         </p>
-        <code className="bg-muted rounded px-3 py-1.5 font-mono text-sm">
+        <code className="bg-grayAlpha-50 rounded px-3 py-1.5 font-mono text-sm">
           npm install -g @redplanethq/corebrain
         </code>
         <Button
           variant="secondary"
-          size="sm"
           onClick={() =>
             invoke("check_corebrain_installed")
               .then(() => setCorebrainError(""))

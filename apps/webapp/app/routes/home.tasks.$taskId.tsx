@@ -407,14 +407,14 @@ function TaskDetailLayout() {
         >
           <ResizablePanel
             id="task-detail"
-            defaultSize={taskChatOpen ? "50%" : "100%"}
+            defaultSize={taskChatOpen && !isCodingTab ? "50%" : "100%"}
             minSize="50%"
           >
             <div className="flex h-full overflow-hidden">
               <Outlet />
             </div>
           </ResizablePanel>
-          {taskChatOpen && (
+          {taskChatOpen && !isCodingTab && (
             <>
               <ResizableHandle withHandle />
               <ResizablePanel

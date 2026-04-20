@@ -101,7 +101,7 @@ export function VirtualSkillsList({
   const itemCount = hasMore ? (skills?.length ?? 0) + 1 : (skills?.length ?? 0);
 
   return (
-    <div className="h-full grow overflow-hidden rounded-lg">
+    <div className="h-page grow overflow-hidden rounded-lg">
       <AutoSizer className="h-full">
         {({ width, height: autoHeight }) => (
           <InfiniteLoader

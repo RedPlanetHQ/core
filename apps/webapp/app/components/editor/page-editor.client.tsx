@@ -1,4 +1,4 @@
-import React, { useContext, useEffect, useRef, useState } from "react";
+import React, { useContext, useEffect, useMemo, useRef, useState } from "react";
 import { useEditor, EditorContent } from "@tiptap/react";
 import StarterKit from "@tiptap/starter-kit";
 import Heading from "@tiptap/extension-heading";
@@ -138,15 +138,28 @@ function EditorInner({
 
   const widgetCtx = useContext(WidgetContext);
 
+  // Memoize extensions so that EditorInner re-renders (e.g. from context
+  // changes) don't create new extension instances and trigger TipTap to
+  // tear down and recreate all NodeViews (which causes cursor jumps and
+  // blinking of status/displayId in scratchpad task items).
+  const extensions = useMemo(
+    () =>
+      buildExtensions(
+        pageId,
+        isToday,
+        butlerName,
+        ydoc,
+        parentTaskId,
+        widgetCtx?.widgetOptions ?? [],
+      ),
+    // widgetOptions is compared by reference; the route now stabilises it
+    // via useMemo so this dep only fires when options actually change.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    [pageId, isToday, butlerName, ydoc, parentTaskId, widgetCtx?.widgetOptions],
+  );
+
   const editor = useEditor({
-    extensions: buildExtensions(
-      pageId,
-      isToday,
-      butlerName,
-      ydoc,
-      parentTaskId,
-      widgetCtx?.widgetOptions ?? [],
-    ),
+    extensions,
     editorProps: {
       attributes: {
         class: "prose prose-sm focus:outline-none max-w-full py-1",

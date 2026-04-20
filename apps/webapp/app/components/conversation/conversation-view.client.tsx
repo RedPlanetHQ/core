@@ -18,6 +18,10 @@ import {
   hasNeedsApprovalDeep,
   mergeAgentParts,
 } from "./conversation-utils";
+import {
+  PermissionModeSelector,
+  type PermissionMode,
+} from "./permission-mode-selector.client";
 import { cn } from "~/lib/utils";
 
 interface ConversationHistory {
@@ -83,6 +87,13 @@ export function ConversationView({
   const handleModelChange = (modelId: string) => {
     setSelectedModelId(modelId);
   };
+
+  const [permissionMode, setPermissionMode] = useLocalCommonState<PermissionMode>(
+    "conversationPermissionMode",
+    "full",
+  );
+  const permissionModeRef = useRef<PermissionMode>(permissionMode ?? "full");
+  permissionModeRef.current = permissionMode ?? "full";
   // toolCallId → { approved, ...argOverrides }
   // Single ref for both approval decisions and arg overrides
   const toolArgOverridesRef = useRef<Record<string, Record<string, unknown>>>(
@@ -142,9 +153,11 @@ export function ConversationView({
           (e) => "approved" in e,
         );
 
+        const permissionMode = permissionModeRef.current;
+
         if (hasApprovals) {
           return {
-            body: { messages, needsApproval: true, id, toolArgOverrides },
+            body: { messages, needsApproval: true, id, toolArgOverrides, permissionMode },
           };
         }
 
@@ -154,6 +167,7 @@ export function ConversationView({
             id,
             toolArgOverrides,
             modelId: selectedModelRef.current,
+            permissionMode,
           },
         };
       },
@@ -319,9 +333,14 @@ export function ConversationView({
             isLoading={
               status === "streaming" ||
               status === "submitted" ||
-              conversationStatus === "running"
+              (messages[messages.length - 1]?.role === "assistant" &&
+                conversationStatus === "running")
             }
-            disabled={needsApproval || conversationStatus === "running"}
+            disabled={
+              needsApproval ||
+              (messages[messages.length - 1]?.role === "assistant" &&
+                conversationStatus === "running")
+            }
             onConversationCreated={(message) => {
               if (message) sendMessage({ text: message });
             }}
@@ -330,6 +349,18 @@ export function ConversationView({
             selectedModelId={selectedModelId}
             onModelChange={handleModelChange}
             skills={skillsFetcher.data?.skills}
+            rightActions={
+              <PermissionModeSelector
+                value={permissionMode ?? "full"}
+                onChange={setPermissionMode}
+                disabled={
+                  status === "streaming" ||
+                  status === "submitted" ||
+                  (messages[messages.length - 1]?.role === "assistant" &&
+                    conversationStatus === "running")
+                }
+              />
+            }
           />
         </div>
       </div>

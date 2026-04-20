@@ -1,13 +1,14 @@
 use serde::{Deserialize, Serialize};
+use crate::pty::SharedLoginPath;
 
-/// Check whether `corebrain` is available on the login-shell PATH.
-/// Returns an error string (suitable for displaying in the UI) when not found.
+/// Check whether `corebrain` is available on the user's shell PATH.
 #[tauri::command]
-pub fn check_corebrain_installed() -> Result<(), String> {
-    // Run `which corebrain` inside a login shell so nvm / homebrew / fnm
-    // locations are on PATH without risking corruption from shell startup output.
-    let found = std::process::Command::new("zsh")
-        .args(["-lc", "which corebrain"])
+pub fn check_corebrain_installed(login_path: tauri::State<SharedLoginPath>) -> Result<(), String> {
+    let path = login_path.0.lock().unwrap().clone();
+
+    let found = std::process::Command::new("which")
+        .arg("corebrain")
+        .env("PATH", &path)
         .output()
         .map(|o| o.status.success())
         .unwrap_or(false);

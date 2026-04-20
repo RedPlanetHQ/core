@@ -30,6 +30,8 @@ export function buildAssistantPartsFromSteps(steps: any[]): any[] {
 }
 
 export interface SaveConversationResultParams {
+  /** Stable ID for upsert — reused across intermediate saves and final save. */
+  id?: string;
   parts: any[];
   conversationId: string;
   incomingUserText: string | undefined;
@@ -40,6 +42,7 @@ export interface SaveConversationResultParams {
 }
 
 export async function saveConversationResult({
+  id,
   parts,
   conversationId,
   incomingUserText,
@@ -58,7 +61,7 @@ export async function saveConversationResult({
 
   if (parts.length > 0) {
     await upsertConversationHistory(
-      crypto.randomUUID(),
+      id ?? crypto.randomUUID(),
       parts,
       conversationId,
       UserTypeEnum.Agent,
@@ -93,7 +96,10 @@ export async function saveConversationResult({
  * Wraps a Mastra agent result in an AI SDK v6 UI stream, transforming
  * tool-call-approval chunks into tool-approval-request events for the frontend.
  */
-export function createUIStreamWithApprovals(agentResult: any): ReadableStream {
+export function createUIStreamWithApprovals(
+  agentResult: any,
+  onApprovalDetected?: (toolCallId: string, approvalId: string) => Promise<void>,
+): ReadableStream {
   const mastraStream = toAISdkStream(agentResult, {
     from: "agent",
     version: "v6",
@@ -101,18 +107,22 @@ export function createUIStreamWithApprovals(agentResult: any): ReadableStream {
 
   return mastraStream.pipeThrough(
     new TransformStream({
-      transform(chunk, controller) {
+      async transform(chunk, controller) {
         if (
           chunk?.type === "data-tool-call-approval" &&
           chunk?.data?.toolCallId
         ) {
+          const approvalId = generateId();
           logger.info(`[conversation] tool-call-approval:`, {
             toolCallId: chunk.data.toolCallId,
             toolName: chunk.data.toolName,
           });
+          if (onApprovalDetected) {
+            await onApprovalDetected(chunk.data.toolCallId, approvalId);
+          }
           controller.enqueue({
             type: "tool-approval-request",
-            approvalId: generateId(),
+            approvalId,
             toolCallId: chunk.data.toolCallId,
           });
         } else {
@@ -126,8 +136,9 @@ export function createUIStreamWithApprovals(agentResult: any): ReadableStream {
 export function streamToUIResponse(
   agentResult: any,
   onCancel?: () => void,
+  onApprovalDetected?: (toolCallId: string, approvalId: string) => Promise<void>,
 ): Response {
-  let stream = createUIStreamWithApprovals(agentResult);
+  let stream = createUIStreamWithApprovals(agentResult, onApprovalDetected);
 
   if (onCancel) {
     // Pipe through a passthrough transform whose cancel() fires when the
