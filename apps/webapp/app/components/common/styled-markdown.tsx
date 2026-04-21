@@ -96,7 +96,7 @@ const markdownComponents: Components = {
     inline ? (
       <code
         className={cn(
-          "rounded bg-gray-100 px-1.5 py-0.5 font-mono text-sm text-gray-800 dark:bg-gray-800 dark:text-gray-200",
+          "bg-grayAlpha-100 text-muted-foreground rounded px-1.5 py-0 font-mono text-sm",
           className,
         )}
         {...props}

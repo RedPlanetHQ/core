@@ -65,7 +65,7 @@ function DaySection({
   return (
     <div
       ref={onRef}
-      className={`mb-8 px-2 pt-6 ${today ? "min-h-[60vh]" : ""}`}
+      className={`mb-8 px-2 pr-4 pt-6 ${today ? "min-h-[60vh]" : ""}`}
     >
       <div className="mb-3 flex items-center gap-3">
         <h2

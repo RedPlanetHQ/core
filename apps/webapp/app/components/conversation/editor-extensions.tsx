@@ -91,7 +91,7 @@ export const getPlaceholder = (placeholder: string | Extension) => {
 
 export const starterKit = StarterKit.configure({
   heading: false,
-  history: false,
+
   bulletList: {
     HTMLAttributes: {
       class: cx("list-disc list-outside pl-6 leading-1 my-1 mb-1.5"),
@@ -114,14 +114,14 @@ export const starterKit = StarterKit.configure({
   },
   paragraph: {
     HTMLAttributes: {
-      class: cx("leading-[22px] mt-[0.25rem] paragraph-node"),
+      class: cx("leading-[22px] mt-[0.25rem] paragraph-node !text-[14px]"),
     },
   },
   codeBlock: false,
   code: {
     HTMLAttributes: {
       class: cx(
-        "rounded bg-grayAlpha-100 text-[#BF4594] px-1.5 py-1 font-mono font-medium border-none",
+        "rounded bg-grayAlpha-50 border border-border text-muted-foreground px-1.5 py-0 font-mono",
       ),
       spellcheck: "false",
     },

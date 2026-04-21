@@ -3,11 +3,9 @@ import {
   getConversationAndHistory,
   updateConversationStatus,
   upsertConversationHistory,
-  setActiveStreamId,
-  clearActiveStreamId,
 } from "../conversation.server";
 import { EpisodeType, UserTypeEnum } from "@core/types";
-import { generateId, stepCountIs, JsonToSseTransformStream } from "ai";
+import { generateId, stepCountIs } from "ai";
 import { Agent, convertMessages } from "@mastra/core/agent";
 import type { OutputProcessor } from "@mastra/core/processors";
 import { buildAgentContext } from "./context";
@@ -22,8 +20,6 @@ import {
   type DecisionContext,
 } from "~/services/agent/types/decision-agent";
 import { type OrchestratorTools } from "~/services/agent/executors/base";
-import { createUIStreamWithApprovals } from "./mastra-stream.server";
-import { getResumableStreamContext } from "~/bullmq/connection";
 import { deductCredits } from "~/trigger/utils/utils";
 import { addToQueue } from "~/lib/ingest.server";
 import {
@@ -32,6 +28,9 @@ import {
   describeAgentError,
   type MessageEntry,
 } from "./context-window";
+
+const normalizeParts = (parts: any[] | undefined) =>
+  (Array.isArray(parts) ? parts : []).filter(Boolean);
 
 interface NoStreamProcessBody {
   id: string;
@@ -121,21 +120,10 @@ export async function noStreamProcess(
       const role =
         history.role ?? (history.userType === "Agent" ? "assistant" : "user");
       const normalized = normalizeParts(history.parts);
-      const parts = (
+      const parts =
         role === "assistant"
           ? normalized.filter((p: any) => p.type === "text")
-          : normalized
-      ).map((p: any) => {
-        if (!p?.providerMetadata?.openai) return p;
-        const { openai: _openai, ...restMeta } = p.providerMetadata;
-        const cleaned = { ...p };
-        if (Object.keys(restMeta).length > 0) {
-          cleaned.providerMetadata = restMeta;
-        } else {
-          delete cleaned.providerMetadata;
-        }
-        return cleaned;
-      });
+          : normalized;
       return { parts, role, id: history.id };
     })
     .filter((m) => hasNonEmptyParts(m.parts));

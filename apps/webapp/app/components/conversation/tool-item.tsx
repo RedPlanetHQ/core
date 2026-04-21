@@ -1,7 +1,10 @@
 import { useEffect, useRef, useState } from "react";
 import { cn } from "~/lib/utils";
 import { type ChatAddToolApproveResponseFunction } from "ai";
-import { loadIntegrationBundle, type ToolUIComponent } from "~/utils/integration-loader.client";
+import {
+  loadIntegrationBundle,
+  type ToolUIComponent,
+} from "~/utils/integration-loader.client";
 import {
   Collapsible,
   CollapsibleContent,
@@ -547,7 +550,7 @@ export const Tool = ({
       open={isOpen}
       onOpenChange={setIsOpen}
       className={cn(
-        "my-1 w-full",
+        "my-0.5 w-full",
         isNested && "ml-2 border-l border-gray-300 pl-3",
         isDisabled && "cursor-not-allowed opacity-50",
       )}

@@ -49,13 +49,11 @@ export const loader = async ({ request }: LoaderFunctionArgs) => {
   const dailyWidgetCells = (workspaceMeta.dailyWidgetLayout ??
     []) as OverviewCell[];
 
-  const [todayPage, widgetOptions, widgetPat] = await Promise.all(
-    [
-      findOrCreateDailyPage(workspaceId, user.id, todayUTC),
-      getWidgetOptions(user.id, workspaceId),
-      getOrCreateWidgetPat(workspaceId, user.id),
-    ],
-  );
+  const [todayPage, widgetOptions, widgetPat] = await Promise.all([
+    findOrCreateDailyPage(workspaceId, user.id, todayUTC),
+    getWidgetOptions(user.id, workspaceId),
+    getOrCreateWidgetPat(workspaceId, user.id),
+  ]);
 
   return typedjson({
     butlerName: workspace?.name ?? "butler",
@@ -154,7 +152,7 @@ export default function DailyRoute() {
       >
         {/* Main daily content */}
         <ResizablePanel minSize="40%">
-          <div className="flex h-full flex-col items-center overflow-y-auto p-2 px-3">
+          <div className="flex h-full flex-col items-center overflow-y-auto p-2 pl-3 pr-0">
             <ClientOnly
               fallback={
                 <div className="text-muted-foreground p-6 text-sm">

@@ -3,6 +3,7 @@ import {
   mergeAttributes,
   type KeyboardShortcutCommand,
 } from "@tiptap/core";
+import { Plugin } from "@tiptap/pm/state";
 import { TextSelection } from "@tiptap/pm/state";
 import {
   ReactNodeViewRenderer,
@@ -48,7 +49,13 @@ const ScratchpadTaskComponent = ({
       nextRunAt: data.nextRunAt ?? null,
       isRecurring: !!data.schedule,
     });
-  }, []);
+    if (data.id) {
+      extension.options._taskCache[data.id] = {
+        title: data.title ?? "",
+        description: data.description ?? null,
+      };
+    }
+  }, []); // eslint-disable-line react-hooks/exhaustive-deps
 
   // No id → create task in DB on mount
   useEffect(() => {
@@ -187,7 +194,13 @@ export const ScratchpadTaskItem = ({
     defining: true,
 
     addOptions() {
-      return { pageId, parentTaskId, nested: false, HTMLAttributes: {} };
+      return {
+        pageId,
+        parentTaskId,
+        nested: false,
+        HTMLAttributes: {},
+        _taskCache: {} as Record<string, { title: string; description: string | null }>,
+      };
     },
 
     addAttributes() {
@@ -208,7 +221,10 @@ export const ScratchpadTaskItem = ({
     addNodeView() {
       // Per-task debounce timers for title sync — lives outside React so typing
       // never triggers a React re-render (which would move the cursor).
-      const titleDebounceTimers = new Map<string, ReturnType<typeof setTimeout>>();
+      const titleDebounceTimers = new Map<
+        string,
+        ReturnType<typeof setTimeout>
+      >();
 
       return ReactNodeViewRenderer(ScratchpadTaskComponent, {
         as: "li",
@@ -322,5 +338,48 @@ export const ScratchpadTaskItem = ({
       };
 
       return shortcuts;
+    },
+
+    addProseMirrorPlugins() {
+      const ext = this;
+      return [
+        new Plugin({
+          appendTransaction(transactions, oldState, newState) {
+            if (!transactions.some((tr) => tr.docChanged)) return null;
+
+            const oldIds = new Map<string, string>();
+            oldState.doc.descendants((node) => {
+              if (node.type.name === NODE_NAME && node.attrs.id) {
+                oldIds.set(node.attrs.id, node.textContent.trim());
+              }
+            });
+
+            const newIds = new Set<string>();
+            newState.doc.descendants((node) => {
+              if (node.type.name === NODE_NAME && node.attrs.id) {
+                newIds.add(node.attrs.id);
+              }
+            });
+
+            for (const [id, textContent] of oldIds) {
+              if (newIds.has(id)) continue;
+              const cached = ext.options._taskCache[id];
+              const isUntitled =
+                textContent === "" &&
+                (!cached ||
+                  !cached.title ||
+                  cached.title === "Untitled task");
+              const hasNoDescription = !cached || !cached.description;
+              if (isUntitled && hasNoDescription) {
+                fetch(`/api/v1/tasks/${id}`, { method: "DELETE" }).catch(
+                  console.error,
+                );
+              }
+            }
+
+            return null;
+          },
+        }),
+      ];
     },
   });

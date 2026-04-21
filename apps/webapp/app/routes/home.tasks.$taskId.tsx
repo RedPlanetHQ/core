@@ -4,7 +4,7 @@ import type {
   LoaderFunctionArgs,
   MetaFunction,
 } from "@remix-run/node";
-import { Outlet, useNavigate, useFetcher, useLocation } from "@remix-run/react";
+import { Outlet, useNavigate, useFetcher, useLocation, useNavigation } from "@remix-run/react";
 import { typedjson, useTypedLoaderData } from "remix-typedjson";
 import { ClientOnly } from "remix-utils/client-only";
 import { LoaderCircle, Trash2, MessageSquare } from "lucide-react";
@@ -310,6 +310,7 @@ function TaskDetailLayout() {
     useTypedLoaderData<typeof loader>();
   const navigate = useNavigate();
   const location = useLocation();
+  const navigation = useNavigation();
   const fetcher = useFetcher<typeof action>();
   const [deleteOpen, setDeleteOpen] = React.useState(false);
   const [scheduleOpen, setScheduleOpen] = React.useState(false);
@@ -333,8 +334,9 @@ function TaskDetailLayout() {
     { label: truncate(task.title || "Untitled") },
   ];
 
-  const isRunsTab = location.pathname.endsWith("/runs");
-  const isCodingTab = location.pathname.endsWith("/coding");
+  const activePath = navigation.location?.pathname ?? location.pathname;
+  const isRunsTab = activePath.endsWith("/runs");
+  const isCodingTab = activePath.endsWith("/coding");
   const isScheduled = task.isActive && (task.schedule || task.nextRunAt);
 
   const toggleTaskChat = () => setTaskChatOpen((v) => !v);

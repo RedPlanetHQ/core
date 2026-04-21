@@ -133,7 +133,7 @@ export function AppSidebar({
 
   return (
     <>
-      <Sidebar variant="inset" className="bg-background pb-2 pt-1">
+      <Sidebar variant="inset" className="bg-background pb-2 pt-2">
         {isDesktop && (
           <div
             className="flex h-9 shrink-0 items-center justify-between px-3"

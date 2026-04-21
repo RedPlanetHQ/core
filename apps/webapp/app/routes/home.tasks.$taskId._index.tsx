@@ -1,6 +1,7 @@
 import { useNavigate, useFetcher, useRouteLoaderData } from "@remix-run/react";
 import { ClientOnly } from "remix-utils/client-only";
 import { LoaderCircle } from "lucide-react";
+import { useMemo } from "react";
 
 import type { loader } from "~/routes/home.tasks.$taskId";
 import { TaskDetailFull } from "~/components/tasks/task-detail-full.client";
@@ -58,9 +59,14 @@ function TaskDetailInner() {
     );
   };
 
-  const widgetCtxValue = widgetPat && baseUrl
-    ? { pat: widgetPat, baseUrl, widgetOptions: widgetOptions ?? [] }
-    : null;
+  const widgetCtxValue = useMemo(
+    () =>
+      widgetPat && baseUrl
+        ? { pat: widgetPat, baseUrl, widgetOptions: widgetOptions ?? [] }
+        : null,
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    [widgetPat, baseUrl, JSON.stringify(widgetOptions)],
+  );
 
   const detail = (
     <TaskDetailFull

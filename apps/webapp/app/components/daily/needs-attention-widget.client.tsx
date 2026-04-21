@@ -144,14 +144,14 @@ function RemindPopover({ taskId, taskTitle, onReminded }: RemindPopoverProps) {
                   key={label}
                   disabled={loading}
                   onClick={() => handlePreset(schedule)}
-                  className="hover:bg-muted w-full rounded px-2 py-1.5 text-left text-sm disabled:opacity-50"
+                  className="hover:bg-grayAlpha-100 w-full rounded px-2 py-1.5 text-left text-sm disabled:opacity-50"
                 >
                   {label}
                 </button>
               ))}
               <button
                 onClick={() => setShowCustom(true)}
-                className="hover:bg-muted w-full rounded px-2 py-1.5 text-left text-sm"
+                className="hover:bg-grayAlpha-100 w-full rounded px-2 py-1.5 text-left text-sm"
               >
                 Custom…
               </button>
