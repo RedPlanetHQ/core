@@ -446,13 +446,13 @@ RULES:
 - If you fail or get stuck, mark the PARENT task (${linkedTask.parentTaskId}) as Waiting and send_message with the error` : `
 - If this task is complex and needs decomposition: create subtasks under this task (parentTaskId: ${linkedTask.id}) in Todo, move this task to Waiting, then send_message to the user explaining the plan and asking for approval
 - The system handles sequential subtask execution automatically — when approved, it starts the first subtask. Each subtask completion triggers the next one. You do NOT manage the queue.`}
-- Mark task ${linkedTask.id} as Done ONLY when the original intent is fully achieved (the system will land it in Review first via markTaskCompleted)
+- Mark task ${linkedTask.id} as Review when the original intent is fully achieved. The user will move it to Done.
 - When Waiting (errors, needs user input, needs approval, partial completion):
   1. call update_task(taskId: "${linkedTask.id}", status: "Waiting")
   2. call send_message explaining what's needed — MUST include the task title so the user (and future you) can identify it. Example: "Task '${linkedTask.title}' is waiting: <reason>. <what's needed to continue>"
 - NEVER write error logs, debug output, or transient state into the task description. The description is for task spec, plan, and structured sections (Questions, Plan, Output, Session) only. Errors and status updates go to send_message.
 - When finished:
-  1. call update_task(taskId: "${linkedTask.id}", status: "Done")
+  1. call update_task(taskId: "${linkedTask.id}", status: "Review")
   2. call send_message with a summary of what was done
 - Do NOT create independent top-level tasks. ${isSubtask ? "You are a subtask — just do your work." : "You can only create subtasks under this task."}
 - DESCRIPTION UPDATES: Only update the task description at phase boundaries (Waiting, plan produced, Review/Done, or when the user provides new context). Do NOT update it on every interaction.
@@ -463,7 +463,7 @@ The gateway sub-agent handles all sleep/polling for coding sessions. You do NOT 
 When you delegate a coding task to the gateway, it will return one of:
 - Questions from the coding agent → write questions to the task description using update_task(section: "Questions", appendToSection: true, description: "<p><strong>Q:</strong> question text</p>"). Then relay to user via send_message, include sessionId in message, mark task Waiting.
 - A plan from the coding agent → you are in EXECUTION mode (user already approved the plan). Call the gateway again immediately with sessionId, dir, and intent "execute the plan" to trigger Phase 3 execution. Do NOT mark task Review again — the plan was already reviewed.
-- Execution results → write results to task description using update_task(section: "Output", description: results_html), mark task Done.
+- Execution results → write results to task description using update_task(section: "Output", description: results_html), mark task Review.
 - "Session still running, brainstorming/planning phase" → call reschedule_self(minutesFromNow=5) to check back soon.
 - "Session still running, execution phase" → save sessionId to task description using update_task(section: "Session", description: session_html), call reschedule_self(minutesFromNow=10) to try again later.
 - Error → update_task(status: "Waiting") then send_message with the error detail. Do NOT write errors into the task description.

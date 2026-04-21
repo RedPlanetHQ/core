@@ -304,6 +304,17 @@ export async function changeTaskStatus(
     }
   }
 
+  // Unblock resume: when a task moves from Waiting → Todo (prep-phase unblock),
+  // the original 2-min buffer wake-up was already cancelled above. Immediately
+  // enqueue so prep resumes without waiting for a wake-up that will never come.
+  if (
+    status === "Todo" &&
+    current.status === "Waiting" &&
+    !current.schedule
+  ) {
+    await enqueueTask({ taskId, workspaceId, userId });
+  }
+
   // Auto-start execution when task moves to Ready
   if (status === "Ready") {
     // If this transition is skipping ahead of a pending scheduled wake-up
@@ -405,11 +416,14 @@ export async function markTaskInProcess(
   jobId?: string,
 ): Promise<Task> {
   const existing = await prisma.task.findUnique({ where: { id } });
+  // Preserve the current phase — prep tasks should stay in prep even while
+  // Working, so the agent context still knows it's planning, not executing.
+  const currentPhase = existing ? getTaskPhase(existing) : "execute";
   return prisma.task.update({
     where: { id },
     data: {
       status: "Working",
-      metadata: setTaskPhaseInMetadata(existing?.metadata ?? null, "execute"),
+      metadata: setTaskPhaseInMetadata(existing?.metadata ?? null, currentPhase),
       ...(jobId && { jobId }),
     },
   });

@@ -5,7 +5,6 @@ import {
   getTaskById,
   updateTaskConversationIds,
 } from "~/services/task.server";
-import { getTaskPhase } from "~/services/task.phase";
 import { getPageContentAsHtml } from "~/services/hocuspocus/content.server";
 import { logger } from "~/services/logger.service";
 import { env } from "~/env.server";
@@ -39,14 +38,7 @@ export async function processTask(payload: TaskPayload): Promise<TaskResult> {
     const task = await getTaskById(taskId);
     if (!task) throw new Error(`Task ${taskId} not found`);
 
-    // Only flip status to Working when we're actually executing. When this
-    // handler runs for a buffer-expiry (startPrepFromBuffer), the task should
-    // stay in Todo so the agent's prep rules engage via phase=prep. The agent
-    // will transition to Waiting or Ready via its normal tool calls.
-    const phase = getTaskPhase(task);
-    if (phase === "execute") {
-      await markTaskInProcess(taskId);
-    }
+    await markTaskInProcess(taskId);
 
     const intent = (task.pageId ? await getPageContentAsHtml(task.pageId) : null) ?? task.title;
 
