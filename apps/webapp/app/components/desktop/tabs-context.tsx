@@ -3,6 +3,7 @@ import React, {
   useCallback,
   useContext,
   useEffect,
+  useRef,
   useState,
 } from "react";
 import { useLocation, useNavigate } from "@remix-run/react";
@@ -90,6 +91,7 @@ export function DesktopTabsProvider({
   const [tabs, setTabs] = useState<Tab[]>([]);
   const [activeTabId, setActiveTabId] = useState<string | null>(null);
   const [initialized, setInitialized] = useState(false);
+  const activeTabIdRef = useRef<string | null>(null);
 
   // Initialize from localStorage (client-only)
   useEffect(() => {
@@ -123,20 +125,29 @@ export function DesktopTabsProvider({
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
-  // Sync active tab path + icon on navigation (title comes from document.title observer)
+  // Keep ref in sync so the location effect always has the latest activeTabId
+  // without re-running when activeTabId changes (which would stamp the wrong icon).
   useEffect(() => {
-    if (!initialized || !activeTabId) return;
+    activeTabIdRef.current = activeTabId;
+  }, [activeTabId]);
+
+  // Sync active tab path + icon on navigation (title comes from document.title observer).
+  // Only depends on location so a tab switch doesn't trigger this before navigation commits.
+  useEffect(() => {
+    if (!initialized || !activeTabIdRef.current) return;
+    const id = activeTabIdRef.current;
     const currentPath = location.pathname + location.search;
     const icon = getIconFromPath(location.pathname);
 
     setTabs((prev) => {
       const updated = prev.map((tab) =>
-        tab.id === activeTabId ? { ...tab, path: currentPath, icon } : tab,
+        tab.id === id ? { ...tab, path: currentPath, icon } : tab,
       );
-      persistTabs(updated, activeTabId);
+      persistTabs(updated, id);
       return updated;
     });
-  }, [location, initialized, activeTabId]);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [location, initialized]);
 
   // Sync active tab title from document.title whenever Remix updates it
   useEffect(() => {
@@ -160,8 +171,6 @@ export function DesktopTabsProvider({
 
     const observer = new MutationObserver(sync);
     observer.observe(titleEl, { childList: true, characterData: true, subtree: true });
-    // Sync immediately in case title is already set
-    sync();
 
     return () => observer.disconnect();
   }, [initialized, activeTabId]);

@@ -1,4 +1,4 @@
-import { Outlet, useLocation, useNavigate, useParams } from "@remix-run/react";
+import { Outlet, useLocation, useNavigate, useNavigation, useParams } from "@remix-run/react";
 import { Download, Plus } from "lucide-react";
 import { PageHeader } from "~/components/common/page-header";
 import { LogOptions } from "~/components/logs/log-options";
@@ -6,10 +6,12 @@ import { LogOptions } from "~/components/logs/log-options";
 export default function MemoryLayout() {
   const location = useLocation();
   const navigate = useNavigate();
+  const navigation = useNavigation();
 
-  const isGraph = location.pathname.includes("/home/memory/graph");
-  const isDocuments = location.pathname.includes("/home/memory/documents");
-  const isLabels = location.pathname.includes("/home/memory/labels");
+  const activePath = navigation.location?.pathname ?? location.pathname;
+  const isGraph = activePath.includes("/home/memory/graph");
+  const isDocuments = activePath.includes("/home/memory/documents");
+  const isLabels = activePath.includes("/home/memory/labels");
   const params = useParams();
 
   const tabs = [

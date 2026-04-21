@@ -24,7 +24,10 @@ import { SelectionBubble } from "~/components/editor/selection-bubble";
 import { ConversationParagraph } from "~/components/editor/extensions/conversation-paragraph-extension";
 import { ConversationPopover } from "~/components/editor/conversation-popover";
 import { useButlerComments } from "~/components/editor/hooks/use-butler-comments";
-import { WidgetNode, WidgetContext } from "~/components/editor/extensions/widget-node-extension";
+import {
+  WidgetNode,
+  WidgetContext,
+} from "~/components/editor/extensions/widget-node-extension";
 import type { WidgetOption } from "~/components/overview/types";
 
 const lowlight = createLowlight(all);
@@ -77,7 +80,7 @@ function buildExtensions(
       code: {
         HTMLAttributes: {
           class: cx(
-            "rounded bg-grayAlpha-50 text-[#BF4594] px-1.5 py-1 font-mono font-medium",
+            "rounded bg-grayAlpha-50 text-muted-foreground border border-border px-1.5 py-0 font-mono",
           ),
           spellcheck: "false",
         },
@@ -158,14 +161,15 @@ function EditorInner({
     [pageId, isToday, butlerName, ydoc, parentTaskId, widgetCtx?.widgetOptions],
   );
 
-  const editor = useEditor({
-    extensions,
-    editorProps: {
+  // Memoize editorProps so TipTap v3's compareOptions doesn't call setOptions on
+  // every render. setActiveConversation is a stable setState reference from React.
+  const editorProps = useMemo(
+    () => ({
       attributes: {
         class: "prose prose-sm focus:outline-none max-w-full py-1",
         style: `min-height: ${minHeight}`,
       },
-      handleClick(view, pos) {
+      handleClick(view: any, pos: number) {
         const $pos = view.state.doc.resolve(pos);
         for (let depth = $pos.depth; depth > 0; depth--) {
           const node = $pos.node(depth);
@@ -188,7 +192,14 @@ function EditorInner({
         setActiveConversation(null);
         return false;
       },
-    },
+    }),
+    // minHeight rarely changes; setActiveConversation is a stable setState ref
+    [minHeight],
+  );
+
+  const editor = useEditor({
+    extensions,
+    editorProps,
   });
 
   const { resolveComment } = useButlerComments(ydoc, pageId);
@@ -244,14 +255,28 @@ export function PageEditor({
 
   useEffect(() => {
     const doc = new Y.Doc();
-    new IndexeddbPersistence(pageId, doc);
+    // Wait for IndexedDB to finish its initial sync before mounting the editor.
+    // Using the 'synced' event prevents the editor from starting with empty
+    // content and then receiving an IndexedDB update that rebuilds the entire
+    // ProseMirror docView (which destroys all node views and resets the cursor).
+    let destroyed = false;
+    const idb = new IndexeddbPersistence(pageId, doc);
+    const onSynced = () => {
+      if (!destroyed) setYdoc(doc);
+    };
+    // 'synced' fires when IndexedDB has loaded the stored state. Fall back to a
+    // short timer in case the event never fires (e.g. fresh doc with no data).
+    idb.on("synced", onSynced);
+    const fallback = setTimeout(() => {
+      if (!destroyed) setYdoc(doc);
+    }, 300);
+
     const providerOptions: ConstructorParameters<typeof HocuspocusProvider>[0] =
       sharedSocket
         ? {
             websocketProvider: sharedSocket,
             name: pageId,
             document: doc,
-            forceSyncInterval: 10_000,
             token: collabToken,
             onConnect: () => console.log("connected"),
           }
@@ -265,9 +290,10 @@ export function PageEditor({
     providerRef.current = new HocuspocusProvider(providerOptions);
     if (sharedSocket) providerRef.current.attach();
 
-    const t = setTimeout(() => setYdoc(doc), 50);
     return () => {
-      clearTimeout(t);
+      destroyed = true;
+      clearTimeout(fallback);
+      idb.off("synced", onSynced);
       providerRef.current?.destroy();
       doc.destroy();
       setYdoc(null);

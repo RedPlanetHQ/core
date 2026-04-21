@@ -31,7 +31,7 @@ import {
   describeAgentError,
   type MessageEntry,
 } from "~/services/agent/context-window";
-import { appendFileSync } from "fs";
+
 import { RequestContext } from "@mastra/core/request-context";
 const ChatRequestSchema = z.object({
   message: z
@@ -129,21 +129,10 @@ const { loader, action } = createHybridActionApiRoute(
         const role =
           history.role ?? (history.userType === "Agent" ? "assistant" : "user");
         const normalized = normalizeParts(history.parts);
-        const parts = (
+        const parts =
           role === "assistant"
             ? normalized.filter((p: any) => p.type === "text")
-            : normalized
-        ).map((p: any) => {
-          if (!p?.providerMetadata?.openai) return p;
-          const { openai: _openai, ...restMeta } = p.providerMetadata;
-          const cleaned = { ...p };
-          if (Object.keys(restMeta).length > 0) {
-            cleaned.providerMetadata = restMeta;
-          } else {
-            delete cleaned.providerMetadata;
-          }
-          return cleaned;
-        });
+            : normalized;
         return { parts, role, id: history.id };
       },
     );

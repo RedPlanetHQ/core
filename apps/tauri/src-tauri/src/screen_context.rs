@@ -316,7 +316,7 @@ fn send_episode(app_name: &str, text: &str, session_id: &str) {
         .set("Content-Type", "application/json")
         .send_json(body)
     {
-        eprintln!("screen_context: failed to send episode: {}", e);
+        log::error!("screen_context: failed to send episode: {}", e);
     }
 }
 
@@ -362,6 +362,8 @@ pub fn start_polling(settings: Arc<Mutex<ScreenContextSettings>>) {
                         continue;
                     }
                 }
+
+                log::info!("[screen_context] capturing accessibility for allowed app: {}", app_name);
 
                 // Manage observer per PID
                 if pid != observed_pid {

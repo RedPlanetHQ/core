@@ -204,7 +204,7 @@ Use tools FIRST (gather_context, get_skill), THEN output the JSON ActionPlan. No
   "updateTasks": [
     {
       "taskId": "id of the task to update",
-      "changes": { "status": "Done", "description": "results..." }
+      "changes": { "status": "Review" }
     }
   ],
   "silentActions": [

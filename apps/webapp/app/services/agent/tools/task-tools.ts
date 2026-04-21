@@ -501,10 +501,10 @@ REPARENTING: Pass newParentId to move a task under a different parent (or null t
       inputSchema: z.object({
         taskId: z.string().describe("The task ID"),
         status: z
-          .enum(["Todo", "Waiting", "Ready", "Working", "Review"])
+          .enum(["Waiting", "Working", "Review"])
           .optional()
           .describe(
-            "New status. To approve a Waiting task and move it to Ready, use unblock_task instead.",
+            "New status. Review is your terminal state — once set, stop. The user will move it to Done. To approve a Waiting task, use unblock_task instead.",
           ),
         title: z.string().optional().describe("Updated title"),
         description: z
@@ -590,7 +590,9 @@ REPARENTING: Pass newParentId to move a task under a different parent (or null t
           ) {
             await updateScheduledTask(taskId, workspaceId, {
               title,
-              description,
+              // Never update description for recurring tasks — it pollutes the
+              // next run's context. Results go via send_message.
+              description: isRecurring ? undefined : description,
               schedule,
               channel: updateChannel,
               isActive,
@@ -661,7 +663,7 @@ REPARENTING: Pass newParentId to move a task under a different parent (or null t
                 );
               } catch (err) {
                 const msg = err instanceof Error ? err.message : String(err);
-                return `Status change rejected: ${msg}. Only the user can move a task to Done, and phase transitions must go through Ready (not Working directly).`;
+                return `Status change rejected: ${msg}. Review is your final state — stop here. The user will move it to Done.`;
               }
             }
           }
@@ -669,7 +671,8 @@ REPARENTING: Pass newParentId to move a task under a different parent (or null t
           const parts = [];
           if (status) parts.push(`status → ${status}`);
           if (title) parts.push(`title updated`);
-          if (description !== undefined) parts.push(`description updated`);
+          if (description !== undefined && !isRecurring) parts.push(`description updated`);
+          if (description !== undefined && isRecurring) parts.push(`description skipped (recurring task — use send_message for results)`);
           if (schedule) parts.push(`schedule updated`);
           if (isActive !== undefined)
             parts.push(isActive ? "resumed" : "paused");
@@ -727,9 +730,7 @@ REPARENTING: Pass newParentId to move a task under a different parent (or null t
               userId,
               "user",
             );
-            return phase === "prep"
-              ? `Task "${task.title}" unblocked and moved back to Todo (prep phase continues). Reason appended to description.`
-              : `Task "${task.title}" approved and moved to Ready. Reason appended to description.`;
+            return `Task "${task.title}" unblocked. I started working on it, I will return back once done.`;
           } catch (error) {
             return `Failed to unblock task: ${error instanceof Error ? error.message : "Unknown error"}`;
           }

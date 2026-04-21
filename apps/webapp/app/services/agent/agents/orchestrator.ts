@@ -15,7 +15,10 @@ import { z } from "zod";
 import { runWebExplorer } from "../explorers";
 import { logger } from "~/services/logger.service";
 import { toRouterString } from "~/lib/model.server";
-import { getDefaultChatModelId, type ModelConfig } from "~/services/llm-provider.server";
+import {
+  getDefaultChatModelId,
+  type ModelConfig,
+} from "~/services/llm-provider.server";
 import { type SkillRef } from "../types";
 import { type OrchestratorTools, DirectOrchestratorTools } from "../executors";
 
@@ -273,7 +276,10 @@ export async function createOrchestratorAgent(
 ): Promise<CreateOrchestratorAgentResult> {
   const executor = executorTools ?? new DirectOrchestratorTools();
 
-  const connectedIntegrations = await executor.getIntegrations(userId, workspaceId);
+  const connectedIntegrations = await executor.getIntegrations(
+    userId,
+    workspaceId,
+  );
 
   const integrationsList = connectedIntegrations
     .map(

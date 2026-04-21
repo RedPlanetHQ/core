@@ -105,7 +105,7 @@ const ConversationItemComponent = ({
       return (
         <EditorContent
           editor={editor}
-          className="editor-container"
+          className={cn("editor-container", !isUser && "mt-2")}
           defaultValue={
             "content" in part
               ? String((part as { content?: unknown }).content ?? "")

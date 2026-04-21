@@ -3,7 +3,7 @@ import {
   createHybridLoaderApiRoute,
   createHybridActionApiRoute,
 } from "~/services/routeBuilders/apiBuilder.server";
-import { getTaskById, updateTask } from "~/services/task.server";
+import { getTaskById, updateTask, deleteTask } from "~/services/task.server";
 import { detectAndApplyRecurrence } from "~/services/tasks/recurrence.server";
 import { getPageContentAsHtml } from "~/services/hocuspocus/content.server";
 import type { TaskStatus } from "@prisma/client";
@@ -59,6 +59,11 @@ const { action } = createHybridActionApiRoute(
     const task = await getTaskById(taskId);
     if (!task || task.workspaceId !== authentication.workspaceId) {
       return json({ error: "Not found" }, { status: 404 });
+    }
+
+    if (request.method === "DELETE") {
+      await deleteTask(taskId, authentication.workspaceId as string);
+      return json({ ok: true });
     }
 
     const body = (await request.json()) as {
