@@ -110,18 +110,35 @@ export async function noStreamProcess(
     );
   }
 
-  const historyMessages: MessageEntry[] = conversationHistory.map(
-    (history: any) => {
+  const normalizeParts = (parts: any[] | undefined) =>
+    (Array.isArray(parts) ? parts : []).filter(Boolean);
+
+  const hasNonEmptyParts = (parts: any[] | undefined) =>
+    normalizeParts(parts).length > 0;
+
+  const historyMessages: MessageEntry[] = conversationHistory
+    .map((history: any) => {
       const role =
         history.role ?? (history.userType === "Agent" ? "assistant" : "user");
-      // For assistant messages, only inject text parts — tool call internals bloat context
-      const parts =
+      const normalized = normalizeParts(history.parts);
+      const parts = (
         role === "assistant"
-          ? (history.parts ?? []).filter((p: any) => p.type === "text")
-          : history.parts;
+          ? normalized.filter((p: any) => p.type === "text")
+          : normalized
+      ).map((p: any) => {
+        if (!p?.providerMetadata?.openai) return p;
+        const { openai: _openai, ...restMeta } = p.providerMetadata;
+        const cleaned = { ...p };
+        if (Object.keys(restMeta).length > 0) {
+          cleaned.providerMetadata = restMeta;
+        } else {
+          delete cleaned.providerMetadata;
+        }
+        return cleaned;
+      });
       return { parts, role, id: history.id };
-    },
-  );
+    })
+    .filter((m) => hasNonEmptyParts(m.parts));
 
   const message = body.message?.parts[0].text;
   let finalMessages: MessageEntry[];
