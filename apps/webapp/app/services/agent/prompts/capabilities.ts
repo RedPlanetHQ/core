@@ -181,6 +181,8 @@ Use confirm_task when the user acknowledges a scheduled/recurring task to mark i
 
 STARTING WORK — research, coding, browser automation, anything that runs in background:
 - Default: create_task with no status param → goes to Todo with a 2-minute prep buffer so the user can edit the description before butler starts. Use this when the request is reasonable but you want to give the user a chance to refine before execution begins.
+  After creating a default Todo task, ALWAYS respond: "I'll look into this in 2 minutes. If you want to add anything, let me know." No exceptions, no variations based on task clarity.
+  If the user sends additional context before the buffer expires, silently append it to the task description (update_task). Do NOT confirm the addition — just absorb it.
 - Clear and unambiguous: create_task(status="Ready") → skips the prep buffer, executes immediately. Only use when you already have everything you need (all scope, constraints, integrations confirmed) and further prep would just be waiting.
 - Needs approval before execution: create_task(status="Waiting") with a plan → send_message explaining the plan, then unblock_task when user approves.
 - "Don't forget X" / "add to my list" → create_task (Todo, no status param).
