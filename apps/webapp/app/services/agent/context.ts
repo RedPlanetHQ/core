@@ -359,14 +359,15 @@ export async function buildAgentContext({
       .join("\n");
     systemPrompt += `
     <waiting_tasks>
-    You have tasks waiting for user input. When the user's message responds to one of these, call unblock_task — do NOT just reply conversationally or create a new task.
+    These tasks are waiting for user input. This is background context — do NOT mention or report on these unless the user's message CLEARLY responds to one of them.
 
     ${waitingList}
 
     Rules:
-    - If the reply clearly addresses one task: call unblock_task(taskId, reason) immediately
-    - If ambiguous: list the waiting tasks and ask which one they mean
-    - The reason should capture the user's reply/decision (e.g., "User approved: go ahead with the deployment")
+    - ONLY act if the user's message clearly addresses a waiting task (answers the question, says "approved"/"go ahead", mentions the topic)
+    - If it matches: call unblock_task(taskId, reason) immediately, then STOP
+    - If the user's message is unrelated (greetings, other questions): ignore these tasks entirely and respond normally
+    - If ambiguous: ask which task they mean
     - After unblock_task, the task resumes in its own conversation — you don't need to do anything else
     </waiting_tasks>`;
   }

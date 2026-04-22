@@ -730,7 +730,7 @@ REPARENTING: Pass newParentId to move a task under a different parent (or null t
               userId,
               "user",
             );
-            return `Task "${task.title}" unblocked. I started working on it, I will return back once done.`;
+            return `Task "${task.title}" unblocked and resumed in its own conversation. Tell the user it's being worked on. Do NOT take any further action on this task — it handles itself from here.`;
           } catch (error) {
             return `Failed to unblock task: ${error instanceof Error ? error.message : "Unknown error"}`;
           }

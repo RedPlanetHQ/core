@@ -5,7 +5,7 @@
  * (same flow as web chat).
  */
 
-import { type UserTypeEnum } from "@core/types";
+import { UserTypeEnum } from "@core/types";
 import { prisma } from "~/db.server";
 import { type ChannelType } from "~/services/agent/prompts/channel-formats";
 import { noStreamProcess } from "~/services/agent/no-stream-process";
@@ -65,6 +65,7 @@ export async function getOrCreateChannelConversation(
   message: string,
   channel: string,
   channelMetadata?: Record<string, string>,
+  userType?: UserTypeEnum,
 ): Promise<string> {
   const sessionId = channelMetadata?.sessionId;
 
@@ -85,6 +86,7 @@ export async function getOrCreateChannelConversation(
       parts: [{ text: message, type: "text" }],
       source: channel,
       asyncJobId: sessionId,
+      userType: userType ?? UserTypeEnum.User,
     });
 
     return conversation.conversationId;
@@ -117,6 +119,7 @@ export async function getOrCreateChannelConversation(
     message,
     parts: [{ text: message, type: "text" }],
     source: channel,
+    userType: userType ?? UserTypeEnum.User,
     ...(title ? { title } : {}),
   });
 

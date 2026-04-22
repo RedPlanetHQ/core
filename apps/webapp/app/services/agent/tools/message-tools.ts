@@ -160,6 +160,8 @@ export function getMessageTools(
                 workspaceId,
                 message,
                 channelType,
+                undefined,
+                UserTypeEnum.Agent,
               );
             await upsertConversationHistory(
               crypto.randomUUID(),
