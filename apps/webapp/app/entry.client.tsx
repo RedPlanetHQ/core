@@ -9,18 +9,31 @@ import { RemixBrowser, useLocation, useMatches } from "@remix-run/react";
 import { startTransition, StrictMode, useEffect } from "react";
 import { hydrateRoot } from "react-dom/client";
 
+// Tauri webview loads the remote webapp from https://app.getcore.me and talks
+// to the Rust side via `fetch("ipc://localhost/...")`. Sentry's browser tracing
+// integration monkey-patches window.fetch; on that cross-origin ipc:// fetch,
+// WKWebView's access-control check fires and Sentry's wrapper crashes on a
+// minified variable ("Can't find variable: i"), which kills the IPC bridge
+// before Tauri can fall back to postMessage. Disable fetch tracing in Tauri
+// — error reporting still works.
+const isTauri =
+  typeof window !== "undefined" &&
+  !!(window as unknown as { __TAURI_INTERNALS__?: unknown }).__TAURI_INTERNALS__;
+
 init({
   dsn: (window as unknown as Record<string, string>).sentryDsn,
-  tracesSampleRate: 1,
+  tracesSampleRate: isTauri ? 0 : 1,
   enableLogs: true,
 
-  integrations: [
-    browserTracingIntegration({
-      useEffect,
-      useLocation,
-      useMatches,
-    }),
-  ],
+  integrations: isTauri
+    ? []
+    : [
+        browserTracingIntegration({
+          useEffect,
+          useLocation,
+          useMatches,
+        }),
+      ],
 
   sendDefaultPii: true,
 });
