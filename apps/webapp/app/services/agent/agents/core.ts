@@ -176,9 +176,11 @@ export async function createCoreTools(
         source,
       );
 
-  // Message tools (only in trigger or background task contexts)
+  // Message tools (only in trigger or background task contexts — NOT in webapp
+  // interactive sessions where the user is already reading the streamed response)
+  const isWebappInteractive = source === "core";
   const messageTools =
-    isBackgroundExecution || triggerChannel
+    !isWebappInteractive && (isBackgroundExecution || triggerChannel)
       ? getMessageTools({
           workspaceId,
           userId,

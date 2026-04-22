@@ -25,7 +25,6 @@ import {
 } from "~/services/agent/mastra-stream.server";
 import { type OutputProcessor, type Processor } from "@mastra/core/processors";
 import { patchArgsDeep } from "~/services/agent/tool-args-patch-processor";
-import { checkWaitingTaskReply } from "~/services/coding-task.server";
 import {
   selectModelMessages,
   describeAgentError,
@@ -106,19 +105,6 @@ const { loader, action } = createHybridActionApiRoute(
         );
       }
 
-      // Check if this conversation is linked to a Waiting task — if so,
-      // the user's reply unblocks it. Fire and forget.
-      if (incomingUserText) {
-        checkWaitingTaskReply(
-          body.id,
-          authentication.workspaceId as string,
-          authentication.userId,
-        ).catch((err) =>
-          logger.error("[conversation] checkWaitingTaskReply failed", {
-            error: String(err),
-          }),
-        );
-      }
     }
 
     // -----------------------------------------------------------------------
