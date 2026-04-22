@@ -225,8 +225,8 @@ export async function noStreamProcess(
     async processInput({ messages }: any) {
       return messages;
     },
-    async processOutputStep({ messages }: any) {
-      const converted = convertMessages(messages).to("AIV5.UI") as any[];
+    async processOutputResult({ messages }: any) {
+      const converted = convertMessages(messages).to("AIV6.UI") as any[];
       const lastMsg = converted[converted.length - 1];
       capturedParts = lastMsg?.parts ?? [];
       capturedText = capturedParts
