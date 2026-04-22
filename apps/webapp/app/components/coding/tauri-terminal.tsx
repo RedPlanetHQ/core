@@ -127,6 +127,13 @@ export function TauriTerminal({
 
   useEffect(() => {
     let mounted = true;
+    // Local bookkeeping so cleanup works even if setup() is still mid-await.
+    // Under React StrictMode, useEffect fires twice; without this, the first
+    // setup's listeners/terminal leak past its cleanup and we end up with two
+    // xterm instances + duplicate pty://data listeners writing every chunk twice.
+    const localUnlisteners: Array<() => void> = [];
+    let localTerm: import("@xterm/xterm").Terminal | null = null;
+    let localRo: ResizeObserver | null = null;
 
     async function setup() {
       if (!containerRef.current) return;
@@ -156,6 +163,11 @@ export function TauriTerminal({
       const fitAddon = new FitAddon();
       term.loadAddon(fitAddon);
 
+      if (!mounted) {
+        term.dispose();
+        return;
+      }
+      localTerm = term;
       term.open(containerRef.current);
 
       // Wait for font to be ready before measuring character dimensions
@@ -173,6 +185,11 @@ export function TauriTerminal({
         };
         check();
       });
+      if (!mounted) {
+        term.dispose();
+        localTerm = null;
+        return;
+      }
       fitAddon.fit();
       term.focus();
 
@@ -215,8 +232,20 @@ export function TauriTerminal({
       );
 
       [dataUnsub, exitUnsub, errorUnsub, sessionIdUnsub].forEach((u) => {
-        if (u) unlistenersRef.current.push(u);
+        if (!u) return;
+        if (!mounted) {
+          // Cleanup already ran while we were awaiting listen registration —
+          // unsubscribe immediately so this setup's listeners don't leak.
+          u();
+        } else {
+          localUnlisteners.push(u);
+          unlistenersRef.current.push(u);
+        }
       });
+      if (!mounted) {
+        term.dispose();
+        return;
+      }
 
       term.onData((data) => {
         invoke("write_pty", { sessionDbId, data });
@@ -236,27 +265,36 @@ export function TauriTerminal({
         });
       });
       if (containerRef.current) ro.observe(containerRef.current);
+      localRo = ro;
       resizeObserverRef.current = ro;
 
-      // Spawn
+      // Spawn — remember what dims the child was started with, so we only
+      // send SIGWINCH after spawn if something actually changed. A redundant
+      // post-spawn resize forces TUIs (Claude Code, etc.) to reflow while
+      // they've already drawn their first frame, orphaning spinner lines.
+      const spawnCols = term.cols || 80;
+      const spawnRows = term.rows || 24;
       try {
         await invoke("spawn_pty", {
           sessionDbId,
           agent,
           dir,
           resumeSessionId: initialExternalSessionId ?? null,
-          cols: term.cols || 80,
-          rows: term.rows || 24,
+          cols: spawnCols,
+          rows: spawnRows,
         });
-        // Re-fit after spawn in case the panel settled further, then sync PTY dims
+        // Catch any dim shift that happened while spawn was in flight
+        // (react-resizable-panels sometimes settles late).
         requestAnimationFrame(() => {
           if (!mounted) return;
           fitAddon.fit();
-          invoke("resize_pty", {
-            sessionDbId,
-            cols: term.cols,
-            rows: term.rows,
-          });
+          if (term.cols !== spawnCols || term.rows !== spawnRows) {
+            invoke("resize_pty", {
+              sessionDbId,
+              cols: term.cols,
+              rows: term.rows,
+            });
+          }
         });
       } catch (err) {
         if (mounted) {
@@ -270,11 +308,16 @@ export function TauriTerminal({
 
     return () => {
       mounted = false;
-      unlistenersRef.current.forEach((u) => u());
-      unlistenersRef.current = [];
-      resizeObserverRef.current?.disconnect();
-      termRef.current?.dispose();
-      termRef.current = null;
+      // Unsubscribe this setup's listeners even if they were never pushed to
+      // the shared ref (e.g. setup resolved after cleanup under StrictMode).
+      localUnlisteners.forEach((u) => u());
+      unlistenersRef.current = unlistenersRef.current.filter(
+        (u) => !localUnlisteners.includes(u),
+      );
+      localRo?.disconnect();
+      if (resizeObserverRef.current === localRo) resizeObserverRef.current = null;
+      localTerm?.dispose();
+      if (termRef.current === localTerm) termRef.current = null;
     };
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [sessionDbId]);

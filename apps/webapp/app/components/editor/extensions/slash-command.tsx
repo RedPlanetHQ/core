@@ -189,14 +189,17 @@ export const buildSlashCommand = (widgetOptions: WidgetOption[] = []) => {
       editor
         .chain()
         .focus()
-        .insertContent({
-          type: "widget",
-          attrs: {
-            widgetSlug: opt.widgetSlug,
-            integrationAccountId: opt.integrationAccountId,
-            config: null,
+        .insertContent([
+          {
+            type: "widget",
+            attrs: {
+              widgetSlug: opt.widgetSlug,
+              integrationAccountId: opt.integrationAccountId,
+              config: null,
+            },
           },
-        })
+          { type: "paragraph" },
+        ])
         .run();
     },
   }));

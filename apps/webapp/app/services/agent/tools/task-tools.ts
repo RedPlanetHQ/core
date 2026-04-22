@@ -829,10 +829,14 @@ REPARENTING: Pass newParentId to move a task under a different parent (or null t
                 return "Max reschedules reached (10). Mark the task as Waiting and notify the user that the session timed out.";
               }
 
-              // Increment reschedule count in metadata
+              const delayMs = minutesFromNow * 60_000;
+              const nextRunAt = new Date(Date.now() + delayMs);
+
               await prisma.task.update({
                 where: { id: currentTaskId },
                 data: {
+                  nextRunAt,
+                  isActive: true,
                   metadata: {
                     ...metadata,
                     rescheduleCount: rescheduleCount + 1,
@@ -840,8 +844,6 @@ REPARENTING: Pass newParentId to move a task under a different parent (or null t
                 },
               });
 
-              // Enqueue delayed re-execution
-              const delayMs = minutesFromNow * 60_000;
               await enqueueTask(
                 { taskId: currentTaskId, workspaceId, userId },
                 delayMs,

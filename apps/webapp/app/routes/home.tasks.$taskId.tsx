@@ -337,9 +337,27 @@ function TaskDetailLayout() {
   const activePath = navigation.location?.pathname ?? location.pathname;
   const isRunsTab = activePath.endsWith("/runs");
   const isCodingTab = activePath.endsWith("/coding");
-  const isScheduled = task.isActive && (task.schedule || task.nextRunAt);
+  const isRecurring =
+    !!task.schedule && (task.occurrenceCount ?? 0) > 1;
 
   const toggleTaskChat = () => setTaskChatOpen((v) => !v);
+
+  React.useEffect(() => {
+    if (isRunsTab && taskChatOpen) {
+      setTaskChatOpen(false);
+    }
+  }, [isRunsTab]);
+
+  React.useEffect(() => {
+    const handler = (e: KeyboardEvent) => {
+      if ((e.metaKey || e.ctrlKey) && e.key.toLowerCase() === "j") {
+        e.preventDefault();
+        setTaskChatOpen((v) => !v);
+      }
+    };
+    window.addEventListener("keydown", handler);
+    return () => window.removeEventListener("keydown", handler);
+  }, []);
 
   return (
     <CodingActionsProvider>
@@ -364,7 +382,7 @@ function TaskDetailLayout() {
                   },
                 ]
               : []),
-            ...(isScheduled
+            ...(isRecurring
               ? [
                   {
                     label: "Runs",

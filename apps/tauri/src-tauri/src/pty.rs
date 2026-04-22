@@ -192,14 +192,20 @@ pub fn spawn_pty(
     std::thread::spawn(move || {
         let mut reader = reader;
         let mut buf = [0u8; 4096];
-        let mut bytes_read: usize = 0;
+        // Holds a trailing partial UTF-8 codepoint split across a read()
+        // boundary. Without this, from_utf8_lossy replaces the split bytes
+        // with U+FFFD, which is rendered as 2 cells in xterm where the TUI's
+        // diff-renderer expects 1 — every cursor-relative erase after that
+        // lands off by one cell, leaving stale spinner/status lines behind.
+        let mut pending: Vec<u8> = Vec::new();
+        let emit_event = format!("pty://data/{}", db_id_reader);
         loop {
             match reader.read(&mut buf) {
                 Ok(0) => break,
                 Ok(n) => {
                     if cancelled_reader.load(Ordering::Relaxed) { break; }
-                    bytes_read += n;
-                    // Append to scrollback buffer, trimming if over the cap
+                    // Always append raw bytes to scrollback — replay on
+                    // reconnect converts the full contiguous buffer once.
                     {
                         let mut b = buffer_reader.lock().unwrap();
                         b.extend_from_slice(&buf[..n]);
@@ -208,14 +214,36 @@ pub fn spawn_pty(
                             b.drain(..drain);
                         }
                     }
-                    let data = String::from_utf8_lossy(&buf[..n]).to_string();
-                    let _ = app_reader.emit(&format!("pty://data/{}", db_id_reader), data);
+                    pending.extend_from_slice(&buf[..n]);
+                    let emit_up_to = match std::str::from_utf8(&pending) {
+                        Ok(_) => pending.len(),
+                        Err(e) => match e.error_len() {
+                            // Truncated trailing codepoint — hold the tail.
+                            None => e.valid_up_to(),
+                            // Genuinely invalid bytes — emit everything lossy
+                            // rather than stalling the stream.
+                            Some(_) => pending.len(),
+                        },
+                    };
+                    if emit_up_to > 0 {
+                        let data = String::from_utf8_lossy(&pending[..emit_up_to]).to_string();
+                        let _ = app_reader.emit(&emit_event, data);
+                        pending.drain(..emit_up_to);
+                    }
+                    // A real UTF-8 codepoint is ≤ 4 bytes; anything longer is
+                    // junk, flush it lossy so we don't accumulate forever.
+                    if pending.len() > 4 {
+                        let data = String::from_utf8_lossy(&pending).to_string();
+                        let _ = app_reader.emit(&emit_event, data);
+                        pending.clear();
+                    }
                 }
-                Err(e) => {
-                    let _ = e;
-                    break;
-                }
+                Err(_) => break,
             }
+        }
+        if !pending.is_empty() {
+            let data = String::from_utf8_lossy(&pending).to_string();
+            let _ = app_reader.emit(&emit_event, data);
         }
         if !cancelled_reader.load(Ordering::Relaxed) {
             let _ = app_reader.emit(&format!("pty://exit/{}", db_id_reader), ());

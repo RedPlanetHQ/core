@@ -28,7 +28,7 @@ export function ButlerRunBadge({
       <span className="text-muted-foreground">
         Butler · <span className="text-foreground">{formatRunTime(date)}</span>
         {isRecurring && (
-          <span className="text-muted-foreground"> · is recurring</span>
+          <span className="text-muted-foreground"> · recurring</span>
         )}
       </span>
     </Badge>
