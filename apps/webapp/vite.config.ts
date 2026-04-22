@@ -51,16 +51,15 @@ export default defineConfig({
 
   build: {
     sourcemap: true,
-  },
-
-  esbuild: {
-    // Disable local-identifier mangling only. Keeps syntax + whitespace
-    // minification (small bundle) but preserves variable names so the
-    // minifier can't clobber a reference the code depends on. Fixes a
-    // production-only "ReferenceError: Can't find variable: i" crash in
-    // @xterm/xterm@6.0.0's `requestMode` parser that appeared after a
-    // fresh install of esbuild/vite picked up a regression in identifier
-    // mangling. Dev mode was unaffected because Vite doesn't minify in dev.
-    minifyIdentifiers: false,
+    // Use terser instead of esbuild for production minification. @xterm/xterm
+    // @6.0.0's `requestMode` function relies on `var`-hoisting — it declares
+    // `var f, p;` AFTER the return statement and assigns to f/p inside the
+    // return expression. Esbuild's minifier mistakenly treats that `var` as
+    // unreachable dead code and strips it, leaving f/p as assignments to
+    // undeclared variables that crash in strict mode (xterm has
+    // "use strict"), surfacing as "ReferenceError: Can't find variable: i"
+    // (or r, or whatever letter the mangler picks that build). Terser
+    // preserves var-hoisting correctly per ES spec.
+    minify: "terser",
   },
 });

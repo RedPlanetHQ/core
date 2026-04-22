@@ -16,7 +16,6 @@
   },
   "dependencies": {
     "@ai-sdk/amazon-bedrock": "3.0.47",
-    "@tauri-apps/api": "^2.0.0",
     "@ai-sdk/anthropic": "^3.0.9",
     "@ai-sdk/azure": "3.0.50",
     "@ai-sdk/google": "^3.0.6",
@@ -83,6 +82,7 @@
     "@tailwindcss/container-queries": "^0.1.1",
     "@tailwindcss/postcss": "^4.1.7",
     "@tanstack/react-table": "^8.13.2",
+    "@tauri-apps/api": "^2.0.0",
     "@tiptap/core": "^3.21.0",
     "@tiptap/extension-code-block": "^3.21.0",
     "@tiptap/extension-code-block-lowlight": "^3.21.0",
@@ -240,6 +240,7 @@
     "prettier-plugin-tailwindcss": "^0.7.2",
     "tailwind-scrollbar": "^4.0.2",
     "tailwindcss": "4.1.18",
+    "terser": "^5.46.1",
     "tsx": "4.20.6",
     "typescript": "5.8.3",
     "vite": "^6.0.0",
