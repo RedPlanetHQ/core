@@ -50,6 +50,17 @@ export default defineConfig({
   },
 
   build: {
-    sourcemap: true
-  }
+    sourcemap: true,
+  },
+
+  esbuild: {
+    // Disable local-identifier mangling only. Keeps syntax + whitespace
+    // minification (small bundle) but preserves variable names so the
+    // minifier can't clobber a reference the code depends on. Fixes a
+    // production-only "ReferenceError: Can't find variable: i" crash in
+    // @xterm/xterm@6.0.0's `requestMode` parser that appeared after a
+    // fresh install of esbuild/vite picked up a regression in identifier
+    // mangling. Dev mode was unaffected because Vite doesn't minify in dev.
+    minifyIdentifiers: false,
+  },
 });
