@@ -54,6 +54,7 @@ pub fn capture_login_path() -> String {
 }
 
 fn emit_error(app: &AppHandle, db_id: &str, message: &str) {
+    log::error!("[pty] {} error: {}", db_id, message);
     let event = format!("pty://error/{}", db_id);
     let _ = app.emit(&event, serde_json::json!({ "message": message }));
 }
@@ -70,6 +71,16 @@ pub fn spawn_pty(
     login_path: State<SharedLoginPath>,
     app: AppHandle,
 ) -> Result<(), String> {
+    log::info!(
+        "[pty] spawn_pty request db_id={} agent={} dir={} resume={} size={}x{}",
+        session_db_id,
+        agent,
+        dir,
+        resume_session_id.as_deref().unwrap_or("<none>"),
+        cols,
+        rows
+    );
+
     // --- Reconnect / resume logic ---
     // If a PTY already exists for this session:
     //   - Still running → always reconnect (replay buffer). Never kill a live process
@@ -89,13 +100,27 @@ pub fn spawn_pty(
                 if !exited {
                     // PTY is still running — reconnect regardless of resume_session_id.
                     let buffer = handle.output_buffer.lock().unwrap().clone();
+                    log::info!(
+                        "[pty] {} reconnect to live PTY, replaying {} bytes",
+                        session_db_id,
+                        buffer.len()
+                    );
                     Action::Reconnect { buffer, emit_exit: false }
                 } else if resume_session_id.is_none() {
                     // PTY exited, no resume requested — replay buffer + exit event.
                     let buffer = handle.output_buffer.lock().unwrap().clone();
+                    log::info!(
+                        "[pty] {} reconnect to exited PTY, replaying {} bytes + exit",
+                        session_db_id,
+                        buffer.len()
+                    );
                     Action::Reconnect { buffer, emit_exit: true }
                 } else {
                     // PTY exited AND caller wants --resume — remove stale handle, spawn fresh.
+                    log::info!(
+                        "[pty] {} previous PTY exited, respawning with --resume",
+                        session_db_id
+                    );
                     handle.cancelled.store(true, Ordering::Relaxed);
                     let _ = handle.child.kill();
                     map.remove(&session_db_id);
@@ -103,6 +128,10 @@ pub fn spawn_pty(
                 }
             } else {
                 // Too old — kill and fall through to spawn
+                log::info!(
+                    "[pty] {} previous PTY aged out (>1h), respawning",
+                    session_db_id
+                );
                 handle.cancelled.store(true, Ordering::Relaxed);
                 let _ = handle.child.kill();
                 map.remove(&session_db_id);
@@ -132,9 +161,80 @@ pub fn spawn_pty(
     let agent_info = agents
         .iter()
         .find(|a| a.name == agent)
-        .ok_or_else(|| format!("Unknown agent: {}", agent))?;
+        .ok_or_else(|| {
+            let available: Vec<&str> = agents.iter().map(|a| a.name.as_str()).collect();
+            let msg = format!(
+                "Unknown agent: {} (available: {:?})",
+                agent, available
+            );
+            log::error!("[pty] {} {}", session_db_id, msg);
+            msg
+        })?;
 
     let path_str = login_path.0.lock().unwrap().clone();
+
+    // Build final args up front so we can log them before spawn.
+    let resolved_args: Vec<String> = if let Some(ref ext_id) = resume_session_id {
+        agent_info
+            .interactive_resume_args
+            .as_deref()
+            .unwrap_or(&agent_info.resume_args)
+            .iter()
+            .map(|a| a.replace("{sessionId}", ext_id))
+            .collect()
+    } else {
+        agent_info
+            .interactive_args
+            .as_deref()
+            .unwrap_or(&agent_info.args)
+            .iter()
+            .cloned()
+            .collect()
+    };
+
+    log::info!(
+        "[pty] {} spawning command={} args={:?} cwd={} PATH_len={} (first 200 chars: {})",
+        session_db_id,
+        agent_info.command,
+        resolved_args,
+        dir,
+        path_str.len(),
+        path_str.chars().take(200).collect::<String>()
+    );
+
+    // Sanity checks — log warnings but still attempt spawn so the underlying
+    // error surfaces in case the assumptions are wrong.
+    if !std::path::Path::new(&dir).exists() {
+        log::warn!(
+            "[pty] {} working directory does not exist: {}",
+            session_db_id, dir
+        );
+    }
+    if agent_info.command.contains('/') == false {
+        // relative command name — must be on PATH
+        let which = std::process::Command::new("which")
+            .arg(&agent_info.command)
+            .env("PATH", &path_str)
+            .output();
+        match which {
+            Ok(o) if o.status.success() => {
+                log::info!(
+                    "[pty] {} resolved {} -> {}",
+                    session_db_id,
+                    agent_info.command,
+                    String::from_utf8_lossy(&o.stdout).trim()
+                );
+            }
+            Ok(_) => log::warn!(
+                "[pty] {} `{}` not found on captured PATH",
+                session_db_id, agent_info.command
+            ),
+            Err(e) => log::warn!(
+                "[pty] {} failed to run `which {}`: {}",
+                session_db_id, agent_info.command, e
+            ),
+        }
+    }
 
     let pty_system = native_pty_system();
     let pair = pty_system
@@ -144,22 +244,15 @@ pub fn spawn_pty(
             pixel_width: 0,
             pixel_height: 0,
         })
-        .map_err(|e| format!("Failed to open PTY: {}", e))?;
+        .map_err(|e| {
+            let msg = format!("Failed to open PTY: {}", e);
+            log::error!("[pty] {} {}", session_db_id, msg);
+            msg
+        })?;
 
     let mut cmd = CommandBuilder::new(&agent_info.command);
-
-    if let Some(ref ext_id) = resume_session_id {
-        let resume_args = agent_info.interactive_resume_args.as_deref()
-            .unwrap_or(&agent_info.resume_args);
-        for arg in resume_args {
-            cmd.arg(arg.replace("{sessionId}", ext_id));
-        }
-    } else {
-        let args = agent_info.interactive_args.as_deref()
-            .unwrap_or(&agent_info.args);
-        for arg in args {
-            cmd.arg(arg);
-        }
+    for arg in &resolved_args {
+        cmd.arg(arg);
     }
 
     cmd.cwd(&dir);
@@ -171,6 +264,8 @@ pub fn spawn_pty(
         emit_error(&app, &session_db_id, &msg);
         msg
     })?;
+
+    log::info!("[pty] {} spawn succeeded, child pid live", session_db_id);
 
     let master = pair.master;
     let writer = master
@@ -199,10 +294,18 @@ pub fn spawn_pty(
         // lands off by one cell, leaving stale spinner/status lines behind.
         let mut pending: Vec<u8> = Vec::new();
         let emit_event = format!("pty://data/{}", db_id_reader);
+        let mut total_bytes_read: usize = 0;
         loop {
             match reader.read(&mut buf) {
-                Ok(0) => break,
+                Ok(0) => {
+                    log::info!(
+                        "[pty] {} reader EOF after {} bytes",
+                        db_id_reader, total_bytes_read
+                    );
+                    break;
+                }
                 Ok(n) => {
+                    total_bytes_read += n;
                     if cancelled_reader.load(Ordering::Relaxed) { break; }
                     // Always append raw bytes to scrollback — replay on
                     // reconnect converts the full contiguous buffer once.
@@ -238,7 +341,13 @@ pub fn spawn_pty(
                         pending.clear();
                     }
                 }
-                Err(_) => break,
+                Err(e) => {
+                    log::warn!(
+                        "[pty] {} reader error after {} bytes: {}",
+                        db_id_reader, total_bytes_read, e
+                    );
+                    break;
+                }
             }
         }
         if !pending.is_empty() {
@@ -246,6 +355,7 @@ pub fn spawn_pty(
             let _ = app_reader.emit(&emit_event, data);
         }
         if !cancelled_reader.load(Ordering::Relaxed) {
+            log::info!("[pty] {} emitting exit event", db_id_reader);
             let _ = app_reader.emit(&format!("pty://exit/{}", db_id_reader), ());
         }
     });
@@ -310,9 +420,28 @@ pub fn write_pty(
     let mut map = state.lock().unwrap();
     if let Some(handle) = map.get_mut(&session_db_id) {
         if let Err(e) = handle.writer.write_all(data.as_bytes()) {
-            emit_error(&app, &session_db_id, &format!("Write failed: {}", e));
+            // If the write fails, the child process likely exited — emit exit
+            // so the frontend shows "Session ended" rather than a write error.
+            let exit_status = handle.child.try_wait().ok().flatten();
+            match exit_status {
+                Some(status) => {
+                    log::warn!(
+                        "[pty] {} write failed because child exited (status={:?}): {}",
+                        session_db_id, status, e
+                    );
+                    let _ = app.emit(&format!("pty://exit/{}", session_db_id), ());
+                }
+                None => {
+                    log::error!(
+                        "[pty] {} write failed but child still running: {}",
+                        session_db_id, e
+                    );
+                    emit_error(&app, &session_db_id, &format!("Write failed: {}", e));
+                }
+            }
         }
     } else {
+        log::warn!("[pty] {} write_pty called but session not in map", session_db_id);
         emit_error(&app, &session_db_id, "Session not running");
     }
 }

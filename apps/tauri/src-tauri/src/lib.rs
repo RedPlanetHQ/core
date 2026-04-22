@@ -276,9 +276,13 @@ pub fn run() {
         Arc::new(Mutex::new(AuthState::default()));
     let pty_state: pty::PtyState =
         Arc::new(Mutex::new(HashMap::new()));
-    let login_path = pty::SharedLoginPath(
-        Arc::new(Mutex::new(pty::capture_login_path()))
+    let captured_path = pty::capture_login_path();
+    log::info!(
+        "[startup] captured login PATH ({} chars): {}",
+        captured_path.len(),
+        captured_path
     );
+    let login_path = pty::SharedLoginPath(Arc::new(Mutex::new(captured_path)));
 
     let pty_state_exit = pty_state.clone();
 
