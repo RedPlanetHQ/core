@@ -161,13 +161,23 @@ export function TauriTerminal({
       // Wait for font to be ready before measuring character dimensions
       await document.fonts.ready;
 
-      // Wait until the container has non-zero dimensions — react-resizable-panels
-      // sets panel sizes via JS after mount, so a fixed RAF count isn't reliable.
+      // Wait until the container has stable non-zero dimensions. We check both
+      // width and height stability so we don't measure mid-animation (sidebar
+      // collapse) or before react-resizable-panels has applied its JS-driven
+      // flex sizes via useEffect (which sets the panel's final height).
       await new Promise<void>((resolve) => {
+        let lastWidth = -1;
+        let lastHeight = -1;
         const check = () => {
-          if (containerRef.current && containerRef.current.offsetHeight > 0) {
+          const el = containerRef.current;
+          if (!el) { resolve(); return; }
+          const w = el.offsetWidth;
+          const h = el.offsetHeight;
+          if (h > 0 && w > 0 && w === lastWidth && h === lastHeight) {
             resolve();
           } else {
+            lastWidth = w;
+            lastHeight = h;
             requestAnimationFrame(check);
           }
         };
@@ -310,6 +320,7 @@ export function TauriTerminal({
         display: "flex",
         flexDirection: "column",
         paddingLeft: 8,
+        paddingRight: 8,
         paddingBottom: 12,
       }}
     >

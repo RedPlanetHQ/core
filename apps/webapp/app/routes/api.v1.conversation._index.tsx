@@ -17,7 +17,7 @@ import { buildAgentContext } from "~/services/agent/context";
 import { createAskUserTool } from "~/services/agent/agents/core";
 import { mastra } from "~/services/agent/mastra";
 import { logger } from "~/services/logger.service";
-
+import { appendFileSync } from "fs";
 import {
   saveConversationResult,
   streamToUIResponse,
@@ -269,7 +269,15 @@ const { loader, action } = createHybridActionApiRoute(
       },
       async processOutputResult({ messages }) {
         const convertedMessages = convertMessages(messages).to("AIV6.UI");
+        appendFileSync(
+          "/Users/harshithmullapudi/Documents/core/raw.json",
+          JSON.stringify(messages),
+        );
 
+        appendFileSync(
+          "/Users/harshithmullapudi/Documents/core/converted.json",
+          JSON.stringify(convertedMessages),
+        );
         await saveConversationResult({
           parts: convertedMessages[convertedMessages.length - 1]
             ? convertedMessages[convertedMessages.length - 1].parts
@@ -391,6 +399,12 @@ const { loader, action } = createHybridActionApiRoute(
     request.signal.addEventListener("abort", cancelStream);
 
     let stream;
+
+    appendFileSync(
+      "/Users/harshithmullapudi/Documents/core/input.json",
+      JSON.stringify(modelMessages),
+    );
+
     try {
       stream = await agent.stream(modelMessages, {
         toolsets: { core: tools },

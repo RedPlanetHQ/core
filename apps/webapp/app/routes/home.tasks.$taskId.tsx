@@ -411,8 +411,9 @@ function TaskDetailLayout() {
             id="task-detail"
             defaultSize={taskChatOpen && !isCodingTab ? "50%" : "100%"}
             minSize="50%"
+            style={{ display: "flex", flexDirection: "column" }}
           >
-            <div className="flex h-full overflow-hidden">
+            <div className="flex min-h-0 flex-1 overflow-hidden">
               <Outlet />
             </div>
           </ResizablePanel>

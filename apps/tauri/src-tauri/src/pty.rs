@@ -281,8 +281,15 @@ pub fn write_pty(
 ) {
     let mut map = state.lock().unwrap();
     if let Some(handle) = map.get_mut(&session_db_id) {
-        if let Err(e) = handle.writer.write_all(data.as_bytes()) {
-            emit_error(&app, &session_db_id, &format!("Write failed: {}", e));
+        if let Err(_) = handle.writer.write_all(data.as_bytes()) {
+            // If the write fails, the child process likely exited — emit exit
+            // so the frontend shows "Session ended" rather than a write error.
+            let exited = handle.child.try_wait().ok().flatten().is_some();
+            if exited {
+                let _ = app.emit(&format!("pty://exit/{}", session_db_id), ());
+            } else {
+                emit_error(&app, &session_db_id, "Write failed: session disconnected");
+            }
         }
     } else {
         emit_error(&app, &session_db_id, "Session not running");
