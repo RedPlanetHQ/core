@@ -10,33 +10,38 @@ import { startTransition, StrictMode, useEffect } from "react";
 import { hydrateRoot } from "react-dom/client";
 
 // Tauri webview loads the remote webapp from https://app.getcore.me and talks
-// to the Rust side via `fetch("ipc://localhost/...")`. Sentry's browser tracing
-// integration monkey-patches window.fetch; on that cross-origin ipc:// fetch,
-// WKWebView's access-control check fires and Sentry's wrapper crashes on a
-// minified variable ("Can't find variable: i"), which kills the IPC bridge
-// before Tauri can fall back to postMessage. Disable fetch tracing in Tauri
-// — error reporting still works.
+// to the Rust side via `fetch("ipc://localhost/...")`. Multiple Sentry default
+// integrations (browserTracing + the always-on Breadcrumbs integration)
+// monkey-patch window.fetch. On the cross-origin ipc:// fetch, WKWebView blocks
+// it (mixed-content + access-control), and Sentry's error path crashes on a
+// minified variable ("Can't find variable: i"), killing the IPC bridge before
+// Tauri can fall back to postMessage. Skipping Sentry.init entirely is the
+// only reliable way to stop ALL fetch wrapping inside the desktop shell;
+// verified by fetching the deployed Sentry chunk and confirming its fetch
+// instrumentation is what's in the broken call stack.
+// Errors inside the desktop app are captured by the Rust-side logger at
+// ~/Library/Logs/me.getcore.app/CORE.log.
 const isTauri =
   typeof window !== "undefined" &&
   !!(window as unknown as { __TAURI_INTERNALS__?: unknown }).__TAURI_INTERNALS__;
 
-init({
-  dsn: (window as unknown as Record<string, string>).sentryDsn,
-  tracesSampleRate: isTauri ? 0 : 1,
-  enableLogs: true,
+if (!isTauri) {
+  init({
+    dsn: (window as unknown as Record<string, string>).sentryDsn,
+    tracesSampleRate: 1,
+    enableLogs: true,
 
-  integrations: isTauri
-    ? []
-    : [
-        browserTracingIntegration({
-          useEffect,
-          useLocation,
-          useMatches,
-        }),
-      ],
+    integrations: [
+      browserTracingIntegration({
+        useEffect,
+        useLocation,
+        useMatches,
+      }),
+    ],
 
-  sendDefaultPii: true,
-});
+    sendDefaultPii: true,
+  });
+}
 
 startTransition(() => {
   hydrateRoot(
