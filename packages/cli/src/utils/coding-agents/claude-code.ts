@@ -1,6 +1,7 @@
-import {existsSync, statSync, readdirSync} from 'node:fs';
+import {existsSync, statSync, readdirSync, createReadStream} from 'node:fs';
 import {join, basename} from 'node:path';
 import {homedir} from 'node:os';
+import {createInterface} from 'node:readline';
 import {BaseCodingAgentReader, type AgentReadResult, type AgentReadOptions, type AgentTurnsResult, type ConversationTurn, type ScannedSession, type ScanOptions, type SessionEntry} from './types';
 
 const CLAUDE_PROJECTS_DIR = join(homedir(), '.claude', 'projects');
@@ -14,9 +15,38 @@ function dirToProjectFolder(dir: string): string {
 
 /**
  * -Users-foo-bar  →  /Users/foo/bar
+ *
+ * WARNING: lossy — hyphens in original path components become `/`.
+ * `/Users/foo/feature-linear-widget` and `/Users/foo/feature/linear/widget`
+ * both encode to the same folder. Use only as fallback; prefer `readCwdFromJsonl`.
  */
 function projectFolderToDir(folder: string): string {
 	return folder.replace(/^-/, '/').replace(/-/g, '/');
+}
+
+/**
+ * Scan the first entries of a Claude Code JSONL until we hit one with a `cwd` field.
+ * user/assistant/progress entries carry `cwd`; the initial `file-history-snapshot` does not.
+ */
+async function readCwdFromJsonl(filePath: string): Promise<string | null> {
+	return new Promise((resolve) => {
+		let found: string | null = null;
+		let lines = 0;
+		const rl = createInterface({input: createReadStream(filePath), crlfDelay: Infinity});
+		rl.on('line', (line) => {
+			if (found || !line.trim()) return;
+			if (++lines > 50) { rl.close(); return; }
+			try {
+				const entry = JSON.parse(line) as {cwd?: unknown};
+				if (typeof entry.cwd === 'string' && entry.cwd) {
+					found = entry.cwd;
+					rl.close();
+				}
+			} catch { /* skip malformed */ }
+		});
+		rl.on('close', () => resolve(found));
+		rl.on('error', () => resolve(null));
+	});
 }
 
 function getSessionPath(dir: string, sessionId: string): string {
@@ -106,12 +136,17 @@ export class ClaudeCodeReader extends BaseCodingAgentReader {
 			return [];
 		}
 
+		// Prefilter by encoded folder name when options.dir is set. Folder-match is a
+		// necessary-but-not-sufficient condition (hyphens collide), so we still verify
+		// against the real cwd below — this just prunes obviously-unrelated folders.
+		const expectedFolder = options.dir ? dirToProjectFolder(options.dir) : null;
+
 		const results: ScannedSession[] = [];
 
 		for (const folder of projectFolders) {
-			const dir = projectFolderToDir(folder);
-			if (options.dir && dir !== options.dir) continue;
+			if (expectedFolder && folder !== expectedFolder) continue;
 
+			const fallbackDir = projectFolderToDir(folder);
 			const projectPath = join(CLAUDE_PROJECTS_DIR, folder);
 			let files: string[];
 			try {
@@ -134,7 +169,7 @@ export class ClaudeCodeReader extends BaseCodingAgentReader {
 				results.push({
 					sessionId: basename(file, '.jsonl'),
 					agent: this.agentName,
-					dir,
+					dir: fallbackDir, // overwritten below from JSONL cwd when available
 					title: null,
 					filePath,
 					fileSizeBytes: stats.size,
@@ -147,12 +182,20 @@ export class ClaudeCodeReader extends BaseCodingAgentReader {
 
 		results.sort((a, b) => b.updatedAt - a.updatedAt);
 
-		// Populate titles in parallel (before slicing — titles are cheap to read)
+		// Populate real cwd + title in parallel. The decoded folder name is lossy
+		// (any `-` in the original path collides with `/`), so the real cwd must come
+		// from the JSONL entries themselves.
 		await Promise.all(results.map(async (s) => {
-			s.title = await this.extractTitle(s.filePath);
+			const [cwd, title] = await Promise.all([
+				readCwdFromJsonl(s.filePath),
+				this.extractTitle(s.filePath),
+			]);
+			if (cwd) s.dir = cwd;
+			s.title = title;
 		}));
 
-		return results;
+		// Final filter against the real cwd (after the cheap folder-level prefilter above).
+		return options.dir ? results.filter((s) => s.dir === options.dir) : results;
 	}
 }
 
