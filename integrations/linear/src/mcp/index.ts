@@ -194,6 +194,14 @@ const GetCycleSchema = z.object({
   cycleId: z.string().describe('Cycle ID to retrieve'),
 });
 
+const GetMyCurrentCycleIssuesSchema = z.object({
+  teamKey: z
+    .string()
+    .optional()
+    .describe('Optional team key (e.g. "ENG") to restrict to a single team; omit for all teams'),
+  first: z.number().optional().default(100).describe('Maximum number of issues to return (default: 100)'),
+});
+
 // ============================================================================
 // TOOL DEFINITIONS
 // ============================================================================
@@ -351,6 +359,13 @@ export async function getTools() {
       name: 'linear_get_cycle',
       description: 'Gets details of a specific cycle',
       inputSchema: zodToJsonSchema(GetCycleSchema),
+      annotations: { readOnlyHint: true, destructiveHint: false, idempotentHint: true },
+    },
+    {
+      name: 'linear_get_my_current_cycle_issues',
+      description:
+        'Gets issues assigned to the authenticated user in the current (active) cycle. Optionally restrict to a single team by teamKey. Returns structured JSON.',
+      inputSchema: zodToJsonSchema(GetMyCurrentCycleIssuesSchema),
       annotations: { readOnlyHint: true, destructiveHint: false, idempotentHint: true },
     },
   ];
@@ -1336,6 +1351,84 @@ export async function callTool(
 
         return {
           content: [{ type: 'text', text }],
+        };
+      }
+
+      case 'linear_get_my_current_cycle_issues': {
+        const validatedArgs = GetMyCurrentCycleIssuesSchema.parse(args);
+
+        const filter: Record<string, any> = {
+          assignee: { isMe: { eq: true } },
+          cycle: { isActive: { eq: true } },
+        };
+        if (validatedArgs.teamKey) {
+          filter.team = { key: { eq: validatedArgs.teamKey } };
+        }
+
+        const query = `
+          query GetMyCurrentCycleIssues($filter: IssueFilter, $first: Int) {
+            issues(filter: $filter, first: $first) {
+              nodes {
+                id
+                identifier
+                title
+                url
+                priority
+                estimate
+                dueDate
+                updatedAt
+                state { id name type color }
+                assignee { id name email displayName }
+                team { id name key }
+                project { id name }
+                cycle { id name number startsAt endsAt }
+                labels { nodes { id name color } }
+              }
+            }
+          }
+        `;
+
+        const data = await executeQuery(linearClient, query, {
+          filter,
+          first: validatedArgs.first,
+        });
+
+        const issues = (data.issues?.nodes ?? []).map((issue: any) => ({
+          id: issue.id,
+          identifier: issue.identifier,
+          title: issue.title,
+          url: issue.url,
+          priority: issue.priority,
+          estimate: issue.estimate,
+          dueDate: issue.dueDate,
+          updatedAt: issue.updatedAt,
+          state: issue.state
+            ? { id: issue.state.id, name: issue.state.name, type: issue.state.type, color: issue.state.color }
+            : null,
+          assignee: issue.assignee
+            ? {
+                id: issue.assignee.id,
+                name: issue.assignee.name,
+                email: issue.assignee.email,
+                displayName: issue.assignee.displayName,
+              }
+            : null,
+          team: issue.team ? { id: issue.team.id, name: issue.team.name, key: issue.team.key } : null,
+          project: issue.project ? { id: issue.project.id, name: issue.project.name } : null,
+          cycle: issue.cycle
+            ? {
+                id: issue.cycle.id,
+                name: issue.cycle.name,
+                number: issue.cycle.number,
+                startsAt: issue.cycle.startsAt,
+                endsAt: issue.cycle.endsAt,
+              }
+            : null,
+          labels: (issue.labels?.nodes ?? []).map((l: any) => ({ id: l.id, name: l.name, color: l.color })),
+        }));
+
+        return {
+          content: [{ type: 'text', text: JSON.stringify({ issues }) }],
         };
       }
 
