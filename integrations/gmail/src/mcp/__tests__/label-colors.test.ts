@@ -1,9 +1,6 @@
 import { describe, it, expect } from 'vitest';
-import {
-  resolveLabelColor,
-  GMAIL_LABEL_PALETTE,
-  ALLOWED_HEX_VALUES,
-} from '../label-colors';
+
+import { resolveLabelColor, GMAIL_LABEL_PALETTE, ALLOWED_HEX_VALUES } from '../label-colors';
 
 describe('resolveLabelColor', () => {
   it('resolves a known preset key to its pair', () => {
@@ -40,15 +37,15 @@ describe('resolveLabelColor', () => {
   });
 
   it('throws on explicit pair with invalid textColor', () => {
-    expect(() =>
-      resolveLabelColor({ textColor: '#123456', backgroundColor: '#4a86e8' })
-    ).toThrow(/Invalid textColor '#123456'/);
+    expect(() => resolveLabelColor({ textColor: '#123456', backgroundColor: '#4a86e8' })).toThrow(
+      /Invalid textColor '#123456'/
+    );
   });
 
   it('throws on explicit pair with invalid backgroundColor', () => {
-    expect(() =>
-      resolveLabelColor({ textColor: '#ffffff', backgroundColor: '#abcdef' })
-    ).toThrow(/Invalid backgroundColor '#abcdef'/);
+    expect(() => resolveLabelColor({ textColor: '#ffffff', backgroundColor: '#abcdef' })).toThrow(
+      /Invalid backgroundColor '#abcdef'/
+    );
   });
 
   it('ALLOWED_HEX_VALUES contains 89 entries', () => {

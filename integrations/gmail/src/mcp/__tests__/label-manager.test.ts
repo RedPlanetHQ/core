@@ -1,4 +1,5 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
+
 import { createLabel, updateLabel } from '../label-manager';
 
 type MockGmail = {
