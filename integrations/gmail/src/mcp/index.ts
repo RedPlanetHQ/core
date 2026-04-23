@@ -199,6 +199,17 @@ async function loadCredentials(
   return oauth2Client;
 }
 
+// Shared color input schema for label tools.
+// Accepts either a preset key (string) or an explicit {textColor, backgroundColor} pair.
+// Gmail restricts colors to a fixed palette; validation happens in resolveLabelColor.
+const LabelColorInputSchema = z.union([
+  z.string(),
+  z.object({
+    textColor: z.string(),
+    backgroundColor: z.string(),
+  }),
+]);
+
 // Schema definitions
 const SendEmailSchema = z.object({
   to: z.array(z.string()).describe('List of recipient email addresses'),
@@ -274,6 +285,12 @@ const CreateLabelSchema = z
       .enum(['labelShow', 'labelShowIfUnread', 'labelHide'])
       .optional()
       .describe('Visibility of the label in the label list'),
+    color: LabelColorInputSchema.optional().describe(
+      'Label color. Either a preset key (e.g. "blue", "green", "red") or an ' +
+        "explicit {textColor, backgroundColor} pair using hex values from Gmail's " +
+        'allowed palette. Gmail renders one pair in both light and dark themes ' +
+        'automatically — no per-theme input is supported.'
+    ),
   })
   .describe('Creates a new Gmail label');
 
@@ -289,6 +306,11 @@ const UpdateLabelSchema = z
       .enum(['labelShow', 'labelShowIfUnread', 'labelHide'])
       .optional()
       .describe('Visibility of the label in the label list'),
+    color: LabelColorInputSchema.optional().describe(
+      'Label color. Either a preset key (e.g. "blue") or an explicit ' +
+        "{textColor, backgroundColor} pair from Gmail's allowed palette. " +
+        'Omit to leave the existing color unchanged.'
+    ),
   })
   .describe('Updates an existing Gmail label');
 
@@ -309,6 +331,11 @@ const GetOrCreateLabelSchema = z
       .enum(['labelShow', 'labelShowIfUnread', 'labelHide'])
       .optional()
       .describe('Visibility of the label in the label list'),
+    color: LabelColorInputSchema.optional().describe(
+      'Label color (applied only when a new label is created). Either a preset ' +
+        "key or an explicit {textColor, backgroundColor} pair from Gmail's " +
+        'allowed palette.'
+    ),
   })
   .describe("Gets an existing label by name or creates it if it doesn't exist");
 
@@ -501,13 +528,18 @@ export async function getTools() {
     },
     {
       name: 'create_label',
-      description: 'Creates a new Gmail label',
+      description:
+        "Creates a new Gmail label. Optionally sets a color from Gmail's fixed palette " +
+        '(preset key or explicit hex pair). Gmail renders one color pair in both light ' +
+        'and dark themes automatically.',
       inputSchema: zodToJsonSchema(CreateLabelSchema),
       annotations: { readOnlyHint: false, destructiveHint: true, idempotentHint: false },
     },
     {
       name: 'update_label',
-      description: 'Updates an existing Gmail label',
+      description:
+        "Updates an existing Gmail label. Can set or change the color (from Gmail's " +
+        'fixed palette). Omitted fields are preserved.',
       inputSchema: zodToJsonSchema(UpdateLabelSchema),
       annotations: { readOnlyHint: false, destructiveHint: true, idempotentHint: true },
     },
@@ -519,7 +551,9 @@ export async function getTools() {
     },
     {
       name: 'get_or_create_label',
-      description: "Gets an existing label by name or creates it if it doesn't exist",
+      description:
+        "Gets an existing label by name or creates it if it doesn't exist. When creating, " +
+        "can set a color from Gmail's fixed palette.",
       inputSchema: zodToJsonSchema(GetOrCreateLabelSchema),
       annotations: { readOnlyHint: false, destructiveHint: true, idempotentHint: true },
     },
@@ -1200,6 +1234,7 @@ export async function callTool(
         const result = await createLabel(gmail, validatedArgs.name, {
           messageListVisibility: validatedArgs.messageListVisibility,
           labelListVisibility: validatedArgs.labelListVisibility,
+          color: validatedArgs.color,
         });
 
         return {
@@ -1216,12 +1251,18 @@ export async function callTool(
         const validatedArgs = UpdateLabelSchema.parse(args);
 
         // Prepare request body with only the fields that were provided
-        const updates: any = {};
+        const updates: {
+          name?: string;
+          messageListVisibility?: string;
+          labelListVisibility?: string;
+          color?: string | { textColor: string; backgroundColor: string };
+        } = {};
         if (validatedArgs.name) updates.name = validatedArgs.name;
         if (validatedArgs.messageListVisibility)
           updates.messageListVisibility = validatedArgs.messageListVisibility;
         if (validatedArgs.labelListVisibility)
           updates.labelListVisibility = validatedArgs.labelListVisibility;
+        if (validatedArgs.color !== undefined) updates.color = validatedArgs.color;
 
         const result = await updateLabel(gmail, validatedArgs.id, updates);
 
@@ -1254,6 +1295,7 @@ export async function callTool(
         const result = await getOrCreateLabel(gmail, validatedArgs.name, {
           messageListVisibility: validatedArgs.messageListVisibility,
           labelListVisibility: validatedArgs.labelListVisibility,
+          color: validatedArgs.color,
         });
 
         const action =
