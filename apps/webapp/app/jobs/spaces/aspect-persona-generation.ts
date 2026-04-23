@@ -78,28 +78,102 @@ const SKIPPED_ASPECTS: StatementAspect[] = [
   "Task",
 ];
 
-// Section separator used to reliably split persona documents in code.
-// HTML comments are invisible in rendered markdown and survive LLM round-trips.
-const SECTION_SEPARATOR_PREFIX = "<!-- section:";
-const SECTION_SEPARATOR_SUFFIX = " -->";
+// ─── Markdown section helpers ───────────────────────────────────────
+// Split/merge persona documents by ## headings — same pattern as
+// task pages use splitByH2/mergeSectionIntoHtml but for markdown.
+// Unknown sections are always preserved verbatim.
 
-function sectionMarker(aspect: StatementAspect): string {
-  return `${SECTION_SEPARATOR_PREFIX}${aspect.toLowerCase()}${SECTION_SEPARATOR_SUFFIX}`;
+interface MarkdownSection {
+  heading: string | null; // null = content before the first ## heading
+  content: string; // raw markdown for this section (including the ## line)
 }
 
 /**
- * Aspect label → StatementAspect mapping for parsing section markers
+ * Split a markdown document into sections by `## ` boundaries.
+ * The first section (before any ##) has heading = null.
+ * Preserves every byte — join all .content to reconstruct the original.
  */
-const MARKER_TO_ASPECT: Record<string, StatementAspect> = {
-  identity: "Identity",
-  preference: "Preference",
-  directive: "Directive",
-};
+export function splitByH2Markdown(doc: string): MarkdownSection[] {
+  if (!doc.trim()) return [];
 
-export interface ParsedPersonaSections {
-  header: string; // Everything before the first ## section (# PERSONA, metadata)
-  sections: Map<StatementAspect, string>; // aspect → full section content (including ## header)
-  pinnedSections: Set<StatementAspect>; // aspects whose content is user-pinned (skip LLM regeneration)
+  const sections: MarkdownSection[] = [];
+  // Match ## at start of line (not ### or deeper)
+  const h2Regex = /^## /gm;
+  const positions: number[] = [];
+  let m: RegExpExecArray | null;
+
+  while ((m = h2Regex.exec(doc)) !== null) {
+    positions.push(m.index);
+  }
+
+  if (positions.length === 0) {
+    // No ## headings — entire doc is the header
+    return [{ heading: null, content: doc }];
+  }
+
+  // Content before the first ## heading
+  if (positions[0] > 0) {
+    sections.push({ heading: null, content: doc.slice(0, positions[0]) });
+  }
+
+  for (let i = 0; i < positions.length; i++) {
+    const start = positions[i];
+    const end = i + 1 < positions.length ? positions[i + 1] : doc.length;
+    const raw = doc.slice(start, end);
+
+    // Extract heading text from the first line: "## IDENTITY\n..." → "IDENTITY"
+    const firstNewline = raw.indexOf("\n");
+    const headingLine = firstNewline >= 0 ? raw.slice(3, firstNewline) : raw.slice(3);
+    sections.push({ heading: headingLine.trim(), content: raw });
+  }
+
+  return sections;
+}
+
+/**
+ * Find a section by heading name (case-insensitive), replace its body content
+ * (everything after the ## heading line), and return the full document.
+ * If the section doesn't exist, append it. All other sections are preserved verbatim.
+ */
+export function mergeSectionIntoMarkdown(
+  doc: string,
+  sectionName: string,
+  newBody: string,
+): string {
+  const sections = splitByH2Markdown(doc);
+
+  const targetIndex = sections.findIndex(
+    (s) => s.heading?.toUpperCase() === sectionName.toUpperCase(),
+  );
+
+  if (targetIndex >= 0) {
+    // Replace the section body, keep the ## heading line
+    sections[targetIndex] = {
+      heading: sectionName,
+      content: `## ${sectionName}\n\n${newBody}\n\n`,
+    };
+  } else {
+    // Append new section at the end
+    sections.push({
+      heading: sectionName,
+      content: `## ${sectionName}\n\n${newBody}\n\n`,
+    });
+  }
+
+  return sections.map((s) => s.content).join("");
+}
+
+/**
+ * Strip structural markdown headings (# and ##) from LLM output.
+ * Prevents the LLM from injecting duplicate document/section headers.
+ * Preserves ### sub-headers which are valid within section content.
+ */
+function sanitizeSectionContent(content: string): string {
+  return content
+    .replace(/^#{1,2}\s+.*$/gm, "") // strip # and ## lines
+    .replace(/<!-- section:\w+ -->/g, "") // strip legacy markers
+    .replace(/\n{3,}/g, "\n\n") // collapse excessive blank lines
+    .trim();
 }
 
 /**
@@ -132,109 +206,12 @@ function jaccardSimilarity(a: string, b: string): number {
 }
 
 /**
- * Parse a persona document into individual sections using <!-- section:X --> markers.
- * Falls back to ## header splitting if markers are missing (legacy docs).
+ * Extract the body content of a ## section (everything after the heading line).
  */
-export function parsePersonaDocument(doc: string): ParsedPersonaSections {
-  const result: ParsedPersonaSections = {
-    header: "",
-    sections: new Map(),
-    pinnedSections: new Set(),
-  };
-
-  // Try marker-based splitting first
-  const markerRegex = /<!-- section:(\w+) -->/g;
-  const markers: { aspect: StatementAspect; index: number }[] = [];
-  let match: RegExpExecArray | null;
-
-  while ((match = markerRegex.exec(doc)) !== null) {
-    const aspect = MARKER_TO_ASPECT[match[1]];
-    if (aspect) {
-      markers.push({ aspect, index: match.index });
-    }
-  }
-
-  if (markers.length > 0) {
-    // Find the ## header for the first section to determine where the header ends
-    // Search for ## TITLE pattern (handles both \n## and start-of-string)
-    const firstTitle = ASPECT_SECTION_MAP[markers[0].aspect].title;
-    const firstHeaderIdx = doc.indexOf(`## ${firstTitle}`);
-    result.header = doc
-      .slice(0, firstHeaderIdx > 0 ? firstHeaderIdx : 0)
-      .trim();
-
-    for (let i = 0; i < markers.length; i++) {
-      const marker = markers[i];
-      const markerEnd =
-        marker.index + `<!-- section:${marker.aspect.toLowerCase()} -->`.length;
-
-      // Section starts right after the previous marker ends, or at the header start for first section
-      let sectionStart: number;
-      if (i === 0) {
-        sectionStart = firstHeaderIdx > 0 ? firstHeaderIdx : 0;
-      } else {
-        const prevMarker = markers[i - 1];
-        const prevMarkerEnd =
-          prevMarker.index +
-          `<!-- section:${prevMarker.aspect.toLowerCase()} -->`.length;
-        sectionStart = prevMarkerEnd;
-      }
-
-      // Section ends at the marker (inclusive)
-      const sectionContent = doc.slice(sectionStart, markerEnd).trim();
-      result.sections.set(marker.aspect, sectionContent);
-
-      // Detect user-pinned sections — <!-- pinned --> anywhere in section content
-      if (sectionContent.includes("<!-- pinned -->")) {
-        result.pinnedSections.add(marker.aspect);
-      }
-    }
-
-    return result;
-  }
-
-  // Fallback: split by ## headers (legacy docs without markers)
-  // Find all ## header positions
-  const headerPositions: { title: string; index: number }[] = [];
-  const headerRegex = /^## (\w+)/gm;
-  let hMatch: RegExpExecArray | null;
-
-  while ((hMatch = headerRegex.exec(doc)) !== null) {
-    headerPositions.push({
-      title: hMatch[1].toUpperCase(),
-      index: hMatch.index,
-    });
-  }
-
-  if (headerPositions.length === 0) {
-    // No sections found at all
-    result.header = doc.trim();
-    return result;
-  }
-
-  // Everything before the first ## header is the header
-  result.header = doc.slice(0, headerPositions[0].index).trim();
-
-  // Each section runs from its ## header to the next ## header (or end of doc)
-  for (let i = 0; i < headerPositions.length; i++) {
-    const start = headerPositions[i].index;
-    const end =
-      i + 1 < headerPositions.length
-        ? headerPositions[i + 1].index
-        : doc.length;
-    const sectionContent = doc.slice(start, end).trim();
-    const title = headerPositions[i].title;
-
-    // Map section title to aspect
-    for (const [aspect, info] of Object.entries(ASPECT_SECTION_MAP)) {
-      if (info.title === title) {
-        result.sections.set(aspect as StatementAspect, sectionContent);
-        break;
-      }
-    }
-  }
-
-  return result;
+function getSectionBody(sectionContent: string): string {
+  const firstNewline = sectionContent.indexOf("\n");
+  if (firstNewline < 0) return "";
+  return sectionContent.slice(firstNewline + 1).trim();
 }
 
 // Aspect to persona section mapping with filtering guidance
@@ -1085,9 +1062,8 @@ function combineIntoPersonaDocument(
     const title = ASPECT_SECTION_MAP[aspect].title;
     document += `## ${title}\n\n`;
     if (section) {
-      document += `${section.content}\n\n`;
+      document += `${sanitizeSectionContent(section.content)}\n\n`;
     }
-    document += `${sectionMarker(aspect)}\n\n`;
   }
 
   return document.trim();
@@ -1389,38 +1365,11 @@ export function applyDelta(
 }
 
 /**
- * Reassemble a persona document from parsed sections.
- * Updates the metadata date and preserves section order.
- */
-function reassemblePersonaDocument(parsed: ParsedPersonaSections): string {
-  const sectionOrder: StatementAspect[] = [
-    "Identity",
-    "Preference",
-    "Directive",
-  ];
-
-  let document = parsed.header ? parsed.header + "\n\n" : "# PERSONA\n\n";
-
-  for (const aspect of sectionOrder) {
-    const sectionContent = parsed.sections.get(aspect);
-    if (!sectionContent) continue;
-
-    // Strip any existing markers and re-add cleanly
-    const marker = sectionMarker(aspect);
-    const cleanContent = sectionContent
-      .replace(/<!-- section:\w+ -->/g, "")
-      .trim();
-    document += cleanContent + "\n\n" + marker + "\n\n";
-  }
-
-  return document.trim();
-}
-
-/**
  * Generate an incremental persona update using section-level merging.
  *
- * Only sections with new statements are sent to the LLM.
- * Unchanged sections are preserved verbatim in code — no LLM drift.
+ * Uses the same pattern as task pages: split by ## headings, update only
+ * affected sections, preserve everything else verbatim. Unknown sections
+ * and user-added content are never dropped.
  */
 export async function generateIncrementalPersona(
   userId: string,
@@ -1466,30 +1415,40 @@ export async function generateIncrementalPersona(
     totalStatements,
   });
 
-  // Step 3: Parse existing document into sections
-  const parsed = parsePersonaDocument(existingPersonaContent);
+  // Step 3: Split existing document into sections by ## headings
+  const existingSections = splitByH2Markdown(existingPersonaContent);
 
-  logger.info("Parsed existing persona document", {
+  logger.info("Split existing persona document", {
     userId,
-    parsedSections: Array.from(parsed.sections.keys()),
-    hasMarkers: existingPersonaContent.includes(SECTION_SEPARATOR_PREFIX),
-    headerLength: parsed.header.length,
-    sectionLengths: Object.fromEntries(
-      Array.from(parsed.sections.entries()).map(([k, v]) => [k, v.length]),
-    ),
+    sectionCount: existingSections.length,
+    headings: existingSections.map((s) => s.heading),
     existingDocLength: existingPersonaContent.length,
-    existingDocPreview: existingPersonaContent.slice(0, 300),
   });
 
-  // Step 4: Build delta prompts for affected sections (skip pinned)
+  // Step 4: For each affected aspect, build delta prompt and apply
+  // Each section is updated independently — other sections untouched.
   const sectionUpdates: {
     aspect: StatementAspect;
+    sectionTitle: string;
     prompt: MessageListInput;
-    existingClean: string;
+    existingBody: string;
   }[] = [];
 
   for (const [aspect, data] of episodeStatements) {
-    if (parsed.pinnedSections.has(aspect)) {
+    const sectionTitle = ASPECT_SECTION_MAP[aspect].title;
+
+    // Find existing section by heading (case-insensitive)
+    const existingSection = existingSections.find(
+      (s) => s.heading?.toUpperCase() === sectionTitle,
+    );
+
+    // Extract just the body (content after the ## heading line)
+    const existingBody = existingSection
+      ? sanitizeSectionContent(getSectionBody(existingSection.content))
+      : "";
+
+    // Check for pinned sections
+    if (existingSection?.content.includes("<!-- pinned -->")) {
       logger.info(`Skipping pinned section during incremental generation`, {
         userId,
         episodeUuid,
@@ -1498,28 +1457,19 @@ export async function generateIncrementalPersona(
       continue;
     }
 
-    const existingSection = parsed.sections.get(aspect);
-
-    // Strip the marker from existing section content before sending to LLM
-    const marker = sectionMarker(aspect);
-    const cleanSection = existingSection
-      ? existingSection.replace(marker, "").trim()
-      : "";
-
     const prompt = buildDeltaPrompt(
       aspect,
-      cleanSection ||
-        `## ${ASPECT_SECTION_MAP[aspect].title}\n\n(No existing content)`,
+      existingBody || `(No existing content)`,
       data.statements,
       userContext,
     );
 
-    sectionUpdates.push({ aspect, prompt, existingClean: cleanSection });
+    sectionUpdates.push({ aspect, sectionTitle, prompt, existingBody });
   }
 
   // Step 5: Direct LLM calls in parallel, parse JSON delta, apply to section
   const updateResults = await Promise.all(
-    sectionUpdates.map(async ({ aspect, prompt, existingClean }) => {
+    sectionUpdates.map(async ({ aspect, sectionTitle, prompt, existingBody }) => {
       const rawResponse = await directLLMCall(
         prompt,
         `incremental-delta-${aspect}`,
@@ -1529,20 +1479,19 @@ export async function generateIncrementalPersona(
         logger.warn(
           `LLM call failed for ${aspect} delta, keeping existing section`,
         );
-        return { aspect, mergedSection: null };
+        return { sectionTitle, newBody: null };
       }
 
       // Parse JSON and validate with Zod
       try {
-        const parsed = JSON.parse(rawResponse);
-        const delta = IncrementalDeltaSchema.parse(parsed);
+        const parsedJson = JSON.parse(rawResponse);
+        const delta = IncrementalDeltaSchema.parse(parsedJson);
 
-        const mergedSection = applyDelta(existingClean, delta);
+        const mergedBody = applyDelta(existingBody, delta);
 
         // Jaccard check: reject if merged section diverges too much from existing.
-        // This catches cases where the LLM rewrites the section instead of patching it.
-        if (existingClean.trim().length > 0) {
-          const similarity = jaccardSimilarity(existingClean, mergedSection);
+        if (existingBody.trim().length > 0) {
+          const similarity = jaccardSimilarity(existingBody, mergedBody);
           if (similarity < INCREMENTAL_JACCARD_THRESHOLD) {
             logger.warn(
               `Jaccard similarity too low for ${aspect} — rejecting delta, keeping existing section`,
@@ -1553,7 +1502,7 @@ export async function generateIncrementalPersona(
                 replacements: delta.replace.length,
               },
             );
-            return { aspect, mergedSection: null };
+            return { sectionTitle, newBody: null };
           }
         }
 
@@ -1562,7 +1511,7 @@ export async function generateIncrementalPersona(
           replacements: delta.replace.length,
         });
 
-        return { aspect, mergedSection };
+        return { sectionTitle, newBody: sanitizeSectionContent(mergedBody) };
       } catch (error) {
         logger.warn(
           `Failed to parse/validate delta for ${aspect}, keeping existing section`,
@@ -1572,28 +1521,29 @@ export async function generateIncrementalPersona(
             rawResponsePreview: rawResponse.slice(0, 200),
           },
         );
-        return { aspect, mergedSection: null };
+        return { sectionTitle, newBody: null };
       }
     }),
   );
 
-  // Step 6: Replace only affected sections with merged content
-  for (const { aspect, mergedSection } of updateResults) {
-    if (mergedSection !== null) {
-      parsed.sections.set(aspect, mergedSection);
+  // Step 6: Merge each updated section into the document — one at a time.
+  // mergeSectionIntoMarkdown preserves all other sections verbatim.
+  let updatedPersona = existingPersonaContent;
+
+  for (const { sectionTitle, newBody } of updateResults) {
+    if (newBody !== null) {
+      updatedPersona = mergeSectionIntoMarkdown(
+        updatedPersona,
+        sectionTitle,
+        newBody,
+      );
     }
   }
-
-  // Step 7: Reassemble document from sections
-  const updatedPersona = reassemblePersonaDocument(parsed);
 
   logger.info("Incremental persona generation completed", {
     userId,
     episodeUuid,
     affectedSections: affectedAspects,
-    unchangedSections: Array.from(parsed.sections.keys()).filter(
-      (a) => !affectedAspects.includes(a),
-    ),
     originalLength: existingPersonaContent.length,
     updatedLength: updatedPersona.length,
   });
