@@ -119,6 +119,7 @@ export default function SingleConversation() {
   return (
     <div className="h-page relative flex w-full flex-col items-center justify-center overflow-hidden">
       <ConversationView
+        key={conversationId as string}
         conversationId={conversationId as string}
         history={conversation.ConversationHistory}
         integrationAccountMap={integrationAccountMap}

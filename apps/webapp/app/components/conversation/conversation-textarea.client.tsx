@@ -36,6 +36,7 @@ interface ConversationTextareaProps {
   defaultValue?: string;
   placeholder?: string;
   isLoading?: boolean;
+  isStopping?: boolean;
   className?: string;
   onChange?: (text: string) => void;
   disabled?: boolean;
@@ -53,6 +54,7 @@ interface ConversationTextareaProps {
 export function ConversationTextarea({
   defaultValue,
   isLoading = false,
+  isStopping = false,
   placeholder,
   onChange,
   onConversationCreated,
@@ -209,20 +211,23 @@ export function ConversationTextarea({
             variant="secondary"
             className="gap-1 shadow-none transition-all duration-500 ease-in-out"
             onClick={() => {
-              if (!isLoading && !disabled) {
-                handleSend();
-              } else if (!disabled) {
+              if (isStopping || disabled) return;
+              if (isLoading) {
                 stop && stop();
+              } else {
+                handleSend();
               }
             }}
-            disabled={disabled}
+            disabled={disabled || isStopping}
             size="lg"
           >
-            {isLoading ? (
+            {isStopping ? (
               <>
                 <LoaderCircle size={18} className="mr-1 animate-spin" />
-                Stop
+                Stopping
               </>
+            ) : isLoading ? (
+              <>Stop</>
             ) : (
               <>Chat</>
             )}

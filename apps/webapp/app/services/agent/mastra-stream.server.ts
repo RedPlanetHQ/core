@@ -1,14 +1,22 @@
-import { generateId, createUIMessageStreamResponse } from "ai";
+import {
+  generateId,
+  createUIMessageStreamResponse,
+  JsonToSseTransformStream,
+  UI_MESSAGE_STREAM_HEADERS,
+} from "ai";
 import { toAISdkStream } from "@redplanethq/ai";
 import { EpisodeType, UserTypeEnum } from "@core/types";
 import { addToQueue } from "~/lib/ingest.server";
 import {
   upsertConversationHistory,
   updateConversationStatus,
+  clearActiveStreamId,
 } from "~/services/conversation.server";
 import { deductCredits } from "~/trigger/utils/utils";
 import { logger } from "~/services/logger.service";
 import { convertMastraChunkToAISDKv5 } from "@mastra/core/stream";
+import { getResumableStreamContext } from "~/bullmq/connection";
+import { unregisterStream } from "./stream-registry.server";
 
 /**
  * Builds assistant message parts from LLMStepResult[].
@@ -158,6 +166,99 @@ export function streamToUIResponse(
 
   return createUIMessageStreamResponse({
     stream,
+  });
+}
+
+/**
+ * Wraps a Mastra agent result in a resumable SSE stream keyed by `streamId`.
+ *
+ * The underlying run survives client disconnects: the stream is buffered in
+ * Redis via `resumable-stream`, so tab closes / network flaps don't abort it.
+ * Only an explicit stop (via `stream-registry.stopStream`) or successful
+ * completion terminates the producer.
+ *
+ * Finalization responsibilities:
+ *  - On success: `messageHistoryProcessor` already sets status=completed and
+ *    persists the assistant message. This helper only clears `activeStreamId`
+ *    and unregisters the abort controller.
+ *  - On cancel/failure: sets status=cancelled/failed and clears activeStreamId.
+ *    No partial assistant message is persisted (cancelled runs leave no trace).
+ */
+export async function createResumableUIResponse(params: {
+  agentResult: any;
+  streamId: string;
+  conversationId: string;
+  abortSignal: AbortSignal;
+  onApprovalDetected?: (toolCallId: string, approvalId: string) => Promise<void>;
+}): Promise<Response> {
+  const {
+    agentResult,
+    streamId,
+    conversationId,
+    abortSignal,
+    onApprovalDetected,
+  } = params;
+
+  const source = createUIStreamWithApprovals(
+    agentResult,
+    onApprovalDetected,
+  ).pipeThrough(new JsonToSseTransformStream());
+
+  let settled = false;
+  const settle = async (status: "completed" | "cancelled" | "failed") => {
+    if (settled) return;
+    settled = true;
+    try {
+      if (status !== "completed") {
+        await updateConversationStatus(conversationId, status);
+      }
+      await clearActiveStreamId(conversationId);
+      unregisterStream(streamId);
+    } catch (err) {
+      logger.error("[conversation] stream finalize failed", {
+        conversationId,
+        streamId,
+        status,
+        error: err instanceof Error ? err.message : String(err),
+      });
+    }
+  };
+
+  const makeStream = (): ReadableStream<string> =>
+    new ReadableStream<string>({
+      async start(controller) {
+        const reader = source.getReader();
+        try {
+          while (true) {
+            const { value, done } = await reader.read();
+            if (done) break;
+            controller.enqueue(value);
+          }
+          controller.close();
+          await settle("completed");
+        } catch (err) {
+          const isAbort = abortSignal.aborted;
+          controller.error(err);
+          await settle(isAbort ? "cancelled" : "failed");
+        } finally {
+          try {
+            reader.releaseLock();
+          } catch {
+            // reader already released — ignore
+          }
+        }
+      },
+    });
+
+  const ctx = getResumableStreamContext();
+  const resumable = await ctx.createNewResumableStream(streamId, makeStream);
+  if (!resumable) {
+    await settle("failed");
+    return new Response(null, { status: 204 });
+  }
+
+  return new Response(resumable as unknown as BodyInit, {
+    headers: UI_MESSAGE_STREAM_HEADERS,
   });
 }
 
