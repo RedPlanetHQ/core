@@ -404,7 +404,7 @@ PREP RULES:
    - Unclear what's needed? → load "Gather Information" skill
    - Open-ended, needs shaping? → load "Brainstorm" skill
    - Multi-step, needs decomposition? → load "Plan" skill
-2. For CODING tasks (when a gateway is connected): delegate brainstorming/planning to the gateway sub-agent. Pass the task title and description. The gateway will return questions or a plan — do NOT tell it to execute.${lastCodingSession?.externalSessionId ? `\n   A coding session already exists — resume it:\n   sessionId: ${lastCodingSession.externalSessionId}, agent: ${lastCodingSession.agent}${lastCodingSession.dir ? `, dir: ${lastCodingSession.dir}` : ""}${lastCodingSession.worktreeBranch ? `, branch: ${lastCodingSession.worktreeBranch}` : ""}` : ""}
+2. For CODING tasks (when a gateway is connected): delegate brainstorming/planning to the gateway sub-agent. Pass the task title and description. The gateway will return questions or a plan — do NOT tell it to execute.${lastCodingSession?.externalSessionId ? `\n   A coding session already exists — resume it:\n   sessionId: ${lastCodingSession.externalSessionId}, agent: ${lastCodingSession.agent}${(lastCodingSession.worktreePath ?? lastCodingSession.dir) ? `, dir: ${lastCodingSession.worktreePath ?? lastCodingSession.dir}` : ""}${lastCodingSession.worktreeBranch ? `, branch: ${lastCodingSession.worktreeBranch}` : ""}` : ""}
 3. For NON-CODING tasks: do the prep yourself using gather_context, take_action, and the readiness skills.
 4. Write your findings/plan into the task description using update_task.
 5. When prep is complete, move to Review: update_task(taskId: "${linkedTask.id}", status: "Review")
@@ -441,7 +441,7 @@ Status: ${linkedTask.status}${isSubtask ? `\nThis is a SUBTASK. Do ONLY this spe
 
 RULES:
 - For integration work (emails, calendar, github, etc.): delegate to the orchestrator via gather_context / take_action
-- For coding, browser, shell: use gateway tools directly (coding_*, browser_*, exec_*) if connected${lastCodingSession?.externalSessionId ? `\n- A coding session already exists for this task — resume it with intent "execute the plan" to trigger Phase 3 execution:\n  sessionId: ${lastCodingSession.externalSessionId}, agent: ${lastCodingSession.agent}${lastCodingSession.dir ? `, dir: ${lastCodingSession.dir}` : ""}${lastCodingSession.worktreeBranch ? `, branch: ${lastCodingSession.worktreeBranch}` : ""}` : ""}
+- For coding, browser, shell: use gateway tools directly (coding_*, browser_*, exec_*) if connected${lastCodingSession?.externalSessionId ? `\n- A coding session already exists for this task — resume it with intent "execute the plan" to trigger Phase 3 execution:\n  sessionId: ${lastCodingSession.externalSessionId}, agent: ${lastCodingSession.agent}${(lastCodingSession.worktreePath ?? lastCodingSession.dir) ? `, dir: ${lastCodingSession.worktreePath ?? lastCodingSession.dir}` : ""}${lastCodingSession.worktreeBranch ? `, branch: ${lastCodingSession.worktreeBranch}` : ""}` : ""}
 - If the user sends a message, treat it as additional direction for this task${isSubtask ? `
 - When you complete this subtask, the system automatically starts the next one and marks the parent Done when all subtasks are done
 - If you fail or get stuck, mark the PARENT task (${linkedTask.parentTaskId}) as Waiting and send_message with the error` : `
