@@ -18,6 +18,9 @@ import { useLocalCommonState } from "~/hooks/use-local-state";
 import { SourceFolderMenu } from "./source-folder-menu";
 import { ConversationListOptions } from "./conversation-list-options";
 
+const EXCLUDED_SOURCES = new Set(["task", "scheduled-task", "daily"]);
+const POLL_INTERVAL_MS = 3000;
+
 export function getSourceIcon(source: string) {
   if (!source || source === "core") return null;
   if (source === "reminder") return <Timer size={13} />;
@@ -83,6 +86,9 @@ function SourceFolder({
   const fetcher = useFetcher<ConversationListResponse>({
     key: `conv-list-${source}`,
   });
+  const pollFetcher = useFetcher<ConversationListResponse>({
+    key: `conv-list-poll-${source}`,
+  });
   const icon = getSourceIcon(source);
   const label = getSourceLabel(source);
   const [open, setOpen] = useLocalCommonState<boolean>(
@@ -142,6 +148,33 @@ function SourceFolder({
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [fetcher.data, fetcher.state]);
+
+  // Merge in polling updates without touching pagination
+  useEffect(() => {
+    if (pollFetcher.data && pollFetcher.state === "idle") {
+      const incoming = new Map(
+        pollFetcher.data.conversations.map((c) => [c.id, c]),
+      );
+      setConversations((prev) =>
+        prev.map((c) => incoming.get(c.id) ?? c),
+      );
+    }
+  }, [pollFetcher.data, pollFetcher.state]);
+
+  // Poll every few seconds while any loaded conversation is running
+  const hasRunning = conversations.some((c) => c.status === "running");
+  useEffect(() => {
+    if (!hasRunning) return;
+    const sourceParam =
+      source === "core" ? "&source=core" : `&source=${source}`;
+    const interval = setInterval(() => {
+      pollFetcher.load(
+        `/api/v1/conversations?unread=false&page=1&limit=10${sourceParam}`,
+      );
+    }, POLL_INTERVAL_MS);
+    return () => clearInterval(interval);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [hasRunning, source]);
 
   const isOpen = open ?? false;
 
@@ -216,6 +249,9 @@ function SourceFolder({
                       "Untitled Conversation"
                     : "Untitled Conversation"}
                 </span>
+                {conversation.status === "running" && (
+                  <LoaderCircle className="text-muted-foreground ml-auto h-3.5 w-3.5 shrink-0 animate-spin" />
+                )}
               </Button>
             </div>
           ))}
@@ -256,11 +292,13 @@ export const ConversationList = ({
     [],
   );
 
-  const sorted = [...conversationSources].sort((a, b) => {
-    if (a.source === "core") return -1;
-    if (b.source === "core") return 1;
-    return getSourceLabel(a.source).localeCompare(getSourceLabel(b.source));
-  });
+  const sorted = [...conversationSources]
+    .filter(({ source }) => !EXCLUDED_SOURCES.has(source))
+    .sort((a, b) => {
+      if (a.source === "core") return -1;
+      if (b.source === "core") return 1;
+      return getSourceLabel(a.source).localeCompare(getSourceLabel(b.source));
+    });
 
   const hidden = hiddenSources ?? [];
   const filtered = sorted.filter(({ source }) => !hidden.includes(source));

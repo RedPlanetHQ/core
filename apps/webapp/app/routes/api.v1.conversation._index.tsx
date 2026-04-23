@@ -6,6 +6,8 @@ import {
   getConversationAndHistory,
   updateConversationStatus,
   upsertConversationHistory,
+  setActiveStreamId,
+  clearActiveStreamId,
 } from "~/services/conversation.server";
 import {
   getDefaultChatModelId,
@@ -20,9 +22,13 @@ import { logger } from "~/services/logger.service";
 
 import {
   saveConversationResult,
-  streamToUIResponse,
+  createResumableUIResponse,
   drainAgentResult,
 } from "~/services/agent/mastra-stream.server";
+import {
+  registerStream,
+  unregisterStream,
+} from "~/services/agent/stream-registry.server";
 import { type OutputProcessor, type Processor } from "@mastra/core/processors";
 import { patchArgsDeep } from "~/services/agent/tool-args-patch-processor";
 import {
@@ -281,6 +287,12 @@ const { loader, action } = createHybridActionApiRoute(
         `[conversation] resuming: ${toolDecisions.length} approval(s), runId=${body.id}`,
       );
 
+      const resumeStreamId = generateId();
+      const resumeAbortController = new AbortController();
+      registerStream(resumeStreamId, resumeAbortController);
+      await updateConversationStatus(body.id, "running");
+      await setActiveStreamId(body.id, resumeStreamId);
+
       let resumeResult: any;
 
       // Build nested arg overrides: strip 'approved' from each entry so only
@@ -309,6 +321,7 @@ const { loader, action } = createHybridActionApiRoute(
               toolCallId,
               toolCallConcurrency: 1,
               requestContext,
+              abortSignal: resumeAbortController.signal,
               prepareStep: (stepArgs) => {
                 if (Object.keys(nestedArgOverrides).length === 0) return;
                 // Deep-walk messages and patch args for any matching toolCallId,
@@ -330,6 +343,7 @@ const { loader, action } = createHybridActionApiRoute(
             resumeResult = await agent.declineToolCall({
               runId: body.id,
               toolCallId,
+              abortSignal: resumeAbortController.signal,
               outputProcessors: [messageHistoryProcessor as OutputProcessor],
             });
           }
@@ -349,11 +363,18 @@ const { loader, action } = createHybridActionApiRoute(
           error: String(err),
           stack: (err as any)?.stack,
         });
+        unregisterStream(resumeStreamId);
+        await clearActiveStreamId(body.id);
         await updateConversationStatus(body.id, "failed");
         throw err;
       }
 
-      return streamToUIResponse(resumeResult);
+      return createResumableUIResponse({
+        agentResult: resumeResult,
+        streamId: resumeStreamId,
+        conversationId: body.id,
+        abortSignal: resumeAbortController.signal,
+      });
     }
 
     // -----------------------------------------------------------------------
@@ -361,20 +382,10 @@ const { loader, action } = createHybridActionApiRoute(
     // -----------------------------------------------------------------------
     await updateConversationStatus(body.id, "running");
 
+    const streamId = generateId();
     const abortController = new AbortController();
-
-    const cancelStream = () => {
-      if (!abortController.signal.aborted) {
-        logger.info(
-          `[conversation] client disconnected, aborting stream for ${body.id}`,
-        );
-        abortController.abort();
-        updateConversationStatus(body.id, "completed").catch(() => {});
-      }
-    };
-
-    // Belt-and-suspenders: also fire if request.signal ever works
-    request.signal.addEventListener("abort", cancelStream);
+    registerStream(streamId, abortController);
+    await setActiveStreamId(body.id, streamId);
 
     let stream;
     try {
@@ -400,11 +411,18 @@ const { loader, action } = createHybridActionApiRoute(
         kind,
         error: error instanceof Error ? error.message : String(error),
       });
+      unregisterStream(streamId);
+      await clearActiveStreamId(body.id);
       await updateConversationStatus(body.id, "failed");
       throw error;
     }
 
-    return streamToUIResponse(stream, cancelStream);
+    return createResumableUIResponse({
+      agentResult: stream,
+      streamId,
+      conversationId: body.id,
+      abortSignal: abortController.signal,
+    });
   },
 );
 

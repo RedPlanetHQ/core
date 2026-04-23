@@ -101,7 +101,7 @@ model Conversation {
   workspace   Workspace? @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
   workspaceId String?
 
-  status         String  @default("pending") // Can be "pending", "running", "completed", "failed", "need_attention"
+  status         String  @default("pending") // Can be "pending", "running", "completed", "failed", "cancelled", "need_attention"
   activeStreamId String? // Set while background stream is active; cleared on completion
 
   ConversationHistory ConversationHistory[]

@@ -145,7 +145,13 @@ export async function readConversation(conversationId: string) {
 
 export async function updateConversationStatus(
   conversationId: string,
-  status: "pending" | "running" | "completed" | "failed" | "need_attention",
+  status:
+    | "pending"
+    | "running"
+    | "completed"
+    | "failed"
+    | "cancelled"
+    | "need_attention",
 ) {
   return prisma.conversation.update({
     where: { id: conversationId },

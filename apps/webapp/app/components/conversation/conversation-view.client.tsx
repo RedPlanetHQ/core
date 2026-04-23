@@ -52,9 +52,17 @@ export function ConversationView({
   integrationAccountMap = {},
   integrationFrontendMap = {},
   autoRegenerate = false,
-  conversationStatus,
+  conversationStatus: conversationStatusProp,
   models: modelsProp = [],
 }: ConversationViewProps) {
+  // Local mirror of the loader-provided status — stays fresh across stop/
+  // completion events without needing a route revalidation.
+  const [conversationStatus, setConversationStatus] = useState(
+    conversationStatusProp,
+  );
+  useEffect(() => {
+    setConversationStatus(conversationStatusProp);
+  }, [conversationStatusProp]);
   const history = historyProp ?? [];
   const readFetcher = useFetcher();
   const skillsFetcher = useFetcher<{
@@ -87,6 +95,26 @@ export function ConversationView({
   const handleModelChange = (modelId: string) => {
     setSelectedModelId(modelId);
   };
+
+  // Captures useChat.stop so handleStop can reference it without depending on
+  // the hook call order.
+  const stopRef = useRef<(() => void) | null>(null);
+
+  const [isStopping, setIsStopping] = useState(false);
+
+  const handleStop = useCallback(async () => {
+    setIsStopping(true);
+    try {
+      await fetch(`/api/v1/conversation/${conversationId}/stop`, {
+        method: "POST",
+      });
+    } catch {
+      // best-effort: network issues shouldn't block the local UI stop
+    }
+    stopRef.current?.();
+    setConversationStatus("cancelled");
+    setIsStopping(false);
+  }, [conversationId]);
 
   const [permissionMode, setPermissionMode] = useLocalCommonState<PermissionMode>(
     "conversationPermissionMode",
@@ -132,6 +160,7 @@ export function ConversationView({
     onFinish: () => {
       toolArgOverridesRef.current = {};
       pendingApprovalRequestsRef.current = [];
+      setConversationStatus("completed");
       readFetcher.submit(null, {
         method: "GET",
         action: `/api/v1/conversation/${conversationId}/read`,
@@ -171,11 +200,16 @@ export function ConversationView({
           },
         };
       },
+      prepareReconnectToStreamRequest: ({ id }) => ({
+        api: `/api/v1/conversation/${id}/stream`,
+      }),
     }),
     // Fire when every suspended tool (across the full agent hierarchy) has a
     // recorded approve/decline decision in toolArgOverridesRef.
     sendAutomaticallyWhen: lastAssistantMessageIsCompleteWithApprovalResponses,
   });
+
+  stopRef.current = stop;
 
   useEffect(() => {
     if (
@@ -326,25 +360,25 @@ export function ConversationView({
       <div className="flex w-full shrink-0 flex-col items-center">
         <div ref={composerRef} className="w-full max-w-[90ch] px-4">
           <ThinkingIndicator
-            isLoading={status === "streaming" || status === "submitted"}
+            isLoading={
+              status === "streaming" ||
+              status === "submitted" ||
+              conversationStatus === "running"
+            }
           />
           <ConversationTextarea
             className="pt-4"
             isLoading={
               status === "streaming" ||
               status === "submitted" ||
-              (messages[messages.length - 1]?.role === "assistant" &&
-                conversationStatus === "running")
+              conversationStatus === "running"
             }
-            disabled={
-              needsApproval ||
-              (messages[messages.length - 1]?.role === "assistant" &&
-                conversationStatus === "running")
-            }
+            isStopping={isStopping}
+            disabled={needsApproval}
             onConversationCreated={(message) => {
               if (message) sendMessage({ text: message });
             }}
-            stop={() => stop()}
+            stop={handleStop}
             models={modelsProp}
             selectedModelId={selectedModelId}
             onModelChange={handleModelChange}
@@ -356,8 +390,7 @@ export function ConversationView({
                 disabled={
                   status === "streaming" ||
                   status === "submitted" ||
-                  (messages[messages.length - 1]?.role === "assistant" &&
-                    conversationStatus === "running")
+                  conversationStatus === "running"
                 }
               />
             }
