@@ -139,6 +139,27 @@ The integration includes proper error handling for:
 5. Run linting and formatting
 6. Submit a pull request
 
+## Label colors
+
+The `create_label`, `update_label`, and `get_or_create_label` MCP tools accept an optional `color` parameter.
+
+- Pass a preset key — one of: `black`, `gray`, `white`, `red`, `orange`, `yellow`, `green`, `teal`, `blue`, `purple`, `pink`, `brown`.
+- Or an explicit `{textColor, backgroundColor}` pair using values from [Gmail's allowed palette](https://developers.google.com/gmail/api/reference/rest/v1/users.labels) (89 hex values total).
+
+Gmail renders one color pair in both light and dark themes automatically. Only labels with `type: 'user'` can be colored.
+
+Example:
+
+```json
+{ "name": "Priority", "color": "red" }
+```
+
+```json
+{ "name": "Priority", "color": { "textColor": "#ffffff", "backgroundColor": "#cc3a21" } }
+```
+
+`update_label` uses Gmail's partial update (`labels.patch`), so fields you omit are preserved.
+
 ## License
 
 This project is licensed under the same license as the parent Sol project.

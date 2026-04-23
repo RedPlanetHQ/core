@@ -166,3 +166,33 @@ Matches if:
 - **Multiple labels could apply** → use priority order above. Urgent beats everything. Apply up to 2 — skip the rest.
 - **Truly ambiguous** → default to FYI rather than leaving unlabelled.
 - **Email is already labelled** → do not overwrite manual labels. Skip entirely.
+
+---
+
+### Label Colors
+
+When creating or updating Gmail labels, you can set a color from Gmail's fixed palette. Pass `color` as either a preset key or an explicit pair:
+
+**Preset key:**
+
+```json
+{
+  "name": "Urgent",
+  "color": "red"
+}
+```
+
+Available presets: `black`, `gray`, `white`, `red`, `orange`, `yellow`, `green`, `teal`, `blue`, `purple`, `pink`, `brown`.
+
+**Explicit pair** (for any color in Gmail's 89-value palette):
+
+```json
+{
+  "name": "Urgent",
+  "color": { "textColor": "#ffffff", "backgroundColor": "#cc3a21" }
+}
+```
+
+Both `textColor` and `backgroundColor` must be values from Gmail's allowed palette — arbitrary hex is rejected. See the full palette in the [Gmail API reference](https://developers.google.com/gmail/api/reference/rest/v1/users.labels).
+
+Gmail renders a single color pair in both light and dark themes automatically — there is no per-theme input. Only `type: 'user'` labels can be colored (system labels cannot).
