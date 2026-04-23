@@ -23,6 +23,7 @@ import {
 import {
 	readAgentSessionTurns,
 	agentSessionExists,
+	agentSessionUpdatedSince,
 	getAgentReader,
 	scanAllSessions,
 	searchSessions,
@@ -496,18 +497,24 @@ async function handleAsk(params: zod.infer<typeof AskSchema>, logger?: Logger) {
 	// Start idle watchdog — kills the process if stdout goes silent for 30s
 	// if (pid) startIdleWatchdog(sessionId, pid);
 
-	// For agents with a session reader, wait until the session file appears
+	// For agents with a session reader, wait until the session file is ready.
+	// - New session: the transcript file needs to appear.
+	// - Resume: the transcript pre-exists from the original run, so wait until it's been
+	//   touched by the resumed process (mtime > startedAt). Otherwise callers can read
+	//   before Claude has flushed anything and see an empty/"completed" session.
 	const hasReader = getAgentReader(agentName) !== null;
-	if (hasReader && !isResume) {
+	if (hasReader) {
 		const deadline = Date.now() + 30_000;
+		const isReady = () =>
+			isResume
+				? agentSessionUpdatedSince(agentName, workingDir, sessionId, startedAt)
+				: agentSessionExists(agentName, workingDir, sessionId);
+
 		const sessionReady = await new Promise<boolean>(resolve => {
 			function check() {
-				if (agentSessionExists(agentName, workingDir, sessionId))
-					return resolve(true);
-				if (!isProcessRunning(sessionId))
-					return resolve(agentSessionExists(agentName, workingDir, sessionId));
-				if (Date.now() >= deadline)
-					return resolve(agentSessionExists(agentName, workingDir, sessionId));
+				if (isReady()) return resolve(true);
+				if (!isProcessRunning(sessionId)) return resolve(isReady());
+				if (Date.now() >= deadline) return resolve(isReady());
 				setTimeout(check, 500);
 			}
 			setTimeout(check, 500);
@@ -515,18 +522,19 @@ async function handleAsk(params: zod.infer<typeof AskSchema>, logger?: Logger) {
 
 		if (!sessionReady) {
 			stopProcess(sessionId);
-			if (worktreePath) removeWorktree(worktreePath, params.dir);
+			if (worktreePath && !isResume) removeWorktree(worktreePath, params.dir);
 			deleteSession(sessionId);
 			return {
 				success: false,
-				error:
-					'Session failed to start: agent did not produce output within 30 seconds',
+				error: isResume
+					? 'Resume failed: agent did not write to the session transcript within 30 seconds'
+					: 'Session failed to start: agent did not produce output within 30 seconds',
 			};
 		}
 
-		// For codex-cli: find the actual session ID codex assigned (its own UUID in the filename)
-		// and re-key our running session record to use it.
-		if (agentName === 'codex-cli') {
+		// For codex-cli on a new session: find the actual session ID codex assigned
+		// (its own UUID in the filename) and re-key our running session record to use it.
+		if (agentName === 'codex-cli' && !isResume) {
 			const found = await findLatestCodexSession(workingDir, startedAt);
 
 			if (found && found.sessionId !== sessionId) {
@@ -664,11 +672,25 @@ async function handleReadSession(params: zod.infer<typeof ReadSessionSchema>) {
 	let status: string;
 	let statusMessage: string | undefined;
 
+	// 30s grace window before we flip initializing → failed when the process is gone
+	// but no transcript was ever written. Matches handleAsk's ready-wait deadline.
+	const INIT_GRACE_MS = 30_000;
+
 	if (running && !fileExists) {
 		status = 'initializing';
 		statusMessage = 'Agent is booting. Wait a few seconds and read again.';
 	} else if (running) {
 		status = 'running';
+	} else if (!fileExists && stored?.startedAt) {
+		// Process is gone and produced no transcript. Don't lie with "completed".
+		if (stored) deleteSession(params.sessionId);
+		if (Date.now() - stored.startedAt < INIT_GRACE_MS) {
+			status = 'initializing';
+			statusMessage = 'Agent is booting. Wait a few seconds and read again.';
+		} else {
+			status = 'failed';
+			statusMessage = 'Agent exited before writing any output to the session transcript.';
+		}
 	} else {
 		// Process finished — clean up running session record
 		if (stored) deleteSession(params.sessionId);

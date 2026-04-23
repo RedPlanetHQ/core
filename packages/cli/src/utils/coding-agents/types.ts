@@ -69,6 +69,13 @@ export abstract class BaseCodingAgentReader {
 
 	abstract sessionExists(dir: string, sessionId: string): boolean;
 
+	/**
+	 * Returns true if the session transcript has been written to since `since` (ms since epoch).
+	 * Used to detect readiness on resume, where the file pre-exists and `sessionExists` is
+	 * satisfied immediately — we need evidence of new activity by the resumed process.
+	 */
+	abstract sessionUpdatedSince(dir: string, sessionId: string, since: number): boolean;
+
 	abstract readSessionOutput(
 		dir: string,
 		sessionId: string,

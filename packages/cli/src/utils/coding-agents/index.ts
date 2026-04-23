@@ -53,6 +53,15 @@ export function agentSessionExists(agentName: string, dir: string, sessionId: st
 	return getAgentReader(agentName)?.sessionExists(dir, sessionId) ?? false;
 }
 
+export function agentSessionUpdatedSince(
+	agentName: string,
+	dir: string,
+	sessionId: string,
+	since: number,
+): boolean {
+	return getAgentReader(agentName)?.sessionUpdatedSince(dir, sessionId, since) ?? false;
+}
+
 /**
  * Scan sessions across all registered agents, merge, sort by recency, and paginate.
  */

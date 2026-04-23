@@ -199,6 +199,20 @@ export class CodexReader extends BaseCodingAgentReader {
 		return findSessionPath(sessionId) !== null;
 	}
 
+	sessionUpdatedSince(_dir: string, sessionId: string, since: number): boolean {
+		const logPath = getSessionLogPath(sessionId, 'stdout');
+		try {
+			if (existsSync(logPath) && statSync(logPath).mtimeMs > since) return true;
+		} catch { /* ignore */ }
+		const jsonlPath = findSessionPath(sessionId);
+		if (!jsonlPath) return false;
+		try {
+			return statSync(jsonlPath).mtimeMs > since;
+		} catch {
+			return false;
+		}
+	}
+
 	/**
 	 * Read session output.
 	 * - stdout log exists (internal UUID before re-keying, or if codex hasn't been re-keyed yet): read from it.

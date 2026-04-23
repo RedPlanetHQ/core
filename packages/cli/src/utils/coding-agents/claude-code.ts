@@ -81,6 +81,15 @@ export class ClaudeCodeReader extends BaseCodingAgentReader {
 		return existsSync(getSessionPath(dir, sessionId));
 	}
 
+	sessionUpdatedSince(dir: string, sessionId: string, since: number): boolean {
+		const sessionPath = getSessionPath(dir, sessionId);
+		try {
+			return statSync(sessionPath).mtimeMs > since;
+		} catch {
+			return false;
+		}
+	}
+
 	async readSessionOutput(
 		dir: string,
 		sessionId: string,
