@@ -69,6 +69,7 @@ export async function getLastCodingSession(
       externalSessionId: true,
       agent: true,
       dir: true,
+      worktreePath: true,
       worktreeBranch: true,
       gateway: { select: { id: true, name: true } },
     },
