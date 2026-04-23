@@ -53,7 +53,7 @@
 ---
 
 > You use specialized agents like Claude Code and Cursor. You gather the context, kick off
-> the session, babysit the output. You're the context middleman — and that makes you the
+> the session, babysit the output. You're the context middleman and that makes you the
 > bottleneck. CORE's butler gathers the context, runs the agents, coordinates the work.
 > You stop babysitting. You start operating.
 
@@ -142,7 +142,7 @@ OPENAI_BASE_URL=https://your-proxy.com   # Any OpenAI-compatible endpoint
 
 [Full self-hosting guide →](https://docs.getcore.me/self-hosting/docker)
 
-> ☁️ Prefer cloud? Try CORE cloud free, 3,000 credits included. [Get started →](https://app.getcore.me)
+> ☁️ Want to download our Mac App, sign up for waitlist [here](https://www.getcore.me/)
 
 [![Deploy on Railway](https://railway.app/button.svg)](https://railway.com/deploy/core)
 
@@ -171,9 +171,13 @@ Want to understand how CORE works under the hood?
 
 ## Security
 
-CASA Tier 2 Certified · TLS 1.3 in transit · AES-256 at rest · Your data is never used for model training · Self-host for full isolation
-
-[Security Policy →](SECURITY.md) · Vulnerabilities: harshith@poozle.dev
+- CASA Tier 2 Certified
+- TLS 1.3 in transit
+- AES-256 at rest
+- Your data is never used for model training
+- Self-host for full isolation
+- [Security Policy →](SECURITY.md)
+- Vulnerabilities: harshith@poozle.dev
 
 ---
 
