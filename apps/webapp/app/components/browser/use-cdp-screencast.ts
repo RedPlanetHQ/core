@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import { CdpClient, eventModifiers } from "./cdp-client";
 
 export type ScreencastStatus = "connecting" | "running" | "ended" | "error";
@@ -51,6 +51,20 @@ export interface ScreencastApi {
   dispatchKey: (type: "keyDown" | "keyUp" | "char", e: KeyboardEvent) => void;
   /** Force a fresh CDP connection (reconnect after a drop). */
   reconnect: () => void;
+  /**
+   * Resize the remote Chromium viewport (and re-issue the screencast at a
+   * matching frame size) so the rendered page fills the host container at
+   * native resolution. Safe to call before `running` — the request is cached
+   * and applied on the next successful attach. Width/height are CSS pixels
+   * of the host container; `dpr` is `window.devicePixelRatio`.
+   */
+  setViewport: (width: number, height: number, dpr: number) => void;
+}
+
+interface Viewport {
+  width: number;
+  height: number;
+  dpr: number;
 }
 
 interface NavigationHistoryEntry {
@@ -88,6 +102,10 @@ export function useCdpScreencast({
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const cdpRef = useRef<CdpClient | null>(null);
   const pageSessionRef = useRef<string>("");
+  // Latest desired Chromium viewport. Populated by `setViewport` (typically
+  // from a ResizeObserver in the consumer) and replayed on every attach so
+  // the remote page always renders at the host container's exact size.
+  const viewportRef = useRef<Viewport | null>(null);
 
   const [status, setStatus] = useState<ScreencastStatus>("connecting");
   const [errorMsg, setErrorMsg] = useState<string>("");
@@ -188,13 +206,30 @@ export function useCdpScreencast({
           img.src = `data:image/png;base64,${p.data}`;
         });
 
+        // Apply any viewport the consumer set before the connection was
+        // ready — keeps the very first frame at the right size instead of
+        // flashing the default 1280-wide frame and then resizing.
+        const v = viewportRef.current;
+        if (v) {
+          await cdp.send(
+            "Emulation.setDeviceMetricsOverride",
+            {
+              width: v.width,
+              height: v.height,
+              deviceScaleFactor: v.dpr,
+              mobile: false,
+            },
+            sessionId,
+          );
+        }
+
         await cdp.send(
           "Page.startScreencast",
           {
             format: "png",
             quality,
-            maxWidth,
-            maxHeight: maxWidth * 2,
+            maxWidth: v ? Math.ceil(v.width * v.dpr) : maxWidth,
+            maxHeight: v ? Math.ceil(v.height * v.dpr) : maxWidth * 2,
             everyNthFrame: 1,
           },
           sessionId,
@@ -364,6 +399,59 @@ export function useCdpScreencast({
       });
   };
 
+  const setViewport = useCallback<ScreencastApi["setViewport"]>(
+    (width, height, dpr) => {
+      const dprSafe = dpr > 0 ? dpr : 1;
+      const w = Math.max(1, Math.floor(width));
+      const h = Math.max(1, Math.floor(height));
+      const prev = viewportRef.current;
+      if (prev && prev.width === w && prev.height === h && prev.dpr === dprSafe) {
+        return;
+      }
+      viewportRef.current = { width: w, height: h, dpr: dprSafe };
+
+      const cdp = cdpRef.current;
+      const sid = pageSessionRef.current;
+      if (!cdp || !sid) return; // not attached yet — applied on next connect.
+
+      cdp
+        .send(
+          "Emulation.setDeviceMetricsOverride",
+          {
+            width: w,
+            height: h,
+            deviceScaleFactor: dprSafe,
+            mobile: false,
+          },
+          sid,
+        )
+        .catch(() => {
+          /* swallow — next resize will retry */
+        });
+
+      // Re-issue the screencast at matching pixel dimensions so frames come
+      // through at native resolution (no client-side downscaling artifacts).
+      // CDP accepts repeated startScreencast calls; the previous stream is
+      // replaced by the new params.
+      cdp
+        .send(
+          "Page.startScreencast",
+          {
+            format: "png",
+            quality,
+            maxWidth: Math.ceil(w * dprSafe),
+            maxHeight: Math.ceil(h * dprSafe),
+            everyNthFrame: 1,
+          },
+          sid,
+        )
+        .catch(() => {
+          /* swallow */
+        });
+    },
+    [quality],
+  );
+
   const dispatchKey: ScreencastApi["dispatchKey"] = (type, e) => {
     const cdp = cdpRef.current;
     const sid = pageSessionRef.current;
@@ -400,5 +488,6 @@ export function useCdpScreencast({
     dispatchWheel,
     dispatchKey,
     reconnect: () => setReconnectKey((k) => k + 1),
+    setViewport,
   };
 }

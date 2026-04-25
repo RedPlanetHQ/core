@@ -107,6 +107,15 @@ if any(data.get(k) != v for k, v in patch.items()):
         json.dump(data, f, indent=2)
 PY
 
+# ---------- pin Brave as the browser ----------
+# The image ships Brave instead of Playwright's bundled Chromium. Run the
+# CLI's set-browser command so prefs.browser.{browserType,browserExecutable}
+# are populated; downstream code reads these via `getBrowserExecutable()` and
+# passes the path into Playwright's `executablePath` at launch. Idempotent —
+# rewrites the same prefs every boot, which lets us survive a wiped
+# /home/corebrain volume without losing the setting.
+corebrain browser set-browser brave >/dev/null 2>&1 || true
+
 # ---------- hand off to the gateway ----------
 # `exec` replaces the shell so the gateway becomes PID 1 and Docker's
 # stop-signal routing + stdout capture go straight to it.

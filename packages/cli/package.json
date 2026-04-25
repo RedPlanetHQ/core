@@ -1,6 +1,6 @@
 {
 	"name": "@redplanethq/corebrain",
-	"version": "2.8.15",
+	"version": "2.8.16",
 	"type": "module",
 	"engines": {
 		"node": ">=16"
