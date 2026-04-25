@@ -31,6 +31,7 @@ import { useTauri } from "~/hooks/use-tauri";
 import { IngestionStatus } from "./ingestion-status";
 import { Task } from "../icons/task";
 import { TryIt } from "./try-it";
+import { GatewaysNav } from "./gateways";
 import { ButlerStatusPill } from "../common/butler-status-pill";
 
 const data = {
@@ -198,6 +199,7 @@ export function AppSidebar({
               (item) => item.url !== "/home/overview" || widgetsEnabled,
             )}
           />
+          <GatewaysNav />
           <TryIt />
         </SidebarContent>
 

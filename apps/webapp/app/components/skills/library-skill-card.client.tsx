@@ -95,7 +95,7 @@ function SkillPreviewModal({
               {skill.title}
             </DialogTitle>
             {isInstalled && (
-              <Badge className="rounded bg-green-100 text-xs text-green-800">
+              <Badge className="text-success rounded bg-green-100 text-xs">
                 <Check size={10} />
                 Installed
               </Badge>
@@ -176,7 +176,7 @@ export function LibrarySkillCard({
           <div className="flex items-center justify-between">
             <IntegrationLogos skill={skill} />
             {isInstalled && (
-              <Badge className="shrink-0 rounded bg-green-100 text-xs text-green-800">
+              <Badge className="text-success shrink-0 rounded bg-green-100 text-xs">
                 <Check size={10} />
                 Installed
               </Badge>

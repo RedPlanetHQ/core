@@ -88,7 +88,7 @@ importers:
       '@core/database':
         specifier: workspace:*
         version: link:../../packages/database
-      '@core/gateway-protocol':
+      '@redplanethq/gateway-protocol':
         specifier: workspace:*
         version: link:../../packages/gateway-protocol
       '@core/mcp-proxy':
@@ -740,7 +740,7 @@ importers:
       '@clack/prompts':
         specifier: ^1.0.1
         version: 1.0.1
-      '@core/gateway-protocol':
+      '@redplanethq/gateway-protocol':
         specifier: workspace:*
         version: link:../gateway-protocol
       '@fastify/websocket':
@@ -920,6 +920,10 @@ importers:
       zod:
         specifier: ^4.3.0
         version: 4.3.6
+    devDependencies:
+      rimraf:
+        specifier: ^3.0.2
+        version: 3.0.2
 
   packages/hook-utils:
     devDependencies:
@@ -27764,7 +27768,7 @@ snapshots:
       fs.realpath: 1.0.0
       inflight: 1.0.6
       inherits: 2.0.4
-      minimatch: 3.1.2
+      minimatch: 3.1.5
       once: 1.4.0
       path-is-absolute: 1.0.1
 

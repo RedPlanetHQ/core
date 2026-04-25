@@ -11,7 +11,7 @@ import {
   type GatewayAgentInfo,
   type OrchestratorTools,
 } from "./executors/base";
-import { getConnectedGateways } from "~/services/gateway.server";
+import { listGateways } from "~/services/gateway.server";
 import { createGatewayAgent } from "./agents/gateway";
 import { mastra } from "./mastra";
 
@@ -69,7 +69,7 @@ export async function runGatewayExplorer(
 export async function getGatewayAgents(
   workspaceId: string,
 ): Promise<GatewayAgentInfo[]> {
-  const gateways = await getConnectedGateways(workspaceId);
+  const gateways = await listGateways(workspaceId);
 
   return gateways.map((gateway) => {
     return {

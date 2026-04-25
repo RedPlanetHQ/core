@@ -1,0 +1,73 @@
+version: "3.8"
+
+# CoreBrain Gateway — single-container deploy.
+#
+# Boots a CORE gateway with the two coding agents (claude-code + codex) and
+# Playwright Chromium pre-installed and `/app` pre-approved as the workspace
+# folder. Pair this with the webapp's "Register gateway" dialog: the
+# gateway prints its security key on first boot, you paste it (with the
+# public URL) into the webapp.
+#
+# Usage:
+#   cp .env.example .env       # edit values
+#   docker compose up -d
+#   docker compose logs -f corebrain-gateway   # grab the security key
+#
+# Persistent volumes:
+#   workspace      → /app               cloned repos + worktrees
+#   corebrain-home → /home/corebrain    gateway state (.corebrain), agent
+#                                       login + session state (.claude,
+#                                       .codex, …), playwright chromium
+#                                       cache (.cache/ms-playwright). One
+#                                       mount covers every agent's $HOME
+#                                       state so adding a new coding agent
+#                                       doesn't need a new volume.
+
+services:
+  corebrain-gateway:
+    container_name: corebrain-gateway
+    image: redplanethq/core-gateway:0.4.0
+    restart: ${RESTART_POLICY:-unless-stopped}
+    build:
+      context: ../../
+      dockerfile: packages/cli/docker/Dockerfile
+    environment:
+      # ── CORE webapp wiring ───────────────────────────────────────────
+      # API_URL is where this gateway reports back to (your CORE webapp).
+      # API_KEY is your personal access token for that workspace.
+      - COREBRAIN_API_URL=${COREBRAIN_API_URL}
+      - COREBRAIN_API_KEY=${COREBRAIN_API_KEY}
+
+      # ── Gateway identity ────────────────────────────────────────────
+      - COREBRAIN_GATEWAY_NAME=${COREBRAIN_GATEWAY_NAME:-cloud-gateway}
+      - COREBRAIN_GATEWAY_DESCRIPTION=${COREBRAIN_GATEWAY_DESCRIPTION:-Cloud-hosted CoreBrain gateway}
+
+      # Security key used by the webapp to authenticate to this gateway.
+      # Leave unset on first boot; the gateway will generate one and print
+      # it to `docker compose logs`. Pin it to a known value here once you
+      # have it, so subsequent restarts don't re-prompt.
+      - COREBRAIN_GATEWAY_SECURITY_KEY=${COREBRAIN_GATEWAY_SECURITY_KEY:-}
+
+      # ── Coding agent auth (env-only — no webapp UI for tokens) ──────
+      # claude-code: long-lived token from `claude setup-token`.
+      - CLAUDE_CODE_OAUTH_TOKEN=${CLAUDE_CODE_OAUTH_TOKEN:-}
+      # codex-cli: standard OpenAI API key.
+      - OPENAI_API_KEY=${OPENAI_API_KEY:-}
+
+      # ── Git credentials for `git clone` of private repos ────────────
+      # The entrypoint configures the credential helper from this token and
+      # auto-fetches author identity (name/email) from the GitHub API.
+      - GITHUB_TOKEN=${GITHUB_TOKEN:-}
+
+      # ── Container baked-in defaults ────────────────────────────────-
+      - COREBRAIN_DEFAULT_WORKSPACE=/app
+      - COREBRAIN_DEPLOY_MODE=docker
+    ports:
+      - "${COREBRAIN_GATEWAY_HTTP_PORT:-7787}:7787"
+    volumes:
+      - workspace:/app
+      - corebrain-home:/home/corebrain
+
+volumes:
+  workspace:
+  corebrain-home:

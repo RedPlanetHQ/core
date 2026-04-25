@@ -10,7 +10,6 @@ import {
   Building,
   Activity,
   Bot,
-  Server,
   MessageSquare,
   Cpu,
   Brain,
@@ -67,7 +66,6 @@ export default function Settings() {
     { name: "Activity", icon: Activity, path: "/settings/activity" },
     { name: "Agent", icon: Bot, path: "/settings/workspace/agent" },
     { name: "Models", icon: Cpu, path: "/settings/workspace/models" },
-    { name: "Gateway", icon: Server, path: "/settings/workspace/gateway" },
     {
       name: "Channels",
       icon: MessageSquare,

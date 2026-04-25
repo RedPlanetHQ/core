@@ -1,0 +1,43 @@
+{
+  "$schema": "https://railway.com/railway.schema.json",
+  "build": {
+    "builder": "DOCKERFILE",
+    "dockerfilePath": "packages/cli/docker/Dockerfile"
+  },
+  "deploy": {
+    "startCommand": "/usr/local/bin/corebrain-entrypoint",
+    "restartPolicyType": "ON_FAILURE",
+    "restartPolicyMaxRetries": 5,
+    "healthcheckPath": "/healthz/public",
+    "healthcheckTimeout": 30,
+    "envVars": {
+      "COREBRAIN_API_URL": {
+        "default": "https://app.getcore.me",
+        "description": "Where this gateway reports back to."
+      },
+      "COREBRAIN_API_KEY": {
+        "description": "Personal access token from CORE → Settings → Tokens."
+      },
+      "COREBRAIN_GATEWAY_NAME": {
+        "default": "railway-gateway",
+        "description": "Display name shown in the CORE sidebar."
+      },
+      "COREBRAIN_GATEWAY_DESCRIPTION": {
+        "default": "Railway-hosted CoreBrain gateway",
+        "description": "Optional description."
+      },
+      "COREBRAIN_GATEWAY_SECURITY_KEY": {
+        "description": "Auth key for the webapp. If unset, the gateway generates one and prints it to the logs on first boot."
+      },
+      "CLAUDE_CODE_OAUTH_TOKEN": {
+        "description": "Long-lived claude-code token (output of `claude setup-token`). Optional — the agent only runs when this is set."
+      },
+      "OPENAI_API_KEY": {
+        "description": "OpenAI API key for codex-cli. Optional — the agent only runs when this is set."
+      },
+      "GITHUB_TOKEN": {
+        "description": "PAT used by `git clone` of private repos. Author identity is fetched from the GitHub API automatically."
+      }
+    }
+  }
+}

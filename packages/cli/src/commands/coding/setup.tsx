@@ -7,6 +7,10 @@ import { exec } from 'node:child_process';
 import { promisify } from 'node:util';
 import { getPreferences, updatePreferences } from '@/config/preferences';
 import type { CliBackendConfig } from '@/types/config';
+import {
+	AGENT_TEMPLATES as agentTemplates,
+	type AgentTemplate,
+} from '@/utils/agent-templates';
 
 const execAsync = promisify(exec);
 
@@ -16,36 +20,7 @@ type Props = {
 	options: zod.infer<typeof options>;
 };
 
-interface AgentTemplate {
-	name: string;
-	commands: string[];
-	defaultConfig: Omit<CliBackendConfig, 'command'>;
-}
-
-const agentTemplates: AgentTemplate[] = [
-	{
-		name: 'claude-code',
-		commands: ['claude'],
-		defaultConfig: {
-			args: ['--dangerously-skip-permissions'],
-			resumeArgs: ['--dangerously-skip-permissions', '--resume', '{sessionId}'],
-			sessionArg: '--session-id',
-			sessionMode: 'always',
-			sessionIdFields: ['session_id'],
-		},
-	},
-	{
-		name: 'codex-cli',
-		commands: ['codex'],
-		defaultConfig: {
-			args: ['--color', 'never', '--sandbox', 'read-only', '--skip-git-repo-check'],
-			resumeArgs: ['resume', '{sessionId}', '--color', 'never', '--sandbox', 'read-only', '--skip-git-repo-check'],
-			sessionMode: 'existing',
-			modelArg: '--model',
-			imageArg: '--image',
-		},
-	},
-];
+export type {AgentTemplate};
 
 interface DetectionResult {
 	name: string;

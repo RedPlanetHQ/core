@@ -7,6 +7,8 @@ import {browserRoutes} from './browser';
 import {execRoutes} from './exec';
 import {filesRoutes} from './files';
 import {utilsRoutes} from './utils';
+import {folderRoutes} from './folders';
+import {shellRoutes} from './shell';
 import {isSlotEnabled} from './manifest-builder';
 import {getPreferences} from '@/config/preferences';
 
@@ -49,6 +51,13 @@ export async function buildServer(opts: ApiServerOptions): Promise<FastifyInstan
 	}
 	// utils has no slot — it's always enabled (e.g. `sleep`).
 	await app.register(utilsRoutes, {prefix: '/api/utils'});
+
+	// Folder management — used by the webapp's per-gateway settings page to
+	// add/remove local paths or clone GitHub URLs into the workspace.
+	await app.register(folderRoutes, {prefix: '/api/folders'});
+
+	// General-purpose shell PTY for the webapp's Terminal tab.
+	await app.register(shellRoutes, {prefix: '/api/shell'});
 
 	app.setErrorHandler((err: Error & {statusCode?: number; code?: string}, _req, reply) => {
 		log(`api error: ${err.message}`);

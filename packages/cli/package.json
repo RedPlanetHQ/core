@@ -1,6 +1,6 @@
 {
 	"name": "@redplanethq/corebrain",
-	"version": "2.8.13",
+	"version": "2.8.15",
 	"type": "module",
 	"engines": {
 		"node": ">=16"
@@ -21,7 +21,7 @@
 	],
 	"dependencies": {
 		"@clack/prompts": "^1.0.1",
-		"@core/gateway-protocol": "workspace:*",
+		"@redplanethq/gateway-protocol": "workspace:*",
 		"@fastify/websocket": "^11.0.1",
 		"@mariozechner/pi-tui": "^0.57.1",
 		"@mishieck/ink-titled-box": "^0.4.2",
