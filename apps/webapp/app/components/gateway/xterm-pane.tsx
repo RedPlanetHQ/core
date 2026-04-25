@@ -283,7 +283,7 @@ export function XtermPane({
 
   return (
     <div
-      className="border-border relative h-full w-full overflow-hidden border"
+      className="relative h-full w-full overflow-hidden"
       style={{
         background: bg,
         display: "flex",

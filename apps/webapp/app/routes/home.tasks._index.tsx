@@ -107,7 +107,11 @@ export default function TasksIndex() {
   const filteredTasks = tasks.filter((t) => {
     if (!showDone && t.status === "Done") return false;
     if (recurringFilter && !t.schedule) return false;
-    if (activeFilters.length > 0 && !activeFilters.includes(t.status as TaskStatus)) return false;
+    if (
+      activeFilters.length > 0 &&
+      !activeFilters.includes(t.status as TaskStatus)
+    )
+      return false;
     return true;
   });
 

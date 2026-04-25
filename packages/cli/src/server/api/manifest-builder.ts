@@ -107,14 +107,34 @@ function detectDeployMode(): DeployMode {
 }
 
 /**
+ * Env override for slot enablement. `COREBRAIN_SLOT_<NAME>` (e.g.
+ * `COREBRAIN_SLOT_FILES=false`) wins over the on-disk slot config so docker
+ * deploys can default a slot off via `ENV` without rewriting preferences,
+ * and operators can flip a slot at runtime by restarting with a different
+ * env value. Recognises `true|1|yes` and `false|0|no` (case-insensitive);
+ * any other value is ignored and falls through to the on-disk setting.
+ */
+function envSlotOverride(slot: keyof GatewaySlots): boolean | undefined {
+	const raw = process.env[`COREBRAIN_SLOT_${slot.toUpperCase()}`];
+	if (raw === undefined || raw === '') return undefined;
+	const v = raw.trim().toLowerCase();
+	if (v === 'true' || v === '1' || v === 'yes') return true;
+	if (v === 'false' || v === '0' || v === 'no') return false;
+	return undefined;
+}
+
+/**
  * A slot is considered enabled unless the user explicitly disabled it via
- * `corebrain gateway config` (slots[name].enabled === false). Missing config
- * means enabled, for backwards compatibility.
+ * `corebrain gateway config` (slots[name].enabled === false) or via the
+ * `COREBRAIN_SLOT_<NAME>` env var. Missing config means enabled, for
+ * backwards compatibility.
  */
 export function isSlotEnabled(
 	slots: GatewaySlots | undefined,
 	slot: keyof GatewaySlots,
 ): boolean {
+	const override = envSlotOverride(slot);
+	if (override !== undefined) return override;
 	if (!slots) return true;
 	const entry = slots[slot];
 	if (!entry) return true;

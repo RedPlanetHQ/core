@@ -54,12 +54,51 @@ export function CdpViewer({
     dispatchWheel,
     dispatchKey,
     reconnect,
+    setViewport,
   } = useCdpScreencast({ wsUrl, quality, maxWidth });
+
+  // Resize the remote Chromium viewport to match the canvas's container.
+  // Debounced because ResizeObserver fires per-frame during a window-drag;
+  // pushing every intermediate size to CDP would flood the channel and
+  // trigger constant page reflows on the remote side.
+  useEffect(() => {
+    const node = containerRef.current;
+    if (!node) return;
+
+    let timer: ReturnType<typeof setTimeout> | null = null;
+    const apply = () => {
+      const rect = node.getBoundingClientRect();
+      if (rect.width <= 0 || rect.height <= 0) return;
+      setViewport(
+        Math.floor(rect.width),
+        Math.floor(rect.height),
+        window.devicePixelRatio || 1,
+      );
+    };
+
+    const ro = new ResizeObserver(() => {
+      if (timer) clearTimeout(timer);
+      timer = setTimeout(apply, 150);
+    });
+    ro.observe(node);
+    apply();
+
+    return () => {
+      if (timer) clearTimeout(timer);
+      ro.disconnect();
+    };
+  }, [setViewport]);
   const [hasControl, setHasControl] = useState(false);
   const [urlInput, setUrlInput] = useState("");
   const urlInputRef = useRef<HTMLInputElement>(null);
+  // Track focus explicitly via onFocus / onBlur instead of reading
+  // `document.activeElement`. WKWebView (Tauri's webview) reports
+  // activeElement inconsistently relative to the React render cycle, so the
+  // guard would mis-fire and clobber the typed character with `pageUrl`,
+  // which manifests as "the URL bar drops focus after one letter".
+  const isUrlFocusedRef = useRef(false);
   useEffect(() => {
-    if (document.activeElement !== urlInputRef.current) {
+    if (!isUrlFocusedRef.current) {
       setUrlInput(pageUrl);
     }
   }, [pageUrl]);
@@ -159,7 +198,13 @@ export function CdpViewer({
           ref={urlInputRef}
           value={urlInput}
           onChange={(e) => setUrlInput(e.target.value)}
-          onFocus={(e) => e.currentTarget.select()}
+          onFocus={(e) => {
+            isUrlFocusedRef.current = true;
+            e.currentTarget.select();
+          }}
+          onBlur={() => {
+            isUrlFocusedRef.current = false;
+          }}
           placeholder={isRunning ? "Enter URL or search…" : ""}
           className="h-7 flex-1 font-mono text-xs"
           disabled={!isRunning}
@@ -172,15 +217,7 @@ export function CdpViewer({
               <span className="hidden md:inline">Connecting…</span>
             </>
           )}
-          {isRunning &&
-            (hasControl ? (
-              <span className="hidden items-center gap-1 text-green-500 md:flex">
-                <MousePointerClick size={12} />
-                You have control
-              </span>
-            ) : (
-              <span className="hidden md:inline">Agent is driving</span>
-            ))}
+
           {status === "ended" && (
             <span className="hidden md:inline">Disconnected</span>
           )}
@@ -231,8 +268,7 @@ export function CdpViewer({
       >
         <canvas
           ref={canvasRef}
-          className="block max-h-full max-w-full"
-          style={{ margin: "0 auto" }}
+          className="block h-full w-full"
           onContextMenu={(e) => hasControl && e.preventDefault()}
           onMouseMove={(e) => hasControl && dispatchMouse("mouseMoved", e)}
           onMouseDown={(e) => hasControl && dispatchMouse("mousePressed", e)}
