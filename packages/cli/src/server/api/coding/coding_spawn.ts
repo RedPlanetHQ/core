@@ -7,10 +7,10 @@ import {
 	buildResumeArgs,
 	startAgentProcess,
 } from '@/utils/coding-runner';
-import {upsertSession, deleteSession} from '@/utils/coding-sessions';
+import {upsertSession, deleteSession, getSession} from '@/utils/coding-sessions';
 import {listFolders, resolveFolderForPath} from '@/config/folders';
 import {ptyManager} from '@/server/pty/manager';
-import {findLatestCodexSession} from '@/utils/coding-agents';
+import {findLatestCodexSession, scanAllSessions} from '@/utils/coding-agents';
 import {gatewayLog} from '@/server/gateway-log';
 
 /**

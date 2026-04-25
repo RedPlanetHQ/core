@@ -10,6 +10,7 @@ import { createTool } from "@mastra/core/tools";
 import { z } from "zod";
 
 import { createCodingSession } from "~/services/coding/coding-session.server";
+import { createBrowserSession } from "~/services/browser/browser-session.server";
 
 import { logger } from "~/services/logger.service";
 import { getGateway } from "~/services/gateway.server";
@@ -23,7 +24,7 @@ import {
   callTool as callGatewayTool,
   fetchManifest,
 } from "~/services/gateway/transport.server";
-import type { Folder } from "@core/gateway-protocol";
+import type { Folder } from "@redplanethq/gateway-protocol";
 
 // Types for gateway tools (matches schema in database)
 interface GatewayTool {
@@ -156,6 +157,29 @@ function createGatewayTools(
                 params as Record<string, unknown>,
                 60000,
               );
+
+          // Record a BrowserSession row when the agent successfully creates a
+          // session alias on the gateway. The row is the workspace-side audit
+          // trail; the gateway already persisted the alias in its config.
+          if (
+            gatewayTool.name === "browser_create_session" &&
+            sessionCtx?.taskId
+          ) {
+            const p = params as Record<string, unknown>;
+            const sessionName = p.session as string | undefined;
+            const profileName = p.profile as string | undefined;
+            if (sessionName && profileName) {
+              createBrowserSession({
+                workspaceId: sessionCtx.workspaceId,
+                taskId: sessionCtx.taskId,
+                gatewayId,
+                sessionName,
+                profileName,
+              }).catch((err) =>
+                logger.warn("Failed to record browser session", { err }),
+              );
+            }
+          }
 
           // Record coding session only on successful coding_ask (result has sessionId)
           if (gatewayTool.name === "coding_ask" && sessionCtx) {

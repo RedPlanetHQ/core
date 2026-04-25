@@ -45,7 +45,8 @@ export function CustomMcpCard({
     }
   }, [fetcher.data, onDelete]);
 
-  const isConnected = !!integration.oauth?.accessToken || !!integration.apiKey?.key;
+  const isConnected =
+    !!integration.oauth?.accessToken || !!integration.apiKey?.key;
 
   return (
     <Card className="bg-background-3 transition-all">
@@ -57,7 +58,7 @@ export function CustomMcpCard({
 
           <div className="flex items-center gap-2">
             {isConnected && (
-              <Badge className="h-6 rounded !bg-green-100 p-2 text-sm text-green-800">
+              <Badge className="text-success h-6 rounded !bg-green-100 p-2 text-sm">
                 Connected
               </Badge>
             )}

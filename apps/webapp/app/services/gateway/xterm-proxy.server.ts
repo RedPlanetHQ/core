@@ -4,25 +4,32 @@ import WebSocket, { WebSocketServer } from "ws";
 import { prisma } from "~/db.server";
 import { sessionStorage } from "~/services/sessionStorage.server";
 import { readSecurityKey } from "./secrets.server";
+import { spawnCodingSession } from "./transport.server";
 
 /**
  * WebSocket upgrade proxy: browser → webapp → gateway xterm PTY.
  *
- * Browser connects to:
- *   ws(s)://app.getcore.me/api/v1/coding-sessions/<codingSessionId>/xterm
- * The webapp authenticates via the session cookie, looks up the gateway +
- * externalSessionId for that coding session, decrypts the gateway's
- * securityKey, and opens an upstream WS to:
- *   ws(s)://<gw.baseUrl>/api/coding/coding_xterm_session?session_id=<externalSessionId>
- * then pipes frames in both directions.
+ * Two upstream paths are supported, both pipe to the gateway's
+ * `/api/coding/coding_xterm_session?session_id=…` endpoint:
  *
- * This keeps the securityKey out of the browser (browser only has a session
- * cookie) and mirrors the Fastify-side xterm WS envelope — input/resize
- * JSON messages pass through unchanged.
+ *   1. CodingSession-bound:
+ *        ws(s)://…/api/v1/coding-sessions/<codingSessionId>/xterm
+ *      Resolves the session row in the DB to get the gateway +
+ *      externalSessionId. Used by the per-task coding UI.
+ *
+ *   2. Gateway-direct:
+ *        ws(s)://…/api/v1/gateways/<gatewayId>/xterm?session_id=<extId>
+ *      No DB session — the caller (webapp) tells us which gateway PTY to
+ *      attach to. Used for the agent-login modal and the per-gateway
+ *      Terminal tab where there's no CodingSession to anchor against.
+ *
+ * Both flows decrypt the gateway's securityKey server-side and pipe frames
+ * unchanged so the browser never sees the secret.
  */
 
-const pathMatcher =
+const codingSessionPath =
   /^\/api\/v1\/coding-sessions\/([^/]+)\/xterm\/?$/;
+const gatewayDirectPath = /^\/api\/v1\/gateways\/([^/]+)\/xterm\/?$/;
 
 async function authenticate(
   req: IncomingMessage,
@@ -38,17 +45,22 @@ async function authenticate(
   return { userId: user.userId, workspaceId: user.workspaceId ?? "" };
 }
 
+/**
+ * Common shape returned by every resolver. `upstreamPath` is appended to
+ * `baseUrl` (after `http→ws` rewrite + trailing-slash strip) to produce the
+ * final upstream WS URL — lets each path supply its own gateway-side route.
+ */
+interface UpstreamTarget {
+  baseUrl: string;
+  gatewayId: string;
+  upstreamPath: string;
+}
+type ResolverResult = UpstreamTarget | { error: string; code: number };
+
 async function resolveSession(
   codingSessionId: string,
   userId: string,
-): Promise<
-  | {
-      externalSessionId: string;
-      baseUrl: string;
-      gatewayId: string;
-    }
-  | { error: string; code: number }
-> {
+): Promise<ResolverResult> {
   const session = await prisma.codingSession.findFirst({
     where: {
       id: codingSessionId,
@@ -66,16 +78,33 @@ async function resolveSession(
   if (!session.gateway?.baseUrl)
     return { error: "no gateway linked", code: 422 };
   return {
-    externalSessionId: session.externalSessionId,
     baseUrl: session.gateway.baseUrl,
     gatewayId: session.gateway.id,
+    upstreamPath: `/api/coding/coding_xterm_session?session_id=${encodeURIComponent(
+      session.externalSessionId,
+    )}`,
   };
 }
 
 function pipeFrames(client: WebSocket, upstream: WebSocket): void {
+  // 1005/1006/1015 etc. are reserved "received-only" close codes — passing
+  // them to ws.close() throws (uncaught → process restart). Forward only
+  // sendable codes; fall back to 1000.
+  const sanitizeCode = (code: number): number =>
+    code === 1000 || (code >= 3000 && code <= 4999) ? code : 1000;
+
   const closeBoth = (code = 1000, reason = "") => {
-    if (client.readyState === client.OPEN) client.close(code, reason);
-    if (upstream.readyState === upstream.OPEN) upstream.close(code, reason);
+    const safe = sanitizeCode(code);
+    try {
+      if (client.readyState === client.OPEN) client.close(safe, reason);
+    } catch {
+      /* already closing */
+    }
+    try {
+      if (upstream.readyState === upstream.OPEN) upstream.close(safe, reason);
+    } catch {
+      /* already closing */
+    }
   };
 
   client.on("message", (data) => {
@@ -91,12 +120,37 @@ function pipeFrames(client: WebSocket, upstream: WebSocket): void {
   upstream.on("error", () => closeBoth(1011, "upstream error"));
 }
 
+async function resolveGatewayDirect(
+  gatewayId: string,
+  externalSessionId: string,
+  userId: string,
+): Promise<ResolverResult> {
+  if (!externalSessionId) {
+    return {error: "session_id query param required", code: 400};
+  }
+  const gateway = await prisma.gateway.findFirst({
+    where: {
+      id: gatewayId,
+      workspace: {UserWorkspace: {some: {userId}}},
+    },
+    select: {id: true, baseUrl: true},
+  });
+  if (!gateway) return {error: "gateway not found", code: 404};
+  return {
+    baseUrl: gateway.baseUrl,
+    gatewayId: gateway.id,
+    upstreamPath: `/api/coding/coding_xterm_session?session_id=${encodeURIComponent(
+      externalSessionId,
+    )}`,
+  };
+}
+
 async function handleUpgrade(
   req: IncomingMessage,
   socket: Socket,
   head: Buffer,
   wss: WebSocketServer,
-  codingSessionId: string,
+  resolver: (userId: string) => Promise<ResolverResult>,
 ): Promise<void> {
   const auth = await authenticate(req);
   if (!auth) {
@@ -105,7 +159,7 @@ async function handleUpgrade(
     return;
   }
 
-  const resolved = await resolveSession(codingSessionId, auth.userId);
+  const resolved = await resolver(auth.userId);
   if ("error" in resolved) {
     socket.write(
       `HTTP/1.1 ${resolved.code} ${resolved.error}\r\n\r\n`,
@@ -125,9 +179,7 @@ async function handleUpgrade(
 
   const upstreamUrl =
     resolved.baseUrl.replace(/^http/i, "ws").replace(/\/$/, "") +
-    `/api/coding/coding_xterm_session?session_id=${encodeURIComponent(
-      resolved.externalSessionId,
-    )}`;
+    resolved.upstreamPath;
   const upstream = new WebSocket(upstreamUrl, {
     headers: { authorization: `Bearer ${securityKey}` },
   });
@@ -158,17 +210,43 @@ export function tryHandleXtermUpgrade(
   wss: WebSocketServer,
 ): boolean {
   const url = new URL(req.url!, `http://${req.headers.host}`);
-  const match = pathMatcher.exec(url.pathname);
-  if (!match) return false;
-  handleUpgrade(req, socket, head, wss, match[1]!).catch((err) => {
-    // eslint-disable-next-line no-console
-    console.error("xterm proxy upgrade failed", err);
-    try {
-      socket.write("HTTP/1.1 500 Internal Server Error\r\n\r\n");
-      socket.destroy();
-    } catch {
-      /* already closed */
-    }
-  });
-  return true;
+
+  const codingMatch = codingSessionPath.exec(url.pathname);
+  if (codingMatch) {
+    const codingSessionId = codingMatch[1]!;
+    handleUpgrade(req, socket, head, wss, (userId) =>
+      resolveSession(codingSessionId, userId),
+    ).catch((err) => {
+      // eslint-disable-next-line no-console
+      console.error("xterm proxy upgrade failed (coding)", err);
+      try {
+        socket.write("HTTP/1.1 500 Internal Server Error\r\n\r\n");
+        socket.destroy();
+      } catch {
+        /* already closed */
+      }
+    });
+    return true;
+  }
+
+  const gatewayMatch = gatewayDirectPath.exec(url.pathname);
+  if (gatewayMatch) {
+    const gatewayId = gatewayMatch[1]!;
+    const externalSessionId = url.searchParams.get("session_id") ?? "";
+    handleUpgrade(req, socket, head, wss, (userId) =>
+      resolveGatewayDirect(gatewayId, externalSessionId, userId),
+    ).catch((err) => {
+      // eslint-disable-next-line no-console
+      console.error("xterm proxy upgrade failed (gateway)", err);
+      try {
+        socket.write("HTTP/1.1 500 Internal Server Error\r\n\r\n");
+        socket.destroy();
+      } catch {
+        /* already closed */
+      }
+    });
+    return true;
+  }
+
+  return false;
 }

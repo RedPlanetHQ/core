@@ -1,5 +1,62 @@
-import { fetchManifest } from "./transport.server";
-import type { Folder, FolderScope } from "@core/gateway-protocol";
+import { callTool, fetchManifest } from "./transport.server";
+import type {
+  Folder,
+  FolderScope,
+  AvailableAgent,
+  DeployMode,
+} from "@redplanethq/gateway-protocol";
+
+interface ConfiguredBrowserSession {
+  name: string;
+  profile: string;
+  live: boolean;
+}
+
+interface ConfiguredBrowserProfile {
+  name: string;
+  dir?: string;
+}
+
+interface BrowserListResult {
+  profiles?: ConfiguredBrowserProfile[];
+  sessions?: ConfiguredBrowserSession[];
+  maxSessions?: number;
+  maxProfiles?: number;
+}
+
+interface RawBrowserListResult {
+  profiles?: Array<string | ConfiguredBrowserProfile>;
+  sessions?: ConfiguredBrowserSession[];
+  maxSessions?: number;
+  maxProfiles?: number;
+}
+
+/**
+ * Live-fetch the gateway's configured browser sessions + profiles via the
+ * `browser_list_sessions` tool. Used by the new-browser-session dialog so
+ * the UI can show what's available + which session names are already
+ * running on the gateway side.
+ */
+export async function getGatewayBrowserSessions(
+  gatewayId: string,
+): Promise<BrowserListResult | null> {
+  try {
+    const result = (await callTool(
+      gatewayId,
+      "browser_list_sessions",
+      {},
+    )) as RawBrowserListResult;
+    if (!result) return null;
+    return {
+      ...result,
+      profiles: (result.profiles ?? []).map((p) =>
+        typeof p === "string" ? { name: p } : p,
+      ),
+    };
+  } catch {
+    return null;
+  }
+}
 
 /**
  * Live-fetch the gateway's registered folders from its `/manifest` endpoint.
@@ -34,12 +91,17 @@ export async function getGatewayAgents(gatewayId: string): Promise<string[]> {
 /**
  * Live-fetch everything the UI typically needs in one roundtrip.
  */
-export async function getGatewayInfo(
-  gatewayId: string,
-): Promise<{
+export async function getGatewayInfo(gatewayId: string): Promise<{
   folders: Folder[];
   agents: string[];
-  gateway: { id: string; name: string; hostname: string; platform: string };
+  availableAgents: AvailableAgent[];
+  gateway: {
+    id: string;
+    name: string;
+    hostname: string;
+    platform: string;
+    deployMode: DeployMode;
+  };
   tools: Array<{ name: string; description: string }>;
 } | null> {
   const m = await fetchManifest(gatewayId);
@@ -48,11 +110,13 @@ export async function getGatewayInfo(
   return {
     folders: manifest.folders ?? [],
     agents: manifest.agents ?? [],
+    availableAgents: manifest.availableAgents ?? [],
     gateway: {
       id: manifest.gateway.id,
       name: manifest.gateway.name,
       hostname: manifest.gateway.hostname,
       platform: manifest.gateway.platform,
+      deployMode: manifest.gateway.deployMode ?? "native",
     },
     tools: (manifest.tools ?? []).map((t) => ({
       name: t.name,

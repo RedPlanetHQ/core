@@ -1,7 +1,9 @@
 {
-  "name": "@core/gateway-protocol",
-  "version": "0.1.0",
-  "private": true,
+  "name": "@redplanethq/gateway-protocol",
+  "version": "0.1.1",
+  "publishConfig": {
+    "access": "public"
+  },
   "type": "module",
   "main": "./dist/index.js",
   "types": "./dist/index.d.ts",
@@ -13,6 +15,9 @@
   },
   "dependencies": {
     "zod": "^4.3.0"
+  },
+  "devDependencies": {
+    "rimraf": "^3.0.2"
   },
   "scripts": {
     "clean": "rimraf dist",

@@ -1,16 +1,101 @@
-FROM node:24-slim
+# syntax=docker/dockerfile:1.6
+#
+# CoreBrain Gateway — one-container deploy.
+#
+# Boots a CORE gateway with the two coding agents pre-installed and a
+# pre-approved /app workspace folder. Designed for Railway / Fly / Render /
+# any Docker host. For laptop installs use `npm install -g @redplanethq/corebrain`
+# instead — this image exists to make the hosted-gateway deploy one command.
+#
+# Build:
+#   docker build -f packages/cli/docker/Dockerfile -t corebrain-gateway .
+# Run:
+#   docker run --rm -it \
+#     -p 7787:7787 \
+#     -e COREBRAIN_API_URL=https://app.getcore.me \
+#     -e COREBRAIN_API_KEY=...                    # user's PAT \
+#     -e COREBRAIN_GATEWAY_NAME=my-cloud-gateway \
+#     -e COREBRAIN_GATEWAY_DESCRIPTION="Cloud agent runtime" \
+#     -e COREBRAIN_GATEWAY_SECURITY_KEY=...       # optional; auto-generated if absent \
+#     -e GITHUB_TOKEN=...                         # optional; for `git clone` of private repos \
+#     -e ANTHROPIC_API_KEY=...                    # optional; lets claude skip OAuth login \
+#     -e OPENAI_API_KEY=...                       # optional; lets codex skip OAuth login \
+#     -v corebrain-home:/home/corebrain                 # persist gateway id, agent login + session state, chromium cache \
+#     -v corebrain-workspace:/app                       # persist cloned repos and worktree state \
+#     corebrain-gateway
+#
+# On first run with no COREBRAIN_GATEWAY_SECURITY_KEY env var the gateway
+# generates one and prints it to stdout. Copy it from `docker logs` and paste
+# (along with the public URL) into the webapp's New Gateway dialog.
 
-RUN apt-get update && apt-get install -y \
-    curl \
-    git \
+FROM node:22-slim
+
+# System dependencies — git for repo work, ca-certs for HTTPS, build tools
+# for node-pty's rebuild fallback on unusual platforms, python3 for node-gyp.
+RUN apt-get update \
+    && apt-get install -y --no-install-recommends \
+        ca-certificates \
+        git \
+        curl \
+        python3 \
+        build-essential \
     && rm -rf /var/lib/apt/lists/*
 
-# Install claude-code globally
-RUN npm install -g @anthropic-ai/claude-code
+# Coding agents — shipped so every gateway has claude + codex available out
+# of the box. Users still need to log them in from the webapp (or set
+# ANTHROPIC_API_KEY / OPENAI_API_KEY) to authenticate.
+RUN npm install -g \
+        @redplanethq/corebrain@2.8.15 \
+        @anthropic-ai/claude-code \
+        @openai/codex \
+        playwright \
+    && npm cache clean --force
 
-# Install corebrain CLI globally
-RUN npm install -g @redplanethq/corebrain
+# Non-root runtime user. claude-code refuses `--dangerously-skip-permissions`
+# under root for security, so the gateway and its spawned agents (claude,
+# codex, playwright) all run as `corebrain`. State paths live under
+# /home/corebrain so volume mounts work without manual chowns.
+ARG GATEWAY_UID=1001
+ARG GATEWAY_GID=1001
+RUN groupadd --gid "${GATEWAY_GID}" corebrain \
+    && useradd --uid "${GATEWAY_UID}" --gid "${GATEWAY_GID}" \
+        --create-home --shell /bin/bash corebrain
 
-WORKDIR /workspace
+# Browser tools — Playwright Chromium + the Linux system libs Chromium needs.
+# `playwright install --with-deps chromium` apt-installs system libs (needs
+# root) and downloads the chromium binary into PLAYWRIGHT_BROWSERS_PATH. We
+# point that at /home/corebrain/.cache/ms-playwright so the corebrain user
+# can read the binary at runtime and a mounted volume there persists it.
+ENV PLAYWRIGHT_BROWSERS_PATH=/home/corebrain/.cache/ms-playwright
+RUN mkdir -p "${PLAYWRIGHT_BROWSERS_PATH}" \
+    && playwright install --with-deps chromium \
+    && chown -R corebrain:corebrain /home/corebrain/.cache
 
-CMD ["bash"]
+# Pre-approved coding workspace. Folders added via the webapp UI or cloned
+# via `POST /api/folders/git` land under this directory. Mount a Docker
+# volume here to persist cloned repos across container restarts.
+RUN mkdir -p /app && chown -R corebrain:corebrain /app
+ENV COREBRAIN_DEFAULT_WORKSPACE=/app
+ENV COREBRAIN_DEPLOY_MODE=docker
+
+# Pre-create the gateway state dir owned by corebrain so a fresh volume
+# mount inherits the right ownership on first boot.
+RUN mkdir -p /home/corebrain/.corebrain \
+    && chown -R corebrain:corebrain /home/corebrain
+
+# Ensure the gateway's manifest port is the documented default. Users can
+# override with -p <host>:7787 or -e COREBRAIN_GATEWAY_HTTP_PORT=<port>.
+EXPOSE 7787
+
+WORKDIR /app
+
+COPY docker/entrypoint.sh /usr/local/bin/corebrain-entrypoint
+RUN chmod +x /usr/local/bin/corebrain-entrypoint
+
+# Stay as root through ENTRYPOINT — the entrypoint chowns the volume mount
+# points (which inherit root ownership when an existing named volume is
+# attached) and then drops to the `corebrain` user via `runuser` before
+# running anything else. This avoids the "can't write to /app" surprise on
+# pre-existing volumes from older builds.
+
+ENTRYPOINT ["/usr/local/bin/corebrain-entrypoint"]

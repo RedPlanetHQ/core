@@ -5,132 +5,160 @@ description: "Spawn and manage coding agent sessions from anywhere"
 
 ## Overview
 
-The Coding capability lets CORE spawn coding agents like Claude Code on your machine. Start a coding session from WhatsApp, check its progress from the web dashboard, and let it work autonomously while you're away from your computer.
+The Coding capability lets CORE spawn coding agents — Claude Code or Codex CLI — on your gateway. Start a coding session from WhatsApp, watch it stream in the webapp's terminal tab, resume it days later, and keep working.
 
-Sessions run in the background and persist their output, so you can resume or read results anytime.
+Sessions are owned by the agent itself: their transcripts live wherever the agent writes them (`~/.claude` for Claude Code, `~/.codex/sessions/...` for Codex). The gateway tracks running PTYs and re-spawns from disk on resume.
 
 ---
 
 ## Supported Agents
 
-Currently supported:
+| Agent name     | Binary  | Notes                                                     |
+| -------------- | ------- | --------------------------------------------------------- |
+| `claude-code`  | `claude` | Anthropic's CLI coding agent. `ANTHROPIC_API_KEY` skips OAuth. |
+| `codex-cli`    | `codex` | OpenAI's CLI coding agent. `OPENAI_API_KEY` skips OAuth.  |
 
-- **Claude Code** - Anthropic's CLI coding agent
+The system is template-driven (`AGENT_TEMPLATES` in the CLI) — adding a new agent means adding a template entry and start/resume args.
 
-More agents coming soon. The system is extensible to support any CLI-based coding agent.
+The gateway auto-detects agent binaries on `PATH` even if they aren't yet configured, so the webapp's *Configure + Log in* dialog can show a one-click setup. Configured agents appear in `manifest.agents`; detected-but-unconfigured ones in `manifest.availableAgents`.
 
 ---
 
-## Commands
-
-### Start a Session
+## Setup
 
 ```bash
-corebrain coding start
+corebrain coding setup
 ```
 
-This prompts you for:
-- Agent to use (e.g., `claude-code`)
-- Working directory
-- Initial prompt
-
-Or provide everything directly:
+Walks you through picking an agent, locating its binary, and (optionally) logging it in. To set the default agent used when the LLM doesn't pass one explicitly:
 
 ```bash
-corebrain coding start --agent claude-code --dir /path/to/project --prompt "Fix the auth bug"
+corebrain coding setup --default claude-code
 ```
 
-### List Sessions
-
-```bash
-corebrain coding list
-```
-
-Shows all sessions with their status (running, completed, closed).
-
-### Read Session Output
-
-```bash
-corebrain coding read <sessionId>
-
-# Read last 50 lines
-corebrain coding read <sessionId> --lines 50 --tail
-```
-
-### Resume a Session
-
-```bash
-corebrain coding resume <sessionId>
-```
-
-Prompts for a new message to continue the session.
-
-### Close a Session
-
-```bash
-corebrain coding close <sessionId>
-```
-
-Stops a running session.
+In Docker the binaries are pre-installed and auto-configured on first boot — set `ANTHROPIC_API_KEY` / `OPENAI_API_KEY` to skip the OAuth log-in step.
 
 ---
 
 ## Gateway Tools
 
-When the gateway is running, CORE can use these coding tools:
+These are the tools exposed to LLM callers via the manifest. They map directly to per-tool routes (`POST /api/coding/<name>`).
 
-### coding_start_session
+### `coding_ask`
 
-Start a new coding session:
+Send a prompt to a coding agent. Omit `sessionId` to start a new session; include it to continue an existing one.
 
-```json
+```jsonc
 {
-  "agent": "claude-code",
-  "prompt": "Fix the authentication timeout issue",
-  "dir": "/Users/me/projects/myapp"
+  "agent": "claude-code",       // optional — defaults to configured default
+  "dir": "/Users/me/repos/api", // must be inside a `coding`-scoped folder
+  "prompt": "Fix the auth timeout bug",
+  "sessionId": "abc-123",       // optional — continues a prior session
+  "model": "claude-sonnet-4-6", // optional override
+  "systemPrompt": "...",        // optional, new sessions only
+  "worktree": false,            // create an isolated git worktree
+  "baseBranch": "main",         //   required when worktree=true
+  "branch": "fix/auth-timeout"  //   required when worktree=true
 }
 ```
 
-Optional parameters:
-- `model` - Specific model to use
-- `systemPrompt` - Custom system prompt
+When `worktree` is `true` the gateway handles `git worktree add` itself — do **not** describe worktree setup in the prompt. Use `coding_read_session` afterwards to read what the agent did.
 
-### coding_resume_session
+### `coding_read_session`
 
-Resume an existing session:
+Read structured conversation turns (user / assistant) from a session.
 
-```json
+```jsonc
+{ "sessionId": "abc-123" }
+```
+
+The response carries a `status` of `"initializing"`, `"running"`, `"completed"`, or `"failed"` so callers can distinguish "agent still booting" from "agent exited without writing".
+
+### `coding_close_session` / `coding_close_all`
+
+Stop a running session (or every running session) and clean up worktrees.
+
+```jsonc
+{ "sessionId": "abc-123" }
+```
+
+### `coding_list_sessions`
+
+List sessions sorted by most recent. Reads from each agent's on-disk transcripts, not just sessions this gateway started.
+
+```jsonc
 {
-  "sessionId": "abc-123",
-  "prompt": "Now add tests for the fix"
+  "agent": "claude-code",   // optional filter
+  "since": "2026-01-01",    // optional ISO date
+  "limit": 20,
+  "offset": 0
 }
 ```
 
-### coding_read_session
+### `coding_search_sessions`
 
-Read session output:
+Search past sessions by title or first-message content.
 
-```json
+```jsonc
 {
-  "sessionId": "abc-123",
-  "lines": 100,
-  "tail": true
+  "query": "auth timeout",
+  "dir": "/Users/me/repos/api", // optional restriction
+  "limit": 10
 }
 ```
 
-### coding_close_session
+### `coding_list_agents`
 
-Close a session:
+List configured agents and which one is the default. No params.
 
-```json
-{
-  "sessionId": "abc-123"
-}
+---
+
+## Webapp-Only Primitives
+
+The webapp also calls two non-LLM routes to drive the live terminal pane:
+
+- `POST /api/coding/spawn` — allocate or resume a PTY without sending a prompt. Used by the *Open terminal* / *Reconnect* affordances. Returns `{ sessionId, pid, status: "new" | "reconnect" | "resumed" }`.
+- `WS /api/coding/coding_xterm_session?session_id=…` — attach to a session's PTY. Auto-resumes the agent if the PTY is gone but the on-disk transcript still exists.
+
+xterm WebSocket frames:
+
+```jsonc
+// server → client
+"raw PTY bytes as text frames…"
+{ "kind": "exit", "exitCode": 0, "signal": null }
+
+// client → server
+"raw text input"
+{ "kind": "input",  "data": "echo hi\n" }
+{ "kind": "resize", "cols": 120, "rows": 40 }
 ```
 
-### coding_list_sessions
+See [`packages/gateway-protocol/README.md`](https://github.com/RedPlanetHQ/core/blob/main/packages/gateway-protocol/README.md) for the full route table.
 
-List all sessions (no parameters).
+---
+
+## Folder Scope
+
+`coding_ask` and `/api/coding/spawn` validate `dir` against registered folders. The path must resolve into a folder that includes the `coding` scope:
+
+```bash
+corebrain folder add /Users/me/repos/api --scopes files,coding,exec
+```
+
+When zero folders are registered the gateway runs in permissive mode (matches the laptop dev experience). Once you register one, scope is enforced everywhere.
+
+---
+
+## Worktrees
+
+Setting `worktree: true` on `coding_ask` makes the gateway:
+
+1. Resolve `dir` to its git repo.
+2. Create `git worktree add ../<branch> <baseBranch>` for the new branch.
+3. Run the agent inside that worktree so changes never touch your working tree.
+4. Clean up the worktree on `coding_close_session`.
+
+This is the safest way to run autonomous "go fix X" sessions while you keep using the same repo.
 
 ---
 
@@ -138,55 +166,30 @@ List all sessions (no parameters).
 
 <Steps>
   <Step title="Start">
-    CORE starts a session with an agent, directory, and prompt. The session gets a unique ID.
+    `coding_ask` with no `sessionId` allocates a UUID and spawns the agent in `dir`. For Codex, the agent picks its own UUID — the gateway re-keys to match so future lookups find the right transcript.
   </Step>
 
   <Step title="Running">
-    The agent runs in the background. Output is streamed to a session file.
+    The PTY is alive; output streams to the xterm WS and the agent's transcript file. `coding_read_session` returns turns with `status: "running"`.
   </Step>
 
-  <Step title="Monitor">
-    CORE (or you) can read the session output at any time while it's running.
+  <Step title="Resume">
+    A new `coding_ask` (or webapp reconnect) with the same `sessionId` either re-attaches to the live PTY or re-spawns the agent with `--resume <sessionId>`.
   </Step>
 
-  <Step title="Complete">
-    The agent finishes its task. Session status changes to "completed".
-  </Step>
-
-  <Step title="Resume or Close">
-    Resume with a new prompt to continue, or close to clean up.
+  <Step title="Complete or Close">
+    The agent exits naturally (`status: "completed"`) or you call `coding_close_session`.
   </Step>
 </Steps>
 
 ---
 
-## Configuration
-
-Configure agents before first use:
-
-```bash
-corebrain coding config --agent claude-code
-```
-
-This sets up the command path and any agent-specific options.
-
----
-
 ## Use Cases
 
-**Remote bug fixing:** You're at dinner, a P0 bug comes in. Message CORE: "Fix the payment processing error in checkout.ts". CORE spawns Claude Code, provides context from memory, and works on the fix.
+**Remote bug fixing:** "Fix the payment processing error in `checkout.ts`." CORE spawns `coding_ask` against your `api` folder. You watch it from the webapp terminal pane.
 
-**Async code reviews:** "Review the changes in the auth PR and suggest improvements." CORE starts a session, analyzes the code, and sends you a summary when done.
+**Async code reviews:** "Review the changes in the auth PR and suggest improvements." CORE starts a session, calls `coding_read_session` after a `sleep` tool call, and summarises.
 
-**Automated refactoring:** "Migrate all API routes from Express to Hono." CORE works through the codebase file by file, and you check in periodically to see progress.
+**Automated refactoring:** "Migrate all API routes from Express to Hono." Run with `worktree: true` so the agent works on its own branch.
 
-**Night shifts:** Set a reminder: "At 2am, run the database migration script and report any errors." CORE handles it while you sleep.
-
----
-
-## Notes
-
-- Sessions are stored in `~/.corebrain/sessions.json`
-- Session output is read from the agent's native session files
-- Multiple sessions can run concurrently
-- Sessions persist across gateway restarts
+**Night shifts:** Set a reminder: "At 2am, run the database migration script and report any errors." A scheduled action calls `exec_command` and `coding_ask` together.

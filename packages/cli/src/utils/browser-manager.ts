@@ -1,5 +1,6 @@
 import fs from 'node:fs';
 import {getProfileDir, getBrowserExecutable, getSessionConfig} from '@/utils/browser-config';
+import {gatewayLog} from '@/server/gateway-log';
 
 interface BrowserSession {
 	context: import('playwright').BrowserContext;
@@ -9,9 +10,73 @@ interface BrowserSession {
 	profileDir: string;
 	headed: boolean;
 	createdAt: number;
+	/**
+	 * Chrome DevTools Protocol WebSocket endpoint for the launched Chromium.
+	 * Captured at launch time by passing `--remote-debugging-port=0` and
+	 * polling `http://127.0.0.1:<port>/json/version`. Used by the per-task
+	 * Browser tab to render a live screencast + forward Input events for
+	 * the "take control" feature.
+	 */
+	cdpWsEndpoint?: string;
+	cdpHttpEndpoint?: string;
+	cdpPort?: number;
 }
 
 const sessionMap = new Map<string, BrowserSession>();
+
+/**
+ * Capture the CDP WebSocket endpoint for the Chromium that Playwright
+ * launched in `profileDir`. Chromium writes `<profileDir>/DevToolsActivePort`
+ * when started with `--remote-debugging-port=0` — first line is the actual
+ * port. Once we have the port we hit `http://127.0.0.1:<port>/json/version`
+ * for `webSocketDebuggerUrl`.
+ *
+ * `Browser.wsEndpoint()` doesn't exist on `Browser` returned by
+ * `launchPersistentContext` (it's on `BrowserServer`), so the port-scan is
+ * the only reliable approach for our launch shape.
+ *
+ * Polled because `DevToolsActivePort` lands a few hundred ms after
+ * `launchPersistentContext` resolves on some setups. Best-effort — failure
+ * leaves `cdpWsEndpoint` undefined and the live-view UI shows "no
+ * inspector available".
+ */
+async function captureCdpEndpoint(
+	profileDir: string,
+): Promise<{port: number; wsEndpoint: string; httpEndpoint: string} | null> {
+	const portFile = `${profileDir}/DevToolsActivePort`;
+	const deadline = Date.now() + 5_000;
+	while (Date.now() < deadline) {
+		try {
+			if (fs.existsSync(portFile)) {
+				const contents = fs.readFileSync(portFile, 'utf8').trim();
+				const portStr = contents.split('\n')[0];
+				const port = portStr ? parseInt(portStr, 10) : NaN;
+				if (Number.isFinite(port) && port > 0) {
+					const httpEndpoint = `http://127.0.0.1:${port}`;
+					const res = await fetch(`${httpEndpoint}/json/version`);
+					if (res.ok) {
+						const body = (await res.json()) as {webSocketDebuggerUrl?: string};
+						if (body.webSocketDebuggerUrl) {
+							gatewayLog(
+								`browser cdp endpoint: ${body.webSocketDebuggerUrl}`,
+							);
+							return {
+								port,
+								wsEndpoint: body.webSocketDebuggerUrl,
+								httpEndpoint,
+							};
+						}
+					}
+				}
+			}
+		} catch {
+			/* try again */
+		}
+		await new Promise(r => setTimeout(r, 100));
+	}
+	gatewayLog(`browser cdp endpoint: no endpoint after 5s for ${profileDir}`);
+	return null;
+}
 
 export async function getOrLaunchSession(
 	sessionName: string,
@@ -44,6 +109,7 @@ export async function getOrLaunchSession(
 		const browserConfig = getBrowserExecutable();
 		const launchOptions: import('playwright').LaunchOptions = {
 			headless: !headed,
+			args: ['--remote-debugging-port=0'],
 		};
 		if (browserConfig.type !== 'default' && browserConfig.path) {
 			launchOptions.executablePath = browserConfig.path;
@@ -57,6 +123,8 @@ export async function getOrLaunchSession(
 
 		const page = context.pages()[0] ?? (await context.newPage());
 
+		const cdp = await captureCdpEndpoint(profileDir);
+
 		const session: BrowserSession = {
 			context,
 			page,
@@ -65,6 +133,9 @@ export async function getOrLaunchSession(
 			profileDir,
 			headed: false,
 			createdAt: Date.now(),
+			cdpPort: cdp?.port,
+			cdpWsEndpoint: cdp?.wsEndpoint,
+			cdpHttpEndpoint: cdp?.httpEndpoint,
 		};
 
 		sessionMap.set(sessionName, session);
@@ -105,6 +176,7 @@ export async function launchSession(
 		const browserConfig = getBrowserExecutable();
 		const launchOptions: import('playwright').LaunchOptions = {
 			headless: !headed,
+			args: ['--remote-debugging-port=0'],
 		};
 		if (browserConfig.type !== 'default' && browserConfig.path) {
 			launchOptions.executablePath = browserConfig.path;
@@ -118,6 +190,8 @@ export async function launchSession(
 
 		const page = context.pages()[0] ?? (await context.newPage());
 
+		const cdp = await captureCdpEndpoint(profileDir);
+
 		const session: BrowserSession = {
 			context,
 			page,
@@ -126,6 +200,9 @@ export async function launchSession(
 			profileDir,
 			headed,
 			createdAt: Date.now(),
+			cdpPort: cdp?.port,
+			cdpWsEndpoint: cdp?.wsEndpoint,
+			cdpHttpEndpoint: cdp?.httpEndpoint,
 		};
 
 		sessionMap.set(sessionName, session);
@@ -136,6 +213,23 @@ export async function launchSession(
 			error: err instanceof Error ? err.message : 'Failed to launch browser',
 		};
 	}
+}
+
+/**
+ * Read the live CDP info for a session — used by the CDP WS proxy to find
+ * which `ws://localhost:<port>/devtools/...` to forward frames to. Returns
+ * null when the session isn't running.
+ */
+export function getSessionCdpInfo(
+	sessionName: string,
+): {wsEndpoint: string; httpEndpoint: string; port: number} | null {
+	const s = sessionMap.get(sessionName);
+	if (!s || !s.cdpWsEndpoint || !s.cdpHttpEndpoint || !s.cdpPort) return null;
+	return {
+		wsEndpoint: s.cdpWsEndpoint,
+		httpEndpoint: s.cdpHttpEndpoint,
+		port: s.cdpPort,
+	};
 }
 
 export async function closeSession(

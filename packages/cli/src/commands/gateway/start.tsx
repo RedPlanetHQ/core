@@ -20,12 +20,13 @@ import {
 } from '@/utils/service-manager';
 import type { ServiceConfig } from '@/utils/service-manager';
 import { initializeDefaultProfiles } from '@/utils/browser-config';
+import { bootstrapFromEnv } from '@/utils/env-bootstrap';
 
 export const options = zod.object({
 	alwaysOn: zod
 		.boolean()
 		.default(false)
-		.describe('Prevent mac from sleeping while gateway is running (macOS only)'),
+		.describe('Prevent system sleep while the gateway is running (macOS: caffeinate, Linux: systemd-inhibit, Windows: SetThreadExecutionState)'),
 	foreground: zod
 		.boolean()
 		.default(false)
@@ -83,13 +84,73 @@ function getGatewayEntryPath(): string {
 	return join(__dirname, '..', '..', 'server', 'gateway-entry.js');
 }
 
-async function runGatewayStart(alwaysOn: boolean): Promise<void> {
+/**
+ * Foreground mode: skip launchd/systemd entirely and exec the gateway-entry
+ * directly with inherited stdio. Designed for Docker / Fly / Railway / ad-hoc
+ * hosts where PID 1 needs to be the long-running process and signals must
+ * flow straight through. No service install, no background detach — the CLI
+ * blocks until the gateway process exits.
+ */
+async function runGatewayForeground(): Promise<void> {
+	// Headless / Docker bootstrap. Pulls auth + gateway identity + default
+	// folder from env vars when the on-disk config is empty. Idempotent — a
+	// container that's been configured manually keeps its values.
+	const applied = bootstrapFromEnv();
+	if (applied.length > 0) {
+		p.log.info(`Applied env config: ${applied.join(', ')}`);
+	}
+
+	const config = getConfig();
+	if (!config.auth?.apiKey || !config.auth?.url) {
+		p.log.error('Not authenticated. Set COREBRAIN_API_KEY + COREBRAIN_API_URL or run `corebrain login`.');
+		process.exitCode = 1;
+		return;
+	}
+	const prefs = getPreferences();
+	if (!prefs.gateway?.id || !prefs.gateway?.name) {
+		p.log.error('Gateway not configured. Set COREBRAIN_GATEWAY_NAME or run `corebrain gateway config`.');
+		process.exitCode = 1;
+		return;
+	}
+
+	initializeDefaultProfiles();
+
+	const gatewayEntryPath = getGatewayEntryPath();
+	const child = spawnChild(process.execPath, [gatewayEntryPath], {
+		stdio: 'inherit',
+		env: process.env,
+	});
+
+	const forward = (signal: NodeJS.Signals) => {
+		if (!child.killed) child.kill(signal);
+	};
+	process.on('SIGTERM', () => forward('SIGTERM'));
+	process.on('SIGINT', () => forward('SIGINT'));
+	process.on('SIGHUP', () => forward('SIGHUP'));
+
+	await new Promise<void>((resolve) => {
+		child.on('exit', (code, signal) => {
+			if (signal) {
+				process.exitCode = 128 + (signal === 'SIGTERM' ? 15 : signal === 'SIGINT' ? 2 : 1);
+			} else {
+				process.exitCode = code ?? 0;
+			}
+			resolve();
+		});
+	});
+}
+
+async function runGatewayStart(alwaysOn: boolean, foreground: boolean): Promise<void> {
+	if (foreground) {
+		return runGatewayForeground();
+	}
+
 	const spinner = p.spinner();
 
 	// Check platform support
 	const serviceType = getServiceType();
 	if (serviceType === 'none') {
-		p.log.error('Service management not supported on this platform. Only macOS (launchd) and Linux (systemd) are supported.');
+		p.log.error('Service management not supported on this platform. Only macOS (launchd) and Linux (systemd) are supported. Use --foreground to run without a service manager.');
 		process.exitCode = 1;
 		return;
 	}
@@ -179,16 +240,20 @@ async function runGatewayStart(alwaysOn: boolean): Promise<void> {
 	);
 }
 
-export default function GatewayStart({ options: { alwaysOn } }: Props) {
+export default function GatewayStart({ options: { alwaysOn, foreground } }: Props) {
 	const { exit } = useApp();
 
 	useEffect(() => {
-		runGatewayStart(alwaysOn)
+		runGatewayStart(alwaysOn, foreground)
 			.catch((err) => {
 				p.log.error(`Gateway error: ${err instanceof Error ? err.message : 'Unknown error'}`);
 				process.exitCode = 1;
 			})
 			.finally(() => {
+				// In foreground mode the gateway process keeps running — we don't
+				// want Ink to unmount and drop stdio. runGatewayForeground only
+				// resolves when the child exits, so we exit here to let the CLI
+				// mirror the child's exit code.
 				setTimeout(() => exit(), 100);
 			});
 	}, [exit]);

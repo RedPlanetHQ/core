@@ -79,3 +79,24 @@ export async function markDisconnected(gatewayId: string, reason?: string) {
 export async function deleteGateway(gatewayId: string) {
   return prisma.gateway.delete({ where: { id: gatewayId } });
 }
+
+/**
+ * Update the connection details (baseUrl and/or encrypted security key) for
+ * a gateway. The caller must verify reachability + key match BEFORE invoking
+ * this — otherwise the row will point at an unreachable URL.
+ *
+ * Pass `encryptedSecurityKey` when rotating the key (already-ciphertexted via
+ * `~/services/gateway/secrets.server`). Pass `baseUrl` when moving the
+ * gateway's public URL. At least one must be supplied.
+ */
+export async function updateGatewayConnection(
+  gatewayId: string,
+  patch: { baseUrl?: string; encryptedSecurityKey?: object },
+) {
+  const data: Record<string, unknown> = {};
+  if (patch.baseUrl !== undefined) data.baseUrl = patch.baseUrl;
+  if (patch.encryptedSecurityKey !== undefined) {
+    data.encryptedSecurityKey = patch.encryptedSecurityKey;
+  }
+  return prisma.gateway.update({ where: { id: gatewayId }, data });
+}

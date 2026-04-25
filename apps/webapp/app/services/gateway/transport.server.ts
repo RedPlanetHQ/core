@@ -4,7 +4,7 @@ import {
   type Manifest as ManifestT,
   HealthResponse,
   type HealthResponse as HealthResponseT,
-} from "@core/gateway-protocol";
+} from "@redplanethq/gateway-protocol";
 import { readSecurityKey } from "./secrets.server";
 
 interface ToolResponseEnvelope {
@@ -35,10 +35,7 @@ async function authedFetch(
 ) {
   const key = await readSecurityKey(gw.id);
   const timeoutMs = init?.timeoutMs ?? 30_000;
-  const {
-    timeoutMs: _omit,
-    ...restInit
-  } = init ?? {};
+  const { timeoutMs: _omit, ...restInit } = init ?? {};
   return fetch(`${gw.baseUrl.replace(/\/$/, "")}${path}`, {
     ...restInit,
     headers: {
@@ -67,15 +64,11 @@ export async function callTool(
   // The gateway's per-tool route expects the request body to BE the tool's
   // parameters (the tool name is already in the URL). No envelope here —
   // the per-route design supersedes the old `/tools/call` envelope.
-  const res = await authedFetch(
-    gw,
-    `/api/${toolGroup(tool)}/${tool}`,
-    {
-      method: "POST",
-      body: JSON.stringify(params ?? {}),
-      timeoutMs: timeoutMs + 5_000,
-    },
-  );
+  const res = await authedFetch(gw, `/api/${toolGroup(tool)}/${tool}`, {
+    method: "POST",
+    body: JSON.stringify(params ?? {}),
+    timeoutMs: timeoutMs + 5_000,
+  });
   const text = await res.text();
   let parsed: ToolResponseEnvelope;
   try {
@@ -94,6 +87,34 @@ export async function callTool(
 }
 
 /**
+ * Generic helper for the per-gateway settings UI: relay an arbitrary HTTP
+ * request to the gateway with auth, return the parsed JSON body. Avoids
+ * boilerplate in each proxy route.
+ */
+export async function gatewayApi<T = unknown>(
+  gatewayId: string,
+  path: string,
+  init: RequestInit & { timeoutMs?: number } = {},
+): Promise<{ status: number; body: T }> {
+  const gw = await prisma.gateway.findUniqueOrThrow({
+    where: { id: gatewayId },
+    select: { id: true, baseUrl: true },
+  });
+  const res = await authedFetch(gw, path, {
+    ...init,
+    timeoutMs: init.timeoutMs ?? 30_000,
+  });
+  const text = await res.text();
+  let body: unknown;
+  try {
+    body = text ? JSON.parse(text) : null;
+  } catch {
+    body = { error: text || res.statusText };
+  }
+  return { status: res.status, body: body as T };
+}
+
+/**
  * Spawn (or resume) an interactive coding session on the gateway so the
  * browser's xterm WS has a PTY to attach to right away.
  *
@@ -106,11 +127,15 @@ export async function callTool(
  */
 export async function spawnCodingSession(
   gatewayId: string,
-  params: {agent: string; dir: string; sessionId?: string},
-): Promise<{sessionId: string; pid?: number; status: "new" | "reconnect" | "resumed"}> {
+  params: { agent: string; dir: string; sessionId?: string },
+): Promise<{
+  sessionId: string;
+  pid?: number;
+  status: "new" | "reconnect" | "resumed";
+}> {
   const gw = await prisma.gateway.findUniqueOrThrow({
-    where: {id: gatewayId},
-    select: {id: true, baseUrl: true},
+    where: { id: gatewayId },
+    select: { id: true, baseUrl: true },
   });
   const res = await authedFetch(gw, "/api/coding/spawn", {
     method: "POST",
@@ -135,7 +160,7 @@ export async function spawnCodingSession(
   if (!res.ok || !body.ok || !body.sessionId || !body.status) {
     throw new Error(body.error ?? `gateway spawn failed (${res.status})`);
   }
-  return {sessionId: body.sessionId, pid: body.pid, status: body.status};
+  return { sessionId: body.sessionId, pid: body.pid, status: body.status };
 }
 
 /**
@@ -151,7 +176,10 @@ export async function fetchManifest(
       where: { id: gatewayId },
       select: { id: true, baseUrl: true },
     });
-    const res = await authedFetch(gw, "/manifest", { method: "GET", timeoutMs });
+    const res = await authedFetch(gw, "/manifest", {
+      method: "GET",
+      timeoutMs,
+    });
     if (!res.ok) return null;
     const etag = res.headers.get("etag") ?? "";
     const manifest = Manifest.parse(await res.json());
@@ -192,7 +220,11 @@ export async function fetchHealth(
 export async function verifyGateway(
   baseUrl: string,
   securityKey: string,
-): Promise<{ gatewayId: string | null; hostname: string | null; platform: string | null } | null> {
+): Promise<{
+  gatewayId: string | null;
+  hostname: string | null;
+  platform: string | null;
+} | null> {
   try {
     const res = await fetch(`${baseUrl.replace(/\/$/, "")}/verify`, {
       headers: { authorization: `Bearer ${securityKey}` },

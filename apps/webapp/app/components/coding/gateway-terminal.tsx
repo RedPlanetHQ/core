@@ -162,7 +162,11 @@ export function GatewayTerminal({ codingSessionId, onNewSession }: Props) {
         if (data.startsWith("{")) {
           try {
             const parsed = JSON.parse(data);
-            if (parsed && typeof parsed === "object" && parsed.kind === "exit") {
+            if (
+              parsed &&
+              typeof parsed === "object" &&
+              parsed.kind === "exit"
+            ) {
               if (mounted) setStatusBoth("ended");
               return;
             }
@@ -224,7 +228,8 @@ export function GatewayTerminal({ codingSessionId, onNewSession }: Props) {
       }
       if (wsRef.current === localWs) wsRef.current = null;
       localRo?.disconnect();
-      if (resizeObserverRef.current === localRo) resizeObserverRef.current = null;
+      if (resizeObserverRef.current === localRo)
+        resizeObserverRef.current = null;
       localTerm?.dispose();
       if (termRef.current === localTerm) termRef.current = null;
     };
@@ -263,8 +268,7 @@ export function GatewayTerminal({ codingSessionId, onNewSession }: Props) {
         background: bg,
         display: "flex",
         flexDirection: "column",
-        paddingLeft: 8,
-        paddingBottom: 12,
+        padding: 12,
       }}
     >
       {status === "connecting" && (

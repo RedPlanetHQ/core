@@ -1,4 +1,4 @@
-import {GatewayErrorCode} from '@core/gateway-protocol';
+import {GatewayErrorCode} from '@redplanethq/gateway-protocol';
 
 export function folderScopeError(target: string, scope: string) {
 	return {

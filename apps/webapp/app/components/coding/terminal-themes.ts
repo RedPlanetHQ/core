@@ -9,12 +9,12 @@ import type { ITheme } from "@xterm/xterm";
 
 export const terminalThemes: Record<"dark" | "light", ITheme> = {
   dark: {
-    // oklch(21.34% 0 0), oklch(92.8% 0 0), oklch(31.32% 0 0)
-    background: "#1e1e1e",
+    // background matches `--background-2` oklch(25.2% 0 0); foreground oklch(92.8% 0 0); selection oklch(35% 0 0)
+    background: "#262626",
     foreground: "#e8e8e8",
     cursor: "#0880ea",
-    cursorAccent: "#1e1e1e",
-    selectionBackground: "#303030",
+    cursorAccent: "#262626",
+    selectionBackground: "#363636",
     selectionForeground: "#e8e8e8",
 
     // Grays — oklch(21.34% 0 0) → oklch(44% 0 0)
@@ -51,11 +51,11 @@ export const terminalThemes: Record<"dark" | "light", ITheme> = {
   },
 
   light: {
-    // oklch(94.28% 0 0), oklch(18% 0 0)
-    background: "#ececec",
+    // background matches `--background-2` oklch(97.21% 0 0); foreground oklch(18% 0 0)
+    background: "#f6f6f6",
     foreground: "#141414",
     cursor: "#0880ea",
-    cursorAccent: "#ececec",
+    cursorAccent: "#f6f6f6",
     // oklch(82% 0.05 252.59)
     selectionBackground: "#abc7e5",
     selectionForeground: "#141414",

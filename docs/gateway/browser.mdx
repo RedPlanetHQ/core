@@ -166,8 +166,9 @@ Profile and browser executable management is CLI-only.
 
 | Use case | How to open |
 |----------|-------------|
-| Agent-controlled automation | Let the agent call `browser_navigate` — it launches the browser in-process |
-| Manual login / handoff | Use `corebrain browser open <session> --headed` |
+| Agent-controlled automation | Let the agent call `browser_navigate` — it launches the browser in-process. |
+| Webapp live view | Click the session in the webapp's *Browser* tab. The webapp calls `POST /api/browser/launch` (always headless) and streams CDP via the `/api/browser/cdp/:session` WebSocket proxy — works the same way for laptop and Docker gateways. |
+| Manual login / handoff | `corebrain browser open <session> --headed` from the gateway machine itself. |
 
 ---
 

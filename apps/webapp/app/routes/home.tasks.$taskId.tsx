@@ -4,7 +4,13 @@ import type {
   LoaderFunctionArgs,
   MetaFunction,
 } from "@remix-run/node";
-import { Outlet, useNavigate, useFetcher, useLocation, useNavigation } from "@remix-run/react";
+import {
+  Outlet,
+  useNavigate,
+  useFetcher,
+  useLocation,
+  useNavigation,
+} from "@remix-run/react";
 import { typedjson, useTypedLoaderData } from "remix-typedjson";
 import { ClientOnly } from "remix-utils/client-only";
 import { LoaderCircle, Trash2, MessageSquare } from "lucide-react";
@@ -78,7 +84,7 @@ export async function loader({ request, params }: LoaderFunctionArgs) {
     integrationAccounts,
     butlerName,
     runs,
-    hasCoding,
+
     widgetOptions,
     widgetPat,
   ] = await Promise.all([
@@ -86,7 +92,7 @@ export async function loader({ request, params }: LoaderFunctionArgs) {
     getIntegrationAccounts(user.id, workspaceId),
     getButlerName(workspaceId),
     getTaskRuns(taskId, workspaceId),
-    hasCodingSessions(taskId, workspaceId),
+
     getWidgetOptions(user.id, workspaceId),
     getOrCreateWidgetPat(workspaceId, user.id),
   ]);
@@ -115,7 +121,7 @@ export async function loader({ request, params }: LoaderFunctionArgs) {
     taskPageId: taskPage.id,
     collabToken: generateCollabToken(workspaceId, user.id),
     runs,
-    hasCoding,
+
     widgetOptions,
     widgetPat,
     baseUrl: new URL(request.url).origin,
@@ -336,9 +342,9 @@ function TaskDetailLayout() {
 
   const activePath = navigation.location?.pathname ?? location.pathname;
   const isRunsTab = activePath.endsWith("/runs");
-  const isCodingTab = activePath.endsWith("/coding");
-  const isRecurring =
-    !!task.schedule && (task.occurrenceCount ?? 0) > 1;
+  const isCodingTab = /\/coding(\/|$)/.test(activePath);
+  const isBrowserTab = /\/browser(\/|$)/.test(activePath);
+  const isRecurring = !!task.schedule && (task.occurrenceCount ?? 0) > 1;
 
   const toggleTaskChat = () => setTaskChatOpen((v) => !v);
 
@@ -369,19 +375,24 @@ function TaskDetailLayout() {
             {
               label: "Info",
               value: "info",
-              isActive: !isRunsTab && !isCodingTab,
+              isActive: !isRunsTab && !isCodingTab && !isBrowserTab,
               onClick: () => navigate(`/home/tasks/${task.id}`),
             },
-            ...(hasCoding
-              ? [
-                  {
-                    label: "Coding",
-                    value: "coding",
-                    isActive: isCodingTab,
-                    onClick: () => navigate(`/home/tasks/${task.id}/coding`),
-                  },
-                ]
-              : []),
+
+            {
+              label: "Code",
+              value: "coding",
+              isActive: isCodingTab,
+              onClick: () => navigate(`/home/tasks/${task.id}/coding`),
+            },
+
+            {
+              label: "Browser",
+              value: "browser",
+              isActive: isBrowserTab,
+              onClick: () => navigate(`/home/tasks/${task.id}/browser`),
+            },
+
             ...(isRecurring
               ? [
                   {
@@ -427,14 +438,16 @@ function TaskDetailLayout() {
         >
           <ResizablePanel
             id="task-detail"
-            defaultSize={taskChatOpen && !isCodingTab ? "50%" : "100%"}
+            defaultSize={
+              taskChatOpen && !isCodingTab && !isBrowserTab ? "50%" : "100%"
+            }
             minSize="50%"
           >
             <div className="flex h-full overflow-hidden">
               <Outlet />
             </div>
           </ResizablePanel>
-          {taskChatOpen && !isCodingTab && (
+          {taskChatOpen && !isCodingTab && !isBrowserTab && (
             <>
               <ResizableHandle withHandle />
               <ResizablePanel

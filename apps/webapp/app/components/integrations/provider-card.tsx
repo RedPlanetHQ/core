@@ -43,7 +43,7 @@ export function ProviderCard({ provider, isConnected }: ProviderCardProps) {
 
             {isConnected && (
               <div className="flex w-full items-center justify-end">
-                <Badge className="h-6 rounded bg-green-100 p-2 text-sm text-green-800">
+                <Badge className="text-success h-6 rounded bg-green-100 p-2 text-sm">
                   Connected
                 </Badge>
               </div>

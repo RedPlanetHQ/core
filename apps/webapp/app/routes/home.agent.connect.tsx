@@ -220,7 +220,7 @@ function DirectChannelCard({
               </Badge>
             )}
             {isWaitlist && !isConnected && isOptedIn && (
-              <Badge className="rounded bg-green-100 text-xs text-green-800">
+              <Badge className="text-success rounded bg-green-100 text-xs">
                 <Check size={10} />
                 On Waitlist
               </Badge>
@@ -232,7 +232,7 @@ function DirectChannelCard({
               </Badge>
             )}
             {channel.status === "available" && !isDefault && (
-              <Badge className="rounded bg-green-100 text-xs text-green-800">
+              <Badge className="text-success rounded bg-green-100 text-xs">
                 Available
               </Badge>
             )}
@@ -404,7 +404,7 @@ export default function Connect() {
     <div className="flex h-full flex-col">
       <PageHeader title="Connect" />
 
-      <div className="home flex h-page-sm flex-col gap-8 overflow-y-auto p-4 px-5 md:h-page">
+      <div className="home h-page-sm md:h-page flex flex-col gap-8 overflow-y-auto p-4 px-5">
         {/* Direct Section */}
         <div className="space-y-3">
           <div>

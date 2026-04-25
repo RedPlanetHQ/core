@@ -1,5 +1,5 @@
 import React, { createContext, useContext, useState } from "react";
-import { Plus, History } from "lucide-react";
+import { Plus, History, Monitor } from "lucide-react";
 import { format } from "date-fns";
 import { Button } from "~/components/ui/button";
 import { Popover, PopoverContent, PopoverTrigger } from "~/components/ui/popover";
@@ -11,6 +11,7 @@ type SessionItem = {
   agent: string;
   createdAt: Date;
   prompt: string | null;
+  gatewayName: string | null;
 };
 
 type CodingActionsValue = {
@@ -104,6 +105,17 @@ function CodingSessionsPopover({
                       {session.agent}
                     </Badge>
                   </div>
+                  {session.gatewayName === null ? (
+                    <span className="text-destructive flex items-center gap-1 text-xs">
+                      <Monitor size={11} />
+                      Gateway not available
+                    </span>
+                  ) : session.gatewayName ? (
+                    <span className="text-muted-foreground flex items-center gap-1 text-xs">
+                      <Monitor size={11} />
+                      {session.gatewayName}
+                    </span>
+                  ) : null}
                   {session.prompt && (
                     <span className="text-muted-foreground line-clamp-2 text-xs">
                       {session.prompt.slice(0, 80)}

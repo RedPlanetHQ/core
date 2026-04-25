@@ -11,11 +11,13 @@ The Exec capability lets CORE run shell commands on your machine. This is powerf
 
 ## Security Model
 
-Commands are validated against configurable patterns before execution:
+Commands are validated against three layers before execution:
 
-1. **Deny patterns** are checked first - if a command matches any deny pattern, it's blocked
-2. **Allow patterns** are checked next - if configured, commands must match at least one
-3. If no allow patterns are configured, all non-denied commands are allowed
+1. **Built-in deny list** — common-sense blocks like `rm -rf /`, `sudo`, `curl … | bash`. Skipped only if `allowUnsafe: true`.
+2. **User deny patterns** — checked next; takes precedence over allow.
+3. **User allow patterns** — if configured, the command must match at least one. If empty, all non-denied commands are allowed.
+
+In addition, when at least one folder is registered the `dir` parameter must resolve into a folder with the `exec` scope — otherwise the call fails with `FOLDER_SCOPE_DENIED`.
 
 ---
 
@@ -79,7 +81,7 @@ Execute a shell command:
 | Parameter | Required | Description |
 |-----------|----------|-------------|
 | `command` | Yes | The command to execute |
-| `dir` | No | Working directory (defaults to `~/.corebrain`) |
+| `dir` | No | Working directory. Must resolve into an `exec`-scoped registered folder when folders exist. Falls back to `ExecConfig.defaultDir` (deprecated) otherwise. |
 | `timeout` | No | Timeout in milliseconds (default: 30000) |
 
 ### Response
@@ -177,8 +179,8 @@ Execute a shell command:
 
 ## Notes
 
-- Commands run with your user permissions
-- Output is captured and returned (stdout and stderr)
-- Long-running commands should use the timeout parameter
-- Commands that require user input will hang - avoid interactive commands
-- Working directory defaults to `~/.corebrain` if not specified
+- Commands run with your user permissions (the user the gateway service runs as).
+- Output is captured and returned (`stdout`, `stderr`, `exitCode`).
+- Long-running commands should set `timeout`.
+- Commands that require user input will hang — avoid interactive commands. Use `coding_ask` with the appropriate agent for interactive flows.
+- The `exec` slot can be turned off entirely in `corebrain gateway config` — disabled slots are not just hidden in the manifest, their HTTP route is not registered at all.
