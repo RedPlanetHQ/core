@@ -1,10 +1,7 @@
-import {spawn} from 'node:child_process';
-import {existsSync, mkdirSync, openSync, statSync} from 'node:fs';
-import {join} from 'node:path';
-import {homedir} from 'node:os';
 import {getPreferences} from '@/config/preferences';
 import type {CliBackendConfig} from '@/types/config';
-import {getSession, deleteSession, isProcessRunningByPid} from '@/utils/coding-sessions';
+import {getSession} from '@/utils/coding-sessions';
+import {ptyManager} from '@/server/pty/manager';
 
 export function getAgentConfig(agentName: string): CliBackendConfig | null {
 	const prefs = getPreferences();
@@ -15,10 +12,16 @@ export function getAgentConfig(agentName: string): CliBackendConfig | null {
 	return coding[agentName];
 }
 
+/**
+ * Build CLI args for starting an agent's interactive TUI. If `prompt` is
+ * provided, it's appended as the final positional arg so the agent processes
+ * it on startup; otherwise the TUI launches blank (used by the xterm spawn
+ * path). Session id flows through `sessionArg` when the agent supports it.
+ */
 export function buildStartArgs(
 	config: CliBackendConfig,
 	params: {
-		prompt: string;
+		prompt?: string;
 		sessionId: string;
 		model?: string;
 		systemPrompt?: string;
@@ -50,33 +53,29 @@ export function buildStartArgs(
 		args.push(config.systemPromptArg, params.systemPrompt);
 	}
 
-	args.push(params.prompt);
+	if (params.prompt) {
+		args.push(params.prompt);
+	}
 	return args;
 }
 
+/**
+ * Build CLI args for resuming an agent via `resumeArgs` (`{sessionId}` is
+ * substituted). Prompt is optional — omit for a blank-resume into the TUI,
+ * set for a prompt-on-resume flow.
+ */
 export function buildResumeArgs(
 	config: CliBackendConfig,
-	params: {prompt: string; sessionId: string},
+	params: {prompt?: string; sessionId: string},
 ): string[] {
 	if (config.resumeArgs) {
 		const args = config.resumeArgs.map(arg =>
 			arg.replace('{sessionId}', params.sessionId),
 		);
-		args.push(params.prompt);
+		if (params.prompt) args.push(params.prompt);
 		return args;
 	}
 	return buildStartArgs(config, params);
-}
-
-export function getSessionLogPath(sessionId: string, stream: 'stdout' | 'stderr'): string {
-	return join(homedir(), '.corebrain', 'logs', `${sessionId}.${stream}.log`);
-}
-
-function ensureLogsDir(): void {
-	const logsDir = join(homedir(), '.corebrain', 'logs');
-	if (!existsSync(logsDir)) {
-		mkdirSync(logsDir, {recursive: true});
-	}
 }
 
 export type Logger = (message: string) => void;
@@ -95,99 +94,51 @@ export function startAgentProcess(
 	log(`SPAWN_ARGS: ${JSON.stringify(args)}`);
 	log(`SPAWN_CWD: ${workingDirectory}`);
 
-	ensureLogsDir();
-
-	const stdoutFd = openSync(getSessionLogPath(sessionId, 'stdout'), 'w');
-	const stderrFd = openSync(getSessionLogPath(sessionId, 'stderr'), 'w');
-
-	let proc;
 	try {
-		proc = spawn(config.command, args, {
+		const {pid} = ptyManager.spawn({
+			sessionId,
+			command: config.command,
+			args,
 			cwd: workingDirectory,
-			shell: false,
-			stdio: ['ignore', stdoutFd, stderrFd],
-			detached: true,
 		});
+		log(`SPAWN_PID: ${pid}`);
+		return {pid};
 	} catch (err) {
 		const errorMsg = err instanceof Error ? err.message : String(err);
 		log(`SPAWN_ERROR: ${errorMsg}`);
 		return {pid: undefined, error: errorMsg};
 	}
-
-	const pid = proc.pid;
-	log(`SPAWN_PID: ${pid}`);
-
-	proc.on('error', (err) => log(`SPAWN_PROCESS_ERROR: ${err.message}`));
-	proc.on('exit', (code, signal) => log(`SPAWN_EXIT: pid=${pid} code=${code} signal=${signal}`));
-
-	proc.unref();
-	log(`SPAWN_DETACHED: process detached and running`);
-
-	return {pid};
 }
 
 export function isProcessRunning(sessionId: string): boolean {
+	// Primary source: PtyManager in-memory state for agents spawned under this
+	// daemon. Falls back to PID-probe for legacy session records that may have
+	// been started before the PTY refactor.
+	if (ptyManager.isRunning(sessionId)) return true;
+
 	const session = getSession(sessionId);
 	if (!session?.pid) return false;
-	return isProcessRunningByPid(session.pid);
+	try {
+		process.kill(session.pid, 0);
+		return true;
+	} catch {
+		return false;
+	}
 }
 
 export function stopProcess(sessionId: string): boolean {
+	if (ptyManager.isRunning(sessionId)) {
+		return ptyManager.kill(sessionId, 'SIGTERM');
+	}
+
+	// Legacy path: kill by stored PID if PTY manager doesn't know about it.
 	const session = getSession(sessionId);
 	if (!session?.pid) return false;
-
-	if (isProcessRunningByPid(session.pid)) {
-		try {
-			process.kill(session.pid, 'SIGTERM');
-			return true;
-		} catch {
-			return false;
-		}
+	try {
+		process.kill(session.pid, 'SIGTERM');
+		return true;
+	} catch {
+		return false;
 	}
-	return false;
 }
 
-/**
- * Start a background watchdog for a running session.
- * If the stdout log has not grown for `idleTimeoutMs` (default 30s), the process is killed.
- * Also cleans up the running session record when the process exits naturally.
- */
-export function startIdleWatchdog(
-	sessionId: string,
-	pid: number,
-	idleTimeoutMs = 30_000,
-): void {
-	const logPath = getSessionLogPath(sessionId, 'stdout');
-	const pollInterval = 5_000;
-	let lastSize = -1;
-	let lastChangedAt = Date.now();
-
-	function check() {
-		// Process already dead — clean up session record and stop
-		if (!isProcessRunningByPid(pid)) {
-			deleteSession(sessionId);
-			return;
-		}
-
-		let currentSize = 0;
-		try {
-			currentSize = statSync(logPath).size;
-		} catch { /* log not created yet */ }
-
-		if (currentSize !== lastSize) {
-			lastSize = currentSize;
-			lastChangedAt = Date.now();
-		} else if (Date.now() - lastChangedAt >= idleTimeoutMs) {
-			// Idle too long — kill and clean up
-			try {
-				process.kill(pid, 'SIGTERM');
-			} catch { /* already gone */ }
-			deleteSession(sessionId);
-			return;
-		}
-
-		setTimeout(check, pollInterval);
-	}
-
-	setTimeout(check, pollInterval);
-}

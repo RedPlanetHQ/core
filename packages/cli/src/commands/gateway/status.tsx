@@ -4,6 +4,7 @@ import * as p from '@clack/prompts';
 import chalk from 'chalk';
 import zod from 'zod';
 import { getPreferences } from '@/config/preferences';
+import type { GatewayConfig } from '@/types/config';
 import {
 	getServiceType,
 	getServiceName,
@@ -78,12 +79,22 @@ async function runGatewayStatus(): Promise<void> {
 
 	spinner.stop(chalk.green('Running'));
 
+	const gw: Partial<GatewayConfig> = prefs.gateway ?? {};
+	const registered = Boolean(gw.securityKeyHash);
+	const tunnelLine = gw.tunnelKind && gw.tunnelKind !== 'none'
+		? `${chalk.bold('Tunnel:')} ${gw.tunnelKind}${gw.tunnelPid ? chalk.dim(` (pid ${gw.tunnelPid})`) : ''}`
+		: `${chalk.bold('Tunnel:')} ${chalk.dim('none')}`;
+
 	p.note(
 		[
 			`${chalk.bold('Status:')} ${chalk.green('Running')}`,
 			`${chalk.bold('Service:')} ${getServiceTypeLabel(serviceType)}`,
 			`${chalk.bold('PID:')} ${pid || 'unknown'}`,
-			`${chalk.bold('Uptime:')} ${prefs.gateway?.startedAt ? formatUptime(prefs.gateway.startedAt) : 'unknown'}`,
+			`${chalk.bold('Uptime:')} ${gw.startedAt ? formatUptime(gw.startedAt) : 'unknown'}`,
+			`${chalk.bold('HTTP port:')} ${gw.httpPort ?? chalk.dim('(default 7787)')}`,
+			`${chalk.bold('Base URL:')} ${gw.httpBaseUrl || chalk.dim('(not registered)')}`,
+			`${chalk.bold('Registered:')} ${registered ? chalk.green('yes') : chalk.yellow('no — run `corebrain gateway register`')}`,
+			tunnelLine,
 			'',
 			`${chalk.dim('Logs: ~/.corebrain/logs/gateway.log')}`,
 		].join('\n'),

@@ -1,8 +1,8 @@
 /**
  * DirectOrchestratorTools
  *
- * Implementation that calls functions directly (DB/websocket).
- * Used in web chat server context.
+ * Implementation that calls gateway HTTP APIs + DB directly. Used in the
+ * in-process (non-Trigger) web chat server context.
  */
 
 import { searchMemoryWithAgent } from "../memory";
@@ -12,7 +12,7 @@ import {
   handleGetIntegrationActions,
   handleExecuteIntegrationAction,
 } from "~/utils/mcp/integration-operations";
-import { callGatewayTool } from "../../../../websocket";
+import { callTool } from "~/services/gateway/transport.server";
 import { prisma } from "~/db.server";
 import { logger } from "../../logger.service";
 import { getChannel } from "~/services/channels";
@@ -76,13 +76,14 @@ export class DirectOrchestratorTools extends OrchestratorTools {
 
   async getGateways(workspaceId: string): Promise<GatewayAgentInfo[]> {
     const gateways = await getConnectedGateways(workspaceId);
-    return gateways.map((gw: GatewayAgentInfo) => {
-      const tools = (gw.tools || []) as any as { name: string }[];
+    return gateways.map((gw) => {
       return {
         id: gw.id,
         name: gw.name,
         description: gw.description || `Gateway: ${gw.name}`,
-        tools: tools.map((t) => t.name),
+        // Tool names aren't cached on the row anymore; live-fetch happens
+        // when the agent is created.
+        tools: [],
         platform: gw.platform,
         hostname: gw.hostname,
         status: gw.status as "CONNECTED" | "DISCONNECTED",
@@ -119,7 +120,7 @@ export class DirectOrchestratorTools extends OrchestratorTools {
     toolName: string,
     params: Record<string, unknown>,
   ): Promise<unknown> {
-    return callGatewayTool(gatewayId, toolName, params, 60000);
+    return callTool(gatewayId, toolName, params, 60000);
   }
 
   async getSkill(skillId: string, workspaceId: string): Promise<string> {

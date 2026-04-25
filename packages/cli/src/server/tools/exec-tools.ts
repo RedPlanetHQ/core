@@ -5,9 +5,14 @@ import {getPreferences} from '@/config/preferences';
 import {getConfigPath} from '@/config/paths';
 import type {GatewayTool} from './browser-tools';
 import type {ExecConfig} from '@/types/config';
+import {listFolders, resolveFolderForPath} from '@/config/folders';
+import {folderScopeError} from './scope-error';
 
 // Default directory for exec commands - uses same directory as config
 const DEFAULT_EXEC_DIR = getConfigPath();
+
+// Warn once per process about the folders-empty fallback
+let warnedFoldersEmpty = false;
 
 // Default blocked command patterns — always enforced unless allowUnsafe is set
 const DEFAULT_BLOCKED: {pattern: RegExp; reason: string}[] = [
@@ -65,7 +70,8 @@ const jsonSchemas: Record<string, Record<string, unknown>> = {
 			},
 			dir: {
 				type: 'string',
-				description: 'Working directory for the command (defaults to ~/.corebrain)',
+				description:
+					'Working directory. Must resolve to a folder registered via `corebrain folder add` with the `exec` scope. If no folders are registered, falls back to ExecConfig.defaultDir (deprecated).',
 			},
 			timeout: {
 				type: 'number',
@@ -246,8 +252,33 @@ async function handleExecCommand(params: zod.infer<typeof ExecCommandSchema>) {
 		};
 	}
 
-	// Determine working directory
-	const dir = params.dir || config.defaultDir || DEFAULT_EXEC_DIR;
+	// Determine working directory with scope enforcement
+	let dir: string;
+	const folders = listFolders();
+
+	if (folders.length > 0) {
+		// Scope enforcement: dir must resolve to a folder with `exec` scope
+		const target = params.dir || process.cwd();
+		const resolved = resolveFolderForPath(target, 'exec');
+		if (!resolved) {
+			const err = folderScopeError(target, 'exec');
+			return {
+				success: false,
+				error: `${err.error.code}: ${err.error.message}`,
+			};
+		}
+		dir = resolved.absPath;
+	} else {
+		// Backwards-compatibility fallback — no folders registered
+		dir = params.dir || config.defaultDir || DEFAULT_EXEC_DIR;
+		if (!warnedFoldersEmpty) {
+			warnedFoldersEmpty = true;
+			console.warn(
+				'[corebrain] DEPRECATION: no folders registered; falling back to ExecConfig.defaultDir. ' +
+					'Register folders with `corebrain folder add <path> --scopes exec` to enforce path scope.',
+			);
+		}
+	}
 
 	// Ensure directory exists
 	if (!existsSync(dir)) {

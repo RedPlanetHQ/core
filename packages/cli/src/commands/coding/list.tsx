@@ -50,7 +50,7 @@ async function runListSessions(opts: zod.infer<typeof options>): Promise<void> {
 
 	if (res.sessions.length === 0) {
 		p.log.info('No sessions found.');
-		p.log.info("Start one with: corebrain coding start");
+		p.log.info('Start one via the API: POST /api/coding/coding_ask');
 		return;
 	}
 

@@ -94,17 +94,25 @@ export interface GatewaySlots {
 		deny?: string[]; // Glob-like patterns: "Bash(git push *)"
 		allowUnsafe?: boolean; // Disable default blocked patterns
 	};
-	imessage?: {
+	files?: {
 		enabled: boolean;
 	};
 }
+
+export interface StoredFolder {
+	id: string; // fld_<uuid>
+	name: string;
+	path: string;
+	scopes: ('files' | 'coding' | 'exec')[];
+	gitRepo?: boolean;
+}
+
+export type TunnelKind = 'tailscale' | 'ngrok' | 'none';
 
 export interface GatewayConfig {
 	id?: string; // Generated gateway ID
 	name?: string; // Gateway name
 	description?: string; // Gateway description/role for meta-agent selection
-	url?: string; // App URL (default: https://app.getcore.me)
-	port?: number;
 	pid: number;
 	startedAt: number;
 	serviceInstalled?: boolean;
@@ -112,13 +120,26 @@ export interface GatewayConfig {
 	serviceName?: string;
 	slots?: GatewaySlots; // Which tool slots are enabled
 	alwaysOn?: boolean; // Prevent mac sleep while gateway is running (macOS only)
+
+	// Registered folders with scopes (files/coding/exec)
+	folders?: StoredFolder[];
+
+	// HTTP daemon
+	httpPort?: number;
+	httpBaseUrl?: string; // Public URL (set by register; from tunnel or user-supplied)
+	securityKeyHash?: string; // sha256(securityKey) hex. Raw key never stored.
+
+	// Tunnel state (managed by register / start)
+	tunnelKind?: TunnelKind;
+	tunnelPid?: number;
 }
 
-// CLI Backend configuration for coding agents
+// CLI Backend configuration for coding agents. Args spawn the agent's
+// interactive TUI — both `coding_ask` and the xterm-spawn path share them.
 export interface CliBackendConfig {
 	command: string;
-	args?: string[]; // Default args for new sessions
-	resumeArgs?: string[]; // Args for resuming sessions (use {sessionId} placeholder)
+	args?: string[]; // Interactive TUI args for a fresh session
+	resumeArgs?: string[]; // Args for resuming a session (use `{sessionId}` placeholder)
 	sessionArg?: string; // e.g., "--session"
 	sessionMode?: 'new' | 'existing' | 'always';
 	sessionIdFields?: string[]; // Fields in output containing session ID

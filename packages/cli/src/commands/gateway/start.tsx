@@ -3,6 +3,7 @@ import { useApp } from 'ink';
 import * as p from '@clack/prompts';
 import chalk from 'chalk';
 import zod from 'zod';
+import { spawn as spawnChild } from 'node:child_process';
 import { getConfig } from '@/config/index';
 import { getPreferences, updatePreferences } from '@/config/preferences';
 import { getConfigPath } from '@/config/paths';
@@ -21,7 +22,14 @@ import type { ServiceConfig } from '@/utils/service-manager';
 import { initializeDefaultProfiles } from '@/utils/browser-config';
 
 export const options = zod.object({
-	alwaysOn: zod.boolean().default(false).describe('Prevent mac from sleeping while gateway is running (macOS only)'),
+	alwaysOn: zod
+		.boolean()
+		.default(false)
+		.describe('Prevent mac from sleeping while gateway is running (macOS only)'),
+	foreground: zod
+		.boolean()
+		.default(false)
+		.describe('Run the gateway attached to the current terminal (for Docker / ad-hoc hosts without launchd/systemd)'),
 });
 
 type Props = {
@@ -150,7 +158,6 @@ async function runGatewayStart(alwaysOn: boolean): Promise<void> {
 	updatePreferences({
 		gateway: {
 			...getPreferences().gateway,
-			port: 0,
 			pid: pid ?? 0,
 			startedAt: Date.now(),
 			serviceInstalled: true,

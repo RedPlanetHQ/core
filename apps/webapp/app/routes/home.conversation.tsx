@@ -194,10 +194,10 @@ export default function ConversationLayout() {
         </AlertDialogContent>
       </AlertDialog>
 
-      <div className="flex flex-1 overflow-hidden">
+      <div className="relative flex flex-1 overflow-hidden">
         {/* Collapsed icon strip — hidden when sidebar is open */}
         {!sidebarOpen && (
-          <div className="flex w-10 shrink-0 flex-col items-center pt-2">
+          <div className="absolute flex w-10 shrink-0 flex-col items-center pt-2">
             <Button
               variant="ghost"
               onClick={() => setSidebarOpen(true)}

@@ -16,6 +16,7 @@ import {
   CheckSquare,
   Code2,
   Plug,
+  Table as TableIcon,
 } from "lucide-react";
 import type { WidgetOption } from "~/components/overview/types";
 
@@ -82,6 +83,17 @@ const STATIC_COMMANDS: CommandItem[] = [
     description: "Code snippet",
     icon: Code2,
     command: (editor) => editor.chain().focus().toggleCodeBlock().run(),
+  },
+  {
+    title: "Table",
+    description: "3x3 table with header row",
+    icon: TableIcon,
+    command: (editor) =>
+      editor
+        .chain()
+        .focus()
+        .insertTable({ rows: 3, cols: 3, withHeaderRow: true })
+        .run(),
   },
 ];
 

@@ -6,9 +6,8 @@ import zod from 'zod';
 import {randomUUID} from 'node:crypto';
 import {exec} from 'node:child_process';
 import {promisify} from 'node:util';
-import {existsSync} from 'node:fs';
+import {existsSync, realpathSync, statSync} from 'node:fs';
 import {getPreferences, updatePreferences} from '@/config/preferences';
-import {getConfig} from '@/config/index';
 import {
 	getServiceType,
 	getServiceName,
@@ -22,29 +21,27 @@ import {
 } from '@/utils/service-manager/index';
 import type {ServiceConfig} from '@/utils/service-manager/index';
 import {getConfigPath} from '@/config/paths';
-import {join, dirname} from 'node:path';
+import {join, dirname, resolve, isAbsolute} from 'node:path';
 import {fileURLToPath} from 'node:url';
 import {homedir} from 'node:os';
-import type {GatewayConfig, GatewaySlots} from '@/types/config';
+import type {GatewayConfig, GatewaySlots, StoredFolder} from '@/types/config';
 import {
 	isPlaywrightReady,
 	installPlaywrightChromium,
 } from '@/utils/browser-config';
-import {
-	createAppBundle,
-	openFullDiskAccessSettings,
-	testMessagesAccess,
-	isAppBundleInstalled,
-	getAppExecutablePath,
-	getAppBundlePath,
-} from '@/utils/app-bundle';
+import {runRegister} from './register';
 
 const execAsync = promisify(exec);
 
-const DEFAULT_APP_URL = 'https://app.getcore.me';
-
 // Tool slot definitions
-type ToolSlot = 'browser' | 'coding' | 'exec' | 'imessage';
+type ToolSlot = 'browser' | 'coding' | 'exec' | 'files';
+
+function expandHome(input: string): string {
+	const trimmed = input.trim();
+	if (trimmed === '~') return homedir();
+	if (trimmed.startsWith('~/')) return join(homedir(), trimmed.slice(2));
+	return trimmed;
+}
 
 interface ToolSlotInfo {
 	value: ToolSlot;
@@ -67,7 +64,7 @@ export const options = zod.object({
 	coding: zod.boolean().optional().describe('Enable/disable coding tools'),
 	browser: zod.boolean().optional().describe('Enable/disable browser tools'),
 	exec: zod.boolean().optional().describe('Enable/disable exec tools'),
-	imessage: zod.boolean().optional().describe('Enable/disable iMessage tools'),
+	files: zod.boolean().optional().describe('Enable/disable files tools (read/write/edit/glob/grep)'),
 	show: zod.boolean().optional().describe('Show current configuration'),
 });
 
@@ -125,28 +122,6 @@ async function isClaudeCodeInstalled(): Promise<{
 	return {installed: false};
 }
 
-// Check if iMessage database is accessible
-async function isIMessageAvailable(): Promise<{
-	available: boolean;
-	message?: string;
-}> {
-	const dbPath = join(homedir(), 'Library/Messages/chat.db');
-	if (!existsSync(dbPath)) {
-		return {available: false, message: 'Messages database not found'};
-	}
-
-	try {
-		await execAsync(`sqlite3 "${dbPath}" "SELECT 1 LIMIT 1"`);
-		return {available: true};
-	} catch {
-		return {
-			available: false,
-			message:
-				'Grant Full Disk Access to terminal in System Settings > Privacy & Security',
-		};
-	}
-}
-
 function formatConfig(config: GatewayConfig | undefined): string {
 	if (!config) {
 		return chalk.dim('(not configured)');
@@ -156,7 +131,12 @@ function formatConfig(config: GatewayConfig | undefined): string {
 		`${chalk.bold('Description:')} ${
 			config.description || chalk.dim('(none)')
 		}`,
-		`${chalk.bold('URL:')} ${config.url || DEFAULT_APP_URL}`,
+		`${chalk.bold('Base URL:')} ${config.httpBaseUrl || chalk.dim('(not registered — run `corebrain gateway register`)')}`,
+		`${chalk.bold('HTTP port:')} ${config.httpPort ?? chalk.dim('(default 7787)')}`,
+		`${chalk.bold('Registered:')} ${config.securityKeyHash ? chalk.green('yes') : chalk.yellow('no')}`,
+		config.tunnelKind && config.tunnelKind !== 'none'
+			? `${chalk.bold('Tunnel:')} ${config.tunnelKind}${config.tunnelPid ? chalk.dim(` (pid ${config.tunnelPid})`) : ''}`
+			: `${chalk.bold('Tunnel:')} ${chalk.dim('none')}`,
 		`${chalk.bold('Browser:')} ${
 			config.slots?.browser?.enabled
 				? chalk.green('enabled')
@@ -172,12 +152,85 @@ function formatConfig(config: GatewayConfig | undefined): string {
 				? chalk.green('enabled')
 				: chalk.dim('disabled')
 		}`,
-		`${chalk.bold('iMessage:')} ${
-			config.slots?.imessage?.enabled
+		`${chalk.bold('Files:')} ${
+			config.slots?.files?.enabled
 				? chalk.green('enabled')
 				: chalk.dim('disabled')
 		}`,
+		`${chalk.bold('Folders:')} ${
+			config.folders && config.folders.length > 0
+				? '\n' +
+					config.folders
+						.map(
+							f =>
+								`  - ${chalk.cyan(f.name)} ${chalk.dim(f.path)} [${f.scopes.join(', ')}]`,
+						)
+						.join('\n')
+				: chalk.dim('(none)')
+		}`,
 	].join('\n');
+}
+
+async function configureFolders(
+	initialFolders: StoredFolder[],
+): Promise<StoredFolder[] | symbol> {
+	const folders = [...initialFolders];
+
+	if (folders.length > 0) {
+		const list = folders
+			.map(f => `  - ${chalk.cyan(f.name)} ${chalk.dim(f.path)}`)
+			.join('\n');
+		p.note(
+			`${list}\n\n${chalk.dim('Remove with `corebrain folder remove <name>`.')}`,
+			`Registered folders (${folders.length})`,
+		);
+	}
+
+	// eslint-disable-next-line no-constant-condition
+	while (true) {
+		const rawPath = await p.text({
+			message: 'Add folder path (blank to finish)',
+			placeholder: '/Users/you/code/project',
+			defaultValue: '',
+			validate: value => {
+				const v = (value ?? '').trim();
+				if (!v) return;
+				const expanded = expandHome(v);
+				if (!isAbsolute(expanded)) return 'Path must be absolute';
+				if (!existsSync(expanded)) return `Path does not exist: ${expanded}`;
+				if (!statSync(expanded).isDirectory()) {
+					return `Not a directory: ${expanded}`;
+				}
+				const abs = realpathSync(resolve(expanded));
+				if (folders.some(f => f.path === abs)) {
+					return 'Folder already registered';
+				}
+			},
+		});
+		if (p.isCancel(rawPath)) return rawPath;
+
+		const trimmed = (rawPath as string).trim();
+		if (!trimmed) break;
+
+		const abs = realpathSync(resolve(expandHome(trimmed)));
+		const baseName = abs.split('/').filter(Boolean).pop() ?? 'folder';
+		let name = baseName;
+		for (let i = 2; folders.some(f => f.name === name); i++) {
+			name = `${baseName}-${i}`;
+		}
+
+		folders.push({
+			id: `fld_${randomUUID()}`,
+			name,
+			path: abs,
+			scopes: ['files', 'coding', 'exec'],
+			gitRepo: existsSync(`${abs}/.git`),
+		});
+
+		p.log.success(chalk.green(`Added: ${abs}`));
+	}
+
+	return folders;
 }
 
 // Direct update (non-interactive)
@@ -221,8 +274,8 @@ async function runDirectUpdate(
 	if (opts.exec !== undefined) {
 		slots.exec = {...slots.exec, enabled: opts.exec};
 	}
-	if (opts.imessage !== undefined) {
-		slots.imessage = {...slots.imessage, enabled: opts.imessage};
+	if (opts.files !== undefined) {
+		slots.files = {...slots.files, enabled: opts.files};
 	}
 	newConfig.slots = slots;
 
@@ -336,96 +389,6 @@ async function configureExec(
 	return {allow: execAllow, deny: execDeny};
 }
 
-// Configure iMessage slot — creates .app bundle and guides FDA setup
-// Returns true if enabled, false if skipped, null if cancelled
-async function configureIMessage(): Promise<boolean | null> {
-	// If already installed and accessible, just enable
-	if (isAppBundleInstalled() && testMessagesAccess()) {
-		p.log.success(
-			chalk.green(
-				'CoreBrainGateway.app already installed and has Full Disk Access',
-			),
-		);
-		return true;
-	}
-
-	p.log.step(chalk.cyan('Setting up iMessage access...'));
-
-	// Step 1: Create the .app bundle
-	const bundleSpinner = p.spinner();
-	bundleSpinner.start('Creating CoreBrainGateway.app in /Applications...');
-	try {
-		const __filename = fileURLToPath(import.meta.url);
-		const __dirname = dirname(__filename);
-		const gatewayEntryPath = join(
-			__dirname,
-			'..',
-			'..',
-			'server',
-			'gateway-entry.js',
-		);
-		createAppBundle(process.execPath, gatewayEntryPath);
-		bundleSpinner.stop(
-			chalk.green('CoreBrainGateway.app created in /Applications'),
-		);
-	} catch (err) {
-		bundleSpinner.stop(chalk.red('Failed to create app bundle'));
-		p.log.error(err instanceof Error ? err.message : 'Unknown error');
-		return false;
-	}
-
-	// Step 2: Open System Settings → Full Disk Access
-	openFullDiskAccessSettings();
-
-	p.log.info(
-		[
-			'',
-			chalk.bold('Grant Full Disk Access to CoreBrain Gateway:'),
-			`  1. In the panel that just opened, click ${chalk.bold('+')}`,
-			`  2. Select ${chalk.bold('CoreBrainGateway')} from Applications`,
-			`  3. Make sure the toggle is ${chalk.bold('ON')}`,
-			'',
-		].join('\n'),
-	);
-
-	// Step 3: Wait for user then verify
-	let verified = false;
-	while (!verified) {
-		const next = await p.select({
-			message: "Once you've added CoreBrainGateway to Full Disk Access:",
-			options: [
-				{value: 'verify', label: 'Verify access'},
-				{value: 'skip', label: 'Skip iMessage for now'},
-			],
-		});
-
-		if (p.isCancel(next)) return null;
-
-		if (next === 'skip') return false;
-
-		const verifySpinner = p.spinner();
-		verifySpinner.start('Checking Full Disk Access...');
-		const ok = testMessagesAccess();
-		if (ok) {
-			verifySpinner.stop(
-				chalk.green('Full Disk Access confirmed — iMessage tools ready'),
-			);
-			verified = true;
-		} else {
-			verifySpinner.stop(
-				chalk.yellow('Not yet — Messages database not accessible'),
-			);
-			p.log.warn(
-				`Make sure ${chalk.bold(
-					getAppBundlePath(),
-				)} is in Full Disk Access with the toggle ON, then try again.`,
-			);
-		}
-	}
-
-	return true;
-}
-
 // Interactive wizard
 async function runInteractiveConfig() {
 	const prefs = getPreferences();
@@ -486,10 +449,9 @@ async function runInteractiveConfig() {
 	const checkSpinner = p.spinner();
 	checkSpinner.start('Checking available tools...');
 
-	const [claudeResult, browserInstalled, imessageResult] = await Promise.all([
+	const [claudeResult, browserInstalled] = await Promise.all([
 		isClaudeCodeInstalled(),
 		isPlaywrightReady(),
-		isIMessageAvailable(),
 	]);
 
 	checkSpinner.stop('Tools checked');
@@ -516,11 +478,9 @@ async function runInteractiveConfig() {
 			hint: 'Run shell commands',
 		},
 		{
-			value: 'imessage',
-			label: 'iMessage',
-			hint: imessageResult.available
-				? chalk.green('available')
-				: chalk.yellow(imessageResult.message || 'not available'),
+			value: 'files',
+			label: 'Files',
+			hint: 'Read, write, edit, glob, grep',
 		},
 	];
 
@@ -529,8 +489,7 @@ async function runInteractiveConfig() {
 	if (existingConfig?.slots?.browser?.enabled) currentlyEnabled.push('browser');
 	if (existingConfig?.slots?.coding?.enabled) currentlyEnabled.push('coding');
 	if (existingConfig?.slots?.exec?.enabled) currentlyEnabled.push('exec');
-	if (existingConfig?.slots?.imessage?.enabled)
-		currentlyEnabled.push('imessage');
+	if (existingConfig?.slots?.files?.enabled) currentlyEnabled.push('files');
 
 	// Step 4: Multi-select tools to configure
 	const selectedTools = await p.multiselect({
@@ -551,7 +510,7 @@ async function runInteractiveConfig() {
 	let browserEnabled = false;
 	let codingEnabled = false;
 	let execEnabled = false;
-	let imessageEnabled: boolean = false;
+	let filesEnabled = false;
 	let execAllow: string[] = [];
 	let execDeny: string[] = [];
 	let claudePath: string | undefined;
@@ -626,17 +585,21 @@ async function runInteractiveConfig() {
 				break;
 			}
 
-			case 'imessage': {
-				const result = await configureIMessage();
-				if (result === null) {
-					p.cancel('Configuration cancelled');
-					return {cancelled: true};
-				}
-				imessageEnabled = result;
+			case 'files': {
+				filesEnabled = true;
 				break;
 			}
 		}
 	}
+
+	// Step 5: Configure folders (scoped workspaces for files/coding/exec)
+	p.log.step(chalk.cyan('Configuring folders...'));
+	const foldersResult = await configureFolders(existingConfig?.folders ?? []);
+	if (p.isCancel(foldersResult)) {
+		p.cancel('Configuration cancelled');
+		return {cancelled: true};
+	}
+	const folders = foldersResult as StoredFolder[];
 
 	// Save configuration
 	const saveSpinner = p.spinner();
@@ -651,23 +614,18 @@ async function runInteractiveConfig() {
 			allow: execAllow.length > 0 ? execAllow : undefined,
 			deny: execDeny.length > 0 ? execDeny : undefined,
 		},
-		imessage: {enabled: imessageEnabled},
+		files: {enabled: filesEnabled},
 	};
-
-	// Get URL from auth config (set during login)
-	const appConfig = getConfig();
-	const authUrl = appConfig.auth?.url || DEFAULT_APP_URL;
 
 	const newConfig: GatewayConfig = {
 		...prefs.gateway,
 		id: gatewayId,
 		name: name as string,
 		description: (description as string) || '',
-		url: authUrl,
-		port: prefs.gateway?.port || 0,
 		pid: prefs.gateway?.pid || 0,
 		startedAt: prefs.gateway?.startedAt || 0,
 		slots,
+		folders,
 	};
 
 	// Save coding config if enabled
@@ -734,13 +692,11 @@ async function runInteractiveConfig() {
 	const gatewayEntryPath = getGatewayEntryPath();
 	const logDir = join(getConfigPath(), 'logs');
 
-	// If iMessage is enabled, launch via the .app bundle so it inherits Full Disk Access
-	const useAppBundle = imessageEnabled && isAppBundleInstalled();
 	const serviceConfig: ServiceConfig = {
 		name: serviceName,
 		displayName: 'CoreBrain Gateway',
-		command: useAppBundle ? getAppExecutablePath() : process.execPath,
-		args: useAppBundle ? [] : [gatewayEntryPath],
+		command: process.execPath,
+		args: [gatewayEntryPath],
 		port: 0,
 		workingDirectory: homedir(),
 		logPath: join(logDir, 'gateway-stdout.log'),
@@ -765,6 +721,27 @@ async function runInteractiveConfig() {
 	});
 
 	startSpinner.stop(chalk.green('Gateway started'));
+
+	// Final step: offer to register the gateway (tunnel + securityKey).
+	const wantRegister = await p.confirm({
+		message: 'Register this gateway with a public URL now?',
+		initialValue: true,
+	});
+
+	if (!p.isCancel(wantRegister) && wantRegister) {
+		const result = await runRegister({});
+		if (!result.ok) {
+			if ('error' in result) {
+				p.log.warn(`Registration failed: ${result.error}`);
+				p.log.info('Re-run later with: corebrain gateway register');
+			} else if ('cancelled' in result) {
+				p.log.info('Registration skipped. Re-run later with: corebrain gateway register');
+			}
+		}
+	} else {
+		p.log.info('Skipped. Register later with: corebrain gateway register');
+	}
+
 	p.outro(chalk.green('Gateway is running!'));
 
 	return {success: true, started: true};

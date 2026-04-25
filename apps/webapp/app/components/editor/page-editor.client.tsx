@@ -6,6 +6,10 @@ import Placeholder from "@tiptap/extension-placeholder";
 import CodeBlockLowlight from "@tiptap/extension-code-block-lowlight";
 import Collaboration from "@tiptap/extension-collaboration";
 import TaskList from "@tiptap/extension-task-list";
+import { Table } from "@tiptap/extension-table";
+import TableRow from "@tiptap/extension-table-row";
+import TableHeader from "@tiptap/extension-table-header";
+import TableCell from "@tiptap/extension-table-cell";
 import { HocuspocusProvider } from "@hocuspocus/provider";
 import { useCollabSocket } from "~/components/editor/collab-socket-context";
 import { IndexeddbPersistence } from "y-indexeddb";
@@ -98,6 +102,10 @@ function buildExtensions(
       HTMLAttributes: { class: cx("list-none pl-0 my-1") },
     }),
     ScratchpadTaskItem({ pageId, parentTaskId }),
+    Table.configure({ resizable: true }),
+    TableRow,
+    TableHeader,
+    TableCell,
     CodeBlockLowlight.configure({ lowlight }),
     Markdown,
     Placeholder.configure({

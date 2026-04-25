@@ -225,27 +225,6 @@ export const GetGatewaysResponseSchema = z.object({
 
 export type GetGatewaysResponse = z.infer<typeof GetGatewaysResponseSchema>;
 
-export const ExecuteGatewayInputSchema = z.object({
-  gatewayId: z.string(),
-  intent: z.string(),
-});
-
-export type ExecuteGatewayInput = z.infer<typeof ExecuteGatewayInputSchema>;
-
-export const ExecuteGatewayToolInputSchema = z.object({
-  gatewayId: z.string(),
-  toolName: z.string(),
-  params: z.record(z.unknown()),
-});
-
-export type ExecuteGatewayToolInput = z.infer<typeof ExecuteGatewayToolInputSchema>;
-
-export const ExecuteGatewayResponseSchema = z.object({
-  result: z.unknown(),
-});
-
-export type ExecuteGatewayResponse = z.infer<typeof ExecuteGatewayResponseSchema>;
-
 // ---------------------------------------------------------------------------
 // Auth – Authorization Code
 // ---------------------------------------------------------------------------

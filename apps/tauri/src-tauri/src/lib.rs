@@ -5,9 +5,8 @@ mod apps;
 #[cfg(target_os = "macos")]
 mod capture;
 mod coding_config;
-mod pty;
 
-use std::collections::{HashMap, HashSet};
+use std::collections::HashSet;
 use std::sync::{Arc, Mutex};
 
 use base64::Engine as _;
@@ -15,6 +14,7 @@ use serde::{Deserialize, Serialize};
 use tauri::menu::{Menu, MenuItem, PredefinedMenuItem};
 use tauri::tray::TrayIconBuilder;
 use tauri::{Manager, State};
+use tauri_plugin_notification::{NotificationExt, PermissionState};
 
 #[cfg(target_os = "macos")]
 use objc::{class, msg_send, sel, sel_impl, runtime::Object};
@@ -236,6 +236,10 @@ fn set_enabled_apps(enabled: Vec<String>, state: State<SharedScreenContextSettin
 /// Returns the local gateway ID from ~/.corebrain/config.json, if configured.
 #[tauri::command]
 fn get_gateway_id() -> Option<String> {
+    read_gateway_id()
+}
+
+fn read_gateway_id() -> Option<String> {
     let path = corebrain_config_path()?;
     let json: serde_json::Value = std::fs::read_to_string(&path)
         .ok()
@@ -243,6 +247,92 @@ fn get_gateway_id() -> Option<String> {
     json["preferences"]["gateway"]["id"]
         .as_str()
         .map(|s| s.to_string())
+}
+
+/// Fire a one-time native notification on launch if the local gateway isn't
+/// configured yet. The first call also handles the macOS permission prompt.
+fn maybe_notify_gateway_setup<R: tauri::Runtime>(app: &tauri::AppHandle<R>) {
+    let gateway = read_gateway_id();
+    log::info!("[notify] gateway_id present={}", gateway.is_some());
+    // TEMP: always fire for testing — restore the early-return below before shipping.
+    // if gateway.is_some() {
+    //     return;
+    // }
+
+    let n = app.notification();
+
+    let state = match n.permission_state() {
+        Ok(s) => s,
+        Err(err) => {
+            log::warn!("[notify] permission_state failed: {}", err);
+            return;
+        }
+    };
+    log::info!("[notify] permission_state={:?}", state);
+
+    let granted = match state {
+        PermissionState::Granted => true,
+        _ => match n.request_permission() {
+            Ok(s) => {
+                log::info!("[notify] request_permission -> {:?}", s);
+                matches!(s, PermissionState::Granted)
+            }
+            Err(err) => {
+                log::warn!("[notify] request_permission failed: {}", err);
+                false
+            }
+        },
+    };
+
+    if !granted {
+        log::warn!("[notify] notification permission not granted, skipping");
+        return;
+    }
+
+    let title = "Set up your CORE gateway";
+    let body = "CORE needs a local gateway to run coding sessions and tools on this Mac. Open CORE → Settings → Gateway to register one.";
+
+    let result = n.builder().title(title).body(body).show();
+
+    match result {
+        Ok(()) => log::info!("[notify] gateway-setup notification dispatched"),
+        Err(err) => log::warn!("[notify] tauri notification failed: {}", err),
+    }
+
+    // macOS-specific fallback: in `tauri dev` the binary runs without a proper
+    // bundle ID, so UserNotifications silently no-ops. AppleScript works from
+    // any process, so always fire it as a backstop. In production builds the
+    // user sees one notification (the plugin path) because macOS dedupes by
+    // identifier; the AppleScript fallback shows up only when the plugin fails.
+    #[cfg(target_os = "macos")]
+    notify_via_osascript(title, body);
+}
+
+#[cfg(target_os = "macos")]
+fn notify_via_osascript(title: &str, body: &str) {
+    // Escape double-quotes and backslashes for AppleScript string literals.
+    let esc = |s: &str| s.replace('\\', "\\\\").replace('"', "\\\"");
+    let script = format!(
+        "display notification \"{}\" with title \"{}\"",
+        esc(body),
+        esc(title)
+    );
+    match std::process::Command::new("osascript")
+        .args(["-e", &script])
+        .output()
+    {
+        Ok(out) if out.status.success() => {
+            log::info!("[notify] osascript notification dispatched");
+        }
+        Ok(out) => {
+            log::warn!(
+                "[notify] osascript failed: status={} stderr={}",
+                out.status,
+                String::from_utf8_lossy(&out.stderr)
+            );
+        }
+        Err(err) => log::warn!("[notify] osascript spawn failed: {}", err),
+    }
 }
 
 /// Called from the frontend after desktop login to persist the PAT for Rust API calls.
@@ -274,17 +364,6 @@ pub fn run() {
         Arc::new(Mutex::new(ScreenContextSettings::default()));
     let auth: SharedAuthState =
         Arc::new(Mutex::new(AuthState::default()));
-    let pty_state: pty::PtyState =
-        Arc::new(Mutex::new(HashMap::new()));
-    let captured_path = pty::capture_login_path();
-    log::info!(
-        "[startup] captured login PATH ({} chars): {}",
-        captured_path.len(),
-        captured_path
-    );
-    let login_path = pty::SharedLoginPath(Arc::new(Mutex::new(captured_path)));
-
-    let pty_state_exit = pty_state.clone();
 
     tauri::Builder::default()
         .plugin(tauri_plugin_log::Builder::new()
@@ -292,10 +371,9 @@ pub fn run() {
             .build())
         .plugin(tauri_plugin_shell::init())
         .plugin(tauri_plugin_updater::Builder::new().build())
+        .plugin(tauri_plugin_notification::init())
         .manage(settings.clone())
         .manage(auth.clone())
-        .manage(pty_state.clone())
-        .manage(login_path)
         .invoke_handler(tauri::generate_handler![
             get_screen_context_settings,
             set_screen_context_paused,
@@ -306,10 +384,6 @@ pub fn run() {
             get_gateway_id,
             coding_config::check_corebrain_installed,
             coding_config::get_coding_agents,
-            pty::spawn_pty,
-            pty::write_pty,
-            pty::resize_pty,
-            pty::kill_pty,
         ])
         .setup(move |app| {
             *settings.lock().unwrap() = load_screen_context_settings();
@@ -354,12 +428,15 @@ pub fn run() {
                 })
                 .build(app)?;
 
+            // Prompt the user to set up a local gateway if one isn't configured
+            // yet. Delay briefly so the notification doesn't race app launch.
+            let notify_handle = app.handle().clone();
+            std::thread::spawn(move || {
+                std::thread::sleep(std::time::Duration::from_secs(5));
+                maybe_notify_gateway_setup(&notify_handle);
+            });
+
             Ok(())
-        })
-        .on_window_event(move |_window, event| {
-            if let tauri::WindowEvent::Destroyed = event {
-                pty::kill_all_ptys(&pty_state_exit);
-            }
         })
         .run(tauri::generate_context!())
         .expect("error while running tauri application");

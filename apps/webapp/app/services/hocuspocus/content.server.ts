@@ -6,6 +6,10 @@ import StarterKit from "@tiptap/starter-kit";
 import TaskList from "@tiptap/extension-task-list";
 import Heading from "@tiptap/extension-heading";
 import Mention from "@tiptap/extension-mention";
+import { Table } from "@tiptap/extension-table";
+import TableRow from "@tiptap/extension-table-row";
+import TableHeader from "@tiptap/extension-table-header";
+import TableCell from "@tiptap/extension-table-cell";
 import type { Extensions } from "@tiptap/core";
 import * as Y from "yjs";
 import { prisma } from "~/db.server";
@@ -72,6 +76,10 @@ export function getServerExtensions(): Extensions {
     Heading.configure({ levels: [1, 2, 3] }),
     CustomTaskItemServer,
     Mention,
+    Table.configure({ resizable: false }),
+    TableRow,
+    TableHeader,
+    TableCell,
   ];
 }
 

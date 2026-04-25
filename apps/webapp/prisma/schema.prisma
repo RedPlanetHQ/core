@@ -399,9 +399,6 @@ model Gateway {
   name        String
   description String?
 
-  // Supported tools - stored as JSON array of { name, description, inputSchema? }
-  tools Json @default("{}")
-
   // Connection status
   status         GatewayStatus @default(DISCONNECTED)
   lastSeenAt     DateTime?
