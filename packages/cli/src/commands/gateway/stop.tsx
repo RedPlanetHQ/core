@@ -46,6 +46,17 @@ async function runGatewayStop(): Promise<void> {
 		return;
 	}
 
+	// Kill any managed tunnel subprocess (tailscale funnel / ngrok) before stopping
+	// the service, so no public endpoint keeps pointing at a dead port.
+	const gw = getPreferences().gateway;
+	if (gw?.tunnelPid) {
+		try {
+			process.kill(gw.tunnelPid, 'SIGTERM');
+		} catch {
+			// Process already dead or not ours — ignore.
+		}
+	}
+
 	// Stop if running
 	const serviceStatus = await getServiceStatus(serviceName);
 	if (serviceStatus === 'running') {

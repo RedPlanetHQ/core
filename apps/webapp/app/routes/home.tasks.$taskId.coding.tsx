@@ -15,7 +15,7 @@ import type { CodingSessionListItem } from "~/services/coding/coding-session.ser
 import { Button } from "~/components/ui/button";
 import { Badge } from "~/components/ui/badge";
 import { useTauri } from "~/hooks/use-tauri";
-import { TauriTerminal } from "~/components/coding/tauri-terminal";
+import { GatewayTerminal } from "~/components/coding/gateway-terminal";
 import { NewSessionDialog } from "~/components/coding/new-session-dialog";
 import { useSetCodingActions } from "~/components/coding/coding-actions-context";
 import { useSidebar } from "~/components/ui/sidebar";
@@ -202,9 +202,14 @@ function SessionDetail({
         ref={scrollRef}
         className="flex min-h-0 flex-1 flex-col gap-5 overflow-y-auto p-4"
       >
-        {!canPoll ? (
+        {!session.gatewayId ? (
           <p className="text-muted-foreground text-sm">
             No gateway linked to this session.
+          </p>
+        ) : !session.externalSessionId ? (
+          <p className="text-muted-foreground text-sm">
+            Session ready. Send a prompt from the conversation to start the
+            agent.
           </p>
         ) : turnsError ? (
           <p className="text-destructive text-sm">{turnsError}</p>
@@ -257,27 +262,29 @@ function CodingPage() {
   const selectedSession =
     sessions.find((s) => s.id === selectedId) ?? sessions[0] ?? null;
 
-  const handleNewSessionCreated = (
-    sessionId: string,
-    agent: string,
-    dir: string,
-  ) => {
+  const handleNewSessionCreated = (args: {
+    id: string;
+    agent: string;
+    dir: string;
+    gatewayId: string;
+    externalSessionId: string | null;
+  }) => {
     const newSession: CodingSessionListItem = {
-      id: sessionId,
-      agent,
-      dir,
+      id: args.id,
+      agent: args.agent,
+      dir: args.dir,
       createdAt: new Date(),
       updatedAt: new Date(),
       prompt: null,
-      externalSessionId: null,
+      externalSessionId: args.externalSessionId,
       conversationId: null,
-      gatewayId: null,
+      gatewayId: args.gatewayId,
       worktreePath: null,
       worktreeBranch: null,
-      gateway: null,
+      gateway: { id: args.gatewayId, name: "" },
     };
     setSessions((prev) => [newSession, ...prev]);
-    setSelectedId(sessionId);
+    setSelectedId(args.id);
     setTerminalKey((k) => k + 1);
   };
 
@@ -290,8 +297,8 @@ function CodingPage() {
   };
 
   const handleResumeSession = (extId: string) => {
-    // Ensure parent state has the extId before remounting, so spawn_pty
-    // receives resumeSessionId instead of falling back to reconnect logic.
+    // Ensure parent state has the extId before remounting, so GatewayTerminal
+    // opens its WS against the right externalSessionId.
     if (selectedId) {
       setSessions((prev) =>
         prev.map((s) =>
@@ -301,8 +308,6 @@ function CodingPage() {
     }
     setTerminalKey((k) => k + 1);
   };
-
-  const lastDir = sessions.find((s) => s.dir)?.dir ?? "";
 
   // Auto-collapse sidebar on mount, restore on unmount
   useEffect(() => {
@@ -353,16 +358,7 @@ function CodingPage() {
     );
   }
 
-  if (sessions.length === 0 && !isDesktop) {
-    return (
-      <div className="flex h-full w-full flex-col items-center justify-center gap-3">
-        <Terminal className="text-muted-foreground h-8 w-8" />
-        <p className="text-muted-foreground text-sm">No coding sessions yet</p>
-      </div>
-    );
-  }
-
-  if (sessions.length === 0 && isDesktop) {
+  if (sessions.length === 0) {
     return (
       <>
         <div className="flex h-full w-full flex-col items-center justify-center gap-3">
@@ -379,29 +375,30 @@ function CodingPage() {
           open={newSessionOpen}
           onOpenChange={setNewSessionOpen}
           taskId={taskId!}
-          defaultDir={lastDir}
           onCreated={handleNewSessionCreated}
         />
       </>
     );
   }
 
-  const showTerminal = isDesktop && selectedSession !== null;
+  // Terminal is available whenever the session is attached to a gateway and
+  // that gateway knows the external (agent-assigned) session id. The browser
+  // opens a WebSocket to `/api/v1/coding-sessions/:id/xterm`, which the webapp
+  // proxies to the gateway's PTY.
+  const showTerminal =
+    selectedSession !== null &&
+    Boolean(selectedSession.gatewayId) &&
+    Boolean(selectedSession.externalSessionId);
 
   return (
     <>
       <div className="h-full w-full overflow-hidden">
         {selectedSession ? (
           showTerminal ? (
-            <TauriTerminal
+            <GatewayTerminal
               key={`${selectedSession.id}-${terminalKey}`}
-              sessionDbId={selectedSession.id}
-              agent={selectedSession.agent}
-              dir={selectedSession.worktreePath ?? selectedSession.dir ?? ""}
-              externalSessionId={selectedSession.externalSessionId ?? undefined}
+              codingSessionId={selectedSession.id}
               onNewSession={() => setNewSessionOpen(true)}
-              onResumeSession={handleResumeSession}
-              onSessionIdUpdated={handleSessionIdUpdated}
             />
           ) : (
             <SessionDetail
@@ -418,15 +415,12 @@ function CodingPage() {
         )}
       </div>
 
-      {isDesktop && (
-        <NewSessionDialog
-          open={newSessionOpen}
-          onOpenChange={setNewSessionOpen}
-          taskId={taskId!}
-          defaultDir={lastDir}
-          onCreated={handleNewSessionCreated}
-        />
-      )}
+      <NewSessionDialog
+        open={newSessionOpen}
+        onOpenChange={setNewSessionOpen}
+        taskId={taskId!}
+        onCreated={handleNewSessionCreated}
+      />
     </>
   );
 }

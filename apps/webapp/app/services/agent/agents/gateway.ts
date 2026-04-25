@@ -19,7 +19,11 @@ import {
   type OrchestratorTools,
   type GatewayAgentInfo,
 } from "../executors/base";
-import { callGatewayTool } from "../../../../websocket";
+import {
+  callTool as callGatewayTool,
+  fetchManifest,
+} from "~/services/gateway/transport.server";
+import type { Folder } from "@core/gateway-protocol";
 
 // Types for gateway tools (matches schema in database)
 interface GatewayTool {
@@ -87,7 +91,11 @@ export function gatewayToolToZodSchema(
   return z.object(shape);
 }
 
-const APPROVAL_REQUIRED_PATTERNS = [/^coding_ask$/i, /^exec_/i];
+const APPROVAL_REQUIRED_PATTERNS = [
+  /^coding_ask$/i,
+  /^exec_/i,
+  /^files_(edit|write)$/i,
+];
 
 function requiresApproval(toolName: string): boolean {
   return APPROVAL_REQUIRED_PATTERNS.some((p) => p.test(toolName));
@@ -205,15 +213,31 @@ const getGatewayAgentPrompt = (
   gatewayName: string,
   gatewayDescription: string | null,
   tools: GatewayTool[],
+  folders: Folder[],
 ) => {
   const toolsList = tools
     .map((t) => `- **${t.name}**: ${t.description}`)
     .join("\n");
 
+  const foldersList =
+    folders.length > 0
+      ? folders
+          .map(
+            (f) =>
+              `- **${f.name}** (\`${f.path}\`) — scopes: ${f.scopes.join(", ")}`,
+          )
+          .join("\n")
+      : "- (no folders registered on this gateway)";
+
   return `You are an execution agent for the "${gatewayName}" gateway.
 ${gatewayDescription ? `\nPurpose: ${gatewayDescription}\n` : ""}
 AVAILABLE TOOLS:
 ${toolsList}
+
+AVAILABLE FOLDERS (exposed by this gateway):
+${foldersList}
+
+When a tool needs a \`dir\`, pick the absolute path from a folder whose scopes include what you need (\`coding\` for coding_*, \`exec\` for exec_*, \`files\` for files_*). Never invent a path that isn't listed here.
 
 TOOL CATEGORIES:
 - **Browser tools** (browser_*): Web automation - open pages, click, fill forms, take screenshots
@@ -356,20 +380,26 @@ export async function createGatewayAgent(
 
   const resolvedModel = modelConfig ?? toRouterString(getDefaultChatModelId());
 
-  if (!gateway) {
-    // Return a disconnected placeholder
-    return {
-      agent: new Agent({
-        id: `gateway_disconnected`,
-        name: "Disconnected Gateway",
-        model: resolvedModel as any,
-        instructions: "This gateway is not connected.",
-      }),
-      connected: false,
-    };
-  }
+  const unavailable = (reason: string) => ({
+    agent: new Agent({
+      id: `gateway_unavailable`,
+      name: "Unavailable Gateway",
+      model: resolvedModel as any,
+      instructions: `This gateway is not available: ${reason}.`,
+    }),
+    connected: false,
+  });
 
-  const gatewayTools = (gateway.tools || []) as unknown as GatewayTool[];
+  if (!gateway) return unavailable("gateway not found");
+
+  // Live-fetch the manifest. The DB no longer caches tools/folders — if the
+  // gateway is offline at call time, we refuse the call outright instead of
+  // handing the agent a stale tool list.
+  const manifest = await fetchManifest(gatewayId);
+  if (!manifest) return unavailable("manifest fetch failed");
+
+  const gatewayTools = (manifest.manifest.tools ?? []) as GatewayTool[];
+  const folders = manifest.manifest.folders ?? [];
   const tools = createGatewayTools(
     gatewayId,
     gatewayTools,
@@ -381,7 +411,7 @@ export async function createGatewayAgent(
   const agentId = `gateway_${gateway.name.toLowerCase().replace(/[^a-z0-9]/g, "_")}`;
 
   logger.info(
-    `GatewayAgent: Creating agent "${agentId}" with ${gatewayTools.length} tools`,
+    `GatewayAgent: Creating agent "${agentId}" with ${gatewayTools.length} tools and ${folders.length} folders`,
   );
 
   const agent = new Agent({
@@ -392,6 +422,7 @@ export async function createGatewayAgent(
       gateway.name,
       gateway.description,
       gatewayTools,
+      folders,
     ),
     tools,
   });

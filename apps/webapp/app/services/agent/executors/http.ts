@@ -96,9 +96,11 @@ export class HttpOrchestratorTools extends OrchestratorTools {
     toolName: string,
     params: Record<string, unknown>,
   ): Promise<unknown> {
-    // Proxy the tool call to the server — server handles the websocket connection
-    const response = await this.client.executeGatewayTool({ gatewayId, toolName, params });
-    return response.result;
+    // With HTTP gateways, Trigger workers talk to the gateway directly —
+    // no webapp proxy hop. We still decrypt the securityKey locally, which
+    // requires DB access and the ENCRYPTION_KEY env var in this worker.
+    const { callTool } = await import("~/services/gateway/transport.server");
+    return await callTool(gatewayId, toolName, params, 60000);
   }
 
   async getSkill(skillId: string, _workspaceId: string): Promise<string> {

@@ -2,7 +2,7 @@ import { json } from "@remix-run/node";
 import type { LoaderFunctionArgs } from "@remix-run/node";
 import { requireUser, getWorkspaceId } from "~/services/session.server";
 import { prisma } from "~/db.server";
-import { callGatewayTool } from "../../websocket";
+import { callTool } from "~/services/gateway/transport.server";
 
 export async function loader({ request, params }: LoaderFunctionArgs) {
   const user = await requireUser(request);
@@ -31,7 +31,7 @@ export async function loader({ request, params }: LoaderFunctionArgs) {
     return json({ error: "No external session ID" }, { status: 422 });
 
   try {
-    const result = (await callGatewayTool(
+    const result = (await callTool(
       session.gatewayId,
       "coding_read_session",
       { sessionId: session.externalSessionId },

@@ -27,8 +27,8 @@ const agentTemplates: AgentTemplate[] = [
 		name: 'claude-code',
 		commands: ['claude'],
 		defaultConfig: {
-			args: ['-p', '--output-format', 'text', '--dangerously-skip-permissions'],
-			resumeArgs: ['-p', '--output-format', 'text', '--dangerously-skip-permissions', '--resume', '{sessionId}'],
+			args: ['--dangerously-skip-permissions'],
+			resumeArgs: ['--dangerously-skip-permissions', '--resume', '{sessionId}'],
 			sessionArg: '--session-id',
 			sessionMode: 'always',
 			sessionIdFields: ['session_id'],
@@ -38,8 +38,8 @@ const agentTemplates: AgentTemplate[] = [
 		name: 'codex-cli',
 		commands: ['codex'],
 		defaultConfig: {
-			args: ['exec', '--json', '--color', 'never', '--sandbox', 'read-only', '--skip-git-repo-check'],
-			resumeArgs: ['exec', 'resume', '{sessionId}', '--color', 'never', '--sandbox', 'read-only', '--skip-git-repo-check'],
+			args: ['--color', 'never', '--sandbox', 'read-only', '--skip-git-repo-check'],
+			resumeArgs: ['resume', '{sessionId}', '--color', 'never', '--sandbox', 'read-only', '--skip-git-repo-check'],
 			sessionMode: 'existing',
 			modelArg: '--model',
 			imageArg: '--image',

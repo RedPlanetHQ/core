@@ -30,6 +30,7 @@
     "@conform-to/react": "^1.17.0",
     "@conform-to/zod": "^1.17.0",
     "@core/database": "workspace:*",
+    "@core/gateway-protocol": "workspace:*",
     "@core/mcp-proxy": "workspace:*",
     "@core/providers": "workspace:*",
     "@core/types": "workspace:*",

@@ -1,0 +1,23 @@
+{
+  "name": "@core/gateway-protocol",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "main": "./dist/index.js",
+  "types": "./dist/index.d.ts",
+  "exports": {
+    ".": {
+      "types": "./dist/index.d.ts",
+      "default": "./dist/index.js"
+    }
+  },
+  "dependencies": {
+    "zod": "^4.3.0"
+  },
+  "scripts": {
+    "clean": "rimraf dist",
+    "typecheck": "tsc --noEmit",
+    "build": "pnpm run clean && tsc --noEmit false --outDir dist --declaration",
+    "dev": "tsc --noEmit false --outDir dist --declaration --watch"
+  }
+}

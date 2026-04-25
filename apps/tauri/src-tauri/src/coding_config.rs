@@ -1,10 +1,31 @@
 use serde::{Deserialize, Serialize};
-use crate::pty::SharedLoginPath;
+
+/// Capture the user's login-shell PATH so version-manager (nvm/fnm/homebrew)
+/// binaries are visible — `which corebrain` from a bare `std::process::Command`
+/// would otherwise miss them.
+fn capture_login_path() -> String {
+    let shell = std::env::var("SHELL").unwrap_or_else(|_| "/bin/sh".to_string());
+    let shell_name = std::path::Path::new(&shell)
+        .file_name()
+        .and_then(|n| n.to_str())
+        .unwrap_or("sh")
+        .to_string();
+    let cmd = format!("source ~/.{}rc 2>/dev/null; echo $PATH", shell_name);
+
+    let output = std::process::Command::new(&shell)
+        .args(["-lc", &cmd])
+        .output();
+
+    match output {
+        Ok(o) if o.status.success() => String::from_utf8_lossy(&o.stdout).trim().to_string(),
+        _ => std::env::var("PATH").unwrap_or_default(),
+    }
+}
 
 /// Check whether `corebrain` is available on the user's shell PATH.
 #[tauri::command]
-pub fn check_corebrain_installed(login_path: tauri::State<SharedLoginPath>) -> Result<(), String> {
-    let path = login_path.0.lock().unwrap().clone();
+pub fn check_corebrain_installed() -> Result<(), String> {
+    let path = capture_login_path();
 
     let found = std::process::Command::new("which")
         .arg("corebrain")

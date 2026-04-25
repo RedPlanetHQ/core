@@ -21,13 +21,6 @@ import { handleMCPRequest, handleSessionRequest } from "~/services/mcp.server";
 import { authenticateHybridRequest } from "~/services/routeBuilders/apiBuilder.server";
 import { trackError } from "~/services/telemetry.server";
 import { setupWebSocket } from "../websocket";
-import {
-  verifyGatewayToken,
-  upsertGateway,
-  updateGatewayTools,
-  updateGatewayLastSeen,
-  disconnectGateway,
-} from "~/services/gateway.server";
 
 const ABORT_DELAY = 5_000;
 
@@ -207,13 +200,7 @@ export {
   handleMCPRequest,
   handleSessionRequest,
   authenticateHybridRequest,
-  // Gateway functions
-  verifyGatewayToken,
-  upsertGateway,
-  updateGatewayTools,
-  updateGatewayLastSeen,
-  disconnectGateway,
 
-  //Websocket
+  // Hocuspocus collaboration WS
   setupWebSocket,
 };

@@ -71,12 +71,14 @@ export async function getGatewayAgents(
 ): Promise<GatewayAgentInfo[]> {
   const gateways = await getConnectedGateways(workspaceId);
 
-  return gateways.map((gateway: GatewayAgentInfo) => {
+  return gateways.map((gateway) => {
     return {
       id: gateway.id,
       name: gateway.name,
       description: gateway.description || `Gateway: ${gateway.name}`,
-      tools: ((gateway.tools || []) as any[]).map((t: any) => t.name),
+      // Tool names aren't cached on the row anymore; live-fetch happens when
+      // the agent is created. Callers that only need the routing list get [].
+      tools: [],
       platform: gateway.platform,
       hostname: gateway.hostname,
       status: gateway.status as "CONNECTED" | "DISCONNECTED",

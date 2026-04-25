@@ -1,10 +1,12 @@
 import zod from 'zod';
 import {randomUUID} from 'node:crypto';
 import {execSync} from 'node:child_process';
-import {existsSync, mkdirSync, cpSync} from 'node:fs';
+import {existsSync, mkdirSync, cpSync, readFileSync, appendFileSync} from 'node:fs';
 import {resolve} from 'node:path';
 import type {GatewayTool} from './browser-tools';
 import {getPreferences} from '@/config/preferences';
+import {listFolders, resolveFolderForPath} from '@/config/folders';
+import {folderScopeError} from './scope-error';
 import {
 	getSession,
 	upsertSession,
@@ -20,15 +22,16 @@ import {
 	stopProcess,
 	type Logger,
 } from '@/utils/coding-runner';
+import {gatewayLog} from '@/server/gateway-log';
 import {
 	readAgentSessionTurns,
-	agentSessionExists,
 	agentSessionUpdatedSince,
 	getAgentReader,
 	scanAllSessions,
 	searchSessions,
 	findLatestCodexSession,
 } from '@/utils/coding-agents';
+import {ptyManager} from '@/server/pty/manager';
 
 // ============ Schemas ============
 
@@ -82,7 +85,8 @@ const jsonSchemas: Record<string, Record<string, unknown>> = {
 			},
 			dir: {
 				type: 'string',
-				description: 'Working directory for the session (must exist)',
+				description:
+					'Working directory for the session. Must exist and (when folders are registered) resolve to a folder registered via `corebrain folder add` with the `coding` scope.',
 			},
 			sessionId: {
 				type: 'string',
@@ -113,7 +117,7 @@ const jsonSchemas: Record<string, Record<string, unknown>> = {
 					'New branch name to create in the worktree (required when worktree is true)',
 			},
 		},
-		required: ['agent', 'prompt', 'dir'],
+		required: ['prompt', 'dir'],
 	},
 	coding_close_session: {
 		type: 'object',
@@ -209,7 +213,7 @@ export const codingTools: GatewayTool[] = [
 	{
 		name: 'coding_read_session',
 		description:
-			'Read conversation turns (user/assistant messages) from a coding session. Returns structured turns instead of raw log lines.',
+			'Read conversation turns (user/assistant messages) from a coding session. Returns structured turns instead of raw log lines. The `status` field is one of: "initializing" (agent booting, transcript not yet written), "running" (agent process alive and writing), "completed" (process exited with a transcript), "failed" (process exited without any transcript).',
 		inputSchema: jsonSchemas.coding_read_session!,
 	},
 	{
@@ -287,13 +291,31 @@ function detectAgentForSession(sessionId: string, dir: string): string {
 
 // ============ Worktree Helpers ============
 
+function ensureWorktreesIgnored(dir: string): void {
+	// Worktrees live at `<dir>/.worktrees/<branch>/` so they're auto-scoped by the
+	// parent registered folder. Make sure git ignores them in the main repo.
+	const gitignorePath = resolve(dir, '.gitignore');
+	const entry = '.worktrees/';
+	try {
+		const existing = existsSync(gitignorePath)
+			? readFileSync(gitignorePath, 'utf8')
+			: '';
+		const lines = existing.split('\n').map(l => l.trim());
+		if (lines.includes(entry) || lines.includes('.worktrees')) return;
+		const sep = existing && !existing.endsWith('\n') ? '\n' : '';
+		appendFileSync(gitignorePath, `${sep}${entry}\n`, 'utf8');
+	} catch {
+		// Non-fatal — if we can't write .gitignore, the worktree still works.
+	}
+}
+
 function setupWorktree(
 	dir: string,
 	baseBranch: string,
 	branch: string,
 ): {worktreePath: string; worktreeBranch: string} | {error: string} {
 	const encodedBranch = branch.replace(/\//g, '-');
-	const worktreePath = resolve(dir, '..', 'worktrees', encodedBranch);
+	const worktreePath = resolve(dir, '.worktrees', encodedBranch);
 
 	// If the worktree already exists (valid git worktree), reuse it so multiple
 	// sessions can run against the same branch without hitting "already checked out".
@@ -311,6 +333,7 @@ function setupWorktree(
 	}
 
 	try {
+		ensureWorktreesIgnored(dir);
 		mkdirSync(worktreePath, {recursive: true});
 		execSync(
 			`git -C ${JSON.stringify(dir)} worktree add ${JSON.stringify(
@@ -368,9 +391,24 @@ function removeWorktree(
 
 // ============ Handlers ============
 
-async function handleAsk(params: zod.infer<typeof AskSchema>, logger?: Logger) {
+async function handleAsk(
+	params: zod.infer<typeof AskSchema>,
+	logger: Logger = gatewayLog,
+) {
 	if (!existsSync(params.dir)) {
 		return {success: false, error: `Directory "${params.dir}" does not exist`};
+	}
+
+	// Scope enforcement: coding requires a folder with `coding` scope
+	if (listFolders().length > 0) {
+		const resolved = resolveFolderForPath(params.dir, 'coding');
+		if (!resolved) {
+			const err = folderScopeError(params.dir, 'coding');
+			return {
+				success: false,
+				error: `${err.error.code}: ${err.error.message}`,
+			};
+		}
 	}
 
 	if (params.worktree && (!params.baseBranch || !params.branch)) {
@@ -494,21 +532,23 @@ async function handleAsk(params: zod.infer<typeof AskSchema>, logger?: Logger) {
 		worktreeBranch,
 	});
 
-	// Start idle watchdog — kills the process if stdout goes silent for 30s
-	// if (pid) startIdleWatchdog(sessionId, pid);
-
-	// For agents with a session reader, wait until the session file is ready.
-	// - New session: the transcript file needs to appear.
-	// - Resume: the transcript pre-exists from the original run, so wait until it's been
-	//   touched by the resumed process (mtime > startedAt). Otherwise callers can read
-	//   before Claude has flushed anything and see an empty/"completed" session.
+	// Wait until the agent has produced output.
+	// - New session: the PTY has emitted any bytes (lastActivity > startedAt) — works
+	//   for both claude-code and codex, regardless of whether the agent has written
+	//   its own transcript file yet.
+	// - Resume: the agent's transcript file has been touched (mtime > startedAt). The
+	//   file pre-exists from the original run, so PTY activity alone isn't enough —
+	//   the resumed process must actually write new turns.
 	const hasReader = getAgentReader(agentName) !== null;
 	if (hasReader) {
 		const deadline = Date.now() + 30_000;
-		const isReady = () =>
-			isResume
-				? agentSessionUpdatedSince(agentName, workingDir, sessionId, startedAt)
-				: agentSessionExists(agentName, workingDir, sessionId);
+		const isReady = () => {
+			if (isResume) {
+				return agentSessionUpdatedSince(agentName, workingDir, sessionId, startedAt);
+			}
+			const lastActivity = ptyManager.getLastActivity(sessionId);
+			return Boolean(lastActivity && lastActivity > startedAt);
+		};
 
 		const sessionReady = await new Promise<boolean>(resolve => {
 			function check() {

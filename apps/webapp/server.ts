@@ -253,17 +253,9 @@ async function init() {
   // handle SSR requests
   app.all("*", remixHandler);
 
-  // Create HTTP server and setup WebSocket
+  // Create HTTP server and attach the Hocuspocus WebSocket upgrade handler.
   const server = createServer(app);
-
-  // Setup WebSocket with gateway module functions
-  module.setupWebSocket(server, {
-    verifyGatewayToken: module.verifyGatewayToken,
-    upsertGateway: module.upsertGateway,
-    updateGatewayTools: module.updateGatewayTools,
-    updateGatewayLastSeen: module.updateGatewayLastSeen,
-    disconnectGateway: module.disconnectGateway,
-  });
+  module.setupWebSocket(server);
 
   const port = process.env.REMIX_APP_PORT || 3000;
   server.listen(port, () =>

@@ -2,7 +2,6 @@ import {existsSync, statSync, readdirSync, createReadStream} from 'node:fs';
 import {join} from 'node:path';
 import {homedir} from 'node:os';
 import {createInterface} from 'node:readline';
-import {getSessionLogPath} from '@/utils/coding-runner';
 import {
 	BaseCodingAgentReader,
 	type AgentReadResult,
@@ -187,23 +186,17 @@ export class CodexReader extends BaseCodingAgentReader {
 	readonly agentName = 'codex-cli';
 
 	/**
-	 * Check whether a session exists.
-	 * - During live session: stdout log has content (keyed by our internal UUID).
-	 * - After re-keying to codex UUID, or for historical sessions: JSONL file exists in date dirs.
+	 * Check whether a session exists. Only recognizes sessions whose IDs match
+	 * codex's own UUID — the caller is responsible for re-keying from an internal
+	 * UUID to codex's UUID via findLatestCodexSession before calling this.
+	 * Pre-rekey "live session" detection is handled at the caller level via the
+	 * PTY manager's output activity, not here.
 	 */
 	sessionExists(_dir: string, sessionId: string): boolean {
-		const logPath = getSessionLogPath(sessionId, 'stdout');
-		try {
-			if (existsSync(logPath) && statSync(logPath).size > 0) return true;
-		} catch { /* ignore */ }
 		return findSessionPath(sessionId) !== null;
 	}
 
 	sessionUpdatedSince(_dir: string, sessionId: string, since: number): boolean {
-		const logPath = getSessionLogPath(sessionId, 'stdout');
-		try {
-			if (existsSync(logPath) && statSync(logPath).mtimeMs > since) return true;
-		} catch { /* ignore */ }
 		const jsonlPath = findSessionPath(sessionId);
 		if (!jsonlPath) return false;
 		try {
@@ -213,21 +206,12 @@ export class CodexReader extends BaseCodingAgentReader {
 		}
 	}
 
-	/**
-	 * Read session output.
-	 * - stdout log exists (internal UUID before re-keying, or if codex hasn't been re-keyed yet): read from it.
-	 * - Otherwise (codex UUID after re-keying, or historical): find JSONL file in date dirs.
-	 */
 	async readSessionOutput(
 		_dir: string,
 		sessionId: string,
 		options: AgentReadOptions = {},
 	): Promise<AgentReadResult> {
-		// Check stdout log first (live/recent session tracked by our UUID)
-		const logPath = getSessionLogPath(sessionId, 'stdout');
-		const sessionPath = existsSync(logPath) && statSync(logPath).size > 0
-			? logPath
-			: findSessionPath(sessionId);
+		const sessionPath = findSessionPath(sessionId);
 
 		if (!sessionPath) {
 			return {entries: [], totalLines: 0, returnedLines: 0, fileExists: false, fileSizeBytes: 0, fileSizeHuman: '0 B'};

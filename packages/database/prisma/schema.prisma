@@ -399,14 +399,21 @@ model Gateway {
   name        String
   description String?
 
-  // Supported tools - stored as JSON array of { name, description, inputSchema? }
-  tools Json @default("{}")
+  /// HTTPS URL where the gateway daemon is reachable
+  baseUrl String
+
+  /// Per-gateway shared secret used for backend→gateway calls.
+  /// Encrypted using ENCRYPTION_KEY (AES-256-GCM) with the same shape
+  /// used for PersonalAccessToken.encryptedToken: { nonce, ciphertext, tag }
+  /// hex-encoded strings. See apps/webapp/app/lib/encryption.server.ts.
+  encryptedSecurityKey Json
 
   // Connection status
-  status         GatewayStatus @default(DISCONNECTED)
-  lastSeenAt     DateTime?
-  connectedAt    DateTime?
-  disconnectedAt DateTime?
+  status          GatewayStatus @default(DISCONNECTED)
+  lastSeenAt      DateTime?
+  connectedAt     DateTime?
+  disconnectedAt  DateTime?
+  lastHealthError String?
 
   // Client metadata
   clientVersion String?
@@ -420,10 +427,10 @@ model Gateway {
   user   User   @relation(fields: [userId], references: [id], onDelete: Cascade)
   userId String
 
+  codingSessions CodingSession[]
+
   @@unique([workspaceId, name])
   @@index([workspaceId, status])
-
-  codingSessions CodingSession[]
 }
 
 enum GatewayStatus {
@@ -1112,7 +1119,6 @@ model Task {
 
   codingSessions CodingSession[]
 
-
   @@unique([workspaceId, displayId])
   @@index([workspaceId])
   @@index([workspaceId, status])
@@ -1145,7 +1151,7 @@ model Page {
   workspace   Workspace @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
   userId      String
 
-  task   Task? @relation("TaskPage")
+  task           Task?           @relation("TaskPage")
   butlerComments ButlerComment[]
 
   @@unique([workspaceId, userId, date])
@@ -1159,10 +1165,10 @@ model ButlerComment {
   resolved   Boolean   @default(false)
   resolvedAt DateTime?
 
-  selectedText   String
-  content        String
-  relativeStart  Json?
-  relativeEnd    Json?
+  selectedText  String
+  content       String
+  relativeStart Json?
+  relativeEnd   Json?
 
   pageId         String
   conversationId String?
@@ -1281,8 +1287,8 @@ model CodingSession {
   worktreePath      String?
   worktreeBranch    String?
 
-  task           Task?         @relation(fields: [taskId], references: [id], onDelete: Cascade)
-  taskId         String?
+  task   Task?   @relation(fields: [taskId], references: [id], onDelete: Cascade)
+  taskId String?
 
   conversation   Conversation? @relation(fields: [conversationId], references: [id], onDelete: SetNull)
   conversationId String?
