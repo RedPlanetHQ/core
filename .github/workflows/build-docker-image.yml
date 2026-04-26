@@ -1,5 +1,10 @@
 name: Build Docker Images
 
+# Release tag conventions:
+#   - Bare semver (e.g. `0.7.0`)        → builds redplanethq/core:0.7.0
+#   - `gateway-` prefix (e.g. `gateway-0.5.0`) → builds redplanethq/core-gateway:0.5.0
+# Each tag triggers exactly one image; the prefix is stripped before publishing.
+
 on:
   push:
     tags:
@@ -8,6 +13,7 @@ on:
 
 jobs:
   build-webapp:
+    if: github.event_name == 'workflow_dispatch' || !startsWith(github.ref_name, 'gateway-')
     runs-on: [self-hosted, linux, x64, aws, spot]
 
     steps:
@@ -34,3 +40,37 @@ jobs:
           tags: redplanethq/core:${{ github.ref_name }}
           cache-from: type=registry,ref=redplanethq/core:buildcache
           cache-to: type=registry,ref=redplanethq/core:buildcache,mode=max
+
+  build-gateway:
+    if: github.event_name == 'workflow_dispatch' || startsWith(github.ref_name, 'gateway-')
+    runs-on: [self-hosted, linux, x64, aws, spot]
+
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: main
+
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v3
+
+      - name: Login to Docker Registry
+        run: echo "${{ secrets.DOCKER_PASSWORD }}" | docker login -u "${{ secrets.DOCKER_USERNAME }}" --password-stdin
+
+      # Strip the `gateway-` prefix so the docker tag stays clean
+      # (gateway-0.5.0 → 0.5.0). On workflow_dispatch from a non-tag ref,
+      # falls through to the raw ref name (e.g. `main`).
+      - name: Compute gateway version
+        id: ver
+        run: echo "tag=${GITHUB_REF_NAME#gateway-}" >> "$GITHUB_OUTPUT"
+
+      # Gateway is amd64-only: Brave's apt repo doesn't ship arm64.
+      - name: Build and Push Gateway Docker Image
+        uses: docker/build-push-action@v5
+        with:
+          context: .
+          file: ./docker/Dockerfile.gateway
+          platforms: linux/amd64
+          push: true
+          tags: redplanethq/core-gateway:${{ steps.ver.outputs.tag }}
+          cache-from: type=registry,ref=redplanethq/core-gateway:buildcache
+          cache-to: type=registry,ref=redplanethq/core-gateway:buildcache,mode=max

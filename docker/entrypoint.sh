@@ -24,11 +24,30 @@ set -eu
 
 # ---------- root phase: fix volume ownership, then drop privileges ----------
 if [ "$(id -u)" = "0" ]; then
-  # Mount points covered by named volumes inherit the volume's ownership,
-  # not the image's. Fix them so corebrain can read/write. `|| true` because
-  # ownership may already be correct, and we don't want a noisy non-zero
-  # exit on a no-op chown of a huge tree.
-  chown -R corebrain:corebrain /app /home/corebrain 2>/dev/null || true
+  # Railway mounts a single persistent volume at /mnt/volume. Map the
+  # gateway's workspace and home dirs into subdirectories of that volume by
+  # symlinking /app and /home/corebrain so one mount covers both. Done
+  # before the chown so the targets exist when ownership is fixed up.
+  if [ "${COREBRAIN_DEPLOY_MODE:-}" = "railway" ]; then
+    mkdir -p /mnt/volume/workspace /mnt/volume/corebrain-home
+
+    if [ ! -L /app ]; then
+      rm -rf /app
+      ln -sfn /mnt/volume/workspace /app
+    fi
+    if [ ! -L /home/corebrain ]; then
+      rm -rf /home/corebrain
+      ln -sfn /mnt/volume/corebrain-home /home/corebrain
+    fi
+
+    chown -R corebrain:corebrain /mnt/volume/workspace /mnt/volume/corebrain-home 2>/dev/null || true
+  else
+    # Mount points covered by named volumes inherit the volume's ownership,
+    # not the image's. Fix them so corebrain can read/write. `|| true` because
+    # ownership may already be correct, and we don't want a noisy non-zero
+    # exit on a no-op chown of a huge tree.
+    chown -R corebrain:corebrain /app /home/corebrain 2>/dev/null || true
+  fi
 
   # Re-exec this script as corebrain. `runuser` (util-linux) is in the base
   # node:22-slim image and doesn't require PAM, unlike `su`.
