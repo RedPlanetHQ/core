@@ -28,9 +28,6 @@ services:
     container_name: corebrain-gateway
     image: redplanethq/core-gateway:0.5.0
     restart: ${RESTART_POLICY:-unless-stopped}
-    build:
-      context: ../../
-      dockerfile: packages/cli/docker/Dockerfile
     environment:
       # ── CORE webapp wiring ───────────────────────────────────────────
       # API_URL is where this gateway reports back to (your CORE webapp).

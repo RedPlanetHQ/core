@@ -81,6 +81,11 @@ RUN curl -fsSLo /usr/share/keyrings/brave-browser-archive-keyring.gpg \
 # volume here to persist cloned repos across container restarts.
 RUN mkdir -p /app && chown -R corebrain:corebrain /app
 ENV COREBRAIN_DEFAULT_WORKSPACE=/app
+# Deploy mode toggles entrypoint behavior. `docker` (default) expects two
+# named volumes mounted at /app and /home/corebrain. `railway` expects a
+# single volume at /mnt/volume — the entrypoint then symlinks /app and
+# /home/corebrain into subdirectories of that volume so one mount covers
+# both. Override with `-e COREBRAIN_DEPLOY_MODE=railway` on Railway.
 ENV COREBRAIN_DEPLOY_MODE=docker
 
 # Default the `files` slot off in docker — `exec` already covers read /
