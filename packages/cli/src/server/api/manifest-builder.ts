@@ -98,9 +98,11 @@ function detectAvailableAgents(
 }
 
 function detectDeployMode(): DeployMode {
-	// Explicit env wins (Dockerfile sets COREBRAIN_DEPLOY_MODE=docker).
+	// Explicit env wins (Dockerfile sets COREBRAIN_DEPLOY_MODE=docker; Railway
+	// deploys override to `railway`).
 	const envMode = process.env.COREBRAIN_DEPLOY_MODE;
-	if (envMode === 'docker' || envMode === 'native') return envMode;
+	if (envMode === 'docker' || envMode === 'native' || envMode === 'railway')
+		return envMode;
 	// Fallback heuristic — `/.dockerenv` is created by Docker on container init.
 	if (existsSync('/.dockerenv')) return 'docker';
 	return 'native';

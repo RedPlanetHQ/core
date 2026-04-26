@@ -24,10 +24,11 @@ export type AvailableAgent = z.infer<typeof AvailableAgent>;
 
 /**
  * How this gateway was deployed. UI uses it to gate features (e.g. only
- * Docker gateways get a "Clone repo" folder option, since laptop gateways
- * already have the user's repos on disk).
+ * container-based gateways get a "Clone repo" folder option, since laptop
+ * gateways already have the user's repos on disk). `railway` is a
+ * container deploy with a single mounted volume at /mnt/volume.
  */
-export const DeployMode = z.enum(["native", "docker"]);
+export const DeployMode = z.enum(["native", "docker", "railway"]);
 export type DeployMode = z.infer<typeof DeployMode>;
 
 export const Manifest = z.object({

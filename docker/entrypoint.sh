@@ -29,6 +29,11 @@ if [ "$(id -u)" = "0" ]; then
   # symlinking /app and /home/corebrain so one mount covers both. Done
   # before the chown so the targets exist when ownership is fixed up.
   if [ "${COREBRAIN_DEPLOY_MODE:-}" = "railway" ]; then
+    # Step out of /app before nuking it. WORKDIR /app makes /app the shell's
+    # cwd at boot; `rm -rf /app` would then leave the shell on a deleted
+    # inode and every later command fails with `getcwd() failed`.
+    cd /
+
     mkdir -p /mnt/volume/workspace /mnt/volume/corebrain-home
 
     if [ ! -L /app ]; then
@@ -41,6 +46,10 @@ if [ "$(id -u)" = "0" ]; then
     fi
 
     chown -R corebrain:corebrain /mnt/volume/workspace /mnt/volume/corebrain-home 2>/dev/null || true
+
+    # Re-enter /app via the symlink so the corebrain phase (and the gateway
+    # process inheriting WORKDIR) runs in the volume-backed workspace.
+    cd /app
   else
     # Mount points covered by named volumes inherit the volume's ownership,
     # not the image's. Fix them so corebrain can read/write. `|| true` because

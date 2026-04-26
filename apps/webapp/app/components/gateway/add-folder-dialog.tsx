@@ -15,10 +15,11 @@ interface Props {
   open: boolean;
   onOpenChange: (v: boolean) => void;
   gatewayId: string;
-  /** Container-based gateway. Shows the GitHub URL clone option (which lands
-   *  in `/app`) and hides local-path entry — Docker filesystem paths aren't
-   *  user-meaningful. Native gateways get only the local-path option. */
-  isDocker?: boolean;
+  /** Container-based gateway (Docker or Railway). Shows the GitHub URL clone
+   *  option (which lands in `/app`) and hides local-path entry — container
+   *  filesystem paths aren't user-meaningful. Native gateways get only the
+   *  local-path option. */
+  isContainer?: boolean;
   onAdded?: () => void;
 }
 
@@ -28,12 +29,12 @@ export function AddFolderDialog({
   open,
   onOpenChange,
   gatewayId,
-  isDocker,
+  isContainer,
   onAdded,
 }: Props) {
-  const [mode, setMode] = useState<Mode>(isDocker ? "git" : "local");
-  const showLocal = !isDocker;
-  const showGit = !!isDocker;
+  const [mode, setMode] = useState<Mode>(isContainer ? "git" : "local");
+  const showLocal = !isContainer;
+  const showGit = !!isContainer;
   const showTabs = showLocal && showGit;
 
   const [path, setPath] = useState("");
@@ -46,7 +47,7 @@ export function AddFolderDialog({
   const [error, setError] = useState<string | null>(null);
 
   const reset = () => {
-    setMode(isDocker ? "git" : "local");
+    setMode(isContainer ? "git" : "local");
     setPath("");
     setName("");
     setUrl("");

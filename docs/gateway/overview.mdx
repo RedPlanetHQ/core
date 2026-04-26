@@ -45,55 +45,92 @@ For the protocol details and a route-by-route reference, see [`packages/gateway-
 
 ---
 
-## Install (Native)
+## Install
 
-<Steps>
-  <Step title="Install the CLI">
+The gateway can be deployed three ways. Pick the one that fits where you want it to run.
+
+<Tabs>
+  <Tab title="Native">
+    Best for running the gateway on your own laptop or workstation, with full access to your local browser, shells, and folders.
+
+    <Steps>
+      <Step title="Install the CLI">
+        ```bash
+        npm install -g @redplanethq/corebrain
+        ```
+      </Step>
+
+      <Step title="Login">
+        ```bash
+        corebrain login
+        ```
+      </Step>
+
+      <Step title="Configure & start">
+        ```bash
+        corebrain gateway config   # name, slots, exec patterns, default agent
+        corebrain gateway start    # installs as a launchd / systemd service
+        ```
+      </Step>
+
+      <Step title="Register with the webapp">
+        Run `corebrain gateway register` to print a security key, then paste it (with the gateway URL) into **Settings → Gateways → New gateway**.
+      </Step>
+    </Steps>
+  </Tab>
+
+  <Tab title="Docker">
+    Best for self-hosted servers, Fly, Render, or any Docker host you control. The bundled image ships Claude Code, Codex CLI, Playwright Chromium, and pre-registers `/app` as a coding workspace.
+
     ```bash
-    npm install -g @redplanethq/corebrain
+    docker run --rm -it \
+      -p 7787:7787 \
+      -e COREBRAIN_API_URL=https://app.getcore.me \
+      -e COREBRAIN_API_KEY=<your PAT> \
+      -e COREBRAIN_GATEWAY_NAME=my-cloud-gateway \
+      -e COREBRAIN_GATEWAY_SECURITY_KEY=<optional; auto-generated if absent> \
+      -v corebrain-state:/root/.corebrain \
+      -v corebrain-workspace:/app \
+      -v corebrain-claude:/root/.claude \
+      -v corebrain-codex:/root/.codex \
+      -v corebrain-playwright:/root/.cache/ms-playwright \
+      ghcr.io/redplanethq/corebrain-gateway
     ```
-  </Step>
 
-  <Step title="Login">
-    ```bash
-    corebrain login
-    ```
-  </Step>
+    If you do not provide `COREBRAIN_GATEWAY_SECURITY_KEY`, the gateway generates one and prints it to stdout once — copy it from `docker logs` and paste it into the webapp.
+  </Tab>
 
-  <Step title="Configure & start">
-    ```bash
-    corebrain gateway config   # name, slots, exec patterns, default agent
-    corebrain gateway start    # installs as a launchd / systemd service
-    ```
-  </Step>
+  <Tab title="Railway">
+    Best for a fully managed cloud gateway with one-click setup. Railway provisions the container, persistent volumes, and a public URL for you.
 
-  <Step title="Register with the webapp">
-    Run `corebrain gateway register` to print a security key, then paste it (with the gateway URL) into **Settings → Gateways → New gateway**.
-  </Step>
-</Steps>
+    [![Deploy on Railway](https://railway.com/button.svg)](https://railway.com/deploy/core-gateway)
 
----
+    <Steps>
+      <Step title="Click Deploy">
+        Use the button above to launch the template on Railway.
+      </Step>
 
-## Install (Docker)
+      <Step title="Set environment variables">
+        Fill in the required variables when prompted:
 
-For Railway / Fly / Render or any Docker host, use the bundled image. It ships Claude Code, Codex CLI, Playwright Chromium, and pre-registers `/app` as a coding workspace.
+        - `COREBRAIN_API_URL` — your CORE instance URL (e.g. `https://app.getcore.me`)
+        - `COREBRAIN_API_KEY` — a Personal Access Token from the webapp
+        - `COREBRAIN_GATEWAY_NAME` — name shown in the webapp
+        - `COREBRAIN_GATEWAY_SECURITY_KEY` — *(optional)* leave empty and Railway will auto-generate one
 
-```bash
-docker run --rm -it \
-  -p 7787:7787 \
-  -e COREBRAIN_API_URL=https://app.getcore.me \
-  -e COREBRAIN_API_KEY=<your PAT> \
-  -e COREBRAIN_GATEWAY_NAME=my-cloud-gateway \
-  -e COREBRAIN_GATEWAY_SECURITY_KEY=<optional; auto-generated if absent> \
-  -v corebrain-state:/root/.corebrain \
-  -v corebrain-workspace:/app \
-  -v corebrain-claude:/root/.claude \
-  -v corebrain-codex:/root/.codex \
-  -v corebrain-playwright:/root/.cache/ms-playwright \
-  ghcr.io/redplanethq/corebrain-gateway
-```
+        See the full list under [Environment Variables](#environment-variables-headless--docker).
+      </Step>
 
-If you do not provide `COREBRAIN_GATEWAY_SECURITY_KEY`, the gateway generates one and prints it to stdout once — copy it from `docker logs` and paste it into the webapp.
+      <Step title="Grab the security key">
+        If you didn't set `COREBRAIN_GATEWAY_SECURITY_KEY`, open the deploy logs once the service is up and copy the auto-generated key printed on first boot.
+      </Step>
+
+      <Step title="Register with the webapp">
+        Copy the public Railway URL and paste it (with the security key) into **Settings → Gateways → New gateway**.
+      </Step>
+    </Steps>
+  </Tab>
+</Tabs>
 
 ---
 

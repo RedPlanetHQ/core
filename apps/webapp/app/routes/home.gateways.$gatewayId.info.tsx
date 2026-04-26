@@ -38,6 +38,13 @@ export default function GatewayInfoTab() {
   };
 
   const isDocker = ctx.deployMode === "docker";
+  const isRailway = ctx.deployMode === "railway";
+  const isContainer = isDocker || isRailway;
+  const deployModeLabel = isRailway
+    ? "Railway container"
+    : isDocker
+      ? "Docker container"
+      : "Direct install on host";
 
   return (
     <div className="md:w-3xl mx-auto flex w-auto flex-col gap-6 px-4 py-6">
@@ -69,9 +76,7 @@ export default function GatewayInfoTab() {
             </>
           ) : null}
           <span className="text-muted-foreground">Deploy mode</span>
-          <span>
-            {isDocker ? "Docker container" : "Direct install on host"}
-          </span>
+          <span>{deployModeLabel}</span>
         </div>
       </section>
 
@@ -84,7 +89,7 @@ export default function GatewayInfoTab() {
         {ctx.availableAgents.length === 0 ? (
           <p className="text-muted-foreground text-sm">
             No coding agents detected on this gateway.{" "}
-            {isDocker
+            {isContainer
               ? "Update the image to include claude-code or codex-cli."
               : "Install claude-code or codex-cli, then re-open this page."}
           </p>
@@ -176,7 +181,7 @@ export default function GatewayInfoTab() {
         open={addFolderOpen}
         onOpenChange={setAddFolderOpen}
         gatewayId={ctx.gatewayId}
-        isDocker={isDocker}
+        isContainer={isContainer}
         onAdded={ctx.refresh}
       />
     </div>
