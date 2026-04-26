@@ -1,6 +1,7 @@
 import React from "react";
 import { BellOff, MoonStar, Play } from "lucide-react";
 import { useFetcher } from "@remix-run/react";
+import { Theme, useTheme } from "remix-themes";
 import { cn } from "~/lib/utils";
 import type {
   ButlerActivityState,
@@ -26,6 +27,8 @@ function formatPauseCopy(data: ButlerActivitySummary | undefined) {
 
 export function ButlerStatusPill() {
   const fetcher = useFetcher<ButlerActivitySummary>();
+  const [theme] = useTheme();
+  const isDark = theme === Theme.DARK;
   const intervalRef = React.useRef<ReturnType<typeof setInterval> | null>(null);
   const [open, setOpen] = React.useState(false);
   const closeTimerRef = React.useRef<ReturnType<typeof setTimeout> | null>(
@@ -93,7 +96,7 @@ export function ButlerStatusPill() {
             "flex h-6 items-center gap-1.5 rounded-lg border px-2 text-xs font-medium transition-colors",
             isActive
               ? "border-primary/30 bg-primary/10 text-primary"
-              : "border-border bg-background-3 text-muted-foreground dark:bg-muted",
+              : "border-border bg-background-3 text-muted-foreground",
           )}
         >
           <div className="relative h-3.5 w-5 overflow-hidden rounded-sm">
@@ -103,8 +106,14 @@ export function ButlerStatusPill() {
               squareSize={2}
               gridGap={2}
               flickerChance={isActive ? 0.8 : 0.3}
-              maxOpacity={isActive ? 0.7 : 0.25}
-              color={isActive ? "rgb(var(--primary))" : "currentColor"}
+              maxOpacity={isActive ? 0.9 : 0.25}
+              color={
+                isActive
+                  ? "rgb(var(--primary))"
+                  : isDark
+                    ? "oklch(85.8% 0 0)"
+                    : "oklch(30.87% 0 0)"
+              }
             />
           </div>
           {stateLabel}

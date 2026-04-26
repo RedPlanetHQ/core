@@ -127,7 +127,14 @@ export const FlickeringGrid: React.FC<FlickeringGridProps> = ({
 
       return { cols, rows, squares, dpr, textSquares };
     },
-    [squareSize, gridGap, maxOpacity, textMaxOpacity, buildTextMask, staticText],
+    [
+      squareSize,
+      gridGap,
+      maxOpacity,
+      textMaxOpacity,
+      buildTextMask,
+      staticText,
+    ],
   );
 
   const updateSquares = useCallback(
