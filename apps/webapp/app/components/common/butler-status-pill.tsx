@@ -93,7 +93,7 @@ export function ButlerStatusPill() {
             "flex h-6 items-center gap-1.5 rounded-lg border px-2 text-xs font-medium transition-colors",
             isActive
               ? "border-primary/30 bg-primary/10 text-primary"
-              : "border-border bg-background-3 text-muted-foreground",
+              : "border-border bg-background-3 text-muted-foreground dark:bg-muted",
           )}
         >
           <div className="relative h-3.5 w-5 overflow-hidden rounded-sm">

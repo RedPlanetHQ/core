@@ -1,8 +1,9 @@
 import zod from 'zod';
-import {randomUUID} from 'node:crypto';
+import {randomUUID, createHash} from 'node:crypto';
 import {execSync} from 'node:child_process';
-import {existsSync, mkdirSync, cpSync, readFileSync, appendFileSync} from 'node:fs';
-import {resolve} from 'node:path';
+import {existsSync, mkdirSync, cpSync, realpathSync} from 'node:fs';
+import {resolve, basename} from 'node:path';
+import {homedir} from 'node:os';
 import type {GatewayTool} from './browser-tools';
 import {getPreferences} from '@/config/preferences';
 import {listFolders, resolveFolderForPath} from '@/config/folders';
@@ -291,22 +292,23 @@ function detectAgentForSession(sessionId: string, dir: string): string {
 
 // ============ Worktree Helpers ============
 
-function ensureWorktreesIgnored(dir: string): void {
-	// Worktrees live at `<dir>/.worktrees/<branch>/` so they're auto-scoped by the
-	// parent registered folder. Make sure git ignores them in the main repo.
-	const gitignorePath = resolve(dir, '.gitignore');
-	const entry = '.worktrees/';
+const CB_WORKTREES_ROOT = resolve(homedir(), '.corebrain', 'worktrees');
+
+/**
+ * Stable per-repo namespace under the corebrain home: `<basename>-<sha8>`.
+ * Basename keeps it human-skimmable; the hash of the real path makes sure two
+ * different repos that share a basename don't collide.
+ */
+function repoWorktreeNamespace(repoDir: string): string {
+	let abs: string;
 	try {
-		const existing = existsSync(gitignorePath)
-			? readFileSync(gitignorePath, 'utf8')
-			: '';
-		const lines = existing.split('\n').map(l => l.trim());
-		if (lines.includes(entry) || lines.includes('.worktrees')) return;
-		const sep = existing && !existing.endsWith('\n') ? '\n' : '';
-		appendFileSync(gitignorePath, `${sep}${entry}\n`, 'utf8');
+		abs = realpathSync(resolve(repoDir));
 	} catch {
-		// Non-fatal — if we can't write .gitignore, the worktree still works.
+		abs = resolve(repoDir);
 	}
+	const base = basename(abs) || 'repo';
+	const hash = createHash('sha256').update(abs).digest('hex').slice(0, 8);
+	return `${base}-${hash}`;
 }
 
 function setupWorktree(
@@ -315,7 +317,11 @@ function setupWorktree(
 	branch: string,
 ): {worktreePath: string; worktreeBranch: string} | {error: string} {
 	const encodedBranch = branch.replace(/\//g, '-');
-	const worktreePath = resolve(dir, '.worktrees', encodedBranch);
+	const worktreePath = resolve(
+		CB_WORKTREES_ROOT,
+		repoWorktreeNamespace(dir),
+		encodedBranch,
+	);
 
 	// If the worktree already exists (valid git worktree), reuse it so multiple
 	// sessions can run against the same branch without hitting "already checked out".
@@ -333,7 +339,6 @@ function setupWorktree(
 	}
 
 	try {
-		ensureWorktreesIgnored(dir);
 		mkdirSync(worktreePath, {recursive: true});
 		execSync(
 			`git -C ${JSON.stringify(dir)} worktree add ${JSON.stringify(

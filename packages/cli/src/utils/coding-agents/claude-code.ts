@@ -7,10 +7,15 @@ import {BaseCodingAgentReader, type AgentReadResult, type AgentReadOptions, type
 const CLAUDE_PROJECTS_DIR = join(homedir(), '.claude', 'projects');
 
 /**
- * /Users/foo/bar  →  -Users-foo-bar
+ * /Users/foo/bar       →  -Users-foo-bar
+ * /Users/foo/.work/bar →  -Users-foo--work-bar
+ *
+ * Claude Code encodes both `/` and `.` as `-` when mapping cwd → project folder,
+ * so paths containing dot-prefixed segments (e.g. `.worktrees`) collapse to a
+ * double hyphen. Match that exactly or session lookups miss the file.
  */
 function dirToProjectFolder(dir: string): string {
-	return dir.replace(/\//g, '-');
+	return dir.replace(/[/.]/g, '-');
 }
 
 /**

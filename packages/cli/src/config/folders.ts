@@ -1,10 +1,28 @@
 import {realpathSync, statSync, existsSync} from 'node:fs';
 import {resolve} from 'node:path';
+import {homedir} from 'node:os';
 import {randomUUID} from 'node:crypto';
 import {getPreferences, updatePreferences} from './preferences';
 import type {StoredFolder} from '@/types/config';
 
 type Scope = StoredFolder['scopes'][number];
+
+// `~/.corebrain` holds corebrain-managed state (worktrees, etc.) so it's
+// implicitly registered with all scopes. This lets coding/files/exec tools
+// operate on paths under it (e.g. ~/.corebrain/worktrees/<repo>/<branch>)
+// without forcing the user to register it manually.
+const COREBRAIN_HOME = resolve(homedir(), '.corebrain');
+const COREBRAIN_HOME_FOLDER: StoredFolder = {
+	id: 'fld_corebrain_home',
+	name: 'corebrain',
+	path: COREBRAIN_HOME,
+	scopes: ['files', 'coding', 'exec'],
+	gitRepo: false,
+};
+
+function isUnderCorebrainHome(abs: string): boolean {
+	return abs === COREBRAIN_HOME || abs.startsWith(COREBRAIN_HOME + '/');
+}
 
 export function listFolders(): StoredFolder[] {
 	return getPreferences().gateway?.folders ?? [];
@@ -122,6 +140,10 @@ export function resolveFolderForPath(
 		const realExisting = realpathSync(existingPath);
 		const tail = parts.slice(i).join('/');
 		abs = tail ? `${realExisting}/${tail}` : realExisting;
+	}
+
+	if (isUnderCorebrainHome(abs)) {
+		return {folder: COREBRAIN_HOME_FOLDER, absPath: abs};
 	}
 
 	const folder = listFolders().find(
