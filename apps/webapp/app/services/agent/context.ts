@@ -43,6 +43,8 @@ import { getPageContentAsHtml } from "~/services/hocuspocus/content.server";
 import { getLastCodingSession } from "~/services/coding/coding-session.server";
 import { DirectOrchestratorTools } from "./executors";
 import { getTaskPhase } from "~/services/task.phase";
+import { fetchManifest } from "~/services/gateway/transport.server";
+import { deriveCapabilityTags } from "~/services/gateway/utils.server";
 
 interface BuildAgentContextParams {
   userId: string;
@@ -199,7 +201,14 @@ export async function buildAgentContext({
   const linkedTaskRecord = conversationRecord?.asyncJobId
     ? await prisma.task.findUnique({
         where: { id: conversationRecord.asyncJobId },
-        select: { id: true, title: true, pageId: true, status: true, parentTaskId: true, metadata: true },
+        select: {
+          id: true,
+          title: true,
+          pageId: true,
+          status: true,
+          parentTaskId: true,
+          metadata: true,
+        },
       })
     : null;
 
@@ -319,11 +328,35 @@ export async function buildAgentContext({
 
   const executor = executorTools ?? new DirectOrchestratorTools();
   const gatewayInfos = await executor.getGateways(workspaceId);
+
+  // Pre-fetch manifests in parallel so we can render capability tags.
+  // A failed manifest fetch renders as [capabilities: unknown] — the gateway
+  // is still listed so butler can attempt delegation.
+  const gatewayCapabilities = await Promise.all(
+    gatewayInfos.map(async (gw) => {
+      try {
+        const manifest = await fetchManifest(gw.id);
+        const toolNames = (manifest?.manifest.tools ?? []).map((t) => t.name);
+        return deriveCapabilityTags(toolNames);
+      } catch {
+        return null;
+      }
+    }),
+  );
+
   const gatewaysList = gatewayInfos
-    .map(
-      (gw, index) =>
-        `${index + 1}. **${gw.name}** (agent: agent-gateway_${gw.name.toLowerCase().replace(/[^a-z0-9]/g, "_")}): ${gw.description}`,
-    )
+    .map((gw, index) => {
+      const tags = gatewayCapabilities[index];
+      const capStr =
+        tags === null
+          ? "[capabilities: unknown]"
+          : tags.length === 0
+            ? "[capabilities: none]"
+            : `[capabilities: ${tags.join(", ")}]`;
+      const slug = gw.name.toLowerCase().replace(/[^a-z0-9]/g, "_");
+      const desc = gw.description ? `\n   ${gw.description}` : "";
+      return `${index + 1}. **${gw.name}** ${capStr} — agent: agent-gateway_${slug}${desc}`;
+    })
     .join("\n");
 
   systemPrompt += `
@@ -338,7 +371,7 @@ export async function buildAgentContext({
 
     Simply delegate to the orchestrator with a clear intent describing what's needed.
     </connected_integrations>
-    
+
     <connected_gateways>
     Each gateway is a subagent you can call directly. Give it a clear intent and it will pick the right tool (coding_*, browser_*, exec_*).
     ${gatewaysList || "No gateways connected."}
@@ -453,13 +486,26 @@ You're preparing this task — NOT executing it. Your job is to gather informati
 
 Task: ${linkedTask.title}${linkedTask.description ? `\nContext: ${linkedTask.description}` : ""}
 Task ID: ${linkedTask.id}
-Status: ${linkedTask.status}${isSubtask ? `\nThis is a SUBTASK.${parentTaskRecord ? `\nParent task: ${parentTaskRecord.title}${parentTaskDescription ? `\nParent context: ${parentTaskDescription}` : ""}` : ""}` : ""}${skillHint}${linkedTask.status === "Waiting" ? `
+Status: ${linkedTask.status}${isSubtask ? `\nThis is a SUBTASK of a larger task.${parentTaskRecord ? `\nParent task: ${parentTaskRecord.title}${parentTaskDescription ? `\nParent context: ${parentTaskDescription}` : ""}` : ""}` : ""}${skillHint}
+${
+  isSubtask
+    ? `
+SUBTASK PREP RULES:
+1. You are prepping ONE CHUNK of a larger task. Read the parent task description and any prior sibling outputs for context.
+2. Self-resolve questions using available context (parent description, gather_context, code reading). ONLY move to Waiting and ask the user if you genuinely cannot proceed without their input.
+3. For CODING tasks (when a gateway is connected): delegate brainstorming/planning to the gateway sub-agent.${lastCodingSession?.externalSessionId ? `\n   A coding session already exists — resume it:\n   sessionId: ${lastCodingSession.externalSessionId}, agent: ${lastCodingSession.agent}${(lastCodingSession.worktreePath ?? lastCodingSession.dir) ? `, dir: ${lastCodingSession.worktreePath ?? lastCodingSession.dir}` : ""}${lastCodingSession.worktreeBranch ? `, branch: ${lastCodingSession.worktreeBranch}` : ""}` : ""}
+4. For NON-CODING tasks: do the prep yourself using gather_context, take_action, and the readiness skills.
+5. Write your plan into the task description using update_task.
+6. When prep is complete, move to Review: update_task(taskId: "${linkedTask.id}", status: "Review"). Do NOT wait for user approval — subtasks auto-transition from prep to execute.
+7. Send a brief summary via send_message of what you plan to do.
 
-THIS TASK IS WAITING. The user's message in this conversation is the reply that resumes it.
-- Call unblock_task(taskId: "${linkedTask.id}", reason: "<the user's reply, summarized>") FIRST, then STOP. unblock_task moves the task to Todo and the system re-enqueues prep with the user's reply.
-- Do NOT do the work yourself, delegate to any sub-agent, or send a message before unblock_task — the resume handler does that.
-- Exception: if the user's message is clearly NOT a reply to this task (a new unrelated request), ignore the rule above and treat it as new direction.` : ""}
-
+DO NOT:
+- Execute the actual work (no sending emails, no writing code, no making changes)
+- Mark the task as Done
+- Create further subtasks — you are a subtask, just plan YOUR work
+- Create independent top-level tasks
+`
+    : `
 PREP RULES:
 1. Run the READINESS CHECK (see <capabilities>). Load the appropriate skill from <skills>:
    - Unclear what's needed? → load "Gather Information" skill
@@ -470,7 +516,9 @@ PREP RULES:
 4. Write your findings/plan into the task description using update_task.
 5. When prep is complete, move to Review: update_task(taskId: "${linkedTask.id}", status: "Review")
 6. Send the user a summary via send_message: what you found, what the plan is, and ask them to review.
-
+7. If this task needs decomposition: create subtasks under this task (parentTaskId: ${linkedTask.id}) in Waiting status. Each subtask should be a meaningful work chunk, NOT a phase ("Planning"/"Execution"). Write the plan summary in the parent description listing all subtasks. Move parent to Waiting and send_message with the plan.
+`
+}
 WHEN TO GO TO WAITING instead of Review:
 - You need the user to answer questions before you can plan → mark Waiting, send questions via send_message
 - Gateway returned questions from the coding agent → relay to user via send_message (include sessionId), mark Waiting
@@ -482,8 +530,6 @@ WHEN TO GO STRAIGHT TO Review:
 DO NOT:
 - Execute the actual work (no sending emails, no writing code, no making changes)
 - Mark the task as Done
-- Create independent top-level tasks${isSubtask ? "" : `
-- If this task needs decomposition: create subtasks under this task (parentTaskId: ${linkedTask.id}), write the plan, move to Review, send_message with the plan`}
 
 CODING SESSION POLLING (during prep):
 - "Session still running, brainstorming/planning phase" → call reschedule_self(minutesFromNow=5)
@@ -498,21 +544,29 @@ You're executing this task in the background. The prep/planning phase is done �
 
 Task: ${linkedTask.title}${linkedTask.description ? `\nContext: ${linkedTask.description}` : ""}
 Task ID: ${linkedTask.id}
-Status: ${linkedTask.status}${isSubtask ? `\nThis is a SUBTASK. Do ONLY this specific work. Do not create further subtasks. Do not look at or manage sibling tasks.${parentTaskRecord ? `\nParent task: ${parentTaskRecord.title}${parentTaskDescription ? `\nParent context: ${parentTaskDescription}` : ""}` : ""}` : ""}${skillHint}${linkedTask.status === "Waiting" ? `
+Status: ${linkedTask.status}${isSubtask ? `\nThis is a SUBTASK. Do ONLY this specific work. Do not create further subtasks. Do not look at or manage sibling tasks.${parentTaskRecord ? `\nParent task: ${parentTaskRecord.title}${parentTaskDescription ? `\nParent context: ${parentTaskDescription}` : ""}` : ""}` : ""}${skillHint}${
+        linkedTask.status === "Waiting"
+          ? `
 
 THIS TASK IS WAITING. The user's message in this conversation is the reply that resumes it.
 - Call unblock_task(taskId: "${linkedTask.id}", reason: "<the user's reply, summarized>") FIRST, then STOP. unblock_task moves the task to Ready and the system re-enqueues execution with the user's reply.
 - Do NOT do the work yourself, delegate to any sub-agent (gateway, gather_context, take_action, etc.), or send a message before unblock_task — the resume handler does that.
-- Exception: if the user's message is clearly NOT a reply to this task (a new unrelated request), ignore the rule above and treat it as new direction.` : ""}
+- Exception: if the user's message is clearly NOT a reply to this task (a new unrelated request), ignore the rule above and treat it as new direction.`
+          : ""
+      }
 
 RULES:
 - For integration work (emails, calendar, github, etc.): delegate to the orchestrator via gather_context / take_action
 - For coding, browser, shell: use gateway tools directly (coding_*, browser_*, exec_*) if connected${renderCodingSessionHint(lastCodingSession, "execute")}
-- If the user sends a message, treat it as additional direction for this task${isSubtask ? `
+- If the user sends a message, treat it as additional direction for this task${
+        isSubtask
+          ? `
 - When you complete this subtask, the system automatically starts the next one and marks the parent Done when all subtasks are done
-- If you fail or get stuck, mark the PARENT task (${linkedTask.parentTaskId}) as Waiting and send_message with the error` : `
-- If this task is complex and needs decomposition: create subtasks under this task (parentTaskId: ${linkedTask.id}) in Todo, move this task to Waiting, then send_message to the user explaining the plan and asking for approval
-- The system handles sequential subtask execution automatically — when approved, it starts the first subtask. Each subtask completion triggers the next one. You do NOT manage the queue.`}
+- If you fail or get stuck, mark the PARENT task (${linkedTask.parentTaskId}) as Waiting and send_message with the error`
+          : `
+- If this task is complex and needs decomposition: create subtasks under this task (parentTaskId: ${linkedTask.id}) in Waiting status. Each subtask should be a meaningful work chunk, NOT a phase ("Planning"/"Execution"). Move this task to Waiting, then send_message to the user explaining the plan and asking for approval.
+- The system handles sequential subtask execution automatically — when approved, it starts the first subtask. Each subtask completion triggers the next one. You do NOT manage the queue.`
+      }
 - Mark task ${linkedTask.id} as Review when the original intent is fully achieved. The user will move it to Done.
 - When Waiting (errors, needs user input, needs approval, partial completion):
   1. call update_task(taskId: "${linkedTask.id}", status: "Waiting")
@@ -555,9 +609,11 @@ This IS the task — don't create or search for other tasks about this topic. If
 
   // Trigger context — butler needs to think first before acting
   if (triggerContext) {
-    const isTriggerFollowUp = triggerContext.trigger.type === "reminder_followup" ||
+    const isTriggerFollowUp =
+      triggerContext.trigger.type === "reminder_followup" ||
       (triggerContext.trigger.data as any)?.isFollowUp === true;
-    const isRecurring = (triggerContext.trigger.data as any)?.isRecurring === true;
+    const isRecurring =
+      (triggerContext.trigger.data as any)?.isRecurring === true;
 
     systemPrompt += `\n\n<trigger_context>
 A trigger has fired: "${triggerContext.reminderText}"${isTriggerFollowUp ? `\nThis is a FOLLOW-UP trigger. Do NOT create further follow-ups — one level only. If the issue is still unresolved, mark the task Waiting and notify the user.` : ""}${isRecurring ? `\nThis is a RECURRING task. Do NOT update the task description — send results via send_message only. Do NOT mark the task as Done — the system handles the recurring lifecycle automatically. If you need to change status, use Review.` : ""}
