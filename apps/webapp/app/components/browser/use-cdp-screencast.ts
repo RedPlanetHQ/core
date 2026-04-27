@@ -20,7 +20,9 @@ interface ScreencastFrameParams {
 
 interface Options {
   wsUrl: string;
-  /** Format quality 0-100 (only honored for `jpeg`). PNG ignores this. */
+  /** Format quality 0-100. JPEG only — the screencast is fixed to JPEG
+   *  because PNG ignores quality and produces 5–10x larger frames per tick,
+   *  which dominates bandwidth and decode cost on the screencast hot path. */
   quality?: number;
   /** Max frame width Chromium ships (lower = lower bandwidth). */
   maxWidth?: number;
@@ -193,17 +195,38 @@ export function useCdpScreencast({
 
           const canvas = canvasRef.current;
           if (!canvas) return;
-          const img = new Image();
-          img.onload = () => {
-            if (cancelled) return;
-            if (canvas.width !== img.width || canvas.height !== img.height) {
-              canvas.width = img.width;
-              canvas.height = img.height;
-            }
-            const ctx = canvas.getContext("2d");
-            if (ctx) ctx.drawImage(img, 0, 0);
-          };
-          img.src = `data:image/png;base64,${p.data}`;
+          // Decode off the main thread via createImageBitmap. The previous
+          // `new Image()` + base64 data URL forced a main-thread decode and
+          // a per-frame string allocation; with a busy screencast that adds
+          // up to visible jank. Skip the data-URL detour entirely by
+          // building a Blob from the base64 payload and handing it to the
+          // browser's image-bitmap pipeline.
+          const bin = atob(p.data);
+          const bytes = new Uint8Array(bin.length);
+          for (let i = 0; i < bin.length; i++) bytes[i] = bin.charCodeAt(i);
+          const blob = new Blob([bytes], { type: "image/jpeg" });
+          createImageBitmap(blob)
+            .then((bm) => {
+              if (cancelled) {
+                bm.close();
+                return;
+              }
+              const c = canvasRef.current;
+              if (!c) {
+                bm.close();
+                return;
+              }
+              if (c.width !== bm.width || c.height !== bm.height) {
+                c.width = bm.width;
+                c.height = bm.height;
+              }
+              const ctx = c.getContext("2d");
+              if (ctx) ctx.drawImage(bm, 0, 0);
+              bm.close();
+            })
+            .catch(() => {
+              /* swallow — corrupt frame; the next ack will pull a fresh one */
+            });
         });
 
         // Apply any viewport the consumer set before the connection was
@@ -226,11 +249,14 @@ export function useCdpScreencast({
         await cdp.send(
           "Page.startScreencast",
           {
-            format: "png",
+            format: "jpeg",
             quality,
             maxWidth: v ? Math.ceil(v.width * v.dpr) : maxWidth,
             maxHeight: v ? Math.ceil(v.height * v.dpr) : maxWidth * 2,
-            everyNthFrame: 1,
+            // Half the frames at the same perceived smoothness — eyes don't
+            // notice >30fps for screencast, but bandwidth and decode cost
+            // scale linearly. Keeps a busy page from saturating the WS.
+            everyNthFrame: 2,
           },
           sessionId,
         );
@@ -437,11 +463,11 @@ export function useCdpScreencast({
         .send(
           "Page.startScreencast",
           {
-            format: "png",
+            format: "jpeg",
             quality,
             maxWidth: Math.ceil(w * dprSafe),
             maxHeight: Math.ceil(h * dprSafe),
-            everyNthFrame: 1,
+            everyNthFrame: 2,
           },
           sid,
         )
