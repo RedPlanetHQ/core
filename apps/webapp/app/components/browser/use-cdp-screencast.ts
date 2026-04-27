@@ -80,6 +80,54 @@ interface NavigationHistory {
   entries: NavigationHistoryEntry[];
 }
 
+interface KeyEventLike {
+  key: string;
+  altKey: boolean;
+  ctrlKey: boolean;
+  metaKey: boolean;
+  shiftKey: boolean;
+}
+
+/**
+ * Map a keydown to Blink editor commands so Mac shortcuts (Cmd+Backspace,
+ * Alt+Left, etc.) work inside the screencast. AppKit normally translates
+ * these before the renderer sees them; under CDP we have to attach the
+ * commands explicitly. Names come from Blink's `EditorCommandNames`. The
+ * shift-modified variants extend the selection instead of moving the caret.
+ */
+function macEditorCommands(e: KeyEventLike): string[] {
+  const sel = e.shiftKey ? "AndModifySelection" : "";
+  if (e.metaKey && !e.ctrlKey && !e.altKey) {
+    switch (e.key) {
+      case "Backspace":
+        return ["DeleteToBeginningOfLine"];
+      case "Delete":
+        return ["DeleteToEndOfLine"];
+      case "ArrowLeft":
+        return [`MoveToBeginningOfLine${sel}`];
+      case "ArrowRight":
+        return [`MoveToEndOfLine${sel}`];
+      case "ArrowUp":
+        return [`MoveToBeginningOfDocument${sel}`];
+      case "ArrowDown":
+        return [`MoveToEndOfDocument${sel}`];
+    }
+  }
+  if (e.altKey && !e.ctrlKey && !e.metaKey) {
+    switch (e.key) {
+      case "Backspace":
+        return ["DeleteWordBackward"];
+      case "Delete":
+        return ["DeleteWordForward"];
+      case "ArrowLeft":
+        return [`MoveWordLeft${sel}`];
+      case "ArrowRight":
+        return [`MoveWordRight${sel}`];
+    }
+  }
+  return [];
+}
+
 /**
  * Connect to Chrome DevTools Protocol over the proxied WebSocket and stream
  * `Page.screencastFrame` images into a canvas. Also exposes mouse/keyboard
@@ -496,6 +544,16 @@ export function useCdpScreencast({
       modifiers: eventModifiers(e),
     };
     if (isPrintable) params.text = e.key;
+    // Mac editor shortcuts (Cmd+Backspace = delete-to-line-start, Alt+Left =
+    // word-left, etc.) are normally translated by AppKit before the renderer
+    // sees them. Headless Chromium gets only the raw key+modifiers, so the
+    // shortcut silently no-ops. CDP exposes a `commands` array on
+    // dispatchKeyEvent for exactly this — we map the key+modifier combo to
+    // Blink's editor command names and let the renderer execute them.
+    if (type === "keyDown") {
+      const commands = macEditorCommands(e);
+      if (commands.length > 0) params.commands = commands;
+    }
     cdp.send("Input.dispatchKeyEvent", params, sid).catch(() => {
       /* swallow */
     });
