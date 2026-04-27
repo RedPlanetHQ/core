@@ -93,7 +93,26 @@ function pipeFrames(client: WebSocket, upstream: WebSocket): void {
   const sanitizeCode = (code: number): number =>
     code === 1000 || (code >= 3000 && code <= 4999) ? code : 1000;
 
+  // Edge proxies (Railway / ALB / Cloudflare) drop WS connections after
+  // 30–60s of silence. A pause between keystrokes — or just thinking time
+  // mid-conversation — counts as idle, which manifests as the terminal
+  // randomly disconnecting while the user is typing. Pinging both hops on
+  // a 25s cadence keeps NAT and proxy state warm without touching payload.
+  const heartbeat = setInterval(() => {
+    try {
+      if (client.readyState === client.OPEN) client.ping();
+    } catch {
+      /* swallow — next interval will retry or close handler will clean up */
+    }
+    try {
+      if (upstream.readyState === upstream.OPEN) upstream.ping();
+    } catch {
+      /* swallow */
+    }
+  }, 25_000);
+
   const closeBoth = (code = 1000, reason = "") => {
+    clearInterval(heartbeat);
     const safe = sanitizeCode(code);
     try {
       if (client.readyState === client.OPEN) client.close(safe, reason);
