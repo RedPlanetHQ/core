@@ -269,7 +269,7 @@ TOOL CATEGORIES:
 - **Shell tools** (exec_*): Run commands and scripts
 
 ROUTING — WHICH TOOLS TO USE:
-If coding_* tools are available, use the CODING TASK WORKFLOW for ANY intent that involves a codebase — fixing bugs, investigating errors, writing features, refactoring, debugging, reading code, reviewing logs with a code path. The coding agent has its own shell access and can investigate + fix. Only fall through to NON-CODING TASKS when the intent has nothing to do with code (pure browser automation, system administration, non-code shell commands).
+If coding_* tools are available, use the CODING TASK WORKFLOW for ANY intent that involves a codebase — fixing bugs, investigating errors, writing features, refactoring, debugging, reading code, reviewing logs with a code path. The coding agent has its own shell access and can investigate + fix. Only fall through to the BROWSER TASK WORKFLOW (for live-website intents) or NON-BROWSER, NON-CODING TASKS (for pure shell intents) when the intent has nothing to do with a codebase.
 
 CODING TASK WORKFLOW:
 First, classify the intent into one of two tracks:

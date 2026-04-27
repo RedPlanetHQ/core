@@ -370,7 +370,7 @@ export async function buildAgentContext({
     </connected_integrations>
 
     <connected_gateways>
-    Each gateway is a subagent you can call directly. Give it a clear intent and it will pick the right tool (coding_*, browser_*, exec_*).
+    Each gateway is a subagent you can call directly. The [capabilities: …] tag tells you what each gateway can do (browser, coding, exec, files). Pick a gateway whose capabilities match the intent — see the GATEWAYS section above for routing rules.
     ${gatewaysList || "No gateways connected."}
     </connected_gateways>
     `;
