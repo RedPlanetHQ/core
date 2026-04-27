@@ -290,6 +290,45 @@ function detectAgentForSession(sessionId: string, dir: string): string {
 	return prefs.defaultCodingAgent ?? 'claude-code';
 }
 
+// ============ Live TUI Prompt Injection ============
+
+const sleep = (ms: number) => new Promise<void>(r => setTimeout(r, ms));
+
+/**
+ * Inject a prompt into a live claude-code TUI as if the user typed it.
+ *
+ * Why this is gnarly: claude-code's input box treats CR that arrives in the
+ * same byte burst as the text as a literal newline (multi-line composition),
+ * not as submit. Real terminals submit because the keypress for Enter arrives
+ * as its own write after the typed/pasted text settles.
+ *
+ * Approach: send the prompt inside a bracketed-paste sequence (so embedded
+ * newlines in the prompt stay literal and don't accidentally submit early),
+ * give the renderer a tick to absorb it, then send a standalone CR for submit.
+ * Returns false if the PTY went away mid-write so the caller can fall back.
+ */
+async function submitPromptToLiveTui(
+	sessionId: string,
+	prompt: string,
+): Promise<boolean> {
+	// Bracketed-paste markers — Claude (and most modern TUIs) recognize these
+	// and route the enclosed bytes to the input buffer without interpreting
+	// embedded newlines as submit.
+	const PASTE_START = '\x1b[200~';
+	const PASTE_END = '\x1b[201~';
+
+	if (!ptyManager.write(sessionId, PASTE_START + prompt + PASTE_END)) {
+		return false;
+	}
+	// Let the TUI render the paste before submit. Without the gap, Claude
+	// occasionally swallows the CR as part of the paste burst.
+	await sleep(80);
+	if (!ptyManager.write(sessionId, '\r')) {
+		return false;
+	}
+	return true;
+}
+
 // ============ Worktree Helpers ============
 
 const CB_WORKTREES_ROOT = resolve(homedir(), '.corebrain', 'worktrees');
@@ -575,7 +614,12 @@ async function handleAsk(
 		const deadline = Date.now() + 30_000;
 		const isReady = () => {
 			if (isResume) {
-				return agentSessionUpdatedSince(agentName, workingDir, sessionId, startedAt);
+				return agentSessionUpdatedSince(
+					agentName,
+					workingDir,
+					sessionId,
+					startedAt,
+				);
 			}
 			const lastActivity = ptyManager.getLastActivity(sessionId);
 			return Boolean(lastActivity && lastActivity > startedAt);
@@ -760,7 +804,8 @@ async function handleReadSession(params: zod.infer<typeof ReadSessionSchema>) {
 			statusMessage = 'Agent is booting. Wait a few seconds and read again.';
 		} else {
 			status = 'failed';
-			statusMessage = 'Agent exited before writing any output to the session transcript.';
+			statusMessage =
+				'Agent exited before writing any output to the session transcript.';
 		}
 	} else {
 		// Process finished — clean up running session record
