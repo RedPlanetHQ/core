@@ -123,3 +123,23 @@ export async function getGatewayInfo(gatewayId: string): Promise<{
     })),
   };
 }
+
+const CAPABILITY_PREFIXES: Array<{ prefix: string; tag: string }> = [
+  { prefix: "browser_", tag: "browser" },
+  { prefix: "coding_", tag: "coding" },
+  { prefix: "exec_", tag: "exec" },
+  { prefix: "files_", tag: "files" },
+];
+
+export function deriveCapabilityTags(toolNames: string[]): string[] {
+  const tags = new Set<string>();
+  for (const name of toolNames) {
+    for (const { prefix, tag } of CAPABILITY_PREFIXES) {
+      if (name.startsWith(prefix)) {
+        tags.add(tag);
+        break;
+      }
+    }
+  }
+  return Array.from(tags).sort();
+}
