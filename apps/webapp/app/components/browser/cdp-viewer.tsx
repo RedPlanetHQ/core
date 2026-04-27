@@ -15,7 +15,7 @@ import { useCdpScreencast } from "./use-cdp-screencast";
 interface Props {
   /** WebSocket URL pointing at the webapp's browser-CDP proxy. */
   wsUrl: string;
-  /** Format quality 0–100 (jpeg only — png ignores). */
+  /** JPEG quality 0–100. Lower = lower bandwidth. */
   quality?: number;
   /** Max frame width Chromium ships. Smaller = lower bandwidth. */
   maxWidth?: number;
