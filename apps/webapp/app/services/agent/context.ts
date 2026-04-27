@@ -334,13 +334,10 @@ export async function buildAgentContext({
   // is still listed so butler can attempt delegation.
   const gatewayCapabilities = await Promise.all(
     gatewayInfos.map(async (gw) => {
-      try {
-        const manifest = await fetchManifest(gw.id);
-        const toolNames = (manifest?.manifest.tools ?? []).map((t) => t.name);
-        return deriveCapabilityTags(toolNames);
-      } catch {
-        return null;
-      }
+      const manifest = await fetchManifest(gw.id);
+      if (!manifest) return null;
+      const toolNames = (manifest.manifest.tools ?? []).map((t) => t.name);
+      return deriveCapabilityTags(toolNames);
     }),
   );
 
