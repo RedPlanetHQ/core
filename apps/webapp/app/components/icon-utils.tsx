@@ -44,6 +44,7 @@ import { Task } from "./icons/task";
 import { Spotify } from "./icons/spotify";
 import { Stripe } from "./icons/stripe";
 import { InReviewLine } from "./icons/in-review-line";
+import { Swiggy } from "./icons/swiggy";
 
 export const ICON_MAPPING = {
   slack: SlackIcon,
@@ -95,7 +96,7 @@ export const ICON_MAPPING = {
   "core-extension": Chromium,
   task: Task,
   spotify: Spotify,
-
+  swiggy: Swiggy,
   // Default icon
   integration: LayoutGrid,
 };

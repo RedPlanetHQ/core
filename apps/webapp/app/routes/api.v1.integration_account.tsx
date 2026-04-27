@@ -7,13 +7,17 @@ import {
 import { IntegrationRunner } from "~/services/integrations/integration-runner";
 import { getIntegrationDefinitionWithId } from "~/services/integrationDefinition.server";
 import { logger } from "~/services/logger.service";
+import { prisma } from "~/db.server";
 
 import { getConnectedIntegrationAccounts } from "~/services/integrationAccount.server";
 
-// Schema for creating an integration account with API key
+// Schema for creating an integration account.
+// `apiKey` is optional so the same endpoint can install widget-only
+// (no-auth) integrations — when the spec declares no auth and has widgets
+// we create a stub IntegrationAccount instead of running SETUP.
 const IntegrationAccountBodySchema = z.object({
   integrationDefinitionId: z.string(),
-  apiKey: z.string(),
+  apiKey: z.string().optional(),
   // Additional fields from multi-field API key auth (e.g., ghost_url)
   fields: z.record(z.string(), z.string()).optional(),
 });
@@ -72,10 +76,82 @@ const { action } = createHybridActionApiRoute(
         );
       }
 
+      const spec = (integrationDefinition.spec as any) ?? {};
+      const hasAnyAuth = !!(
+        spec?.auth?.OAuth2 ||
+        spec?.auth?.api_key ||
+        spec?.auth?.mcp
+      );
+      const hasWidgets =
+        Array.isArray(spec?.widgets) && spec.widgets.length > 0;
+      const hasFields = fields && Object.keys(fields).length > 0;
+      const hasApiKey = typeof apiKey === "string" && apiKey.length > 0;
+
+      // Widget-only install path: no auth declared on the integration and
+      // no credentials supplied. Create a stub IntegrationAccount so the
+      // widget loader picks it up. The composite unique key
+      // (accountId, integrationDefinitionId, workspaceId) keeps re-installs
+      // idempotent.
+      if (!hasAnyAuth && !hasApiKey && !hasFields) {
+        if (!hasWidgets) {
+          return json(
+            { error: "Integration has no auth method or widgets to install" },
+            { status: 400 },
+          );
+        }
+
+        const accountId = `${integrationDefinition.slug}-widget`;
+        const workspaceId = authentication.workspaceId as string;
+
+        const existing = await prisma.integrationAccount.findFirst({
+          where: {
+            accountId,
+            integrationDefinitionId: integrationDefinition.id,
+            workspaceId,
+          },
+        });
+
+        const account = existing
+          ? await prisma.integrationAccount.update({
+              where: { id: existing.id },
+              data: { isActive: true, integratedById: userId },
+            })
+          : await prisma.integrationAccount.create({
+              data: {
+                integrationDefinitionId: integrationDefinition.id,
+                workspaceId,
+                integratedById: userId,
+                accountId,
+                integrationConfiguration: {},
+                settings: {},
+                isActive: true,
+              },
+            });
+
+        logger.info("Widget-only integration installed", {
+          integrationAccountId: account.id,
+          integrationDefinitionId: integrationDefinition.id,
+          slug: integrationDefinition.slug,
+          userId,
+          workspaceId,
+        });
+
+        return json({ success: true, setupResult: { account } });
+      }
+
+      // Auth-based install path (API key, possibly multi-field)
+      if (!hasApiKey && !hasFields) {
+        return json(
+          { error: "API key or required fields are missing" },
+          { status: 400 },
+        );
+      }
+
       // Build eventBody: if fields are provided, spread them for multi-field auth
       // For multi-field auth (e.g., Ghost), all values come from fields
-      const hasFields = fields && Object.keys(fields).length > 0;
-      const eventBody = hasFields ? { apiKey: "", ...fields } : { apiKey };
+      const eventBody = hasFields
+        ? { apiKey: "", ...fields }
+        : { apiKey: apiKey as string };
 
       // Trigger the SETUP event for the integration
       const messages = await IntegrationRunner.setup({

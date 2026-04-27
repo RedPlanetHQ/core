@@ -17,6 +17,7 @@ import {
   DialogTitle,
 } from "~/components/ui/dialog";
 import { NeedsAttentionWidget } from "./needs-attention-widget.client";
+import { getIcon, type IconType } from "~/components/icon-utils";
 
 interface NativeWidget {
   widgetSlug: string;
@@ -103,31 +104,34 @@ function DailyWidgetPicker({
               {NATIVE_WIDGETS.length > 0 && (
                 <div className="border-t border-gray-100 pt-1 dark:border-gray-800" />
               )}
-              {widgetOptions.map((option) => (
-                <button
-                  key={`${option.integrationAccountId}-${option.widgetSlug}`}
-                  onClick={() => onSelect(option)}
-                  className="hover:bg-grayAlpha-100 flex w-full items-center gap-3 rounded-md p-3 text-left transition-colors"
-                >
-                  {option.integrationIcon ? (
-                    <img
-                      src={option.integrationIcon}
-                      alt=""
-                      className="h-7 w-7 rounded object-contain"
-                    />
-                  ) : (
-                    <div className="flex h-7 w-7 items-center justify-center rounded text-xs font-medium uppercase">
-                      {option.integrationName.slice(0, 2)}
+              {widgetOptions.map((option) => {
+                const Icon = option.integrationIcon
+                  ? getIcon(option.integrationIcon as IconType)
+                  : null;
+                return (
+                  <button
+                    key={`${option.integrationAccountId}-${option.widgetSlug}`}
+                    onClick={() => onSelect(option)}
+                    className="hover:bg-grayAlpha-100 flex w-full items-center gap-3 rounded-md p-3 text-left transition-colors"
+                  >
+                    {Icon ? (
+                      <div className="bg-background-2 flex h-7 w-7 items-center justify-center rounded">
+                        <Icon size={18} />
+                      </div>
+                    ) : (
+                      <div className="flex h-7 w-7 items-center justify-center rounded text-xs font-medium uppercase">
+                        {option.integrationName.slice(0, 2)}
+                      </div>
+                    )}
+                    <div>
+                      <p className="text-sm font-medium">{option.widgetName}</p>
+                      <p className="text-muted-foreground text-xs">
+                        {option.integrationName} · {option.widgetDescription}
+                      </p>
                     </div>
-                  )}
-                  <div>
-                    <p className="text-sm font-medium">{option.widgetName}</p>
-                    <p className="text-muted-foreground text-xs">
-                      {option.integrationName} · {option.widgetDescription}
-                    </p>
-                  </div>
-                </button>
-              ))}
+                  </button>
+                );
+              })}
             </>
           )}
 
