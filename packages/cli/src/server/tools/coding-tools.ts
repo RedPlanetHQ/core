@@ -396,6 +396,18 @@ function removeWorktree(
 
 // ============ Handlers ============
 
+async function waitForProcessExit(
+	sessionId: string,
+	timeoutMs: number,
+): Promise<boolean> {
+	const deadline = Date.now() + timeoutMs;
+	while (Date.now() < deadline) {
+		if (!isProcessRunning(sessionId)) return true;
+		await new Promise(resolve => setTimeout(resolve, 100));
+	}
+	return !isProcessRunning(sessionId);
+}
+
 async function handleAsk(
 	params: zod.infer<typeof AskSchema>,
 	logger: Logger = gatewayLog,
@@ -439,12 +451,26 @@ async function handleAsk(
 	const isResume = Boolean(params.sessionId);
 	let sessionId = params.sessionId || randomUUID();
 
-	// For resume, verify process is not already running
+	// On resume, if a previous PTY is still alive for this id, kill it before
+	// respawning. The TUI has no API to inject a new prompt into a running
+	// instance, so the only way to deliver `params.prompt` is a fresh
+	// `--resume <id>` process. SIGTERM gives the agent a chance to flush its
+	// transcript; we escalate to SIGKILL only if it doesn't exit in time.
 	if (isResume && isProcessRunning(sessionId)) {
-		return {
-			success: false,
-			error: `Session "${sessionId}" is already running. Wait for it to finish before sending another prompt.`,
-		};
+		logger(`coding_ask resume: killing running pty for sessionId=${sessionId}`);
+		stopProcess(sessionId);
+		let exited = await waitForProcessExit(sessionId, 5_000);
+		if (!exited) {
+			logger(`coding_ask resume: SIGTERM did not exit, escalating to SIGKILL`);
+			ptyManager.kill(sessionId, 'SIGKILL');
+			exited = await waitForProcessExit(sessionId, 2_000);
+		}
+		if (!exited) {
+			return {
+				success: false,
+				error: `Session "${sessionId}" did not exit after SIGTERM/SIGKILL — cannot resume.`,
+			};
+		}
 	}
 
 	// Set up worktree for new sessions when requested

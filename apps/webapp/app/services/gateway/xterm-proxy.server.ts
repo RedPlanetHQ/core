@@ -184,8 +184,29 @@ async function handleUpgrade(
     headers: { authorization: `Bearer ${securityKey}` },
   });
 
+  // Buffer upstream frames that arrive before the client WS handshake
+  // completes. The gateway emits `attach.replayed` (the PTY scrollback)
+  // immediately on connect, which would otherwise hit our `upstream`
+  // socket before `pipeFrames` registers a 'message' listener and get
+  // silently dropped — leaving the user with a blank terminal on resume.
+  const earlyFrames: unknown[] = [];
+  let piped = false;
+  const bufferEarly = (data: unknown) => {
+    if (!piped) earlyFrames.push(data);
+  };
+  upstream.on("message", bufferEarly);
+
   upstream.once("open", () => {
     wss.handleUpgrade(req, socket, head, (client) => {
+      // Flush buffered scrollback before switching to live piping. Doing
+      // this synchronously inside the upgrade callback ensures no
+      // upstream frame can slip in between flush and listener swap.
+      for (const frame of earlyFrames) {
+        if (client.readyState === client.OPEN) client.send(frame as any);
+      }
+      earlyFrames.length = 0;
+      upstream.off("message", bufferEarly);
+      piped = true;
       pipeFrames(client, upstream);
     });
   });

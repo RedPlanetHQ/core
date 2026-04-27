@@ -1,21 +1,18 @@
-import { useOutletContext } from "@remix-run/react";
 import { useState } from "react";
 import {
   Bot,
-  CheckCircle2,
   FolderOpen,
   Loader2,
   Plus,
   Trash2,
 } from "lucide-react";
 import { Button } from "~/components/ui/button";
-import { Badge } from "~/components/ui/badge";
 import { AddFolderDialog } from "~/components/gateway/add-folder-dialog";
+import { useGateway } from "~/components/gateway/gateway-provider";
 import { cn } from "~/lib/utils";
-import type { GatewayOutletContext } from "./home.gateways.$gatewayId";
 
 export default function GatewayInfoTab() {
-  const ctx = useOutletContext<GatewayOutletContext>();
+  const gw = useGateway();
   const [addFolderOpen, setAddFolderOpen] = useState(false);
   const [removingFolderId, setRemovingFolderId] = useState<string | null>(null);
 
@@ -23,7 +20,7 @@ export default function GatewayInfoTab() {
     setRemovingFolderId(folderId);
     try {
       const res = await fetch(
-        `/api/v1/gateways/${ctx.gatewayId}/folders/${folderId}`,
+        `/api/v1/gateways/${gw.id}/folders/${folderId}`,
         { method: "DELETE" },
       );
       if (!res.ok) {
@@ -31,14 +28,14 @@ export default function GatewayInfoTab() {
         // eslint-disable-next-line no-alert
         alert(body.error ?? `Failed (${res.status})`);
       }
-      ctx.refresh();
+      gw.refresh();
     } finally {
       setRemovingFolderId(null);
     }
   };
 
-  const isDocker = ctx.deployMode === "docker";
-  const isRailway = ctx.deployMode === "railway";
+  const isDocker = gw.deployMode === "docker";
+  const isRailway = gw.deployMode === "railway";
   const isContainer = isDocker || isRailway;
   const deployModeLabel = isRailway
     ? "Railway container"
@@ -52,27 +49,37 @@ export default function GatewayInfoTab() {
       <section className="flex flex-col gap-2">
         <h2 className="text-lg font-medium">Overview</h2>
         <div className="grid grid-cols-[140px_1fr] gap-y-2 text-sm">
+          <span className="text-muted-foreground">Name</span>
+          <span className="font-medium">{gw.name}</span>
+          <span className="text-muted-foreground">Description</span>
+          <span
+            className={cn(
+              gw.description ? "" : "text-muted-foreground italic",
+            )}
+          >
+            {gw.description ?? "—"}
+          </span>
           <span className="text-muted-foreground">Status</span>
           <span
             className={cn(
               "font-medium",
-              ctx.status === "CONNECTED"
+              gw.status === "CONNECTED"
                 ? "text-success"
                 : "text-muted-foreground",
             )}
           >
-            {ctx.status === "CONNECTED" ? "Connected" : "Disconnected"}
+            {gw.status === "CONNECTED" ? "Connected" : "Disconnected"}
           </span>
-          {ctx.hostname ? (
+          {gw.hostname ? (
             <>
               <span className="text-muted-foreground">Hostname</span>
-              <span className="font-mono text-xs">{ctx.hostname}</span>
+              <span className="font-mono text-xs">{gw.hostname}</span>
             </>
           ) : null}
-          {ctx.platform ? (
+          {gw.platform ? (
             <>
               <span className="text-muted-foreground">Platform</span>
-              <span>{ctx.platform}</span>
+              <span>{gw.platform}</span>
             </>
           ) : null}
           <span className="text-muted-foreground">Deploy mode</span>
@@ -86,36 +93,24 @@ export default function GatewayInfoTab() {
           <h2 className="text-lg font-medium">Coding agents</h2>
         </div>
 
-        {ctx.availableAgents.length === 0 ? (
+        {gw.agents.length === 0 ? (
           <p className="text-muted-foreground text-sm">
             No coding agents detected on this gateway.{" "}
             {isContainer
               ? "Update the image to include claude-code or codex-cli."
-              : "Install claude-code or codex-cli, then re-open this page."}
+              : "Install claude-code or codex-cli, then refresh."}
           </p>
         ) : (
           <div className="flex flex-col gap-1.5">
-            {ctx.availableAgents
-              .filter((a) => a.configured)
-              .map((a) => {
-                return (
-                  <div
-                    key={a.name}
-                    className="bg-background-3 flex items-center gap-3 rounded border px-3 py-2"
-                  >
-                    <Bot
-                      size={22}
-                      className={cn("shrink-0", "text-foreground")}
-                    />
-                    <div className="flex min-w-0 flex-1 flex-col">
-                      <span className="font-medium">{a.name}</span>
-                      <span className="text-muted-foreground truncate font-mono text-xs">
-                        {a.path}
-                      </span>
-                    </div>
-                  </div>
-                );
-              })}
+            {gw.agents.map((name) => (
+              <div
+                key={name}
+                className="bg-background-3 flex items-center gap-3 rounded border px-3 py-2"
+              >
+                <Bot size={22} className="text-foreground shrink-0" />
+                <span className="font-medium">{name}</span>
+              </div>
+            ))}
           </div>
         )}
       </section>
@@ -135,13 +130,13 @@ export default function GatewayInfoTab() {
           </Button>
         </div>
 
-        {ctx.folders.length === 0 ? (
+        {gw.folders.length === 0 ? (
           <p className="text-muted-foreground text-sm">
             No folders registered yet.
           </p>
         ) : (
           <div className="flex flex-col gap-1.5">
-            {ctx.folders.map((f) => (
+            {gw.folders.map((f) => (
               <div
                 key={f.id}
                 className="bg-background-3 flex items-center gap-3 rounded border px-3 py-2"
@@ -180,9 +175,8 @@ export default function GatewayInfoTab() {
       <AddFolderDialog
         open={addFolderOpen}
         onOpenChange={setAddFolderOpen}
-        gatewayId={ctx.gatewayId}
-        isContainer={isContainer}
-        onAdded={ctx.refresh}
+        gatewayId={gw.id}
+        onAdded={gw.refresh}
       />
     </div>
   );

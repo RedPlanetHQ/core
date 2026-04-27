@@ -38,7 +38,7 @@ export function TryIt() {
     <SidebarGroup className="py-0">
       <Collapsible open={open} onOpenChange={setOpen}>
         <CollapsibleTrigger asChild>
-          <button className="text-muted-foreground hover:text-foreground flex w-full items-center gap-1 px-2 py-1 text-sm font-medium">
+          <button className="text-muted-foreground hover:text-foreground flex w-full items-center gap-1 px-2 py-1 text-sm font-light">
             Try
             <ChevronDown
               size={14}

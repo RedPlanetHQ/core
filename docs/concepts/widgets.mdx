@@ -1,0 +1,68 @@
+---
+title: "Widgets"
+description: "Embeddable views that pull live data from your connected integrations into CORE"
+---
+
+## What they are
+
+Widgets are small, embeddable UIs that each integration ships with. They render *inside* CORE — your Overview page, the Scratchpad's side panel, or as inline blocks in any page — but the data they show is fetched live from the connected service.
+
+A Linear integration might ship a "My issues" widget. A Calendar integration might ship "Today" and "Next meeting." A Notion integration might ship "Recent pages." When you connect the integration, the widgets show up automatically in the picker — you don't install them separately.
+
+---
+
+## Where widgets render
+
+<CardGroup cols={3}>
+  <Card title="Overview" icon="grid">
+    The dashboard at `/overview` is a freeform widget grid. Pick widgets from your connected integrations, drag to size and arrange. The layout is workspace-scoped — visible to everyone in the workspace.
+  </Card>
+
+  <Card title="Scratchpad panel" icon="sidebar">
+    Open the **Widgets** button on the daily page to dock a separate widget grid alongside your scratchpad. Useful when you want context (calendar, inbox, queue) visible while planning.
+  </Card>
+
+  <Card title="Inline in pages" icon="square-code">
+    Type `/` in any page and pick a widget from the slash menu. The widget becomes a block in your document and travels with whatever you write around it.
+  </Card>
+</CardGroup>
+
+The Overview grid and the Scratchpad panel each store their layout independently, so you can build a "dashboard" on Overview and still have a focused, smaller set on the Scratchpad without them fighting.
+
+---
+
+## How widgets get their data
+
+Widgets aren't bundled into CORE — they're loaded from the integration's own frontend at runtime. When you drop a widget in:
+
+1. CORE looks up the integration's widget bundle URL from its installed spec.
+2. The bundle is loaded once and cached in your browser.
+3. CORE renders the widget with a context object containing the widget's configuration plus credentials it needs to call the underlying service.
+
+This means widgets always reflect what the integration team has shipped — no extension store to manage, no version pinning, no separate auth flow.
+
+---
+
+## Configuring a widget
+
+Some widgets accept config — a Linear "Issues" widget might let you pick a team or filter, a Calendar widget might let you choose which calendars to show. Config is declared by the integration via a schema, and CORE renders the form for you when you first add the widget.
+
+Click the gear icon on a widget's header to edit its config any time. Config is stored on the cell (Overview, Scratchpad panel) or on the block (inline page widget), so the same widget type can appear multiple times with different settings — for example, three Linear "Issues" widgets each scoped to a different project.
+
+---
+
+## Using widgets
+
+- **Overview** — go to `/overview`, click **Add widget**, pick from the list of widgets exposed by your connected integrations. Drag corners to resize, drag the body to move. Layout autosaves.
+- **Scratchpad** — open `/daily`, click **Widgets** in the page header, and the same picker appears for the side panel.
+- **Inline** — in any page, place your cursor on an empty line, type `/`, and search for the widget by name. It'll render as a block; resize is per widget.
+
+Removing a widget from the Overview/Scratchpad grid drops it from your layout but leaves the integration connected. Removing an inline widget deletes the block but does not affect the integration either.
+
+---
+
+## Widgets and the butler
+
+The butler doesn't render widgets — it talks to the same integrations through the [Toolkit](/concepts/toolkit). Think of widgets as the *visual* surface and the toolkit as the *action* surface for the same set of connected apps. If your Linear integration ships an "Issues" widget, the same connection lets the CORE Agent run "show me my open Linear issues" via tools — the widget just gives you a passive, always-on view of the same data.
+
+This is why widgets and the agent stay in sync automatically: they share the integration's auth and connection, so adding or removing an integration affects both at once.

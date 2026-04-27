@@ -217,7 +217,7 @@ curl -X POST $GATEWAY/api/folders/git \
 - **Exec patterns.** `exec_command` validates each command against allow / deny globs (`Bash(<glob>)`) plus a built-in deny list for unsafe primitives.
 - **Browser profiles.** Stored locally; auth state never leaves your machine.
 
-All traffic between CORE and the gateway is authenticated; use HTTPS or a tunnel (Tailscale / ngrok / Cloudflare) for non-loopback deployments.
+All traffic between CORE and the gateway is authenticated; use HTTPS or a tunnel (Tailscale / ngrok / Cloudflare) for non-loopback deployments. See [Tunnels](/gateway/tunnels) for the Tailscale Funnel and ngrok setup walkthroughs.
 
 ---
 

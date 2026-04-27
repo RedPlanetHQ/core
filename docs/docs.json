@@ -51,6 +51,10 @@
           {
             "group": "Toolkit",
             "pages": ["concepts/toolkit"]
+          },
+          {
+            "group": "Workspace",
+            "pages": ["concepts/scratchpad", "concepts/widgets"]
           }
         ]
       },
@@ -296,6 +300,10 @@
           {
             "group": "Capabilities",
             "pages": ["gateway/browser", "gateway/coding", "gateway/exec"]
+          },
+          {
+            "group": "Networking",
+            "pages": ["gateway/tunnels"]
           },
           {
             "group": "Integrations",

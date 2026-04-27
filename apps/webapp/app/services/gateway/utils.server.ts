@@ -2,7 +2,6 @@ import { callTool, fetchManifest } from "./transport.server";
 import type {
   Folder,
   FolderScope,
-  AvailableAgent,
   DeployMode,
 } from "@redplanethq/gateway-protocol";
 
@@ -94,10 +93,10 @@ export async function getGatewayAgents(gatewayId: string): Promise<string[]> {
 export async function getGatewayInfo(gatewayId: string): Promise<{
   folders: Folder[];
   agents: string[];
-  availableAgents: AvailableAgent[];
   gateway: {
     id: string;
     name: string;
+    description?: string;
     hostname: string;
     platform: string;
     deployMode: DeployMode;
@@ -110,10 +109,10 @@ export async function getGatewayInfo(gatewayId: string): Promise<{
   return {
     folders: manifest.folders ?? [],
     agents: manifest.agents ?? [],
-    availableAgents: manifest.availableAgents ?? [],
     gateway: {
       id: manifest.gateway.id,
       name: manifest.gateway.name,
+      description: manifest.gateway.description,
       hostname: manifest.gateway.hostname,
       platform: manifest.gateway.platform,
       deployMode: manifest.gateway.deployMode ?? "native",

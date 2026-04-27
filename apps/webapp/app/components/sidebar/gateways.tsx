@@ -58,11 +58,11 @@ export function GatewaysNav() {
   }, [refresh]);
 
   return (
-    <SidebarGroup className="py-0">
+    <SidebarGroup className="mb-2 py-0">
       <Collapsible open={open} onOpenChange={setOpen}>
         <div className="flex items-center justify-between pr-2">
           <CollapsibleTrigger asChild>
-            <button className="text-muted-foreground hover:text-foreground flex flex-1 items-center gap-1 px-2 py-1 text-sm">
+            <button className="text-muted-foreground hover:text-foreground flex w-full items-center gap-1 px-2 py-1 text-sm font-light">
               Gateways
               <ChevronDown
                 size={14}

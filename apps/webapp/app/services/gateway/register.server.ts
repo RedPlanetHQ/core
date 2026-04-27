@@ -67,12 +67,8 @@ export async function registerGateway(
 ): Promise<RegisterGatewayResult | RegisterGatewayError> {
   // 1. Reachability + key check
   const probe = await verifyGateway(input.baseUrl, input.securityKey);
-  if (!probe) {
-    return {
-      ok: false,
-      error:
-        "Gateway did not accept the securityKey. Make sure the daemon is running and the key matches what `corebrain gateway register` printed.",
-    };
+  if (!probe.ok) {
+    return { ok: false, error: probe.reason };
   }
 
   // 2. Pull the manifest once (with the raw key — the DB row doesn't exist

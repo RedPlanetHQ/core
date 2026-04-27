@@ -11,6 +11,11 @@ function ensureSubscriber(): void {
   subscriberInitialized = true;
 
   const subscriber = getRedisConnection().duplicate();
+  subscriber.on("error", (err) => {
+    logger.error("[stream-registry] subscriber error", {
+      error: err instanceof Error ? err.message : String(err),
+    });
+  });
   subscriber.subscribe(STOP_CHANNEL).catch((err) => {
     logger.error("[stream-registry] failed to subscribe to stop channel", {
       error: err instanceof Error ? err.message : String(err),

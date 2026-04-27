@@ -36,6 +36,7 @@ export const Manifest = z.object({
   gateway: z.object({
     id: z.string(),
     name: z.string(),
+    description: z.string().optional(),
     version: z.string(),
     platform: z.string(),
     hostname: z.string(),

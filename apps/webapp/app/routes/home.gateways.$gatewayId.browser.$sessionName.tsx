@@ -28,6 +28,7 @@ import {
   DialogTitle,
 } from "~/components/ui/dialog";
 import type { GatewayBrowserOutletContext } from "./home.gateways.$gatewayId.browser";
+import { useGateway } from "~/components/gateway/gateway-provider";
 
 /**
  * Per-session view. Renders the live CDP screencast when the session is
@@ -36,6 +37,7 @@ import type { GatewayBrowserOutletContext } from "./home.gateways.$gatewayId.bro
  */
 export default function GatewayBrowserSession() {
   const ctx = useOutletContext<GatewayBrowserOutletContext>();
+  const gw = useGateway();
   const { sessionName } = useParams<{ sessionName: string }>();
   const navigate = useNavigate();
 
@@ -66,7 +68,7 @@ export default function GatewayBrowserSession() {
         <Button
           size="sm"
           variant="secondary"
-          onClick={() => navigate(`/home/gateways/${ctx.gatewayId}/browser`)}
+          onClick={() => navigate(`/home/gateways/${gw.id}/browser`)}
         >
           Back to sessions
         </Button>
@@ -79,7 +81,7 @@ export default function GatewayBrowserSession() {
     setDeleteError(null);
     try {
       const res = await fetch(
-        `/api/v1/gateways/${ctx.gatewayId}/browser/sessions/${encodeURIComponent(
+        `/api/v1/gateways/${gw.id}/browser/sessions/${encodeURIComponent(
           sessionName,
         )}`,
         { method: "DELETE" },
@@ -90,7 +92,7 @@ export default function GatewayBrowserSession() {
       }
       setConfirmOpen(false);
       ctx.refresh();
-      navigate(`/home/gateways/${ctx.gatewayId}/browser`);
+      navigate(`/home/gateways/${gw.id}/browser`);
     } catch (err) {
       setDeleteError(err instanceof Error ? err.message : String(err));
     } finally {
@@ -103,7 +105,7 @@ export default function GatewayBrowserSession() {
     setLaunchError(null);
     try {
       const res = await fetch(
-        `/api/v1/gateways/${ctx.gatewayId}/browser/launch`,
+        `/api/v1/gateways/${gw.id}/browser/launch`,
         {
           method: "POST",
           headers: { "Content-Type": "application/json" },
@@ -148,8 +150,8 @@ export default function GatewayBrowserSession() {
     <div className="flex h-full w-full flex-col overflow-hidden">
       {session.live ? (
         <CdpViewer
-          key={`${ctx.gatewayId}:${session.name}`}
-          wsUrl={buildCdpWsUrl(ctx.gatewayId, session.name)}
+          key={`${gw.id}:${session.name}`}
+          wsUrl={buildCdpWsUrl(gw.id, session.name)}
           leadingNode={sessionLabel}
           actionsNode={deleteButton}
         />

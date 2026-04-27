@@ -6,12 +6,17 @@ import { gatewayApi } from "~/services/gateway/transport.server";
 
 /**
  * POST /api/v1/gateways/:gatewayId/shell
- * body: { cwd? }
- * → { sessionId } — browser attaches to the gateway-direct xterm WS with
- *   this id to drive an interactive shell on the gateway host. Used by the
- *   per-gateway Terminal tab.
+ * body: { cwd?, fresh? }
+ * → { sessionId, resumed } — browser attaches to the gateway-direct xterm
+ *   WS with this id to drive an interactive shell on the gateway host. Used
+ *   by the per-gateway Terminal tab. `resumed: true` means the gateway
+ *   handed back its existing shell session (scrollback will replay on
+ *   attach); `fresh: true` forces a new session.
  */
-const Body = z.object({ cwd: z.string().optional() });
+const Body = z.object({
+  cwd: z.string().optional(),
+  fresh: z.boolean().optional(),
+});
 
 export async function action({ request, params }: ActionFunctionArgs) {
   if (request.method !== "POST") {
@@ -42,10 +47,14 @@ export async function action({ request, params }: ActionFunctionArgs) {
   const { status, body } = await gatewayApi<{
     ok: boolean;
     sessionId?: string;
+    resumed?: boolean;
     error?: string;
   }>(gatewayId, "/api/shell/spawn", {
     method: "POST",
-    body: JSON.stringify({ cwd: parsed.data.cwd }),
+    body: JSON.stringify({
+      cwd: parsed.data.cwd,
+      fresh: parsed.data.fresh,
+    }),
   });
   if (status >= 400 || !body.ok || !body.sessionId) {
     return json(
@@ -53,5 +62,5 @@ export async function action({ request, params }: ActionFunctionArgs) {
       { status: status >= 400 ? status : 502 },
     );
   }
-  return json({ sessionId: body.sessionId });
+  return json({ sessionId: body.sessionId, resumed: body.resumed ?? false });
 }
