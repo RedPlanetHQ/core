@@ -199,8 +199,13 @@ async function handleUpgrade(
   const upstreamUrl =
     resolved.baseUrl.replace(/^http/i, "ws").replace(/\/$/, "") +
     resolved.upstreamPath;
+  // permessage-deflate batches small frames before compressing, which adds
+  // perceptible latency to per-keystroke terminal traffic. Terminal output
+  // is already small and mostly ASCII — disabling deflate trades a bit of
+  // bandwidth for noticeably snappier typing in the Claude Code stream.
   const upstream = new WebSocket(upstreamUrl, {
     headers: { authorization: `Bearer ${securityKey}` },
+    perMessageDeflate: false,
   });
 
   // Buffer upstream frames that arrive before the client WS handshake
