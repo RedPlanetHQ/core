@@ -311,6 +311,47 @@ class PtyManager {
 		}
 	}
 
+	/**
+	 * Kill a session and wait for the OS to reap the PTY (so a follow-up `spawn`
+	 * with the same sessionId doesn't trip the "already running" guard). Falls
+	 * back to dropping the handle if the exit event doesn't arrive in time —
+	 * SIGKILL the underlying pid first to make sure we're not leaking a process.
+	 */
+	async killAndWait(
+		sessionId: string,
+		timeoutMs = 2000,
+	): Promise<boolean> {
+		const handle = this.handles.get(sessionId);
+		if (!handle) return false;
+		if (handle.exited) {
+			this.handles.delete(sessionId);
+			return true;
+		}
+
+		const exited = await new Promise<boolean>(resolve => {
+			const onExit = () => {
+				clearTimeout(timer);
+				resolve(true);
+			};
+			handle.exitSubscribers.add(onExit);
+			const timer = setTimeout(() => {
+				handle.exitSubscribers.delete(onExit);
+				resolve(false);
+			}, timeoutMs);
+			this.kill(sessionId, 'SIGTERM');
+		});
+
+		if (!exited) {
+			try {
+				handle.pty.kill('SIGKILL');
+			} catch {
+				/* ignore */
+			}
+		}
+		this.handles.delete(sessionId);
+		return true;
+	}
+
 	killAll(): void {
 		for (const sessionId of this.handles.keys()) {
 			this.kill(sessionId, 'SIGTERM');

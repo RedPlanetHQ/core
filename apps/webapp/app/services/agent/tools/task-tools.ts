@@ -285,6 +285,12 @@ FOLLOW-UP: Set isFollowUp=true and parentTaskId to reschedule an existing task.`
             }
 
             // Immediate task (no scheduling)
+            // Subtasks default to Waiting (they sit idle until parent is approved
+            // and the system transitions them to Todo sequentially).
+            // Top-level tasks default to Todo (with 2-min prep buffer).
+            const effectiveStatus =
+              parentTaskId && !initialStatus ? "Waiting" : undefined;
+
             const task = await createTask(
               workspaceId,
               userId,
@@ -292,6 +298,9 @@ FOLLOW-UP: Set isFollowUp=true and parentTaskId to reschedule an existing task.`
               undefined,
               {
                 ...(parentTaskId && { parentTaskId }),
+                ...(effectiveStatus && {
+                  status: effectiveStatus as TaskStatus,
+                }),
               },
             );
             if (description) {
@@ -303,7 +312,8 @@ FOLLOW-UP: Set isFollowUp=true and parentTaskId to reschedule an existing task.`
               await setPageContentFromHtml(page.id, description);
             }
             // Move to target status — Ready triggers auto-execution, Waiting gates on approval
-            if (initialStatus && initialStatus !== "Todo") {
+            // Skip if we already set effectiveStatus (subtask created in Waiting)
+            if (initialStatus && initialStatus !== "Todo" && !effectiveStatus) {
               try {
                 await changeTaskStatus(
                   task.id,
@@ -318,10 +328,12 @@ FOLLOW-UP: Set isFollowUp=true and parentTaskId to reschedule an existing task.`
               }
             }
             const label = parentTaskId ? "subtask" : "task";
-            const targetStatus = initialStatus ?? "Todo";
+            const targetStatus = effectiveStatus ?? initialStatus ?? "Todo";
             const statusNote =
               targetStatus === "Waiting"
-                ? "Waiting — send_message to user explaining what's needed."
+                ? parentTaskId
+                  ? "Waiting — will run when parent is approved."
+                  : "Waiting — send_message to user explaining what's needed."
                 : "Added to Todo (planning).";
             logger.info(
               `Task ${task.id} created (${targetStatus})${parentTaskId ? ` subtask of ${parentTaskId}` : ""}`,
@@ -509,7 +521,7 @@ REPARENTING: Pass newParentId to move a task under a different parent (or null t
           .enum(["Waiting", "Review"])
           .optional()
           .describe(
-            "New status. Use Waiting when blocked on the user, Review when finished — Review is your terminal state, stop after setting it. NEVER set Working: the system marks a task Working automatically when execution starts. To approve a Waiting task, use unblock_task instead.",
+            "New status. Waiting = needs user input. Review = work is done, your terminal state — once set, stop. The user will move Review → Done. To approve a Waiting task, use unblock_task. Working is set automatically by the system when a task starts running — agents must never set it.",
           ),
         title: z.string().optional().describe("Updated title"),
         description: z
@@ -725,9 +737,16 @@ REPARENTING: Pass newParentId to move a task under a different parent (or null t
             });
 
             // Phase-aware: prep → back to Todo (continue planning),
-            // execute → Ready (auto-enqueues, resumes execution)
+            // execute → Ready (auto-enqueues, resumes execution).
+            // EXCEPTION: if task has Waiting subtasks (butler decomposed it),
+            // approval means "start the subtask chain" — go to Ready.
             const phase = getTaskPhase(task);
-            const targetStatus = phase === "prep" ? "Todo" : "Ready";
+            const waitingSubtaskCount = await prisma.task.count({
+              where: { parentTaskId: taskId, status: "Waiting" },
+            });
+            const hasWaitingSubtasks = waitingSubtaskCount > 0;
+            const targetStatus =
+              phase === "prep" && !hasWaitingSubtasks ? "Todo" : "Ready";
 
             await changeTaskStatus(
               taskId,

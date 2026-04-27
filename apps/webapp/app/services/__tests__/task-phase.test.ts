@@ -112,6 +112,14 @@ describe("canTransition", () => {
     expect(canTransition("Waiting", "Working", "prep", "agent")).toBe(false);
   });
 
+  it("forbids agent Ready -> Working (system runner only)", () => {
+    expect(canTransition("Ready", "Working", "execute", "agent")).toBe(false);
+  });
+
+  it("forbids agent Waiting -> Working in execute (system runner only)", () => {
+    expect(canTransition("Waiting", "Working", "execute", "agent")).toBe(false);
+  });
+
   it("allows agent Todo -> Review (synchronous finish during prep)", () => {
     expect(canTransition("Todo", "Review", "prep", "agent")).toBe(true);
   });

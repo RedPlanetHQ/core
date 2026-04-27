@@ -86,9 +86,13 @@ export async function createTask(
   }
 
   const effectiveStatus = options?.status ?? "Todo";
-  // Initial phase: Todo → prep, everything else → execute (e.g., recurring
-  // tasks created in Ready via createScheduledTask skip prep entirely).
-  const initialPhase = effectiveStatus === "Todo" ? "prep" : "execute";
+  // Initial phase: Todo or Waiting → prep (task needs planning),
+  // everything else → execute (e.g., recurring tasks created in Ready
+  // via createScheduledTask skip prep entirely).
+  const initialPhase =
+    effectiveStatus === "Todo" || effectiveStatus === "Waiting"
+      ? "prep"
+      : "execute";
 
   const task = await prisma.task.create({
     data: {
@@ -267,7 +271,7 @@ export async function getNextBacklogSubtask(
   parentTaskId: string,
 ): Promise<Task | null> {
   return prisma.task.findFirst({
-    where: { parentTaskId, status: "Todo" },
+    where: { parentTaskId, status: "Waiting" },
     orderBy: { displayId: "asc" },
   });
 }
@@ -345,11 +349,18 @@ export async function changeTaskStatus(
     // nextRunAt is still valid and the scheduled wake-up will fire at the
     // right time. Only enqueue non-scheduled tasks right away.
     if (!current.schedule) {
-      // Check if this task has Todo subtasks — if so, enqueue the first one
-      // instead of the parent, and move parent to Working
+      // Check if this task has Waiting subtasks — if so, start the first one
+      // by transitioning it to Todo (which triggers enqueue via the
+      // Waiting→Todo handler above), and move parent to Working.
       const nextSubtask = await getNextBacklogSubtask(taskId);
       if (nextSubtask) {
-        await enqueueTask({ taskId: nextSubtask.id, workspaceId, userId });
+        await changeTaskStatus(
+          nextSubtask.id,
+          "Todo",
+          workspaceId,
+          userId,
+          "system",
+        );
         // Parent flips directly to Working/execute (subtask sequencing is its own
         // engine; parent doesn't need its own prep pass).
         await prisma.task.update({
@@ -366,29 +377,47 @@ export async function changeTaskStatus(
     }
   }
 
-  // Subtask completed — enqueue next Todo sibling, or auto-complete parent if all done
+  // Subtask completed — trigger next Waiting sibling (sequential flow only),
+  // or auto-complete parent if all done.
   if (status === "Done") {
     if (current.parentTaskId) {
-      const nextSibling = await getNextBacklogSubtask(current.parentTaskId);
-      if (nextSibling) {
-        await enqueueTask({ taskId: nextSibling.id, workspaceId, userId });
-      } else {
-        // No more Backlog siblings — check if all subtasks are done
-        const activeSubtasks = await prisma.task.count({
-          where: {
-            parentTaskId: current.parentTaskId,
-            status: { in: ["Todo", "Working"] },
-          },
-        });
-        if (activeSubtasks === 0) {
-          // Parent auto-completion is a system-on-behalf-of-user transition.
+      // Load parent to check if this is sequential flow or cherry-pick
+      const parentTask = await prisma.task.findUnique({
+        where: { id: current.parentTaskId },
+        select: { status: true },
+      });
+
+      // Only trigger next sibling if parent is Working (sequential flow).
+      // If parent is Waiting (not yet approved), this was a cherry-pick — don't cascade.
+      if (parentTask?.status === "Working") {
+        const nextSibling = await getNextBacklogSubtask(current.parentTaskId);
+        if (nextSibling) {
+          // Transition Waiting → Todo triggers enqueue
           await changeTaskStatus(
-            current.parentTaskId,
-            "Done",
+            nextSibling.id,
+            "Todo",
             workspaceId,
             userId,
-            "user",
+            "system",
           );
+        } else {
+          // No more Waiting siblings — check if all subtasks are done
+          const activeSubtasks = await prisma.task.count({
+            where: {
+              parentTaskId: current.parentTaskId,
+              status: { in: ["Todo", "Working", "Waiting"] },
+            },
+          });
+          if (activeSubtasks === 0) {
+            // Parent auto-completion is a system-on-behalf-of-user transition.
+            await changeTaskStatus(
+              current.parentTaskId,
+              "Done",
+              workspaceId,
+              userId,
+              "user",
+            );
+          }
         }
       }
     }
@@ -411,6 +440,18 @@ export async function changeTaskStatus(
     where: { id: taskId },
     data: { status, metadata: newMetadata },
   });
+
+  // Auto-transition: when a SUBTASK moves to Review in prep phase,
+  // skip the user approval gate and move directly to Ready.
+  // The user already approved the parent plan — subtasks execute autonomously.
+  if (
+    status === "Review" &&
+    current.parentTaskId &&
+    currentPhase === "prep"
+  ) {
+    return changeTaskStatus(taskId, "Ready", workspaceId, userId, "system");
+  }
+
   return task;
 }
 

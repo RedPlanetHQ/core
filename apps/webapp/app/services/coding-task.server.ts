@@ -88,13 +88,12 @@ export async function upsertPageSection(
   inputHtml: string,
 ): Promise<void> {
   const existingHtml = (await getPageContentAsHtml(pageId)) || "";
-  const existingDoc =
-    (existingHtml
-      ? (htmlToTiptapJson(existingHtml) as {
-          type: string;
-          content?: DocNode[];
-        })
-      : null) ?? { type: "doc", content: [] };
+  const existingDoc = (existingHtml
+    ? (htmlToTiptapJson(existingHtml) as {
+        type: string;
+        content?: DocNode[];
+      })
+    : null) ?? { type: "doc", content: [] };
   const inputDoc = htmlToTiptapJson(inputHtml) as {
     type: string;
     content?: DocNode[];
@@ -104,7 +103,6 @@ export async function upsertPageSection(
   const mergedHtml = tiptapJsonToHtml(merged);
   await setPageContentFromHtml(pageId, mergedHtml);
 }
-
 
 // ─── Reply Detection ────────────────────────────────────────────────
 // When a user replies to a conversation linked to a Waiting task,
@@ -132,9 +130,12 @@ export async function checkWaitingTaskReply(
 
     await changeTaskStatus(task.id, targetStatus, workspaceId, userId, "user");
 
-    logger.info(`Waiting task reply detected, moved to ${targetStatus} (phase: ${phase})`, {
-      taskId: task.id,
-      conversationId,
-    });
+    logger.info(
+      `Waiting task reply detected, moved to ${targetStatus} (phase: ${phase})`,
+      {
+        taskId: task.id,
+        conversationId,
+      },
+    );
   }
 }
