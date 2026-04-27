@@ -1,11 +1,11 @@
-import { useMemo } from "react";
+import { useCallback, useEffect, useMemo, useState } from "react";
 import {
   json,
   type LoaderFunctionArgs,
   type ActionFunctionArgs,
   type MetaFunction,
 } from "@remix-run/node";
-import { useLoaderData } from "@remix-run/react";
+import { useFetcher, useLoaderData, useRevalidator } from "@remix-run/react";
 import { requireUser, requireWorkpace } from "~/services/session.server";
 import { getIntegrationDefinitions } from "~/services/integrationDefinition.server";
 import { getIntegrationAccounts } from "~/services/integrationAccount.server";
@@ -18,6 +18,7 @@ import { OAuthAuthSection } from "~/components/integrations/oauth-auth-section";
 import { McpOAuthAuthSection } from "~/components/integrations/mcp-oauth-auth-section";
 import { Section } from "~/components/integrations/section";
 import { PageHeader } from "~/components/common/page-header";
+import { Button } from "~/components/ui/button";
 import { prisma } from "~/db.server";
 import { scheduler, unschedule } from "~/services/oauth/scheduler";
 import { Plus } from "lucide-react";
@@ -137,8 +138,37 @@ export function IntegrationDetail({
   const hasMCPAuth = !!(
     specData?.mcp?.type === "http" && specData?.mcp?.needsAuth
   );
+  const hasWidgets =
+    Array.isArray(specData?.widgets) && specData.widgets.length > 0;
+  const isWidgetOnly =
+    !hasApiKey && !hasOAuth2 && !hasMcpOAuth && !hasMCPAuth && hasWidgets;
   const hasAutoActivity = !!specData?.schedule && !!specData?.enableAutoRead;
   const Component = getIcon(integration.icon as IconType);
+
+  const installFetcher = useFetcher<{ success?: boolean; error?: string }>();
+  const revalidator = useRevalidator();
+  const [installError, setInstallError] = useState<string | null>(null);
+
+  const handleWidgetInstall = useCallback(() => {
+    setInstallError(null);
+    installFetcher.submit(
+      { integrationDefinitionId: integration.id },
+      {
+        method: "post",
+        action: "/api/v1/integration_account",
+        encType: "application/json",
+      },
+    );
+  }, [integration.id, installFetcher]);
+
+  useEffect(() => {
+    if (installFetcher.state !== "idle" || !installFetcher.data) return;
+    if (installFetcher.data.success) {
+      revalidator.revalidate();
+    } else if (installFetcher.data.error) {
+      setInstallError(installFetcher.data.error);
+    }
+  }, [installFetcher.state, installFetcher.data, revalidator]);
 
   return (
     <div className="flex h-full flex-col overflow-hidden">
@@ -200,48 +230,83 @@ export function IntegrationDetail({
                       </span>
                     </div>
                   )}
-                  {!hasApiKey && !hasOAuth2 && !hasMcpOAuth && !hasMCPAuth && (
-                    <div className="text-muted-foreground">
-                      No authentication method specified
+                  {isWidgetOnly && (
+                    <div className="flex items-center gap-2">
+                      <span className="inline-flex items-center gap-2">
+                        <Checkbox checked /> No authentication required
+                      </span>
                     </div>
                   )}
+                  {!hasApiKey &&
+                    !hasOAuth2 &&
+                    !hasMcpOAuth &&
+                    !hasMCPAuth &&
+                    !hasWidgets && (
+                      <div className="text-muted-foreground">
+                        No authentication method specified
+                      </div>
+                    )}
                 </div>
               </div>
 
               {/* Connect Section - Always show to allow adding more accounts */}
-              {(hasApiKey || hasOAuth2 || hasMcpOAuth) && (
-                <div className="mt-6 space-y-4">
-                  <h3 className="text-lg font-medium">
-                    {hasActiveAccounts
-                      ? `Add Another ${integration.name} Account`
-                      : `Connect to ${integration.name}`}
-                  </h3>
+              {(hasApiKey || hasOAuth2 || hasMcpOAuth || isWidgetOnly) &&
+                !(isWidgetOnly && hasActiveAccounts) && (
+                  <div className="mt-6 space-y-4">
+                    <h3 className="text-lg font-medium">
+                      {hasActiveAccounts
+                        ? `Add Another ${integration.name} Account`
+                        : `Connect to ${integration.name}`}
+                    </h3>
 
-                  {/* API Key Authentication */}
-                  <ApiKeyAuthSection
-                    integration={integration}
-                    specData={specData}
-                    activeAccount={null}
-                  />
-
-                  {/* OAuth Authentication */}
-                  <OAuthAuthSection
-                    integration={integration}
-                    specData={specData}
-                    activeAccount={null}
-                  />
-
-                  {/* MCP OAuth Authentication */}
-                  {hasMcpOAuth && (
-                    <McpOAuthAuthSection
+                    {/* API Key Authentication */}
+                    <ApiKeyAuthSection
                       integration={integration}
-                      activeAccount={
-                        hasActiveAccounts ? activeAccounts[0] : null
-                      }
+                      specData={specData}
+                      activeAccount={null}
                     />
-                  )}
-                </div>
-              )}
+
+                    {/* OAuth Authentication */}
+                    <OAuthAuthSection
+                      integration={integration}
+                      specData={specData}
+                      activeAccount={null}
+                    />
+
+                    {/* MCP OAuth Authentication */}
+                    {hasMcpOAuth && (
+                      <McpOAuthAuthSection
+                        integration={integration}
+                        activeAccount={
+                          hasActiveAccounts ? activeAccounts[0] : null
+                        }
+                      />
+                    )}
+
+                    {/* Widget-only install — same Connect button shape */}
+                    {isWidgetOnly && (
+                      <div className="bg-background-3 rounded-lg p-4">
+                        <Button
+                          type="button"
+                          variant="secondary"
+                          size="lg"
+                          disabled={installFetcher.state === "submitting"}
+                          onClick={handleWidgetInstall}
+                          className="w-full"
+                        >
+                          {installFetcher.state === "submitting"
+                            ? "Connecting..."
+                            : `Connect to ${integration.name}`}
+                        </Button>
+                        {installError && (
+                          <p className="text-destructive mt-2 text-sm">
+                            {installError}
+                          </p>
+                        )}
+                      </div>
+                    )}
+                  </div>
+                )}
 
               {/* Connected Accounts Info */}
               <ConnectedAccountSection
