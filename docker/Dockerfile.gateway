@@ -39,6 +39,7 @@ RUN apt-get update \
         curl \
         python3 \
         build-essential \
+        openssh-client \
     && rm -rf /var/lib/apt/lists/*
 
 # Coding agents — shipped so every gateway has claude + codex available out
