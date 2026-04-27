@@ -58,7 +58,26 @@ async function resolveTarget(
 }
 
 function pipeFrames(client: WebSocket, upstream: WebSocket): void {
+  // Edge proxies (Railway / ALB / Cloudflare) drop WS connections after
+  // 30–60s of silence. CDP traffic is bursty — a static page emits no
+  // screencast frames once Chromium considers it visually stable — so
+  // long-idle sessions disconnect even though both ends are alive. Ping
+  // both hops on a 25s cadence to keep proxy state warm.
+  const heartbeat = setInterval(() => {
+    try {
+      if (client.readyState === client.OPEN) client.ping();
+    } catch {
+      /* swallow */
+    }
+    try {
+      if (upstream.readyState === upstream.OPEN) upstream.ping();
+    } catch {
+      /* swallow */
+    }
+  }, 25_000);
+
   const closeBoth = (code = 1000, reason = "") => {
+    clearInterval(heartbeat);
     if (client.readyState === client.OPEN) client.close(code, reason);
     if (upstream.readyState === upstream.OPEN) upstream.close(code, reason);
   };
