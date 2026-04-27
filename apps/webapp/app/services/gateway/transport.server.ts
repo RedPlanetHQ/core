@@ -217,33 +217,78 @@ export async function fetchHealth(
  *
  * Returns the gateway's self-reported identity on success, null on failure.
  */
+export type VerifyGatewayResult =
+  | {
+      ok: true;
+      gatewayId: string | null;
+      hostname: string | null;
+      platform: string | null;
+    }
+  | { ok: false; reason: string };
+
 export async function verifyGateway(
   baseUrl: string,
   securityKey: string,
-): Promise<{
-  gatewayId: string | null;
-  hostname: string | null;
-  platform: string | null;
-} | null> {
+): Promise<VerifyGatewayResult> {
+  const url = `${baseUrl.replace(/\/$/, "")}/verify`;
+  let res: Response;
   try {
-    const res = await fetch(`${baseUrl.replace(/\/$/, "")}/verify`, {
+    res = await fetch(url, {
       headers: { authorization: `Bearer ${securityKey}` },
       signal: AbortSignal.timeout(10_000),
     });
-    if (!res.ok) return null;
-    const body = (await res.json()) as {
-      ok?: boolean;
-      gatewayId?: string | null;
-      hostname?: string | null;
-      platform?: string | null;
-    };
-    if (!body.ok) return null;
+  } catch (err) {
+    const detail =
+      err instanceof Error
+        ? err.name === "TimeoutError" || err.name === "AbortError"
+          ? "request timed out after 10s"
+          : err.message
+        : String(err);
     return {
-      gatewayId: body.gatewayId ?? null,
-      hostname: body.hostname ?? null,
-      platform: body.platform ?? null,
+      ok: false,
+      reason: `Could not reach ${url} from the CORE server (${detail}). If you used \`tailscale funnel\`, make sure the funnel is up and publicly reachable.`,
     };
-  } catch {
-    return null;
   }
+
+  if (res.status === 401) {
+    return {
+      ok: false,
+      reason: "Gateway rejected the security key (401). Re-copy the value from the CLI output and retry.",
+    };
+  }
+  if (!res.ok) {
+    const body = await res.text().catch(() => "");
+    return {
+      ok: false,
+      reason: `Gateway responded ${res.status} at /verify${body ? `: ${body.slice(0, 200)}` : ""}`,
+    };
+  }
+
+  let body: {
+    ok?: boolean;
+    gatewayId?: string | null;
+    hostname?: string | null;
+    platform?: string | null;
+  };
+  try {
+    body = (await res.json()) as typeof body;
+  } catch {
+    return {
+      ok: false,
+      reason: "Gateway responded 200 but body was not JSON — is the URL pointing at the gateway daemon?",
+    };
+  }
+  if (!body.ok) {
+    return {
+      ok: false,
+      reason: "Gateway returned ok:false at /verify",
+    };
+  }
+
+  return {
+    ok: true,
+    gatewayId: body.gatewayId ?? null,
+    hostname: body.hostname ?? null,
+    platform: body.platform ?? null,
+  };
 }

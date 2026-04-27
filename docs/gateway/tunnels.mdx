@@ -1,0 +1,164 @@
+---
+title: "Tunnels"
+description: "Expose a gateway running on your laptop to CORE over Tailscale Funnel or ngrok"
+---
+
+When the gateway runs on `127.0.0.1` it is only reachable from the same machine. To let CORE call it from the cloud — without opening a port on your router or putting the gateway on a public host — register it through a tunnel. The CLI ships first-class support for **Tailscale Funnel** and **ngrok**, and `corebrain gateway register` will start, track, and tear down the tunnel for you.
+
+If your gateway already has a public URL (Railway, Fly, Cloudflare in front of a Docker host, etc.), you don't need this — pick **none** at register time and paste the URL yourself.
+
+---
+
+## Choosing a tunnel
+
+<CardGroup cols={2}>
+  <Card title="Tailscale Funnel" icon="shield">
+    Stable URL tied to your tailnet. Best when the gateway will run for days or weeks, or when you already use Tailscale. Free for personal use.
+  </Card>
+
+  <Card title="ngrok" icon="bolt">
+    Fastest to set up — one auth token and you have an HTTPS URL in seconds. Free-tier URLs change on every restart; paid plans give you a stable subdomain.
+  </Card>
+</CardGroup>
+
+Either way, traffic is HTTPS-terminated by the tunnel and the gateway still requires `Authorization: Bearer gwk_<key>` on every request.
+
+---
+
+## Tailscale Funnel
+
+### Prerequisites
+
+<Steps>
+  <Step title="Install the Tailscale CLI">
+    Follow the install guide at <a href="https://tailscale.com/download">tailscale.com/download</a>. Verify with:
+
+    ```bash
+    tailscale version
+    ```
+  </Step>
+
+  <Step title="Log in to your tailnet">
+    ```bash
+    sudo tailscale up
+    ```
+
+    Funnel is a per-tailnet feature — your account needs to be the owner, or an admin must have enabled it for you.
+  </Step>
+
+  <Step title="Enable Funnel for this device">
+    Open the Tailscale admin console → **DNS** → **HTTPS Certificates** (turn on) → **Access Controls** → add a Funnel ACL grant for the device, e.g.:
+
+    ```hujson
+    "nodeAttrs": [
+      { "target": ["autogroup:member"], "attr": ["funnel"] }
+    ]
+    ```
+
+    Full reference: <a href="https://tailscale.com/kb/1223/funnel">Tailscale Funnel docs</a>.
+  </Step>
+</Steps>
+
+### Register the gateway
+
+```bash
+corebrain gateway register --tunnel tailscale
+```
+
+Under the hood this runs `tailscale funnel --bg <port>` and reads the public URL from `tailscale funnel status`. The URL has the shape `https://<device>.<tailnet>.ts.net` and persists across reboots as long as the device stays in your tailnet.
+
+The CLI stores the funnel's PID under your gateway preferences, so `corebrain gateway stop` shuts the funnel down with the service.
+
+### Troubleshooting
+
+- **`tailscale not found on PATH`** — install the CLI and re-run. On macOS Homebrew users, `brew install tailscale` only installs the daemon helper; for the CLI binary install the App Store / `.pkg` build or use `brew install --cask tailscale`.
+- **`tailscale funnel started but no public URL appeared within 5s`** — Funnel is not yet enabled for this device. Check the admin console (HTTPS certs + Funnel grant) and try again.
+- **Funnel works but CORE can't reach the gateway** — confirm the gateway is bound to `0.0.0.0` (it is by default) and that the port matches `corebrain gateway status`.
+
+---
+
+## ngrok
+
+### Prerequisites
+
+<Steps>
+  <Step title="Install the ngrok CLI">
+    macOS:
+
+    ```bash
+    brew install ngrok
+    ```
+
+    Linux / Windows: see <a href="https://ngrok.com/download">ngrok.com/download</a>. Verify:
+
+    ```bash
+    ngrok version
+    ```
+  </Step>
+
+  <Step title="Add your auth token">
+    Sign in at <a href="https://dashboard.ngrok.com">dashboard.ngrok.com</a>, copy your authtoken, then:
+
+    ```bash
+    ngrok config add-authtoken <YOUR_TOKEN>
+    ```
+
+    Without this step ngrok will start, but the public URL will fail TLS handshake with `ERR_NGROK_4018`.
+  </Step>
+</Steps>
+
+### Register the gateway
+
+```bash
+corebrain gateway register --tunnel ngrok
+```
+
+The CLI runs `ngrok http <port>` in the background and queries ngrok's local API on `127.0.0.1:4040` to discover the public HTTPS URL. The URL is captured as your gateway's `baseUrl` and the ngrok process PID is tracked alongside it.
+
+`corebrain gateway stop` will SIGTERM the ngrok process so the public endpoint stops pointing at a dead port.
+
+### Stable URLs
+
+Free-tier ngrok URLs change every restart, which means re-pasting the URL in **Settings → Gateways** every time you reboot. To avoid that:
+
+- **Reserved domain (paid):** create one in the ngrok dashboard, then run ngrok manually with `ngrok http --domain=<your>.ngrok.app <port>` and register with `--tunnel none --baseUrl https://<your>.ngrok.app`.
+- **Static TCP / edge:** also supported via `--tunnel none` — anything that gives you a fixed `https://...` URL works.
+
+### Troubleshooting
+
+- **`ngrok did not expose a public URL within 15s`** — the most common cause is a missing authtoken. Run `ngrok config add-authtoken …`.
+- **`bind: address already in use` on 4040** — another ngrok process is already running. Kill it (`pkill ngrok`) before re-registering.
+- **Free-tier "interstitial" page** — ngrok shows a one-time browser warning page on free URLs. CORE's requests are HTTP API calls and bypass it; you only see it in your browser.
+
+---
+
+## Bring your own URL
+
+Pick this when the gateway already has a stable public address — Railway, Fly, Render, Cloudflare Tunnel, an internal load balancer, etc.
+
+```bash
+corebrain gateway register --tunnel none --baseUrl https://my-gateway.example.com
+```
+
+No subprocess is started; the CLI just records the URL and prints the security key. You are responsible for making sure that URL terminates HTTPS and forwards to the gateway port (default `7787`).
+
+---
+
+## Inspecting and stopping a tunnel
+
+```bash
+corebrain gateway status      # shows tunnel kind + pid
+corebrain gateway stop        # stops the gateway and the tunnel
+corebrain gateway register    # re-run to swap to a different tunnel
+```
+
+If you need to swap tunnels mid-session — say from ngrok to Tailscale — run `corebrain gateway stop`, then `corebrain gateway register --tunnel <new>`. The CLI generates a fresh security key on every register; paste the new pair into **Settings → Gateways → Edit** in the webapp.
+
+---
+
+## Security notes
+
+- The tunnel only carries HTTPS — your security key never traverses plaintext.
+- The gateway still validates `Authorization: Bearer …` on every request. A leaked tunnel URL alone cannot reach any tool.
+- Slot toggles (`corebrain gateway config`) are enforced at the route layer — disabling Browser, Coding, or Exec removes their HTTP routes entirely, so a stolen key still cannot hit them through the tunnel.
+- Both Tailscale Funnel and ngrok log connection metadata. If that's a concern for your threat model, prefer Tailscale (private-by-default tailnet, with Funnel as an explicit opt-in) or self-host with `--tunnel none`.

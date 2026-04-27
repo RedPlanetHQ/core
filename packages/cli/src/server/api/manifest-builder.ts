@@ -179,6 +179,7 @@ export function buildManifest(): {manifest: Manifest; etag: string} {
 		gateway: {
 			id: gw.id ?? 'pending',
 			name: gw.name ?? `${hostname()}-gateway`,
+			...(gw.description ? {description: gw.description} : {}),
 			version: cliVersion,
 			platform: platform(),
 			hostname: hostname(),

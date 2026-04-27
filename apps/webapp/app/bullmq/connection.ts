@@ -21,6 +21,7 @@ export function getRedisConnection() {
     password: process.env.REDIS_PASSWORD,
     maxRetriesPerRequest: null, // Required for BullMQ
     enableReadyCheck: false, // Required for BullMQ
+    autoPipelining: true, // Coalesce concurrent commands to avoid ENOBUFS under burst load
   };
 
   // Add TLS configuration if not disabled
@@ -60,10 +61,20 @@ let _streamContext: ResumableStreamContext | null = null;
 export function getResumableStreamContext(): ResumableStreamContext {
   if (!_streamContext) {
     const base = getRedisConnection();
+    // Dedicated pub/sub connections so XADD bursts from streaming don't
+    // contend with BullMQ traffic on the shared socket.
+    const publisher = base.duplicate();
+    const subscriber = base.duplicate();
+    publisher.on("error", (error) => {
+      console.error("Redis resumable-stream publisher error:", error);
+    });
+    subscriber.on("error", (error) => {
+      console.error("Redis resumable-stream subscriber error:", error);
+    });
     _streamContext = createResumableStreamContext({
       waitUntil: null, // long-running server process — no keepalive needed
-      publisher: base.duplicate(),
-      subscriber: base.duplicate(),
+      publisher,
+      subscriber,
     });
   }
   return _streamContext;

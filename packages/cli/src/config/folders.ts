@@ -24,6 +24,18 @@ function isUnderCorebrainHome(abs: string): boolean {
 	return abs === COREBRAIN_HOME || abs.startsWith(COREBRAIN_HOME + '/');
 }
 
+// Best-effort realpath. Used only for security in `resolveFolderForPath` —
+// the stored folder path stays in the user-supplied form so symlinked
+// workspaces (e.g. Railway's `/app → /mnt/volume/workspace`) show as `/app`
+// in the UI and match the terminal's `pwd`.
+function realpathSafe(p: string): string {
+	try {
+		return realpathSync(p);
+	} catch {
+		return p;
+	}
+}
+
 export function listFolders(): StoredFolder[] {
 	return getPreferences().gateway?.folders ?? [];
 }
@@ -33,18 +45,18 @@ export function addFolder(input: {
 	path: string;
 	scopes: Scope[];
 }): StoredFolder {
-	const abs = realpathSync(resolve(input.path));
-	if (!existsSync(abs) || !statSync(abs).isDirectory()) {
-		throw new Error(`Not a directory: ${abs}`);
+	const inputPath = resolve(input.path);
+	if (!existsSync(inputPath) || !statSync(inputPath).isDirectory()) {
+		throw new Error(`Not a directory: ${inputPath}`);
 	}
 
 	const folders = listFolders();
-	if (folders.some(f => f.path === abs)) {
-		throw new Error(`Folder already registered: ${abs}`);
+	if (folders.some(f => f.path === inputPath)) {
+		throw new Error(`Folder already registered: ${inputPath}`);
 	}
 
 	const name =
-		input.name ?? abs.split('/').filter(Boolean).pop() ?? 'folder';
+		input.name ?? inputPath.split('/').filter(Boolean).pop() ?? 'folder';
 	if (folders.some(f => f.name === name)) {
 		throw new Error(`Folder name in use: ${name}`);
 	}
@@ -56,9 +68,9 @@ export function addFolder(input: {
 	const folder: StoredFolder = {
 		id: `fld_${randomUUID()}`,
 		name,
-		path: abs,
+		path: inputPath,
 		scopes: Array.from(new Set(input.scopes)),
-		gitRepo: existsSync(`${abs}/.git`),
+		gitRepo: existsSync(`${inputPath}/.git`),
 	};
 
 	const prefs = getPreferences();
@@ -146,11 +158,15 @@ export function resolveFolderForPath(
 		return {folder: COREBRAIN_HOME_FOLDER, absPath: abs};
 	}
 
-	const folder = listFolders().find(
-		f =>
-			f.scopes.includes(scope) &&
-			(abs === f.path || abs.startsWith(f.path + '/')),
-	);
+	// Compare against realpath of `f.path` too — `f.path` may be a symlink
+	// (e.g. Railway's `/app → /mnt/volume/workspace`) while `abs` is already
+	// the physical path.
+	const folder = listFolders().find(f => {
+		if (!f.scopes.includes(scope)) return false;
+		if (abs === f.path || abs.startsWith(f.path + '/')) return true;
+		const real = realpathSafe(f.path);
+		return abs === real || abs.startsWith(real + '/');
+	});
 	return folder ? {folder, absPath: abs} : null;
 }
 

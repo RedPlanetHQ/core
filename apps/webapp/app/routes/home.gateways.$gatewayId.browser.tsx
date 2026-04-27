@@ -1,13 +1,13 @@
-import { Outlet, useNavigate, useOutletContext, useParams } from "@remix-run/react";
+import { Outlet, useNavigate, useParams } from "@remix-run/react";
 import { useCallback, useEffect, useState } from "react";
 import {
   useSetBrowserActions,
   type BrowserProfileItem,
   type BrowserSessionItem,
 } from "~/components/browser/browser-actions-context";
-import type { GatewayOutletContext } from "./home.gateways.$gatewayId";
+import { useGateway } from "~/components/gateway/gateway-provider";
 
-export interface GatewayBrowserOutletContext extends GatewayOutletContext {
+export interface GatewayBrowserOutletContext {
   sessions: BrowserSessionItem[] | null;
   profiles: BrowserProfileItem[];
   loadError: string | null;
@@ -21,7 +21,7 @@ export interface GatewayBrowserOutletContext extends GatewayOutletContext {
  * `:sessionName`, and clicking a session in the popover navigates there.
  */
 export default function GatewayBrowserLayout() {
-  const ctx = useOutletContext<GatewayOutletContext>();
+  const gw = useGateway();
   const params = useParams();
   const navigate = useNavigate();
   const setBrowserActions = useSetBrowserActions();
@@ -38,7 +38,7 @@ export default function GatewayBrowserLayout() {
     setLoadError(null);
     try {
       const res = await fetch(
-        `/api/v1/gateways/${ctx.gatewayId}/browser-sessions`,
+        `/api/v1/gateways/${gw.id}/browser-sessions`,
       );
       if (!res.ok) {
         const body = (await res.json().catch(() => ({}))) as { error?: string };
@@ -53,7 +53,7 @@ export default function GatewayBrowserLayout() {
     } catch (err) {
       setLoadError(err instanceof Error ? err.message : String(err));
     }
-  }, [ctx.gatewayId]);
+  }, [gw.id]);
 
   useEffect(() => {
     refresh();
@@ -65,9 +65,9 @@ export default function GatewayBrowserLayout() {
 
   const handleSelect = useCallback(
     (name: string) => {
-      navigate(`/home/gateways/${ctx.gatewayId}/browser/${encodeURIComponent(name)}`);
+      navigate(`/home/gateways/${gw.id}/browser/${encodeURIComponent(name)}`);
     },
-    [ctx.gatewayId, navigate],
+    [gw.id, navigate],
   );
 
   const handleLaunch = useCallback(
@@ -76,7 +76,7 @@ export default function GatewayBrowserLayout() {
       setLaunchError(null);
       try {
         const res = await fetch(
-          `/api/v1/gateways/${ctx.gatewayId}/browser/launch`,
+          `/api/v1/gateways/${gw.id}/browser/launch`,
           {
             method: "POST",
             headers: { "Content-Type": "application/json" },
@@ -96,13 +96,13 @@ export default function GatewayBrowserLayout() {
         setLaunching(null);
       }
     },
-    [ctx.gatewayId, handleSelect, refresh],
+    [gw.id, handleSelect, refresh],
   );
 
   const handleCreate = useCallback(
     async (name: string, profile: string) => {
       const res = await fetch(
-        `/api/v1/gateways/${ctx.gatewayId}/browser/sessions`,
+        `/api/v1/gateways/${gw.id}/browser/sessions`,
         {
           method: "POST",
           headers: { "Content-Type": "application/json" },
@@ -116,7 +116,7 @@ export default function GatewayBrowserLayout() {
       await refresh();
       handleSelect(name);
     },
-    [ctx.gatewayId, handleSelect, refresh],
+    [gw.id, handleSelect, refresh],
   );
 
   useEffect(() => {
@@ -148,7 +148,6 @@ export default function GatewayBrowserLayout() {
   ]);
 
   const childCtx: GatewayBrowserOutletContext = {
-    ...ctx,
     sessions,
     profiles,
     loadError,

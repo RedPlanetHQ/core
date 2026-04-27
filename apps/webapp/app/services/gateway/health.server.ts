@@ -32,6 +32,35 @@ export async function refreshGatewayHealth(
         }
       : {},
   );
+
+  // Sync user-editable identity fields (name, description) from the
+  // manifest so the gateway list and other DB-bound consumers stay in step
+  // with COREBRAIN_GATEWAY_NAME / _DESCRIPTION env-var changes on the
+  // gateway side. Best-effort: a unique-name collision (P2002) falls back
+  // to syncing description only — the live UI keeps showing the manifest
+  // name via the provider, but the DB row stays unchanged so we don't
+  // overwrite a sibling gateway.
+  if (m) {
+    const name = m.manifest.gateway.name?.trim();
+    const description = m.manifest.gateway.description?.trim() ?? null;
+    try {
+      await prisma.gateway.update({
+        where: { id: gatewayId },
+        data: {
+          ...(name ? { name } : {}),
+          description,
+        },
+      });
+    } catch (err) {
+      const code = (err as { code?: string } | null)?.code;
+      if (code === "P2002") {
+        await prisma.gateway
+          .update({ where: { id: gatewayId }, data: { description } })
+          .catch(() => {});
+      }
+    }
+  }
+
   return "connected";
 }
 

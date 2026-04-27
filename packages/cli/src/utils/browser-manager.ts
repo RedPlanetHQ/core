@@ -1,4 +1,6 @@
 import fs from 'node:fs';
+import os from 'node:os';
+import path from 'node:path';
 import {getProfileDir, getBrowserExecutable, getSessionConfig} from '@/utils/browser-config';
 import {gatewayLog} from '@/server/gateway-log';
 
@@ -256,6 +258,89 @@ export async function closeAllSessions(): Promise<{success: boolean}> {
 	const names = [...sessionMap.keys()];
 	await Promise.allSettled(names.map(async name => closeSession(name)));
 	return {success: true};
+}
+
+const SINGLETON_FILES = ['SingletonLock', 'SingletonCookie', 'SingletonSocket'];
+
+/**
+ * Decide whether `profileDir` holds a stale Chromium SingletonLock. Chromium
+ * writes the lock as a symlink whose target is `<hostname>-<pid>`. If the
+ * hostname differs from ours (different container) or the pid isn't alive,
+ * the lock is left over from a prior process and Brave will refuse to launch
+ * until it's removed.
+ */
+function lockIsStale(profileDir: string): boolean {
+	const lockPath = path.join(profileDir, 'SingletonLock');
+	let target: string;
+	try {
+		target = fs.readlinkSync(lockPath);
+	} catch (err) {
+		if ((err as NodeJS.ErrnoException).code === 'ENOENT') return false;
+		// File exists but isn't a symlink we can read — unparseable, treat as
+		// stale so we clear it rather than leave Brave wedged.
+		return true;
+	}
+
+	// Hostnames can contain hyphens (Docker uses 12-char hex which can't, but
+	// be defensive), so split from the right.
+	const dash = target.lastIndexOf('-');
+	if (dash < 0) return true;
+	const host = target.slice(0, dash);
+	const pid = Number(target.slice(dash + 1));
+
+	if (host !== os.hostname()) return true;
+	if (!Number.isFinite(pid) || pid <= 0) return true;
+
+	try {
+		process.kill(pid, 0);
+		return false;
+	} catch {
+		return true;
+	}
+}
+
+/**
+ * Walk every profile under `~/.corebrain/browser-profiles/` and remove
+ * Chromium singleton files left over from a prior process (different
+ * container hostname, or same host but the pid is gone). Safe to call only
+ * at gateway boot — within a live process, `sessionMap` is the source of
+ * truth for which profiles are in use, and Chromium manages the lock files
+ * itself.
+ */
+export function clearStaleProfileLocks(): {cleared: string[]} {
+	const profilesRoot = path.join(os.homedir(), '.corebrain', 'browser-profiles');
+	const cleared: string[] = [];
+	if (!fs.existsSync(profilesRoot)) return {cleared};
+
+	let entries: string[];
+	try {
+		entries = fs.readdirSync(profilesRoot);
+	} catch {
+		return {cleared};
+	}
+
+	for (const entry of entries) {
+		const profileDir = path.join(profilesRoot, entry);
+		try {
+			if (!fs.statSync(profileDir).isDirectory()) continue;
+		} catch {
+			continue;
+		}
+
+		if (!lockIsStale(profileDir)) continue;
+
+		for (const name of SINGLETON_FILES) {
+			try {
+				fs.rmSync(path.join(profileDir, name), {force: true});
+			} catch {
+				/* best effort */
+			}
+		}
+		cleared.push(entry);
+		gatewayLog(`browser: cleared stale profile lock for "${entry}"`);
+	}
+
+	return {cleared};
 }
 
 export function getLiveSessions(): string[] {

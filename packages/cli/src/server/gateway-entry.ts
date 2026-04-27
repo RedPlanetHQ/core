@@ -9,6 +9,7 @@ import {getPreferences, updatePreferences} from '../config/preferences.js';
 import {startServer} from './api/server.js';
 import {ptyManager} from './pty/manager.js';
 import {gatewayLog, GATEWAY_LOG_FILE} from './gateway-log.js';
+import {clearStaleProfileLocks, closeAllSessions} from '../utils/browser-manager.js';
 
 const LOG_MAX_AGE_DAYS = 3;
 
@@ -38,6 +39,19 @@ async function main() {
 	clearOldLogs();
 	log('Starting gateway daemon...');
 
+	// Containers (Railway et al.) hard-kill the previous gateway, leaving
+	// Chromium SingletonLock symlinks in browser-profile dirs that point at
+	// the prior container's hostname/pid. Brave refuses to launch against
+	// those, so evict them before any browser session can start.
+	try {
+		const {cleared} = clearStaleProfileLocks();
+		if (cleared.length > 0) {
+			log(`Cleared stale browser-profile locks: ${cleared.join(', ')}`);
+		}
+	} catch (err) {
+		log(`clearStaleProfileLocks failed: ${(err as Error).message}`);
+	}
+
 	const prefs = getPreferences();
 	const gw = prefs.gateway;
 
@@ -61,14 +75,33 @@ async function main() {
 		process.exit(1);
 	}
 
-	const shutdown = (signal: string) => {
+	let shuttingDown = false;
+	const shutdown = async (signal: string) => {
+		if (shuttingDown) return;
+		shuttingDown = true;
 		log(`Shutting down (${signal})...`);
 		ptyManager.killAll();
+		try {
+			// Bound the wait so a wedged Playwright doesn't keep us past the
+			// container's grace period (Railway sends SIGKILL after ~30s).
+			await Promise.race([
+				closeAllSessions(),
+				new Promise(resolve => setTimeout(resolve, 5000)),
+			]);
+		} catch (err) {
+			log(
+				`closeAllSessions error: ${err instanceof Error ? err.message : String(err)}`,
+			);
+		}
 		process.exit(0);
 	};
 
-	process.on('SIGTERM', () => shutdown('SIGTERM'));
-	process.on('SIGINT', () => shutdown('SIGINT'));
+	process.on('SIGTERM', () => {
+		void shutdown('SIGTERM');
+	});
+	process.on('SIGINT', () => {
+		void shutdown('SIGINT');
+	});
 
 	process.on('uncaughtException', (err) => {
 		log(`Uncaught exception: ${err.message}`);

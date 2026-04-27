@@ -1,5 +1,5 @@
 import {randomUUID} from 'node:crypto';
-import {existsSync, realpathSync, statSync} from 'node:fs';
+import {existsSync, statSync} from 'node:fs';
 import {resolve} from 'node:path';
 import {updateConfig, getConfig} from '@/config/index';
 import {getPreferences, updatePreferences} from '@/config/preferences';
@@ -110,14 +110,20 @@ export function bootstrapFromEnv(): string[] {
 	// as a coding+files+exec folder so a brand-new container is immediately
 	// usable from the webapp's "New coding session" dialog without the user
 	// having to add a folder manually.
+	//
+	// We store the env-supplied path as-is (e.g. `/app`) instead of its
+	// realpath. On Railway the workspace is a symlink to `/mnt/volume/...`
+	// so the volume persists across restarts, but `/app` is the form the
+	// terminal prompt and tooling use — that's what should appear in the UI.
 	const foldersPatch: {folders?: StoredFolder[]} = {};
 	if (defaultWorkspace && existsSync(defaultWorkspace)) {
 		try {
-			const abs = realpathSync(resolve(defaultWorkspace));
-			if (statSync(abs).isDirectory()) {
+			const inputPath = resolve(defaultWorkspace);
+			if (statSync(inputPath).isDirectory()) {
 				const existingFolders = existing.folders ?? [];
-				if (!existingFolders.some(f => f.path === abs)) {
-					const baseName = abs.split('/').filter(Boolean).pop() ?? 'app';
+				if (!existingFolders.some(f => f.path === inputPath)) {
+					const baseName =
+						inputPath.split('/').filter(Boolean).pop() ?? 'app';
 					let name = baseName;
 					for (let i = 2; existingFolders.some(f => f.name === name); i++) {
 						name = `${baseName}-${i}`;
@@ -127,12 +133,12 @@ export function bootstrapFromEnv(): string[] {
 						{
 							id: `fld_${randomUUID()}`,
 							name,
-							path: abs,
+							path: inputPath,
 							scopes: ['files', 'coding', 'exec'],
-							gitRepo: existsSync(`${abs}/.git`),
+							gitRepo: existsSync(`${inputPath}/.git`),
 						},
 					];
-					applied.push(`folder:${name}=${abs}`);
+					applied.push(`folder:${name}=${inputPath}`);
 				}
 			}
 		} catch {

@@ -1,0 +1,69 @@
+---
+title: "Scratchpad"
+description: "Your daily page — a place to think out loud where the butler can read along"
+---
+
+## What it is
+
+The Scratchpad is the daily page CORE creates for you the moment you log in. One page per day, scoped to your local timezone. It's a collaborative block editor (paragraphs, headings, lists, tasks, code blocks, tables) backed by Yjs, so it autosaves and survives across devices without a save button.
+
+You can use it like any notes app — but the butler is reading along. There are two ways to put it to work.
+
+---
+
+## Two ways to engage the butler
+
+<CardGroup cols={2}>
+  <Card title="Write a task with [ ]" icon="square-check">
+    Type `[ ]` to start a checkbox item. The line becomes a real task the moment you stop typing — within ~2 minutes the butler picks it up and starts working on it. You'll see its progress on the task's badge right inside the scratchpad.
+  </Card>
+
+  <Card title="Mention with @butler" icon="at">
+    Type `@butler` followed by an instruction. After a short idle pause the butler reads the paragraph, runs your request, and replies as a comment attached to that paragraph — so the answer lives next to the question.
+  </Card>
+</CardGroup>
+
+The split is intentional: tasks are *work the butler should run on its own and report back when done*; mentions are *a question or instruction you want answered right here in the page*.
+
+---
+
+## How `[ ]` tasks work
+
+A `[ ]` line isn't just text formatting — it's bound to a real Task in CORE the instant you create it.
+
+- Typing `[ ]` (or using the `Task` slash command) inserts a checkbox item, creates a Task row with `source: "daily"`, and links it to the scratchpad.
+- The text you type becomes the task title. Edits autosave to the task as you type.
+- The task shows a butler-run badge with the next scheduled run time. Within roughly two minutes the butler claims it and starts execution.
+- Click the task's display id (e.g. `T-142`) to jump to its full task page — descriptions, subtasks, activity log, runs.
+- Check the box to mark it Done. Uncheck to send it back to Todo.
+- Delete the line and the task is cleaned up automatically — *unless* you've already typed a title or the butler has added context, in which case the task is preserved and you can find it on the tasks list.
+
+This is why a Scratchpad task "just works" — you write a checkbox, it's now a tracked unit of work the butler will pick up and report back on, and you didn't have to leave the page to make any of that happen.
+
+---
+
+## How `@butler` mentions work
+
+`@butler` is for answers you want inline. Type it followed by an instruction, keep writing, and a few seconds after you stop, the butler reads the paragraph, runs the request through the CORE Agent, and posts a comment on the paragraph with what it found or did.
+
+A few things worth knowing:
+
+- The mention text (minus `@butler`) is what the butler sees as your instruction — keep the rest of the paragraph self-contained.
+- A comment shows up right on that paragraph; click it to expand the response and to open the underlying conversation if you want to follow up in chat.
+- Each mention is processed once — the butler tracks which paragraphs it has already answered on, so editing unrelated text won't re-trigger it. Edit the paragraph itself if you want a fresh reply.
+
+Use `@butler` for things you want answered *now and visible in context*: "@butler what did Manoj say last time about the partnership?" / "@butler summarize my open Linear issues."
+
+---
+
+## Widgets in the side panel
+
+Open the **Widgets** button in the daily header to dock a widget panel alongside the page. It's the same widget system as the [Overview](/concepts/widgets) page, but the layout is scoped to the Scratchpad — useful when you want a calendar, your inbox, or a Linear queue visible while you plan the day. Layouts persist per workspace.
+
+You can also embed a widget *inline* in the page itself: type `/` and pick a widget from the slash menu to drop it as a block. Inline widgets carry their own per-block config and travel with whatever you write around them.
+
+---
+
+## Why a daily page (not one big page)
+
+A new page every day forces a clean break: yesterday's open loops are still in memory and searchable, but they're not staring at you. The butler treats today as the source of truth for what's currently top-of-mind, which is what makes the `[ ]` and `@butler` flows feel light — the butler has a small, fresh surface to reason about instead of an ever-growing journal.

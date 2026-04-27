@@ -59,14 +59,8 @@ const { action, loader } = createHybridActionApiRoute(
       body.securityKey ?? (await readSecurityKey(gateway.id));
 
     const probe = await verifyGateway(nextBaseUrl, nextSecurityKey);
-    if (!probe) {
-      return json(
-        {
-          error:
-            "Gateway is not reachable with the supplied URL and key. Double-check both and try again.",
-        },
-        { status: 400 },
-      );
+    if (!probe.ok) {
+      return json({ error: probe.reason }, { status: 400 });
     }
 
     await updateGatewayConnection(gateway.id, {
