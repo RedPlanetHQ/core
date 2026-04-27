@@ -265,8 +265,10 @@ WHEN TO DELEGATE TO A GATEWAY (not the orchestrator, not gather_context, not web
 
 → exec capability — use when the intent needs a real shell on a real machine: running scripts, system admin, anything that touches local files outside the codebase scope.
 
+→ files capability — use when the intent is direct file read/write/edit on the gateway machine (read a config, edit a dotfile, write a small script to disk). For anything that involves running code or commands, prefer exec or coding instead.
+
 PICKING A GATEWAY:
-1. Identify which capability the intent needs (browser / coding / exec).
+1. Identify which capability the intent needs (browser / coding / exec / files).
 2. Scan <connected_gateways> for one whose [capabilities: …] tag includes it.
 3. If multiple match, prefer the one whose description matches the context (personal vs work, mac vs cloud).
 4. If [capabilities: unknown] is the only match, try delegating anyway — the manifest may have failed to load but the gateway can still respond.
