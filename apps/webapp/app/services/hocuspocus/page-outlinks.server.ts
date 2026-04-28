@@ -94,10 +94,16 @@ function updateTaskTitleInDoc(node: any, taskId: string, newTitle: string): bool
  * When a task's title changes, find all pages that reference it via outlinks
  * and update the taskItem text in each page's stored JSON.
  * Persists via Hocuspocus so live clients get the update in real-time.
+ *
+ * `sourcePageId` (when provided) is the page the title change originated from.
+ * That page is skipped — it already holds the new text in its live Y.Doc, and
+ * re-applying it via `updateContentForDocument` would wipe and replace the
+ * fragment, tearing down the active editor's NodeViews and resetting the cursor.
  */
 export async function updateTaskTitleInPages(
   taskId: string,
   newTitle: string,
+  sourcePageId?: string,
 ): Promise<void> {
   try {
     const pages = await prisma.page.findMany({
@@ -105,6 +111,7 @@ export async function updateTaskTitleInPages(
         outlinks: {
           array_contains: [{ type: "Task", id: taskId }] as any,
         },
+        ...(sourcePageId && { NOT: { id: sourcePageId } }),
       },
       select: { id: true, description: true },
     });
