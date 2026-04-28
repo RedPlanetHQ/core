@@ -52,6 +52,37 @@ const toTitleCase = (s: string) =>
 		.map((w, i) => (i === 0 ? w.charAt(0).toUpperCase() + w.slice(1) : w))
 		.join(' ');
 
+function toolTypeGlyph(toolName: string): string {
+	if (toolName === 'gather_context' || toolName === 'agent-gather_context') {
+		return chalk.cyan('?');
+	}
+	if (
+		toolName === 'create_task' ||
+		toolName === 'list_tasks' ||
+		toolName === 'update_task' ||
+		toolName === 'delete_task'
+	) {
+		return chalk.blue('▣');
+	}
+	if (
+		toolName === 'add_reminder' ||
+		toolName === 'update_reminder' ||
+		toolName === 'delete_reminder' ||
+		toolName === 'list_reminders' ||
+		toolName === 'confirm_reminder' ||
+		toolName === 'set_timezone'
+	) {
+		return chalk.yellow('⏲');
+	}
+	if (
+		toolName === 'execute_integration_action' ||
+		toolName === 'get_integration_actions'
+	) {
+		return chalk.magenta('⚡');
+	}
+	return '';
+}
+
 function resolveDisplayName(toolName: string, input?: Record<string, unknown>): string {
 	if (toolName === 'execute_integration_action' && typeof input?.action === 'string') {
 		return toTitleCase(input.action);
@@ -74,6 +105,8 @@ export class ToolCallItem implements Component {
 	private childrenByCallId = new Map<string, ToolCallItem>();
 	public isExpanded = false;
 	public isDone = false;
+	public isDenied = false;
+	public hasError = false;
 
 	constructor(toolName: string) {
 		this.toolName = toolName;
@@ -138,6 +171,15 @@ export class ToolCallItem implements Component {
 
 			if (part.state === 'output-available' && !child.isDone) {
 				child.isDone = true;
+				child.result = toResultString(part.output);
+			}
+			if (part.state === 'output-denied' && !child.isDone) {
+				child.isDone = true;
+				child.isDenied = true;
+			}
+			if (part.state === 'output-error' && !child.isDone) {
+				child.isDone = true;
+				child.hasError = true;
 				child.result = toResultString(part.output);
 			}
 		}
@@ -206,18 +248,63 @@ export class ToolCallItem implements Component {
 		const indent = '  '.repeat(depth);
 		const lines: string[] = [];
 
-		const dot = this.isDone ? chalk.green('●') : chalk.yellow('◌');
+		const isTakeAction =
+			this.toolName === 'take_action' || this.toolName === 'agent-take_action';
+
+		if (isTakeAction && this.children.length > 0) {
+			// Webapp parity: take_action children are rendered flat (no wrapper header).
+			// Render each child at THIS depth (not depth + 1) so they look like top-level.
+			const out: string[] = [];
+			for (const child of this.children) {
+				for (const line of child._render(width, depth)) {
+					out.push(line);
+				}
+			}
+			return out;
+		}
+
+		if (isTakeAction && this.children.length === 0 && !this.isDone) {
+			// No children yet — show a single "working" line so the user knows something
+			// is happening (mirrors webapp's "Working..." / "Awaiting approval...").
+			return [
+				truncateToWidth(
+					`${indent}${chalk.yellow('◌')} ${chalk.dim('Working...')}`,
+					width,
+				),
+			];
+		}
+
+		let dot: string;
+		if (this.isDenied) {
+			dot = chalk.red('✗');
+		} else if (this.hasError) {
+			dot = chalk.red('!');
+		} else if (this.isDone) {
+			dot = chalk.green('●');
+		} else {
+			dot = chalk.yellow('◌');
+		}
+
+		const typeGlyph = toolTypeGlyph(this.toolName);
+		const namePrefix = typeGlyph ? `${typeGlyph} ` : '';
+
 		let header: string;
-		if (this.isDone) {
-			header = `${indent}${dot} ${chalk.bold(this.displayName)}${this.argSummary ? chalk.dim('(' + this.argSummary + ')') : ''}`;
+		if (this.isDenied) {
+			header = `${indent}${dot} ${namePrefix}${chalk.bold(this.displayName)} ${chalk.dim('(rejected)')}`;
+		} else if (this.hasError) {
+			header = `${indent}${dot} ${namePrefix}${chalk.bold(this.displayName)} ${chalk.dim('(error)')}`;
+		} else if (this.isDone) {
+			header = `${indent}${dot} ${namePrefix}${chalk.bold(this.displayName)}${this.argSummary ? chalk.dim('(' + this.argSummary + ')') : ''}`;
 		} else if (!this.isExpanded && this.children.length > 0) {
 			const activeChild =
 				[...this.children].reverse().find(c => !c.isDone) ??
 				this.children[this.children.length - 1];
 			const childDot = activeChild.isDone ? chalk.green('●') : chalk.yellow('◌');
-			header = `${indent}${dot} ${chalk.bold(this.displayName)} ${chalk.dim('›')} ${childDot} ${chalk.dim(activeChild.displayName)}`;
+			const childTypeGlyph = toolTypeGlyph(activeChild.toolName);
+			const childPrefix = childTypeGlyph ? `${childTypeGlyph} ` : '';
+			header = `${indent}${dot} ${namePrefix}${chalk.bold(this.displayName)} ${chalk.dim('›')} ${childDot} ${childPrefix}${chalk.dim(activeChild.displayName)}`;
 		} else {
-			header = `${indent}${dot} ${chalk.bold(this.displayName)} ${chalk.dim('(running...)')}`;
+			header = `${indent}${dot} ${namePrefix}${chalk.bold(this.displayName)} ${chalk.dim('(running...)')}`;
 		}
 
 		lines.push(truncateToWidth(header, width));

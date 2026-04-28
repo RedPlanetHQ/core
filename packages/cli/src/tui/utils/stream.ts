@@ -88,7 +88,10 @@ export type OutputPart = {
 	state?:
 		| 'input-streaming'
 		| 'output-available'
+		| 'output-denied'
+		| 'output-error'
 		| 'approval-requested'
+		| 'approval-responded'
 		| 'in-progress';
 	input?: Record<string, unknown>;
 	output?: unknown;
