@@ -88,9 +88,6 @@ importers:
       '@core/database':
         specifier: workspace:*
         version: link:../../packages/database
-      '@redplanethq/gateway-protocol':
-        specifier: workspace:*
-        version: link:../../packages/gateway-protocol
       '@core/mcp-proxy':
         specifier: workspace:*
         version: link:../../packages/mcp-proxy
@@ -202,6 +199,9 @@ importers:
       '@redplanethq/ai':
         specifier: 1.2.1
         version: 1.2.1(@mastra/core@1.25.0(@standard-community/standard-json@0.3.5(@standard-schema/spec@1.1.0)(@types/json-schema@7.0.15)(effect@3.18.4)(quansync@0.2.11)(valibot@1.2.0(typescript@5.8.3))(zod-to-json-schema@3.25.1(zod@4.3.6))(zod@4.3.6))(@standard-community/standard-openapi@0.2.9(@standard-community/standard-json@0.3.5(@standard-schema/spec@1.1.0)(@types/json-schema@7.0.15)(effect@3.18.4)(quansync@0.2.11)(valibot@1.2.0(typescript@5.8.3))(zod-to-json-schema@3.25.1(zod@4.3.6))(zod@4.3.6))(@standard-schema/spec@1.1.0)(effect@3.18.4)(openapi-types@12.1.3)(valibot@1.2.0(typescript@5.8.3))(zod@4.3.6))(@types/json-schema@7.0.15)(openapi-types@12.1.3)(zod@4.3.6))(zod@4.3.6)
+      '@redplanethq/gateway-protocol':
+        specifier: workspace:*
+        version: link:../../packages/gateway-protocol
       '@redplanethq/sdk':
         specifier: 0.1.19
         version: 0.1.19
@@ -740,9 +740,6 @@ importers:
       '@clack/prompts':
         specifier: ^1.0.1
         version: 1.0.1
-      '@redplanethq/gateway-protocol':
-        specifier: workspace:*
-        version: link:../gateway-protocol
       '@fastify/websocket':
         specifier: ^11.0.1
         version: 11.2.0
@@ -752,6 +749,9 @@ importers:
       '@mishieck/ink-titled-box':
         specifier: ^0.4.2
         version: 0.4.2(ink@6.6.0(@types/react@19.2.13)(react@19.2.4))(react@19.2.4)(typescript@5.8.3)
+      '@redplanethq/gateway-protocol':
+        specifier: workspace:*
+        version: link:../gateway-protocol
       '@redplanethq/sdk':
         specifier: workspace:*
         version: link:../sdk
@@ -803,6 +803,9 @@ importers:
       react:
         specifier: ^19.2.4
         version: 19.2.4
+      turndown:
+        specifier: ^7.2.4
+        version: 7.2.4
       ws:
         specifier: ^8.18.0
         version: 8.19.0
@@ -822,6 +825,9 @@ importers:
       '@types/react':
         specifier: ^19.2.13
         version: 19.2.13
+      '@types/turndown':
+        specifier: ^5.0.6
+        version: 5.0.6
       '@types/ws':
         specifier: ^8.5.13
         version: 8.18.1
@@ -3536,6 +3542,9 @@ packages:
       ink: ^6.0.0
       react: ^19.1.0
       typescript: ^5
+
+  '@mixmark-io/domino@2.2.0':
+    resolution: {integrity: sha512-Y28PR25bHXUg88kCV7nivXrP2Nj2RueZ3/l/jdx6J9f8J4nsEGcgX0Qe6lt7Pa+J79+kPiJU3LguR6O/6zrLOw==}
 
   '@mjackson/headers@0.10.0':
     resolution: {integrity: sha512-U1Eu1gF979k7ZoIBsJyD+T5l9MjtPONsZfoXfktsQHPJD0s7SokBGx+tLKDLsOY+gzVYAWS0yRFDNY8cgbQzWQ==}
@@ -7432,6 +7441,9 @@ packages:
 
   '@types/tedious@4.0.14':
     resolution: {integrity: sha512-KHPsfX/FoVbUGbyYvk1q9MMQHLPeRZhRJZdO45Q4YjvFkv4hMNghCWTvy7rdKessBsmtz4euWCWAB6/tVpI1Iw==}
+
+  '@types/turndown@5.0.6':
+    resolution: {integrity: sha512-ru00MoyeeouE5BX4gRL+6m/BsDfbRayOskWqUvh7CLGW+UXxHQItqALa38kKnOiZPqJrtzJUgAC2+F0rL1S4Pg==}
 
   '@types/unist@2.0.11':
     resolution: {integrity: sha512-CmBKiL6NNo/OqgmMn95Fk9Whlp2mtvIv+KNpQKN2F4SjvrEesubTRWGYSg+BnWZOnlCaSTU1sMpsBOzgbYhnsA==}
@@ -14983,6 +14995,10 @@ packages:
     resolution: {integrity: sha512-kc8ZibdRcuWUG1pbYSBFWqmIjynlD8Lp7IB6U3vIzvOv9VG+6Sp8bzyeBWE3Oi8XV5KsQrznyRTBPvrf99E4mA==}
     hasBin: true
 
+  turndown@7.2.4:
+    resolution: {integrity: sha512-I8yFsfRzmzK0WV1pNNOA4A7y4RDfFxPRxb3t+e3ui14qSGOxGtiSP6GjeX+Y6CHb7HYaFj7ECUD7VE5kQMZWGQ==}
+    engines: {node: '>=18', npm: '>=9'}
+
   twilio@5.11.1:
     resolution: {integrity: sha512-LQuLrAwWk7dsu7S5JQWzLRe17qdD4/7OJcwZG6kYWMJILtxI7pXDHksu9DcIF/vKpSpL1F0/sA9uSF3xuVizMQ==}
     engines: {node: '>=14.0'}
@@ -19170,6 +19186,8 @@ snapshots:
       ink: 6.6.0(@types/react@19.2.13)(react@19.2.4)
       react: 19.2.4
       typescript: 5.8.3
+
+  '@mixmark-io/domino@2.2.0': {}
 
   '@mjackson/headers@0.10.0': {}
 
@@ -23785,6 +23803,8 @@ snapshots:
   '@types/tedious@4.0.14':
     dependencies:
       '@types/node': 20.19.7
+
+  '@types/turndown@5.0.6': {}
 
   '@types/unist@2.0.11': {}
 
@@ -32965,6 +32985,10 @@ snapshots:
       turbo-linux-arm64: 2.5.4
       turbo-windows-64: 2.5.4
       turbo-windows-arm64: 2.5.4
+
+  turndown@7.2.4:
+    dependencies:
+      '@mixmark-io/domino': 2.2.0
 
   twilio@5.11.1:
     dependencies:
