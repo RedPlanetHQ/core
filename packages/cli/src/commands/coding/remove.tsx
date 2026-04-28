@@ -6,6 +6,8 @@ import zod from 'zod';
 import { getPreferences, updatePreferences } from '@/config/preferences';
 import type { CliBackendConfig } from '@/types/config';
 
+import {requireNativeGateway} from "@/utils/require-native-gateway";
+
 export const options = zod.object({
 	agent: zod.string().describe('Agent name to remove'),
 });
@@ -15,6 +17,7 @@ type Props = {
 };
 
 async function runCodingRemove(agentName: string): Promise<void> {
+	if (!requireNativeGateway()) return;
 	const prefs = getPreferences();
 	const coding = (prefs.coding || {}) as Record<string, CliBackendConfig>;
 

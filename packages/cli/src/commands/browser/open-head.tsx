@@ -6,6 +6,8 @@ import zod from 'zod';
 import {isPlaywrightReady, getConfiguredSessions} from '@/utils/browser-config';
 import {launchSession} from '@/utils/browser-manager';
 
+import {requireNativeGateway} from "@/utils/require-native-gateway";
+
 export const options = zod.object({});
 
 type Props = {
@@ -13,6 +15,7 @@ type Props = {
 };
 
 async function runOpenHead(): Promise<void> {
+	if (!requireNativeGateway()) return;
 	const spinner = p.spinner();
 	spinner.start('Checking Playwright...');
 

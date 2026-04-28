@@ -6,6 +6,8 @@ import zod from 'zod';
 import { getPreferences, updatePreferences } from '@/config/preferences';
 import type { CliBackendConfig } from '@/types/config';
 
+import {requireNativeGateway} from "@/utils/require-native-gateway";
+
 export const options = zod.object({
 	agent: zod.string().describe('Agent name (e.g., claude-code)'),
 	command: zod.string().optional().describe('CLI command path'),
@@ -38,6 +40,7 @@ function formatConfig(cfg: CliBackendConfig): string {
 }
 
 async function runCodingConfig(opts: zod.infer<typeof options>): Promise<void> {
+	if (!requireNativeGateway()) return;
 	const agentName = opts.agent;
 	const prefs = getPreferences();
 	const coding = (prefs.coding || {}) as Record<string, CliBackendConfig>;

@@ -6,6 +6,8 @@ import zod from 'zod';
 import {deleteSession, getConfiguredSessions, getMaxSessions} from '@/utils/browser-config';
 import {closeSession} from '@/utils/browser-manager';
 
+import {requireNativeGateway} from "@/utils/require-native-gateway";
+
 export const args = zod.tuple([zod.string().describe('Session name to delete')]);
 
 export const options = zod.object({});
@@ -16,6 +18,7 @@ type Props = {
 };
 
 async function runDeleteSession(name: string): Promise<void> {
+	if (!requireNativeGateway()) return;
 	const spinner = p.spinner();
 	spinner.start(`Deleting session "${name}"...`);
 

@@ -76,6 +76,7 @@ export async function getGatewayAgents(
       id: gateway.id,
       name: gateway.name,
       description: gateway.description || `Gateway: ${gateway.name}`,
+      baseUrl: gateway.baseUrl,
       // Tool names aren't cached on the row anymore; live-fetch happens when
       // the agent is created. Callers that only need the routing list get [].
       tools: [],

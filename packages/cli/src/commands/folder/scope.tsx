@@ -8,6 +8,8 @@ import {updateScopes} from '@/config/folders';
 const SCOPE_VALUES = ['files', 'coding', 'exec'] as const;
 type Scope = (typeof SCOPE_VALUES)[number];
 
+import {requireNativeGateway} from "@/utils/require-native-gateway";
+
 export const args = zod.tuple([
 	zod.string().describe('Folder id or name to modify'),
 ]);
@@ -44,6 +46,7 @@ function runFolderScope(
 	idOrName: string,
 	opts: zod.infer<typeof options>,
 ): void {
+	if (!requireNativeGateway()) return;
 	if (!opts.add && !opts.remove) {
 		p.log.error(
 			chalk.red('Specify at least one of --add or --remove'),

@@ -1,5 +1,3 @@
-version: "3.8"
-
 # CoreBrain Gateway — single-container deploy.
 #
 # Boots a CORE gateway with the two coding agents (claude-code + codex) and
@@ -27,6 +25,9 @@ services:
   corebrain-gateway:
     container_name: corebrain-gateway
     image: redplanethq/core-gateway:0.6.2
+    # Image is published amd64-only today. Apple Silicon hosts run it under
+    # Rosetta emulation; remove this line once we publish a multi-arch image.
+    platform: linux/amd64
     restart: ${RESTART_POLICY:-unless-stopped}
     environment:
       # ── CORE webapp wiring ───────────────────────────────────────────

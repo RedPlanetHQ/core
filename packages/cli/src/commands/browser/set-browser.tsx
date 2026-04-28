@@ -12,6 +12,8 @@ import {
 } from '@/utils/browser-config';
 import type {BrowserType} from '@/types/config';
 
+import {requireNativeGateway} from "@/utils/require-native-gateway";
+
 export const args = zod
 	.tuple([
 		zod.enum(['default', 'brave', 'chrome', 'custom']).describe('Browser type'),
@@ -29,6 +31,7 @@ async function runSetBrowser(
 	browserType: BrowserType,
 	customPath?: string,
 ): Promise<void> {
+	if (!requireNativeGateway()) return;
 	const spinner = p.spinner();
 
 	// Show current config

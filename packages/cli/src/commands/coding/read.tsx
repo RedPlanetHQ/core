@@ -5,6 +5,8 @@ import chalk from 'chalk';
 import zod from 'zod';
 import {executeCodingTool} from '@/server/tools/coding-tools';
 
+import {requireNativeGateway} from "@/utils/require-native-gateway";
+
 export const options = zod.object({
 	sessionId: zod.string().optional().describe('Session ID to read'),
 	follow: zod.boolean().optional().describe('Follow output (like tail -f)'),
@@ -48,6 +50,7 @@ function printTurn(turn: ConversationTurn): void {
 }
 
 async function runReadSession(opts: zod.infer<typeof options>): Promise<void> {
+	if (!requireNativeGateway()) return;
 	let sessionId = opts.sessionId;
 
 	if (!sessionId) {

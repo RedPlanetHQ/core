@@ -389,8 +389,9 @@ async function configureExec(
 	return {allow: execAllow, deny: execDeny};
 }
 
-// Interactive wizard
-async function runInteractiveConfig() {
+// Interactive wizard. Exported so `corebrain gateway setup --kind native`
+// can reuse the same flow as the legacy `corebrain gateway config` entrypoint.
+export async function runInteractiveConfig() {
 	const prefs = getPreferences();
 	const existingConfig = prefs.gateway;
 
@@ -750,6 +751,28 @@ async function runInteractiveConfig() {
 async function runConfig(opts: zod.infer<typeof options>) {
 	// Only show config if --show flag is explicitly passed
 	if (opts.show) {
+		return runDirectUpdate(opts);
+	}
+
+	// `gateway config` is reconfigure-only — for first-time setup the user goes
+	// through `gateway setup`. Direct flag updates (--name / --browser etc) are
+	// still allowed without an existing native gateway since they're idempotent.
+	const directFlagsSet =
+		opts.name !== undefined ||
+		opts.description !== undefined ||
+		opts.coding !== undefined ||
+		opts.browser !== undefined ||
+		opts.exec !== undefined ||
+		opts.files !== undefined;
+
+	const prefs = getPreferences();
+	if (!directFlagsSet && !prefs.gateway?.id) {
+		p.log.error('No native gateway configured on this machine.');
+		p.log.info(`Run ${chalk.cyan('corebrain gateway setup')} to create one.`);
+		return {success: false, error: 'no native gateway'};
+	}
+
+	if (directFlagsSet) {
 		return runDirectUpdate(opts);
 	}
 

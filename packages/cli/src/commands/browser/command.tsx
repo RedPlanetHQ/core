@@ -6,6 +6,8 @@ import zod from 'zod';
 import {isPlaywrightReady} from '@/utils/browser-config';
 import {getOrLaunchSession} from '@/utils/browser-manager';
 
+import {requireNativeGateway} from "@/utils/require-native-gateway";
+
 export const args = zod.tuple([
 	zod.string().describe('JavaScript expression to evaluate'),
 ]);
@@ -20,6 +22,7 @@ type Props = {
 };
 
 async function runBrowserCommand(sessionName: string, script: string): Promise<void> {
+	if (!requireNativeGateway()) return;
 	const spinner = p.spinner();
 	spinner.start('Checking Playwright...');
 

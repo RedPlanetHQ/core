@@ -5,6 +5,8 @@ import chalk from 'chalk';
 import zod from 'zod';
 import {closeSession} from '@/utils/browser-manager';
 
+import {requireNativeGateway} from "@/utils/require-native-gateway";
+
 export const args = zod.tuple([zod.string().describe('Session name to close')]);
 
 export const options = zod.object({});
@@ -15,6 +17,7 @@ type Props = {
 };
 
 async function runCloseSession(name: string): Promise<void> {
+	if (!requireNativeGateway()) return;
 	const spinner = p.spinner();
 	spinner.start(`Closing session "${name}"...`);
 

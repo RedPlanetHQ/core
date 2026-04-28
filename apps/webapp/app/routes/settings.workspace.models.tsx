@@ -27,6 +27,7 @@ import {
   isSupportedProvider,
   type SupportedProvider,
 } from "~/services/byok.server";
+import { PROVIDER_SPECS } from "@core/types";
 
 const USE_CASES = [
   {
@@ -49,6 +50,8 @@ const USE_CASES = [
 
 type UseCase = (typeof USE_CASES)[number]["key"];
 
+// Derived from the canonical catalog in @core/types/llm/providers.
+// Adding a provider there propagates here automatically.
 const BYOK_PROVIDERS: {
   type: SupportedProvider;
   label: string;
@@ -56,51 +59,20 @@ const BYOK_PROVIDERS: {
   hint?: string;
   isUrl?: boolean;
   isAzure?: boolean;
-}[] = [
-  { type: "openai", label: "OpenAI", placeholder: "sk-..." },
-  { type: "anthropic", label: "Anthropic", placeholder: "sk-ant-..." },
-  { type: "google", label: "Google", placeholder: "AIza..." },
-  {
-    type: "openrouter",
-    label: "OpenRouter",
-    placeholder: "sk-or-...",
-    hint: "Use model IDs like openrouter/anthropic/claude-3.5-haiku",
-  },
-  { type: "deepseek", label: "DeepSeek", placeholder: "sk-..." },
-  {
-    type: "vercel",
-    label: "Vercel AI Gateway",
-    placeholder: "aig-...",
-    hint: "Use model IDs like vercel/anthropic/claude-sonnet-4-5",
-  },
-  {
-    type: "groq",
-    label: "Groq",
-    placeholder: "gsk_...",
-    hint: "Use model IDs like groq/llama-3.3-70b-versatile",
-  },
-  { type: "mistral", label: "Mistral", placeholder: "..." },
-  {
-    type: "xai",
-    label: "xAI (Grok)",
-    placeholder: "xai-...",
-    hint: "Use model IDs like grok-3-mini",
-  },
-  {
-    type: "ollama",
-    label: "Ollama",
-    placeholder: "http://localhost:11434",
-    hint: "Enter your Ollama server URL. Use model IDs like ollama/llama3.2",
-    isUrl: true,
-  },
-  {
-    type: "azure",
-    label: "Azure OpenAI",
-    placeholder: "sk-...",
-    hint: "Use model IDs like azure/gpt-4o (deployment name after azure/)",
-    isAzure: true,
-  },
-];
+}[] = Object.values(PROVIDER_SPECS)
+  .filter((s) => s.byokSupported)
+  .map((s) => ({
+    type: s.id as SupportedProvider,
+    label: s.label,
+    // For ollama (no api key, has required URL), the form input is a URL.
+    placeholder:
+      s.apiKeyVar === null && s.baseUrl
+        ? s.baseUrl.placeholder
+        : s.apiKeyPlaceholder,
+    hint: s.modelHint ?? s.baseUrl?.hint,
+    isUrl: s.apiKeyVar === null,
+    isAzure: s.isAzure,
+  }));
 
 export const loader = async ({ request }: LoaderFunctionArgs) => {
   const user = await requireUser(request);

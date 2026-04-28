@@ -5,6 +5,8 @@ import chalk from 'chalk';
 import zod from 'zod';
 import {createProfile, getConfiguredProfiles, getMaxProfiles} from '@/utils/browser-config';
 
+import {requireNativeGateway} from "@/utils/require-native-gateway";
+
 export const args = zod.tuple([zod.string().describe('Profile name to create (e.g. personal, work)')]);
 
 export const options = zod.object({});
@@ -15,6 +17,7 @@ type Props = {
 };
 
 async function runCreateProfile(name: string): Promise<void> {
+	if (!requireNativeGateway()) return;
 	const spinner = p.spinner();
 	spinner.start(`Creating profile "${name}"...`);
 

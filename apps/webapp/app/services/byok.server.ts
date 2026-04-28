@@ -5,6 +5,7 @@ import {
   EncryptedSecretSchema,
 } from "~/lib/encryption.server";
 import { logger } from "./logger.service";
+import { BYOK_PROVIDERS, isByokProvider } from "@core/types";
 
 // ---------------------------------------------------------------------------
 // In-memory cache for decrypted BYOK keys (avoids DB + decrypt per request)
@@ -48,24 +49,12 @@ function invalidateCache(workspaceId: string, providerType: string) {
 // BYOK key management
 // ---------------------------------------------------------------------------
 
-const SUPPORTED_PROVIDERS = [
-  "openai",
-  "anthropic",
-  "google",
-  "openrouter",
-  "deepseek",
-  "vercel",
-  "groq",
-  "mistral",
-  "xai",
-  "ollama",
-  "azure",
-] as const;
-export type SupportedProvider = (typeof SUPPORTED_PROVIDERS)[number];
+/** Re-export for callers that previously imported from this module. The
+ *  authoritative list lives in @core/types/llm/providers. */
+export const SUPPORTED_PROVIDERS = BYOK_PROVIDERS;
+export type SupportedProvider = (typeof BYOK_PROVIDERS)[number];
 
-export function isSupportedProvider(type: string): type is SupportedProvider {
-  return (SUPPORTED_PROVIDERS as readonly string[]).includes(type);
-}
+export { isByokProvider as isSupportedProvider };
 
 /**
  * Store (or update) a workspace-scoped API key for a provider.

@@ -30,6 +30,7 @@ export interface GatewayAgentInfo {
   id: string;
   name: string;
   description: string;
+  baseUrl: string;
   tools: string[];
   platform: string | null;
   hostname: string | null;

@@ -9,6 +9,8 @@ import type {StoredFolder} from '@/types/config';
 const SCOPE_VALUES = ['files', 'coding', 'exec'] as const;
 type Scope = (typeof SCOPE_VALUES)[number];
 
+import {requireNativeGateway} from "@/utils/require-native-gateway";
+
 export const args = zod.tuple([
 	zod
 		.string()
@@ -60,6 +62,7 @@ async function runFolderAdd(
 	path: string,
 	opts: zod.infer<typeof options>,
 ): Promise<void> {
+	if (!requireNativeGateway()) return;
 	const scopes: Scope[] = opts.scopes
 		? parseScopes(opts.scopes)
 		: [...SCOPE_VALUES];

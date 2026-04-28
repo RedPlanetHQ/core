@@ -5,6 +5,8 @@ import chalk from 'chalk';
 import zod from 'zod';
 import {executeCodingTool} from '@/server/tools/coding-tools';
 
+import {requireNativeGateway} from "@/utils/require-native-gateway";
+
 export const options = zod.object({
 	agent: zod.string().optional().describe('Filter to a specific agent (e.g. claude-code, codex-cli)'),
 	since: zod.string().optional().describe('Filter sessions updated after this date (e.g. 2024-03-01)'),
@@ -29,6 +31,7 @@ interface SessionInfo {
 }
 
 async function runListSessions(opts: zod.infer<typeof options>): Promise<void> {
+	if (!requireNativeGateway()) return;
 	const result = await executeCodingTool('coding_list_sessions', {
 		agent: opts.agent,
 		since: opts.since,

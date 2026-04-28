@@ -82,22 +82,21 @@ The gateway can be deployed three ways. Pick the one that fits where you want it
   <Tab title="Docker">
     Best for self-hosted servers, Fly, Render, or any Docker host you control. The bundled image ships Claude Code, Codex CLI, Playwright Chromium, and pre-registers `/app` as a coding workspace.
 
+    The repo includes a ready compose file under [`hosting/gateway`](https://github.com/RedPlanetHQ/core/tree/main/hosting/gateway):
+
     ```bash
-    docker run --rm -it \
-      -p 7787:7787 \
-      -e COREBRAIN_API_URL=https://app.getcore.me \
-      -e COREBRAIN_API_KEY=<your PAT> \
-      -e COREBRAIN_GATEWAY_NAME=my-cloud-gateway \
-      -e COREBRAIN_GATEWAY_SECURITY_KEY=<optional; auto-generated if absent> \
-      -v corebrain-state:/root/.corebrain \
-      -v corebrain-workspace:/app \
-      -v corebrain-claude:/root/.claude \
-      -v corebrain-codex:/root/.codex \
-      -v corebrain-playwright:/root/.cache/ms-playwright \
-      ghcr.io/redplanethq/corebrain-gateway
+    cd hosting/gateway
+    cp .env.example .env       # fill in COREBRAIN_API_KEY (and the agent token below)
+    docker compose up -d
+    docker compose logs -f corebrain-gateway   # grab the auto-generated security key on first boot
     ```
 
-    If you do not provide `COREBRAIN_GATEWAY_SECURITY_KEY`, the gateway generates one and prints it to stdout once — copy it from `docker logs` and paste it into the webapp.
+    Set the token for whichever coding agent you plan to use — the container runs both `claude-code` and `codex-cli`, but each needs its own credential to skip OAuth:
+
+    - **`CLAUDE_CODE_OAUTH_TOKEN`** — long-lived token from `claude setup-token` (run on a laptop where you've already done `claude login`). See [Claude Code authentication](https://docs.claude.com/en/docs/claude-code/setup#authentication).
+    - **`OPENAI_API_KEY`** — standard OpenAI API key from the [API Keys dashboard](https://platform.openai.com/api-keys). See [Codex CLI auth](https://github.com/openai/codex#authentication).
+
+    If you leave `COREBRAIN_GATEWAY_SECURITY_KEY` blank in `.env`, the gateway generates one on first boot and prints it to the logs — copy it (with the gateway URL) into the webapp's **Register gateway** dialog.
   </Tab>
 
   <Tab title="Railway">

@@ -6,6 +6,8 @@ import zod from 'zod';
 import { getPreferences, updatePreferences } from '@/config/preferences';
 import type { ExecConfig } from '@/types/config';
 
+import {requireNativeGateway} from "@/utils/require-native-gateway";
+
 export const options = zod.object({
 	allow: zod.string().optional().describe('Allow patterns (comma-separated, e.g., "Bash(npm run *),Bash(git status)")'),
 	deny: zod.string().optional().describe('Deny patterns (comma-separated, e.g., "Bash(rm -rf *),Bash(git push *)")'),
@@ -28,6 +30,7 @@ function formatConfig(cfg: ExecConfig): string {
 }
 
 async function runExecConfig(opts: zod.infer<typeof options>): Promise<void> {
+	if (!requireNativeGateway()) return;
 	const prefs = getPreferences();
 	const existingConfig = prefs.exec || {};
 
