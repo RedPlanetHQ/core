@@ -5,6 +5,8 @@ import chalk from 'chalk';
 import zod from 'zod';
 import {listFolders} from '@/config/folders';
 
+import {requireNativeGateway} from "@/utils/require-native-gateway";
+
 export const options = zod.object({});
 
 type Props = {
@@ -12,6 +14,7 @@ type Props = {
 };
 
 function runFolderList(): void {
+	if (!requireNativeGateway()) return;
 	const folders = listFolders();
 	if (folders.length === 0) {
 		p.log.info(chalk.dim('No folders registered. Use `corebrain folder add <path>`.'));

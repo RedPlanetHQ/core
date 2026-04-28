@@ -14,6 +14,8 @@ import {
 
 const execAsync = promisify(exec);
 
+import {requireNativeGateway} from "@/utils/require-native-gateway";
+
 export const options = zod.object({});
 
 type Props = {
@@ -50,6 +52,7 @@ async function detectAgent(template: AgentTemplate): Promise<DetectionResult | n
 }
 
 async function runCodingSetup(): Promise<void> {
+	if (!requireNativeGateway()) return;
 	const spinner = p.spinner();
 	spinner.start('Detecting available coding agents...');
 

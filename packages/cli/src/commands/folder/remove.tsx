@@ -5,6 +5,8 @@ import chalk from 'chalk';
 import zod from 'zod';
 import {removeFolder} from '@/config/folders';
 
+import {requireNativeGateway} from "@/utils/require-native-gateway";
+
 export const args = zod.tuple([
 	zod.string().describe('Folder id or name to remove'),
 ]);
@@ -17,6 +19,7 @@ type Props = {
 };
 
 function runFolderRemove(idOrName: string): void {
+	if (!requireNativeGateway()) return;
 	try {
 		removeFolder(idOrName);
 		p.log.success(chalk.green(`Folder removed: ${idOrName}`));

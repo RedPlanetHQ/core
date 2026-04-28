@@ -11,6 +11,7 @@ import {
   isSupportedProvider,
 } from "~/services/byok.server";
 import { getProviders } from "~/services/llm-provider.server";
+import { BYOK_PROVIDERS } from "@core/types";
 
 // ---------------------------------------------------------------------------
 // GET /api/v1/byok — list BYOK key status per provider
@@ -70,13 +71,13 @@ const loader = createHybridLoaderApiRoute(
 // ---------------------------------------------------------------------------
 
 const SetKeyBody = z.object({
-  providerType: z.enum(["openai", "anthropic", "google"]),
+  providerType: z.enum(BYOK_PROVIDERS),
   apiKey: z.string().min(1, "API key is required"),
   baseUrl: z.string().optional(),
 });
 
 const DeleteKeyBody = z.object({
-  providerType: z.enum(["openai", "anthropic", "google"]),
+  providerType: z.enum(BYOK_PROVIDERS),
 });
 
 const { action } = createHybridActionApiRoute(

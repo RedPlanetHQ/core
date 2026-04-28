@@ -18,6 +18,8 @@ import type {
   GetSkillInput,
   GetSkillResponse,
   GetGatewaysResponse,
+  RegisterGatewayRequest,
+  RegisterGatewayResponse,
   AuthorizationCodeResponse,
   TokenExchangeInput,
   TokenExchangeResponse,
@@ -260,6 +262,21 @@ export class CoreClient {
    */
   async getGateways(): Promise<GetGatewaysResponse> {
     return this.request<GetGatewaysResponse>("GET", "/api/v1/gateways");
+  }
+
+  /**
+   * Register a self-hosted gateway with the workspace.
+   * POST /api/v1/gateways  (body: { intent: "register", baseUrl, securityKey, name?, description? })
+   *
+   * The webapp probes the gateway's `/verify` to confirm reachability and
+   * that the supplied key matches its stored hash before persisting.
+   */
+  async registerGateway(
+    input: Omit<RegisterGatewayRequest, "intent">,
+  ): Promise<RegisterGatewayResponse> {
+    return this.request<RegisterGatewayResponse>("POST", "/api/v1/gateways", {
+      body: { intent: "register", ...input },
+    });
   }
 
   // -------------------------------------------------------------------------

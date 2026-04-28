@@ -6,6 +6,8 @@ import zod from 'zod';
 import {isPlaywrightReady} from '@/utils/browser-config';
 import {launchSession} from '@/utils/browser-manager';
 
+import {requireNativeGateway} from "@/utils/require-native-gateway";
+
 export const args = zod.tuple([zod.string().describe('Session name to open')]);
 
 export const options = zod.object({
@@ -23,6 +25,7 @@ async function runBrowserOpen(
 	url: string | undefined,
 	headed: boolean,
 ): Promise<void> {
+	if (!requireNativeGateway()) return;
 	const spinner = p.spinner();
 	spinner.start('Checking Playwright...');
 

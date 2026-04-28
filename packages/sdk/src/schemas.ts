@@ -211,11 +211,28 @@ export const GatewayAgentInfoSchema = z.object({
   id: z.string(),
   name: z.string(),
   description: z.string(),
+  baseUrl: z.string(),
   tools: z.array(z.string()),
   platform: z.string().nullable(),
   hostname: z.string().nullable(),
   status: z.enum(["CONNECTED", "DISCONNECTED"]),
 });
+
+export const RegisterGatewayRequestSchema = z.object({
+  intent: z.literal("register"),
+  baseUrl: z.string().url(),
+  securityKey: z.string().min(10),
+  name: z.string().min(1).max(64).optional(),
+  description: z.string().max(500).optional(),
+});
+
+export type RegisterGatewayRequest = z.infer<typeof RegisterGatewayRequestSchema>;
+
+export const RegisterGatewayResponseSchema = z.object({
+  gatewayId: z.string(),
+});
+
+export type RegisterGatewayResponse = z.infer<typeof RegisterGatewayResponseSchema>;
 
 export type GatewayAgentInfo = z.infer<typeof GatewayAgentInfoSchema>;
 

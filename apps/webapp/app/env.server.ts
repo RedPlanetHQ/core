@@ -1,7 +1,7 @@
 import { z } from "zod";
 import { isValidDatabaseUrl } from "./utils/db";
 import { isValidRegex } from "./utils/regex";
-import { LLMModelEnum } from "@core/types";
+import { LLMModelEnum, CHAT_PROVIDERS, EMBEDDING_PROVIDERS } from "@core/types";
 
 const EnvironmentSchema = z
   .object({
@@ -130,8 +130,8 @@ const EnvironmentSchema = z
     MODEL_TEMPERATURE: z.coerce.number().default(1),
     LLM_TOLERANT_OUTPUT: z.string().optional(),
     OLLAMA_URL: z.string().optional(),
-    CHAT_PROVIDER: z.enum(["openai", "anthropic", "google", "ollama", "azure"]).default("openai"),
-    EMBEDDINGS_PROVIDER: z.enum(["openai", "google", "ollama", "azure"]).optional(),
+    CHAT_PROVIDER: z.enum(CHAT_PROVIDERS).default("openai"),
+    EMBEDDINGS_PROVIDER: z.enum(EMBEDDING_PROVIDERS).optional(),
 
     // Inline batch fallback (when Batch API is unavailable)
     INLINE_BATCH_TTL_MS: z.coerce.number().int().positive().default(3600000),

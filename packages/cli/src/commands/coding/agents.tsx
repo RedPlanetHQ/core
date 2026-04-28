@@ -5,6 +5,8 @@ import chalk from 'chalk';
 import zod from 'zod';
 import {executeCodingTool} from '@/server/tools/coding-tools';
 
+import {requireNativeGateway} from "@/utils/require-native-gateway";
+
 export const options = zod.object({});
 
 type Props = {
@@ -12,6 +14,7 @@ type Props = {
 };
 
 async function runListAgents(): Promise<void> {
+	if (!requireNativeGateway()) return;
 	const result = await executeCodingTool('coding_list_agents', {});
 
 	if (!result.success) {

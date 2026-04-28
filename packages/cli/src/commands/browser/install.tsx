@@ -11,6 +11,8 @@ import {
 	getMaxProfiles,
 } from '@/utils/browser-config';
 
+import {requireNativeGateway} from "@/utils/require-native-gateway";
+
 export const options = zod.object({});
 
 type Props = {
@@ -18,6 +20,7 @@ type Props = {
 };
 
 async function runBrowserInstall(): Promise<void> {
+	if (!requireNativeGateway()) return;
 	const spinner = p.spinner();
 	spinner.start('Checking if Playwright Chromium is installed...');
 

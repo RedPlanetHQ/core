@@ -10,6 +10,8 @@ import {
 	getMaxSessions,
 } from '@/utils/browser-config';
 
+import {requireNativeGateway} from "@/utils/require-native-gateway";
+
 export const args = zod.tuple([zod.string().describe('Session name to create')]);
 
 export const options = zod.object({
@@ -22,6 +24,7 @@ type Props = {
 };
 
 async function runCreateSession(name: string, profile: string): Promise<void> {
+	if (!requireNativeGateway()) return;
 	const spinner = p.spinner();
 	spinner.start(`Creating session "${name}" with profile "${profile}"...`);
 

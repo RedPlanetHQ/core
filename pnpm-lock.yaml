@@ -740,6 +740,9 @@ importers:
       '@clack/prompts':
         specifier: ^1.0.1
         version: 1.0.1
+      '@core/types':
+        specifier: workspace:*
+        version: link:../types
       '@fastify/websocket':
         specifier: ^11.0.1
         version: 11.2.0

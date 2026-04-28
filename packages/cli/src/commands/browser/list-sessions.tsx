@@ -6,6 +6,8 @@ import zod from 'zod';
 import {getConfiguredSessions, getMaxSessions} from '@/utils/browser-config';
 import {getLiveSessions} from '@/utils/browser-manager';
 
+import {requireNativeGateway} from "@/utils/require-native-gateway";
+
 export const options = zod.object({});
 
 type Props = {
@@ -13,6 +15,7 @@ type Props = {
 };
 
 async function runListSessions(): Promise<void> {
+	if (!requireNativeGateway()) return;
 	const sessions = getConfiguredSessions();
 	const maxSessions = getMaxSessions();
 	const live = getLiveSessions();

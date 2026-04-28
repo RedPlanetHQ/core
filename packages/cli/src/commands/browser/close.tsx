@@ -5,6 +5,8 @@ import chalk from 'chalk';
 import zod from 'zod';
 import {closeAllSessions} from '@/utils/browser-manager';
 
+import {requireNativeGateway} from "@/utils/require-native-gateway";
+
 export const options = zod.object({});
 
 type Props = {
@@ -12,6 +14,7 @@ type Props = {
 };
 
 async function runCloseAll(): Promise<void> {
+	if (!requireNativeGateway()) return;
 	const spinner = p.spinner();
 	spinner.start('Closing all browser sessions...');
 	await closeAllSessions();
