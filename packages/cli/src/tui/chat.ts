@@ -28,7 +28,7 @@ import {WidgetsView} from './components/widgets-view.js';
 import {DashboardView} from './components/dashboard-view.js';
 import {loadWidgetBundle} from './utils/widget-loader.js';
 import {getPreferences} from '../config/preferences.js';
-import {fetchConversationHistory, fetchWorkspace, fetchWorkspaceAvatar, fetchIntegrationAccounts, openBrowser} from './utils/stream.js';
+import {fetchConversationHistory, fetchWorkspace, fetchWorkspaceAvatar, fetchIntegrationAccounts, openBrowser, createTaskApi} from './utils/stream.js';
 import {ApprovalPanel} from './components/approval-panel.js';
 
 export function startTuiApp(
@@ -126,6 +126,17 @@ export function startTuiApp(
 	const accountFrontendMap = new Map<string, string>();
 
 	let overlayActive = false;
+	let newTaskMode = false;
+	let lastTabAt: number | null = null;
+	const TAB_DOUBLE_TAP_MS = 300;
+
+	function setNewTaskMode(on: boolean): void {
+		if (newTaskMode === on) return;
+		newTaskMode = on;
+		statusLine.setMode(on ? 'newTask' : 'chat');
+		tui.requestRender();
+	}
+
 	let isProcessing = false;
 	let allToolItems: ToolCallItem[] = [];
 	let conversationComponents: Component[] = [];
@@ -248,6 +259,42 @@ export function startTuiApp(
 
 	editor.onSubmit = (message: string) => {
 		const trimmed = message.trim();
+
+		// Task mode: empty submit cancels mode; non-empty creates a task.
+		if (newTaskMode) {
+			if (!trimmed) {
+				setNewTaskMode(false);
+				return;
+			}
+			createTaskApi(baseUrl, apiKey, {title: trimmed})
+				.then(task => {
+					addToMessages(
+						new Text(
+							chalk.green('✓ Task created: ') +
+								chalk.white(task.title) +
+								chalk.dim(task.displayId ? `  [${task.displayId}]` : ''),
+							1,
+							0,
+						),
+					);
+					addToMessages(new Spacer(1));
+					tui.requestRender();
+				})
+				.catch((err: Error) => {
+					addToMessages(
+						new Text(
+							chalk.red('Failed to create task: ') + chalk.dim(err.message),
+							1,
+							0,
+						),
+					);
+					tui.requestRender();
+				})
+				.finally(() => {
+					setNewTaskMode(false);
+				});
+			return;
+		}
 
 		if (trimmed === '/clear') {
 			clearConversation();
@@ -439,8 +486,8 @@ export function startTuiApp(
 		};
 
 		list.onCreateTask = () => {
-			// Task 7 will hook this up to setNewTaskMode(true). For now, just exit.
 			exit();
+			setNewTaskMode(true);
 		};
 	}
 
@@ -742,6 +789,33 @@ export function startTuiApp(
 			if (data === '3') { pendingApprovalPanel.confirm(2); return; }
 			// Block all other input while approval is pending
 			return;
+		}
+
+		// ── Tab+Tab on empty input → enter create-task mode ──────────────────
+		if (data === '\t' && !overlayActive) {
+			if (editor.getText().trim() === '') {
+				const now = Date.now();
+				if (lastTabAt !== null && now - lastTabAt < TAB_DOUBLE_TAP_MS) {
+					lastTabAt = null;
+					setNewTaskMode(true);
+					return {consume: true};
+				}
+				lastTabAt = now;
+				return {consume: true};
+			}
+			// Non-empty input: editor handles Tab (autocomplete completion).
+			lastTabAt = null;
+		}
+
+		// Any non-Tab key cancels the pending double-tap window.
+		if (data !== '\t') {
+			lastTabAt = null;
+		}
+
+		// ── Esc exits create-task mode without submitting ────────────────────
+		if (newTaskMode && matchesKey(data, Key.escape) && !overlayActive) {
+			setNewTaskMode(false);
+			return {consume: true};
 		}
 
 		if (matchesKey(data, Key.ctrl('o'))) {

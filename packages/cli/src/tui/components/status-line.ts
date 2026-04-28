@@ -2,6 +2,8 @@ import {visibleWidth, truncateToWidth} from '@mariozechner/pi-tui';
 import type {Component} from '@mariozechner/pi-tui';
 import chalk from 'chalk';
 
+export type ChatMode = 'chat' | 'newTask';
+
 /**
  * Single-row status bar rendered below the editor.
  * Left side: incognito badge (when active).
@@ -12,6 +14,7 @@ export class StatusLine implements Component {
 	private _incognito = false;
 	private _acceptAll = false;
 	private _widget: Component | null = null;
+	private _mode: ChatMode = 'chat';
 
 	setIncognito(val: boolean): void {
 		this._incognito = val;
@@ -25,8 +28,16 @@ export class StatusLine implements Component {
 		this._widget = widget;
 	}
 
+	setMode(val: ChatMode): void {
+		if (this._mode === val) return;
+		this._mode = val;
+	}
+
 	render(width: number): string[] {
 		const parts: string[] = [];
+		if (this._mode === 'newTask') {
+			parts.push(chalk.bgHex('#3a3a00').hex('#ffee66')(' ⊕ NEW TASK '));
+		}
 		if (this._incognito) {
 			parts.push(chalk.bgHex('#3a2a00').hex('#ffcc44')(' ⊘ incognito '));
 		}
