@@ -11,6 +11,13 @@ export interface PendingApproval {
 	input?: Record<string, unknown>;
 }
 
+export interface ApprovalDecisions {
+	/** Map of toolCallId -> approved (true) / rejected (false) */
+	decisions: Map<string, boolean>;
+	/** True if any decision was option 1 (Yes, allow all this session) */
+	acceptAllFuture: boolean;
+}
+
 const toTitleCase = (s: string) =>
 	s
 		.split('_')
@@ -38,8 +45,18 @@ export class ApprovalPanel implements Component {
 	private requestRender: () => void;
 	private toolUIComp: Component | null = null;
 
-	/** Called with (approved, acceptAll) when user confirms */
-	onSelect?: (approved: boolean, acceptAll: boolean) => void;
+	/** Per-tool decisions: toolCallId -> boolean */
+	private decisions: Map<string, boolean> = new Map();
+	/** Flips true if any tool was decided with option 1 (Yes, allow all) */
+	private acceptAllFuture = false;
+	/** Index into pendingApprovals of the currently active (shown) tool */
+	private activeIndex = 0;
+
+	/**
+	 * Fired exactly once when ALL pending tools have a decision.
+	 * (May fire immediately if cascade-reject is triggered.)
+	 */
+	onAllDecided?: (result: ApprovalDecisions) => void;
 
 	constructor(
 		accountFrontendMap: Map<string, string>,
@@ -52,6 +69,7 @@ export class ApprovalPanel implements Component {
 	addApproval(approval: PendingApproval): void {
 		this.pendingApprovals.push(approval);
 		if (this.pendingApprovals.length === 1) {
+			// First approval — load its tool UI
 			void this.tryLoadToolUI(approval);
 		}
 	}
@@ -118,38 +136,99 @@ export class ApprovalPanel implements Component {
 	/** Confirm current selection, or pass explicit index */
 	confirm(optionIndex?: number): void {
 		const idx = optionIndex ?? this.selectedOption;
+		const active = this.pendingApprovals[this.activeIndex];
+		if (!active) return;
+
+		const {toolCallId} = active;
+
 		if (idx === 0) {
-			this.onSelect?.(true, false);
+			// Yes
+			this.decisions.set(toolCallId, true);
 		} else if (idx === 1) {
-			this.onSelect?.(true, true);
+			// Yes, allow all during this session
+			this.decisions.set(toolCallId, true);
+			this.acceptAllFuture = true;
 		} else {
-			this.onSelect?.(false, false);
+			// No — cascade-reject all remaining undecided tools
+			this.decisions.set(toolCallId, false);
+			this.cascadeReject();
+		}
+
+		// Check if all tools have decisions
+		if (this.decisions.size === this.pendingApprovals.length) {
+			this.onAllDecided?.({
+				decisions: this.decisions,
+				acceptAllFuture: this.acceptAllFuture,
+			});
+			return;
+		}
+
+		// Advance to the next undecided tool
+		this.advanceToNextUndecided();
+	}
+
+	/** Auto-reject all currently undecided tools (called on cascade-reject) */
+	private cascadeReject(): void {
+		for (const approval of this.pendingApprovals) {
+			if (!this.decisions.has(approval.toolCallId)) {
+				this.decisions.set(approval.toolCallId, false);
+			}
+		}
+	}
+
+	/** Advance activeIndex to the next tool without a decision, then reload toolUI */
+	private advanceToNextUndecided(): void {
+		const n = this.pendingApprovals.length;
+		// Search forward from current position
+		for (let offset = 1; offset < n; offset++) {
+			const candidate = (this.activeIndex + offset) % n;
+			const approval = this.pendingApprovals[candidate];
+			if (!this.decisions.has(approval.toolCallId)) {
+				this.activeIndex = candidate;
+				this.toolUIComp = null;
+				this.selectedOption = 0;
+				void this.tryLoadToolUI(approval);
+				this.requestRender();
+				return;
+			}
 		}
 	}
 
 	render(width: number): string[] {
 		const lines: string[] = [];
-		const active = this.pendingApprovals[0];
 		const n = this.pendingApprovals.length;
+		const active = this.pendingApprovals[this.activeIndex];
 
 		if (!active) return lines;
+
+		// ── Queue header ──────────────────────────────────────────────────────────
+		if (n > 1) {
+			// Status glyphs: one per tool, active tool wrapped in brackets
+			const glyphs = this.pendingApprovals.map((approval, i) => {
+				const decision = this.decisions.get(approval.toolCallId);
+				let glyph: string;
+				if (decision === true) {
+					glyph = chalk.green('✓'); // ✓
+				} else if (decision === false) {
+					glyph = chalk.red('✗'); // ✗
+				} else {
+					glyph = chalk.dim('?');
+				}
+				if (i === this.activeIndex) {
+					glyph = chalk.bold(`[${glyph}]`);
+				}
+				return glyph;
+			});
+			const statusStr = glyphs.join(' ');
+			const headerLeft = chalk.dim(`Tool ${this.activeIndex + 1} of ${n}`);
+			lines.push(truncateToWidth(`${headerLeft}   ${statusStr}`, width));
+			lines.push('');
+		}
 
 		const displayName = resolveDisplayName(active.toolName, active.input);
 
 		// ── Title (bold tool name) ────────────────────────────────────────────
 		lines.push(truncateToWidth(chalk.bold.white(displayName), width));
-
-		// Sub-title: queued count if >1
-		if (n > 1) {
-			const queued = this.pendingApprovals
-				.slice(1)
-				.map(a => resolveDisplayName(a.toolName, a.input))
-				.join(', ');
-			lines.push(
-				truncateToWidth(chalk.dim(`+${n - 1} queued: ${queued}`), width),
-			);
-		}
-
 		lines.push('');
 
 		// ── Content: toolUI or args preview ──────────────────────────────────
@@ -180,7 +259,7 @@ export class ApprovalPanel implements Component {
 		for (let i = 0; i < OPTIONS.length; i++) {
 			const opt = OPTIONS[i];
 			const isSelected = i === this.selectedOption;
-			const arrow = isSelected ? chalk.green('\u203a') : ' ';
+			const arrow = isSelected ? chalk.green('›') : ' ';
 			const num = chalk.dim(`${i + 1}.`);
 			const label = isSelected ? chalk.green(opt.label) : opt.label;
 			const hint = 'hint' in opt ? chalk.dim(` ${opt.hint}`) : '';
@@ -188,7 +267,7 @@ export class ApprovalPanel implements Component {
 		}
 
 		lines.push('');
-		lines.push(truncateToWidth(chalk.dim('Esc to cancel \xb7 \u2191\u2193 to navigate \xb7 enter to confirm'), width));
+		lines.push(truncateToWidth(chalk.dim('Esc to cancel \xb7 ↑↓ to navigate \xb7 enter to confirm'), width));
 
 		return lines;
 	}

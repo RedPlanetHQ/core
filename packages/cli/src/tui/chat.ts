@@ -144,7 +144,6 @@ export function startTuiApp(
 	let butlerName = 'CORE'; // replaced once workspace loads
 	let workspaceAccent = '#c15e50';
 	let pendingApprovalPanel: ApprovalPanel | null = null;
-	let pendingApprovalToolCallId: string | null = null;
 	let autoApproveAll = false;
 
 	const conversation = createConversation(baseUrl, apiKey);
@@ -246,7 +245,6 @@ export function startTuiApp(
 		conversationComponents = [];
 		allToolItems = [];
 		pendingApprovalPanel = null;
-		pendingApprovalToolCallId = null;
 		autoApproveAll = false;
 		statusLine.setAcceptAll(false);
 		conversation.clear();
@@ -659,7 +657,6 @@ export function startTuiApp(
 					const idx = conversationComponents.lastIndexOf(pendingApprovalPanel);
 					if (idx !== -1) conversationComponents.splice(idx, 1);
 					pendingApprovalPanel = null;
-					pendingApprovalToolCallId = null;
 				}
 				addToMessages(
 					new Text(
@@ -701,22 +698,19 @@ export function startTuiApp(
 
 				if (!pendingApprovalPanel) {
 					// First approval — create the panel and hide the loader
-					pendingApprovalToolCallId = toolCallId;
 					removeLoader();
 					const panel = new ApprovalPanel(accountFrontendMap, () => tui.requestRender());
 					pendingApprovalPanel = panel;
 					addToMessages(panel);
 
-					panel.onSelect = (approved: boolean, acceptAll: boolean) => {
+					panel.onAllDecided = (result) => {
 						// Remove the approval panel
 						try { messagesContainer.removeChild(panel); } catch { /* ignore */ }
 						const pidx = conversationComponents.lastIndexOf(panel);
 						if (pidx !== -1) conversationComponents.splice(pidx, 1);
 						pendingApprovalPanel = null;
-						const resolvedToolCallId = pendingApprovalToolCallId ?? '';
-						pendingApprovalToolCallId = null;
 
-						if (acceptAll) {
+						if (result.acceptAllFuture) {
 							autoApproveAll = true;
 							statusLine.setAcceptAll(true);
 						}
@@ -724,9 +718,16 @@ export function startTuiApp(
 						showLoader();
 						tui.requestRender();
 
-						conversation.approve(approved, resolvedToolCallId, callbacks).catch(() => {
-							// errors handled via onError
-						});
+						// Submit decisions sequentially — one approve() call per tool
+						(async () => {
+							for (const [toolCallId, approved] of result.decisions) {
+								try {
+									await conversation.approve(approved, toolCallId, callbacks);
+								} catch {
+									// errors handled via onError
+								}
+							}
+						})();
 					};
 				}
 
