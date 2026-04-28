@@ -559,12 +559,11 @@ export const Tool = ({
         <Button
           variant="ghost"
           className={cn(
-            "text-muted-foreground/80 -ml-2 flex items-center gap-2 py-1 text-left hover:cursor-pointer",
+            "text-muted-foreground/50 hover:text-muted-foreground group -ml-2 flex items-center gap-2 py-1 text-left hover:cursor-pointer",
             isDisabled && "cursor-not-allowed",
           )}
           disabled={isDisabled || needsApproval}
         >
-          {getIcon()}
           <span>{displayName}</span>
           {triggerHint?.kind === "nested" ? (
             <span className="text-muted-foreground/60 flex min-w-0 items-center gap-1 text-sm">
@@ -581,7 +580,7 @@ export const Tool = ({
               · {triggerHint.hint}
             </span>
           ) : null}
-          <span className="text-muted-foreground ml-auto shrink-0">
+          <span className="text-muted-foreground ml-auto hidden shrink-0 group-hover:inline-flex">
             {isOpen ? <ChevronDown size={14} /> : <ChevronRight size={14} />}
           </span>
         </Button>

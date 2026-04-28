@@ -19,42 +19,34 @@
           },
           {
             "group": "Getting Started",
+            "pages": ["getting-started"]
+          },
+          {
+            "group": "Concepts",
             "pages": [
-              "getting-started"
+              "concepts/meta-agent",
+              "concepts/memory",
+              "concepts/toolkit",
+              "concepts/scratchpad",
+              "concepts/widgets"
             ]
           }
         ]
       },
       {
-        "tab": "Concepts",
+        "tab": "Memory",
         "groups": [
-          {
-            "group": "Overview",
-            "pages": ["concepts/overview"]
-          },
-          {
-            "group": "Agent",
-            "pages": ["concepts/meta-agent"]
-          },
           {
             "group": "Memory",
             "pages": [
-              "concepts/memory/overview",
-              "concepts/memory/how-core-searches",
-              "concepts/memory/how-core-ingests",
-              "concepts/memory/aspects",
-              "concepts/memory/query_types",
-              "concepts/memory/entity_types",
-              "concepts/memory/labels"
+              "memory/overview",
+              "memory/how-core-searches",
+              "memory/how-core-ingests",
+              "memory/aspects",
+              "memory/query_types",
+              "memory/entity_types",
+              "memory/labels"
             ]
-          },
-          {
-            "group": "Toolkit",
-            "pages": ["concepts/toolkit"]
-          },
-          {
-            "group": "Workspace",
-            "pages": ["concepts/scratchpad", "concepts/widgets"]
           }
         ]
       },

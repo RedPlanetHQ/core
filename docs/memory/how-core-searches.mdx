@@ -15,7 +15,7 @@ Retrieval is intent-driven — not keyword matching.
 
 ```mermaid
 flowchart LR
-    QUERY["User message or ActionPlan\narrives at CORE Agent"]
+    QUERY["User message or ActionPlan\narrives at Agent"]
 
     DECOMP["① Memory Agent decomposes intent\nBreaks the request into\nmultiple targeted sub-queries"]
 
@@ -30,16 +30,16 @@ flowchart LR
 
     CONTEXT["④ Return rich context\nStructured facts with timestamps\nprovenance & relationship links"]
 
-    AGENT["CORE Agent uses context\nto ground its response"]
+    AGENT["Agent uses context\nto ground its response"]
 
     QUERY --> DECOMP --> search --> RANK --> CONTEXT --> AGENT
 ```
 
-When you ask the CORE Agent a question or search your memory:
+When you ask the Butler a question or search your memory:
 
 <Steps>
   <Step title="Query Classification">
-    CORE analyzes your query to determine the [query type](/concepts/memory/query_types) (aspect, entity, temporal, exploratory, or relationship), relevant time range, and which aspects to prioritize.
+    CORE analyzes your query to determine the [query type](/memory/query_types) (aspect, entity, temporal, exploratory, or relationship), relevant time range, and which aspects to prioritize.
   </Step>
 
   <Step title="Strategy Selection">
@@ -74,15 +74,15 @@ When you ask the CORE Agent a question or search your memory:
 ## Next Steps
 
 <CardGroup cols={3}>
-  <Card title="Query Types" icon="magnifying-glass" href="/concepts/memory/query_types">
+  <Card title="Query Types" icon="magnifying-glass" href="/memory/query_types">
     The 5 query types and how CORE classifies your questions
   </Card>
 
-  <Card title="How CORE Ingests" icon="download" href="/concepts/memory/how-core-ingests">
+  <Card title="How CORE Ingests" icon="download" href="/memory/how-core-ingests">
     How information enters your memory graph
   </Card>
 
-  <Card title="Statement Aspects" icon="tags" href="/concepts/memory/aspects">
+  <Card title="Statement Aspects" icon="tags" href="/memory/aspects">
     How facts are categorized for intelligent retrieval
   </Card>
 </CardGroup>

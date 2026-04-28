@@ -34,7 +34,7 @@ flowchart LR
 
 <Steps>
   <Step title="Raw Input Capture">
-    Information arrives from conversations with the CORE Agent, integration activity (GitHub commits, Slack messages, Linear issues), manual document uploads, or scheduled syncs from connected apps.
+    Information arrives from conversations with the Butler, integration activity (GitHub commits, Slack messages, Linear issues), manual document uploads, or scheduled syncs from connected apps.
   </Step>
 
   <Step title="Episode Creation">
@@ -46,7 +46,7 @@ flowchart LR
   </Step>
 
   <Step title="Statement Extraction">
-    Facts are extracted as structured triples: subject → predicate → object. Each statement is classified into one of [11 aspects](/concepts/memory/aspects) (Identity, Preference, Decision, etc.).
+    Facts are extracted as structured triples: subject → predicate → object. Each statement is classified into one of [11 aspects](/memory/aspects) (Identity, Preference, Decision, etc.).
   </Step>
 
   <Step title="Graph Integration">
@@ -58,7 +58,7 @@ flowchart LR
 
 ## Automatic vs Manual Ingestion
 
-**Automatic:** Connected integrations feed activity into memory in real-time or via scheduled syncs. Conversations with the CORE Agent are captured automatically. Zero effort - happens in the background.
+**Automatic:** Connected integrations feed activity into memory in real-time or via scheduled syncs. Conversations with the Butler are captured automatically. Zero effort - happens in the background.
 
 **Manual:** Tell the agent directly: "Remember this: I prefer using Fastify over Express for APIs because of better TypeScript support." Or use the MCP `memory_ingest` tool from any connected AI agent.
 
@@ -79,15 +79,15 @@ When new facts contradict old ones, CORE doesn't overwrite - it creates a tempor
 ## Next Steps
 
 <CardGroup cols={3}>
-  <Card title="How CORE Searches" icon="magnifying-glass" href="/concepts/memory/how-core-searches">
+  <Card title="How CORE Searches" icon="magnifying-glass" href="/memory/how-core-searches">
     How CORE retrieves information from your memory
   </Card>
 
-  <Card title="Statement Aspects" icon="tags" href="/concepts/memory/aspects">
+  <Card title="Statement Aspects" icon="tags" href="/memory/aspects">
     How facts are categorized during ingestion
   </Card>
 
-  <Card title="Labels" icon="tag" href="/concepts/memory/labels">
+  <Card title="Labels" icon="tag" href="/memory/labels">
     Organize ingested content with labels
   </Card>
 </CardGroup>
