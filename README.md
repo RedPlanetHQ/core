@@ -119,6 +119,17 @@ CORE investigated, created the issue, and assigned the right engineer. You woke 
 
 Open source, self-hosted. Your data never leaves your infra.
 
+**Wizard (fastest):**
+
+```bash
+npm install -g @redplanethq/corebrain
+corebrain setup
+```
+
+Walks you through install dir, AI provider, API key + chat model, auto-generates secrets, brings the stack up. Opens at `http://localhost:3033`.
+
+**Manual:**
+
 ```bash
 git clone https://github.com/RedPlanetHQ/core.git
 cd core/hosting/docker
@@ -127,15 +138,22 @@ cp .env.example .env
 docker compose up -d
 ```
 
-Open `http://localhost:3000` → connect your first app → hand off your first task.
+Open `http://localhost:3033` → connect your first app → hand off your first task.
 
-**Pick your model** (edit `.env`):
+**Pick your model** (edit `.env` or answer the wizard):
 
 ```bash
 OPENAI_API_KEY=sk-...                    # OpenAI
 ANTHROPIC_API_KEY=sk-ant-...             # Anthropic Claude
 OLLAMA_URL=http://localhost:11434        # Ollama — fully local, no cloud
 OPENAI_BASE_URL=https://your-proxy.com   # Any OpenAI-compatible endpoint
+```
+
+**Connect a gateway** (laptop, Docker host, or Railway) so CORE can drive your browser, run coding agents, and touch local folders:
+
+```bash
+corebrain login              # point at https://app.getcore.me or your self-hosted URL
+corebrain gateway setup      # pick native | docker | railway
 ```
 
 **Requirements:** Docker 20.10+, Docker Compose 2.20+, 4 vCPU / 8GB RAM

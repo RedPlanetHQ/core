@@ -17,14 +17,14 @@ corebrain login
 
 This connects the Gateway to your own CORE instance instead of CORE Cloud. Make sure `APP_ORIGIN` and `LOGIN_ORIGIN` are set correctly in your `.env` file: see [Docker setup](/self-hosting/docker#configuring-your-host-url).
 
-## Deployment Options
+## Setting Up a Gateway
 
-The gateway can be deployed three ways — pick whichever fits your setup:
+Once you're logged into your self-hosted instance, run:
 
-- **Native** — run on your own machine via the `corebrain` CLI.
-- **Docker** — run anywhere you can pull `ghcr.io/redplanethq/corebrain-gateway`.
-- **Railway** — one-click deploy:
+```bash
+corebrain gateway setup
+```
 
-  [![Deploy on Railway](https://railway.com/button.svg)](https://railway.com/deploy/core-gateway)
+The wizard asks where the gateway should run (native / docker / railway) and handles config, security key generation, optional Tailscale funnel, and registration with your instance.
 
-For step-by-step instructions for each option, see the [Gateway overview](/gateway/overview#install).
+For the full reference — flags, the manifest API, capability slots, environment variables — see the [Gateway overview](/gateway/overview#install).

@@ -132,6 +132,8 @@ export function createUIStreamWithApprovals(
             type: "tool-approval-request",
             approvalId,
             toolCallId: chunk.data.toolCallId,
+            toolName: chunk.data.toolName,
+            input: chunk.data.input ?? chunk.data.args,
           });
         } else {
           controller.enqueue(chunk);

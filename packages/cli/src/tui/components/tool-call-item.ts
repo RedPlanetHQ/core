@@ -52,34 +52,10 @@ const toTitleCase = (s: string) =>
 		.map((w, i) => (i === 0 ? w.charAt(0).toUpperCase() + w.slice(1) : w))
 		.join(' ');
 
-function toolTypeGlyph(toolName: string): string {
-	if (toolName === 'gather_context' || toolName === 'agent-gather_context') {
-		return chalk.cyan('?');
-	}
-	if (
-		toolName === 'create_task' ||
-		toolName === 'list_tasks' ||
-		toolName === 'update_task' ||
-		toolName === 'delete_task'
-	) {
-		return chalk.blue('▣');
-	}
-	if (
-		toolName === 'add_reminder' ||
-		toolName === 'update_reminder' ||
-		toolName === 'delete_reminder' ||
-		toolName === 'list_reminders' ||
-		toolName === 'confirm_reminder' ||
-		toolName === 'set_timezone'
-	) {
-		return chalk.yellow('⏲');
-	}
-	if (
-		toolName === 'execute_integration_action' ||
-		toolName === 'get_integration_actions'
-	) {
-		return chalk.magenta('⚡');
-	}
+// Tool-type icons removed: in a TUI the state dot + descriptive tool name is
+// enough; extra glyphs added noise (and "?" for gather_context read like an
+// error). Webapp uses real Lucide icons; we don't have that affordance.
+function toolTypeGlyph(_toolName: string): string {
 	return '';
 }
 
@@ -189,15 +165,23 @@ export class ToolCallItem implements Component {
 	 * Returns not-done children — these are nested tools still waiting
 	 * (in-progress or approval-requested) at the time of an approval event.
 	 * Mirrors webapp's findPendingApprovals expansion of agent-take_action.
+	 *
+	 * Includes the toolCallId so callers (e.g. ApprovalPanel) can key per-child
+	 * decisions independently — sharing the container's id collapses decisions.
 	 */
-	getPendingChildren(): Array<{toolName: string; displayName: string; input: Record<string, unknown>}> {
-		return this.children
-			.filter(c => !c.isDone)
-			.map(c => ({
-				toolName: c.toolName,
-				displayName: c.displayName,
-				input: c.parsedArgs(),
-			}));
+	getPendingChildren(): Array<{toolCallId: string; toolName: string; displayName: string; input: Record<string, unknown>}> {
+		const out: Array<{toolCallId: string; toolName: string; displayName: string; input: Record<string, unknown>}> = [];
+		for (const [callId, child] of this.childrenByCallId) {
+			if (!child.isDone) {
+				out.push({
+					toolCallId: callId,
+					toolName: child.toolName,
+					displayName: child.displayName,
+					input: child.parsedArgs(),
+				});
+			}
+		}
+		return out;
 	}
 
 	/**

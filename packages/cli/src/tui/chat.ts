@@ -29,6 +29,8 @@ import {DashboardView} from './components/dashboard-view.js';
 import {loadWidgetBundle} from './utils/widget-loader.js';
 import {getPreferences} from '../config/preferences.js';
 import {fetchConversationHistory, fetchWorkspace, fetchWorkspaceAvatar, fetchIntegrationAccounts, openBrowser, createTaskApi} from './utils/stream.js';
+import type {HistoryMessage} from './utils/stream.js';
+import {getToolDisplayName} from './utils/tool-names.js';
 import {ApprovalPanel} from './components/approval-panel.js';
 
 export function startTuiApp(
@@ -361,6 +363,116 @@ export function startTuiApp(
 	}
 
 
+	function renderHistoryMessage(msg: HistoryMessage): boolean {
+		let any = false;
+
+		for (const part of msg.parts) {
+			const t = part.type;
+
+			// ── text ──────────────────────────────────────────────────────────
+			if (t === 'text' && part.text) {
+				if (msg.role === 'user') {
+					addToMessages(
+						new Text(
+							chalk.bgHex('#3a3a3a').white(' ❯ ' + part.text + ' '),
+							0,
+							0,
+						),
+					);
+				} else {
+					addToMessages(new Markdown(part.text, 1, 0, markdownTheme));
+				}
+				any = true;
+				continue;
+			}
+
+			// ── file (image or other) ─────────────────────────────────────────
+			if (t === 'file') {
+				const filename = part.filename ?? 'attachment';
+				const isImage =
+					typeof part.mediaType === 'string' &&
+					part.mediaType.startsWith('image/');
+				const label = isImage
+					? `[image: ${filename}]`
+					: `[file: ${filename}${part.mediaType ? ' (' + part.mediaType + ')' : ''}]`;
+				addToMessages(new Text(chalk.dim(label), 1, 0));
+				any = true;
+				continue;
+			}
+
+			// ── tool-<name> ───────────────────────────────────────────────────
+			if (t.startsWith('tool-')) {
+				const toolName = t.slice('tool-'.length);
+				// Skip data-tool-agent (its info is in parent tool's output) and
+				// step-start sentinels.
+				if (
+					toolName === 'agent' ||
+					toolName === 'agent-take_action' ||
+					toolName === 'take_action'
+				) {
+					// Render parent agent/take_action wrappers as a compact line if no
+					// other tool parts will represent the work. For history rendering
+					// we defer to the nested tools that should accompany them; if those
+					// don't exist (rare), still print a marker.
+				}
+
+				const displayName = getToolDisplayName(toolName);
+				const argSummary = summarizeArgs(part.input);
+				const dot =
+					part.state === 'output-denied'
+						? chalk.red('✗')
+						: part.state === 'output-error'
+							? chalk.red('!')
+							: chalk.green('●');
+				const header = `${dot} ${chalk.bold(displayName)}${argSummary ? chalk.dim(' (' + argSummary + ')') : ''}`;
+				addToMessages(new Text(header, 1, 0));
+
+				// Result preview (first 3 non-empty lines)
+				const resultStr = stringifyToolOutput(part.output);
+				if (resultStr) {
+					const previewLines = resultStr
+						.split('\n')
+						.filter(l => l.trim().length > 0)
+						.slice(0, 3);
+					for (const line of previewLines) {
+						addToMessages(new Text(chalk.dim('  ' + line), 1, 0));
+					}
+				}
+
+				any = true;
+				continue;
+			}
+
+			// ── data-tool-agent / step-start / unknown ────────────────────────
+			// Silently skip — these are streaming-protocol artifacts.
+		}
+
+		return any;
+	}
+
+	function summarizeArgs(input: unknown): string {
+		if (!input || typeof input !== 'object') return '';
+		const obj = input as Record<string, unknown>;
+		const firstVal = Object.values(obj)[0];
+		if (firstVal === undefined) return '';
+		const str =
+			typeof firstVal === 'string'
+				? firstVal
+				: JSON.stringify(firstVal);
+		const oneLine = str.replace(/[\r\n\t]+/g, ' ').trim();
+		return oneLine.length > 60 ? oneLine.slice(0, 60) + '…' : oneLine;
+	}
+
+	function stringifyToolOutput(output: unknown): string {
+		if (output === undefined || output === null) return '';
+		if (typeof output === 'string') return output;
+		try {
+			return JSON.stringify(output, null, 2);
+		} catch {
+			return String(output);
+		}
+	}
+
 	function loadConversationHistoryIntoMessages(conversationId: string): void {
 		const historyLoader = new Loader(
 			tui,
@@ -383,25 +495,10 @@ export function startTuiApp(
 				}
 
 				for (const msg of messages) {
-					const text = msg.parts
-						.filter(p => p.type === 'text' && p.text)
-						.map(p => p.text ?? '')
-						.join('');
-
-					if (!text) continue;
-
-					if (msg.role === 'user') {
-						addToMessages(
-							new Text(
-								chalk.bgHex('#3a3a3a').white(' \u276f ' + text + ' '),
-								0,
-								0,
-							),
-						);
-					} else {
-						addToMessages(new Markdown(text, 1, 0, markdownTheme));
+					const renderedAny = renderHistoryMessage(msg);
+					if (renderedAny) {
+						addToMessages(new Spacer(1));
 					}
-					addToMessages(new Spacer(1));
 				}
 
 				tui.requestRender();
