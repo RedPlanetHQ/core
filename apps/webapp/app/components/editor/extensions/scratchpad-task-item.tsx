@@ -252,7 +252,10 @@ export const ScratchpadTaskItem = ({
                   fetch(`/api/v1/tasks/${id}`, {
                     method: "PATCH",
                     headers: { "Content-Type": "application/json" },
-                    body: JSON.stringify({ title }),
+                    // sourcePageId tells the server to skip propagating this
+                    // title back into the originating page's live Y.Doc — that
+                    // would wipe the fragment and reset the user's cursor.
+                    body: JSON.stringify({ title, sourcePageId: pageId }),
                   }).catch(console.error);
                 }, 500),
               );

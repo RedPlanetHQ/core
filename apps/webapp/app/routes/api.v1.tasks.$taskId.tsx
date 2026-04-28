@@ -70,6 +70,7 @@ const { action } = createHybridActionApiRoute(
       status?: TaskStatus;
       title?: string;
       description?: string;
+      sourcePageId?: string;
     };
     if (!body.status && !body.title && body.description === undefined) {
       return json({ error: "Missing fields" }, { status: 400 });
@@ -79,17 +80,18 @@ const { action } = createHybridActionApiRoute(
       ...(body.status && { status: body.status }),
       ...(body.title !== undefined && { title: body.title }),
       ...(body.description !== undefined && { description: body.description }),
+      ...(body.sourcePageId && { sourcePageId: body.sourcePageId }),
     });
 
     // Feature 2: auto-detect schedule from updated title in background
-    if (body.title !== undefined) {
-      detectAndApplyRecurrence(
-        taskId,
-        authentication.workspaceId as string,
-        task.userId,
-        body.title,
-      );
-    }
+    // if (body.title !== undefined) {
+    //   detectAndApplyRecurrence(
+    //     taskId,
+    //     authentication.workspaceId as string,
+    //     task.userId,
+    //     body.title,
+    //   );
+    // }
 
     return json({
       id: updated.id,

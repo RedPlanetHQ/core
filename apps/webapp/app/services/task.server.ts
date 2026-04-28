@@ -213,11 +213,17 @@ export async function searchTasks(
 
 export async function updateTask(
   id: string,
-  data: { status?: TaskStatus; title?: string; description?: string },
+  data: {
+    status?: TaskStatus;
+    title?: string;
+    description?: string;
+    /** Page the change originated from — excluded from title propagation. */
+    sourcePageId?: string;
+  },
   /** When true, appends description to existing content instead of replacing */
   append = false,
 ): Promise<Task> {
-  const { description, ...prismaData } = data;
+  const { description, sourcePageId, ...prismaData } = data;
 
   const existing = data.title
     ? await prisma.task.findUnique({ where: { id }, select: { title: true } })
@@ -226,7 +232,7 @@ export async function updateTask(
 
   // Propagate title change to all pages that reference this task
   if (data.title && data.title !== existing?.title) {
-    updateTaskTitleInPages(id, data.title).catch(console.error);
+    updateTaskTitleInPages(id, data.title, sourcePageId).catch(console.error);
   }
 
   if (description && task.pageId) {
