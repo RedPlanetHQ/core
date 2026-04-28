@@ -47,105 +47,81 @@ For the protocol details and a route-by-route reference, see [`packages/gateway-
 
 ## Install
 
-The gateway can be deployed three ways. Pick the one that fits where you want it to run.
+`corebrain gateway setup` is the unified entry point — pick where the gateway should run and the wizard handles the rest (config, security key, public URL via Tailscale or Railway, registration with CORE).
 
-<Tabs>
-  <Tab title="Native">
-    Best for running the gateway on your own laptop or workstation, with full access to your local browser, shells, and folders.
-
-    <Steps>
-      <Step title="Install the CLI">
-        ```bash
-        npm install -g @redplanethq/corebrain
-        ```
-      </Step>
-
-      <Step title="Login">
-        ```bash
-        corebrain login
-        ```
-      </Step>
-
-      <Step title="Configure & start">
-        ```bash
-        corebrain gateway config   # name, slots, exec patterns, default agent
-        corebrain gateway start    # installs as a launchd / systemd service
-        ```
-      </Step>
-
-      <Step title="Register with the webapp">
-        Run `corebrain gateway register` to print a security key, then paste it (with the gateway URL) into **Settings → Gateways → New gateway**.
-      </Step>
-    </Steps>
-  </Tab>
-
-  <Tab title="Docker">
-    Best for self-hosted servers, Fly, Render, or any Docker host you control. The bundled image ships Claude Code, Codex CLI, Playwright Chromium, and pre-registers `/app` as a coding workspace.
-
-    The repo includes a ready compose file under [`hosting/gateway`](https://github.com/RedPlanetHQ/core/tree/main/hosting/gateway):
-
+<Steps>
+  <Step title="Install the CLI">
     ```bash
-    cd hosting/gateway
-    cp .env.example .env       # fill in COREBRAIN_API_KEY (and the agent token below)
-    docker compose up -d
-    docker compose logs -f corebrain-gateway   # grab the auto-generated security key on first boot
+    npm install -g @redplanethq/corebrain
+    corebrain login
+    ```
+  </Step>
+
+  <Step title="Run setup">
+    ```bash
+    corebrain gateway setup
     ```
 
-    Set the token for whichever coding agent you plan to use — the container runs both `claude-code` and `codex-cli`, but each needs its own credential to skip OAuth:
+    The wizard asks where the gateway should run:
 
-    - **`CLAUDE_CODE_OAUTH_TOKEN`** — long-lived token from `claude setup-token` (run on a laptop where you've already done `claude login`). See [Claude Code authentication](https://docs.claude.com/en/docs/claude-code/setup#authentication).
-    - **`OPENAI_API_KEY`** — standard OpenAI API key from the [API Keys dashboard](https://platform.openai.com/api-keys). See [Codex CLI auth](https://github.com/openai/codex#authentication).
+    - **Native** — this machine. Installs a launchd (macOS) / systemd (Linux) service, generates a security key, and registers with CORE. Full access to local browser, shells, and folders.
+    - **Docker** — local or remote Docker host. Drops `docker-compose.yaml` + `.env` into `~/.corebrain/gateways/<name>/` (templates fetched from `main` so they stay in sync), runs `docker compose up -d`, optionally exposes via [Tailscale funnel](/gateway/tunnels), and registers with CORE.
+    - **Railway** — managed cloud. Detects (or installs) the Railway CLI, runs `railway init` + `railway deploy -t core-gateway`, provisions a public domain, and registers with CORE.
 
-    If you leave `COREBRAIN_GATEWAY_SECURITY_KEY` blank in `.env`, the gateway generates one on first boot and prints it to the logs — copy it (with the gateway URL) into the webapp's **Register gateway** dialog.
-  </Tab>
+    For docker / railway the wizard also prompts (optional) for `CLAUDE_CODE_OAUTH_TOKEN`, `OPENAI_API_KEY`, and `GITHUB_TOKEN` so the coding + git slots work out of the box.
+  </Step>
 
-  <Tab title="Railway">
-    Best for a fully managed cloud gateway with one-click setup. Railway provisions the container, persistent volumes, and a public URL for you.
+  <Step title="Verify">
+    ```bash
+    corebrain gateway list           # all gateways your workspace knows about
+    corebrain gateway status         # native gateway on this machine
+    corebrain gateway status <id>    # any gateway by id
+    ```
+  </Step>
+</Steps>
 
-    [![Deploy on Railway](https://railway.com/button.svg)](https://railway.com/deploy/core-gateway)
+### Skipping the wizard
 
-    <Steps>
-      <Step title="Click Deploy">
-        Use the button above to launch the template on Railway.
-      </Step>
+`corebrain gateway setup --kind native|docker|railway` jumps straight into one path. Useful for headless installs and CI.
 
-      <Step title="Set environment variables">
-        Fill in the required variables when prompted:
+### One-click Railway deploy
 
-        - `COREBRAIN_API_URL` — your CORE instance URL (e.g. `https://app.getcore.me`)
-        - `COREBRAIN_API_KEY` — a Personal Access Token from the webapp
-        - `COREBRAIN_GATEWAY_NAME` — name shown in the webapp
-        - `COREBRAIN_GATEWAY_SECURITY_KEY` — *(optional)* leave empty and Railway will auto-generate one
+Prefer to skip the CLI entirely for a Railway gateway? Click below — Railway prompts for the env vars, provisions the service + public domain, and you paste the URL + security key into the webapp's **Register gateway** dialog.
 
-        See the full list under [Environment Variables](#environment-variables-headless--docker).
-      </Step>
+[![Deploy on Railway](https://railway.com/button.svg)](https://railway.com/deploy/core-gateway)
 
-      <Step title="Grab the security key">
-        If you didn't set `COREBRAIN_GATEWAY_SECURITY_KEY`, open the deploy logs once the service is up and copy the auto-generated key printed on first boot.
-      </Step>
+The required env vars are:
 
-      <Step title="Register with the webapp">
-        Copy the public Railway URL and paste it (with the security key) into **Settings → Gateways → New gateway**.
-      </Step>
-    </Steps>
-  </Tab>
-</Tabs>
+- `COREBRAIN_API_URL` — your CORE instance URL (e.g. `https://app.getcore.me`)
+- `COREBRAIN_API_KEY` — a Personal Access Token from the webapp
+- `COREBRAIN_GATEWAY_NAME` — name shown in the webapp
+- `COREBRAIN_GATEWAY_SECURITY_KEY` — *(optional)* leave empty and Railway will auto-generate one (find it in the deploy logs on first boot)
 
 ---
 
 ## Gateway Commands
 
-| Command                       | Description                                           |
-| ----------------------------- | ----------------------------------------------------- |
-| `corebrain gateway start`     | Install + start the gateway as a system service       |
-| `corebrain gateway start --foreground` | Run attached to the current terminal (Docker / ad-hoc) |
-| `corebrain gateway stop`      | Stop and uninstall the service                        |
-| `corebrain gateway restart`   | Restart the service                                   |
-| `corebrain gateway status`    | Show service + manifest status                        |
-| `corebrain gateway config`    | Configure name, slots, exec patterns, default agent   |
-| `corebrain gateway register`  | Generate / rotate the security key                    |
-| `corebrain folder add <path>` | Register a path with `files,coding,exec` scopes       |
-| `corebrain folder list`       | List registered folders                               |
+| Command                                | Description                                                              |
+| -------------------------------------- | ------------------------------------------------------------------------ |
+| `corebrain gateway setup`              | Wizard: pick native / docker / railway, configure, and register with CORE |
+| `corebrain gateway list`               | List every gateway registered with your CORE workspace                   |
+| `corebrain gateway status [id]`        | Show local-native status (no id), or any gateway's manifest (with id)    |
+| `corebrain gateway config`             | Reconfigure the native gateway on this machine (slots, folders, exec patterns) |
+| `corebrain gateway start`              | Install + start the native gateway as a system service                   |
+| `corebrain gateway start --foreground` | Run attached to the current terminal (Docker / ad-hoc)                   |
+| `corebrain gateway stop`               | Stop and uninstall the native service                                    |
+| `corebrain gateway restart`            | Restart the native service                                               |
+| `corebrain gateway register`           | Generate / rotate the security key for the native gateway                |
+
+The `folder`, `browser`, `coding`, and `exec` command groups configure the native gateway's slots and only run when one is set up on this machine — they print a redirect to `corebrain gateway setup` otherwise.
+
+| Command                       | Description                                            |
+| ----------------------------- | ------------------------------------------------------ |
+| `corebrain folder add <path>` | Register a path with `files,coding,exec` scopes        |
+| `corebrain folder list`       | List registered folders                                |
+| `corebrain browser status`    | Inspect the gateway's browser config + sessions        |
+| `corebrain coding setup`      | Configure a coding agent (claude-code, codex)          |
+| `corebrain exec config`       | Set the exec slot's allow / deny patterns              |
 
 ---
 

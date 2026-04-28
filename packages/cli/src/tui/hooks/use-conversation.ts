@@ -112,6 +112,41 @@ export function createConversation(
 	let activeAbortController: AbortController | null = null;
 	// Equivalent of webapp's cachedNestedPartsRef — persists agent item across streams
 	let savedAgentItem: ToolCallItem | null = null;
+	// Persistent useChat-like parts model: survives stream resumptions (e.g. when
+	// a paused-for-approval stream ends and a fresh approval stream starts, the
+	// new stream may only carry tool-approval-request events without the original
+	// tool-input-start that established the toolName). The webapp doesn't lose
+	// this because its UIMessage parts persist across stream sessions; the TUI's
+	// per-stream maps reset. Mirror the persistence here.
+	interface ToolPart {
+		toolName: string;
+		input?: Record<string, unknown>;
+		state?: string; // 'input-streaming' | 'in-progress' | 'output-available' | 'output-denied' | 'output-error' | 'approval-requested' | 'approval-responded'
+		parentCallId?: string;
+	}
+	const partsByCallId = new Map<string, ToolPart>();
+	function rememberPart(
+		toolCallId: string,
+		updates: {toolName?: string; input?: Record<string, unknown>; state?: string; parentCallId?: string},
+	): void {
+		const existing = partsByCallId.get(toolCallId);
+		partsByCallId.set(toolCallId, {
+			toolName: updates.toolName || existing?.toolName || toolCallId,
+			input: updates.input ?? existing?.input,
+			state: updates.state ?? existing?.state,
+			parentCallId: updates.parentCallId ?? existing?.parentCallId,
+		});
+	}
+	const TERMINAL_STATES = new Set(['output-available', 'output-denied', 'output-error', 'approval-responded']);
+	function findPendingChildrenOf(parentCallId: string): Array<{toolName: string; input: Record<string, unknown>; toolCallId: string}> {
+		const out: Array<{toolName: string; input: Record<string, unknown>; toolCallId: string}> = [];
+		for (const [callId, part] of partsByCallId) {
+			if (part.parentCallId === parentCallId && (!part.state || !TERMINAL_STATES.has(part.state))) {
+				out.push({toolName: part.toolName, input: part.input ?? {}, toolCallId: callId});
+			}
+		}
+		return out;
+	}
 
 	// ── Shared stream event processor ─────────────────────────────────────────
 	async function processStream(
@@ -126,6 +161,7 @@ export function createConversation(
 		const toolInputMap = new Map<string, Record<string, unknown>>(); // toolCallId → input
 		let activeParent: {id: string; item: ToolCallItem} | null = null;
 		let lastAgentItem: ToolCallItem | null = savedAgentItem; // restored from prior stream (like cachedNestedPartsRef)
+		let lastAgentCallId: string | null = null; // tracks lastAgentItem's toolCallId for parent linkage
 		let hadApprovalRequest = false;
 		const approvedContainerIds = new Set<string>(); // prevent duplicate approval expansion
 
@@ -145,12 +181,18 @@ export function createConversation(
 
 						if (CONTAINER_TOOLS.has(event.toolName)) {
 							activeParent = {id: event.toolCallId, item};
-							if (event.toolName.startsWith('agent-')) lastAgentItem = item;
+							if (event.toolName.startsWith('agent-')) {
+								lastAgentItem = item;
+								lastAgentCallId = event.toolCallId;
+							}
+							rememberPart(event.toolCallId, {toolName: event.toolName, state: 'input-streaming'});
 							callbacks.onToolStart?.(event.toolCallId, event.toolName, item);
 						} else if (activeParent) {
 							activeParent.item.addChild(item);
+							rememberPart(event.toolCallId, {toolName: event.toolName, state: 'input-streaming', parentCallId: activeParent.id});
 							callbacks.onRerender?.();
 						} else {
+							rememberPart(event.toolCallId, {toolName: event.toolName, state: 'input-streaming'});
 							callbacks.onToolStart?.(event.toolCallId, event.toolName, item);
 						}
 
@@ -167,6 +209,7 @@ export function createConversation(
 
 					case 'tool-input-available': {
 						toolInputMap.set(event.toolCallId, event.input);
+						rememberPart(event.toolCallId, {input: event.input, state: 'in-progress'});
 						break;
 					}
 
@@ -179,13 +222,19 @@ export function createConversation(
 
 						if (CONTAINER_TOOLS.has(event.toolName)) {
 							activeParent = {id: event.toolCallId, item};
-							if (event.toolName.startsWith('agent-')) lastAgentItem = item;
+							if (event.toolName.startsWith('agent-')) {
+								lastAgentItem = item;
+								lastAgentCallId = event.toolCallId;
+							}
+							rememberPart(event.toolCallId, {toolName: event.toolName, input: event.args, state: 'in-progress'});
 							callbacks.onToolStart?.(event.toolCallId, event.toolName, item);
 						} else if (activeParent) {
 							item.setDone();
 							activeParent.item.addChild(item);
+							rememberPart(event.toolCallId, {toolName: event.toolName, input: event.args, state: 'in-progress', parentCallId: activeParent.id});
 							callbacks.onRerender?.();
 						} else {
+							rememberPart(event.toolCallId, {toolName: event.toolName, input: event.args, state: 'in-progress'});
 							callbacks.onToolStart?.(event.toolCallId, event.toolName, item);
 						}
 
@@ -193,6 +242,7 @@ export function createConversation(
 					}
 
 					case 'tool-output-available': {
+						rememberPart(event.toolCallId, {state: 'output-available'});
 						const parentItem = activeTools.get(event.toolCallId);
 						if (parentItem && event.output) {
 							let parts: OutputPart[] | null = null;
@@ -201,7 +251,26 @@ export function createConversation(
 							} else if (event.output.toolCalls ?? event.output.toolResults ?? event.output.steps) {
 								parts = mastraDataToOutputParts(event.output as Parameters<typeof mastraDataToOutputParts>[0]);
 							}
-							if (parts) parentItem.updateFromOutputParts(parts);
+							if (parts) {
+								parentItem.updateFromOutputParts(parts);
+								// Mirror the nested children into the persistent parts model so
+								// approval expansion can find them when the container's
+								// ToolCallItem isn't in activeTools (cross-stream resumption).
+								for (const part of parts) {
+									if (!part.type.startsWith('tool-') || !part.toolCallId) continue;
+									const childToolName = part.type.slice('tool-'.length);
+									const isTerminal =
+										part.state === 'output-available' ||
+										part.state === 'output-denied' ||
+										part.state === 'output-error';
+									rememberPart(part.toolCallId, {
+										toolName: childToolName,
+										input: part.input,
+										parentCallId: event.toolCallId,
+										state: isTerminal ? 'output-available' : (part.state ?? 'in-progress'),
+									});
+								}
+							}
 						}
 
 						if (!event.preliminary && activeParent?.id === event.toolCallId) {
@@ -215,6 +284,7 @@ export function createConversation(
 					}
 
 					case 'tool-result': {
+						rememberPart(event.toolCallId, {state: 'output-available'});
 						const item = activeTools.get(event.toolCallId);
 						if (item) {
 							item.setDone(event.result);
@@ -229,7 +299,15 @@ export function createConversation(
 
 					case 'tool-approval-request': {
 						hadApprovalRequest = true;
-						const toolName = toolNameMap.get(event.toolCallId) ?? event.toolCallId;
+						// Mark the approval-requested state on the persistent part.
+						rememberPart(event.toolCallId, {state: 'approval-requested'});
+
+						// Resolve toolName from the persistent parts model first, then
+						// fall back to the per-stream toolNameMap. This catches the case
+						// where the approval arrives in a fresh stream session that didn't
+						// see the original tool-input-start.
+						const persistedPart = partsByCallId.get(event.toolCallId);
+						const toolName = persistedPart?.toolName ?? toolNameMap.get(event.toolCallId) ?? event.toolCallId;
 
 						// Save agent item unconditionally — must happen before any early break
 						// so the next processStream (approval resume stream) can look up children.
@@ -237,22 +315,39 @@ export function createConversation(
 
 						// Mirror webapp's findPendingApprovals: expand container tools into
 						// their pending children so the user sees the actual leaf tools.
-						const containerItem = activeTools.get(event.toolCallId);
+						// Find pending children via the persistent parts model (works across
+						// stream resumptions, unlike activeTools which is per-stream).
 						const isContainerTool =
 							toolName === 'agent-take_action' || toolName === 'take_action';
 
-						if (isContainerTool && containerItem) {
+						if (isContainerTool) {
 							// Deduplicate: parallel tool calls fire multiple approval events for
 							// the same container. Only expand once — one approval covers all children.
 							if (approvedContainerIds.has(event.toolCallId)) break;
 							approvedContainerIds.add(event.toolCallId);
 
-							const pendingChildren = containerItem.getPendingChildren();
+							// Source 1 (in-stream): the container's ToolCallItem in activeTools
+							// has nested children registered via tool-output-available's
+							// updateFromOutputParts. This is the most reliable source when the
+							// container was started in this same stream.
+							const containerItem = activeTools.get(event.toolCallId);
+							let pendingChildren: Array<{toolCallId: string; toolName: string; input: Record<string, unknown>}> = containerItem?.getPendingChildren() ?? [];
+
+							// Source 2 (cross-stream resumption): the persistent parts model.
+							// The container's ToolCallItem may have been cleared but
+							// partsByCallId entries with parentCallId === containerId persist.
+							if (pendingChildren.length === 0) {
+								pendingChildren = findPendingChildrenOf(event.toolCallId);
+							}
+
 							if (pendingChildren.length > 0) {
 								for (const child of pendingChildren) {
+									// Pass child's own toolCallId — sharing the container's id
+									// across children would collapse decisions in the panel
+									// (decisions Map keyed by toolCallId).
 									callbacks.onApprovalRequested?.(
 										event.approvalId,
-										event.toolCallId,
+										child.toolCallId,
 										child.toolName,
 										child.input,
 									);
@@ -261,14 +356,9 @@ export function createConversation(
 							}
 						}
 
-						// Fall back: if toolName wasn't resolved, check children cached from first stream
-						let resolvedName = toolName;
-						let toolInput = toolInputMap.get(event.toolCallId);
-						if (resolvedName === event.toolCallId && lastAgentItem) {
-							const childInfo = lastAgentItem.getChildInfo(event.toolCallId);
-							if (childInfo) { resolvedName = childInfo.toolName; toolInput = childInfo.input; }
-						}
-						callbacks.onApprovalRequested?.(event.approvalId, event.toolCallId, resolvedName, toolInput);
+						// Fall back: single approval. resolvedName comes from persistedPart.
+						const toolInput = persistedPart?.input ?? toolInputMap.get(event.toolCallId);
+						callbacks.onApprovalRequested?.(event.approvalId, event.toolCallId, toolName, toolInput);
 						break;
 					}
 
@@ -291,30 +381,44 @@ export function createConversation(
 								if (call.toolCallId && call.toolName) {
 									toolNameMap.set(call.toolCallId as string, call.toolName as string);
 									if (call.args) toolInputMap.set(call.toolCallId as string, call.args as Record<string, unknown>);
+									// Children registered via data-tool-agent are nested inside the
+									// active agent container — link them so approval expansion can find them.
+									rememberPart(call.toolCallId as string, {
+										toolName: call.toolName as string,
+										input: call.args as Record<string, unknown> | undefined,
+										parentCallId: lastAgentCallId ?? undefined,
+										state: 'in-progress',
+									});
+								}
+							}
+							// Mark any toolResults as output-available in the parts model so
+							// findPendingChildrenOf doesn't return completed tools as "pending".
+							const allResults = [
+								...(agentData.toolResults ?? []),
+								...(Array.isArray(agentData.steps)
+									? agentData.steps.flatMap((s: any) => s.toolResults ?? [])
+									: []),
+							];
+							for (const r of allResults) {
+								const res = (r as any).payload ?? r;
+								if (res.toolCallId) {
+									rememberPart(res.toolCallId as string, {state: 'output-available'});
 								}
 							}
 							const parts = mastraDataToOutputParts(agentData);
 							if (parts.length > 0) {
 								lastAgentItem.updateFromOutputParts(parts);
 								callbacks.onRerender?.();
-							} else {
+							} else if (allResults.length > 0) {
 								// Post-approval pattern: toolCalls is [] but toolResults has results
 								// for children registered in an earlier snapshot — mark them done.
-								const allResults = [
-									...(agentData.toolResults ?? []),
-									...(Array.isArray(agentData.steps)
-										? agentData.steps.flatMap((s: any) => s.toolResults ?? [])
-										: []),
-								];
-								if (allResults.length > 0) {
-									const resultMap = new Map<string, unknown>();
-									for (const r of allResults) {
-										const res = (r as any).payload ?? r;
-										if (res.toolCallId) resultMap.set(res.toolCallId as string, res.result);
-									}
-									lastAgentItem.markChildrenDoneByIds(resultMap);
-									callbacks.onRerender?.();
+								const resultMap = new Map<string, unknown>();
+								for (const r of allResults) {
+									const res = (r as any).payload ?? r;
+									if (res.toolCallId) resultMap.set(res.toolCallId as string, res.result);
 								}
+								lastAgentItem.markChildrenDoneByIds(resultMap);
+								callbacks.onRerender?.();
 							}
 						}
 						break;
@@ -384,6 +488,7 @@ export function createConversation(
 		clear() {
 			conversationId = null;
 			savedAgentItem = null;
+			partsByCallId.clear();
 		},
 
 		resume(id: string) {

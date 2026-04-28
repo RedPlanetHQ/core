@@ -546,10 +546,24 @@ export function isRecurringTask(t: TaskSummary): boolean {
 
 // ── Fetch conversation history ────────────────────────────────────────────────
 
+export interface HistoryPart {
+	type: string;
+	text?: string;
+	// file parts
+	mediaType?: string;
+	filename?: string;
+	url?: string;
+	// tool parts
+	toolCallId?: string;
+	state?: string;
+	input?: Record<string, unknown>;
+	output?: unknown;
+}
+
 export interface HistoryMessage {
 	id: string;
 	role: 'user' | 'assistant';
-	parts: Array<{type: string; text?: string}>;
+	parts: HistoryPart[];
 }
 
 export interface ConversationDetail {
