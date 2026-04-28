@@ -20,6 +20,9 @@ import {createConversation} from './hooks/use-conversation.js';
 import {ToolCallItem} from './components/tool-call-item.js';
 import {ConversationSelector} from './components/conversation-selector.js';
 import {ReminderList} from './components/reminder-list.js';
+import {TaskList} from './components/task-list.js';
+import {TaskDetail} from './components/task-detail.js';
+import type {TaskSummary} from './utils/stream.js';
 import {IntegrationsView} from './components/integrations-view.js';
 import {WidgetsView} from './components/widgets-view.js';
 import {DashboardView} from './components/dashboard-view.js';
@@ -61,6 +64,7 @@ export function startTuiApp(
 				{name: 'clear', description: 'Clear conversation and start fresh'},
 				{name: 'resume', description: 'Resume a previous conversation'},
 				{name: 'reminders', description: 'View your reminders'},
+				{name: 'tasks', description: 'View and manage your tasks'},
 				{name: 'integrations', description: 'View and connect integrations'},
 				{name: 'widgets', description: 'Configure widgets (below-input & overview)'},
 				{name: 'dashboard', description: 'Show overview widgets in TUI'},
@@ -260,6 +264,11 @@ export function startTuiApp(
 			return;
 		}
 
+		if (trimmed === '/tasks') {
+			showTaskList();
+			return;
+		}
+
 		if (trimmed === '/integrations') {
 			showIntegrationsView();
 			return;
@@ -306,6 +315,66 @@ export function startTuiApp(
 		tui.requestRender();
 	}
 
+
+	function loadConversationHistoryIntoMessages(conversationId: string): void {
+		const historyLoader = new Loader(
+			tui,
+			s => chalk.cyan(s),
+			s => chalk.gray(s),
+			'Loading history...',
+		);
+		messagesContainer.addChild(historyLoader);
+		historyLoader.start();
+		tui.requestRender();
+
+		fetchConversationHistory(baseUrl, apiKey, conversationId)
+			.then(({messages, incognito: convIncognito}) => {
+				messagesContainer.removeChild(historyLoader);
+				historyLoader.stop();
+
+				if (convIncognito && !conversation.incognito) {
+					conversation.toggleIncognito();
+					statusLine.setIncognito(true);
+				}
+
+				for (const msg of messages) {
+					const text = msg.parts
+						.filter(p => p.type === 'text' && p.text)
+						.map(p => p.text ?? '')
+						.join('');
+
+					if (!text) continue;
+
+					if (msg.role === 'user') {
+						addToMessages(
+							new Text(
+								chalk.bgHex('#3a3a3a').white(' \u276f ' + text + ' '),
+								0,
+								0,
+							),
+						);
+					} else {
+						addToMessages(new Markdown(text, 1, 0, markdownTheme));
+					}
+					addToMessages(new Spacer(1));
+				}
+
+				tui.requestRender();
+			})
+			.catch((err: Error) => {
+				messagesContainer.removeChild(historyLoader);
+				historyLoader.stop();
+				addToMessages(
+					new Text(
+						chalk.red('Failed to load history: ') + chalk.gray(err.message),
+						1,
+						0,
+					),
+				);
+				tui.requestRender();
+			});
+	}
+
 	function showResumeSelector(): void {
 		hideMainUI();
 
@@ -328,63 +397,7 @@ export function startTuiApp(
 			exitSelector();
 			clearConversation();
 			conversation.resume(conv.id);
-
-			const historyLoader = new Loader(
-				tui,
-				s => chalk.cyan(s),
-				s => chalk.gray(s),
-				'Loading history...',
-			);
-			messagesContainer.addChild(historyLoader);
-			historyLoader.start();
-			tui.requestRender();
-
-			fetchConversationHistory(baseUrl, apiKey, conv.id)
-				.then(({messages, incognito: convIncognito}) => {
-					messagesContainer.removeChild(historyLoader);
-					historyLoader.stop();
-
-					if (convIncognito && !conversation.incognito) {
-						conversation.toggleIncognito();
-						statusLine.setIncognito(true);
-					}
-
-					for (const msg of messages) {
-						const text = msg.parts
-							.filter(p => p.type === 'text' && p.text)
-							.map(p => p.text ?? '')
-							.join('');
-
-						if (!text) continue;
-
-						if (msg.role === 'user') {
-							addToMessages(
-								new Text(
-									chalk.bgHex('#3a3a3a').white(' \u276f ' + text + ' '),
-									0,
-									0,
-								),
-							);
-						} else {
-							addToMessages(new Markdown(text, 1, 0, markdownTheme));
-						}
-						addToMessages(new Spacer(1));
-					}
-
-					tui.requestRender();
-				})
-				.catch((err: Error) => {
-					messagesContainer.removeChild(historyLoader);
-					historyLoader.stop();
-					addToMessages(
-						new Text(
-							chalk.red('Failed to load history: ') + chalk.gray(err.message),
-							1,
-							0,
-						),
-					);
-					tui.requestRender();
-				});
+			loadConversationHistoryIntoMessages(conv.id);
 		};
 	}
 
@@ -400,6 +413,60 @@ export function startTuiApp(
 		list.onCancel = () => {
 			tui.removeChild(list);
 			restoreMainUI();
+		};
+	}
+
+
+	function showTaskList(): void {
+		hideMainUI();
+
+		const list = new TaskList(baseUrl, apiKey, tui, () => tui.requestRender());
+		tui.addChild(list);
+		tui.setFocus(list);
+
+		const exit = (): void => {
+			list.dispose();
+			try { tui.removeChild(list); } catch { /* ignore */ }
+			restoreMainUI();
+		};
+
+		list.onCancel = exit;
+
+		list.onOpenTask = (task: TaskSummary) => {
+			list.dispose();
+			try { tui.removeChild(list); } catch { /* ignore */ }
+			showTaskDetail(task);
+		};
+
+		list.onCreateTask = () => {
+			// Task 7 will hook this up to setNewTaskMode(true). For now, just exit.
+			exit();
+		};
+	}
+
+	function showTaskDetail(task: TaskSummary): void {
+		const detail = new TaskDetail(
+			baseUrl,
+			apiKey,
+			task.id,
+			task.conversationIds ?? [],
+			tui,
+			() => tui.requestRender(),
+		);
+		tui.addChild(detail);
+		tui.setFocus(detail);
+
+		detail.onCancel = () => {
+			try { tui.removeChild(detail); } catch { /* ignore */ }
+			showTaskList();
+		};
+
+		detail.onOpenConversation = (conversationId: string) => {
+			try { tui.removeChild(detail); } catch { /* ignore */ }
+			restoreMainUI();
+			clearConversation();
+			conversation.resume(conversationId);
+			loadConversationHistoryIntoMessages(conversationId);
 		};
 	}
 
