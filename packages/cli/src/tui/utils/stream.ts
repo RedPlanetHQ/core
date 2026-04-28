@@ -401,6 +401,146 @@ export async function fetchReminders(
 	};
 }
 
+// ── Tasks ─────────────────────────────────────────────────────────────────────
+
+// The 6 user-settable statuses. The DB also has a `Recurring` enum value but
+// it is effectively unused — recurring tasks live with their normal status.
+// The "recurring" tab in the TUI is a CLIENT-SIDE filter on schedule +
+// maxOccurrences (matches webapp pattern in home.tasks._index.tsx).
+export type TaskStatusValue =
+	| 'Todo'
+	| 'Waiting'
+	| 'Ready'
+	| 'Working'
+	| 'Review'
+	| 'Done';
+
+export interface TaskSummary {
+	id: string;
+	displayId: string | null;
+	title: string;
+	status: TaskStatusValue;
+	createdAt: string;
+	updatedAt: string;
+	nextRunAt: string | null;
+	schedule: string | null;
+	maxOccurrences: number | null;
+	conversationIds: string[];
+}
+
+export interface TaskDetail {
+	id: string;
+	displayId: string | null;
+	title: string;
+	status: TaskStatusValue;
+	description: string | null; // HTML
+	nextRunAt: string | null;
+	schedule: string | null;
+}
+
+/**
+ * Fetch tasks. If `status` is set, server filters by status. If unset, returns
+ * all tasks (caller is responsible for any client-side filtering — e.g. the
+ * TaskList component does this for the Recurring tab).
+ */
+export async function fetchTasks(
+	baseUrl: string,
+	apiKey: string,
+	status?: TaskStatusValue,
+): Promise<TaskSummary[]> {
+	const params = new URLSearchParams();
+	if (status) params.set('status', status);
+	const url =
+		`${baseUrl}/api/v1/tasks` +
+		(params.toString() ? `?${params.toString()}` : '');
+
+	const response = await fetch(url, {
+		headers: {Authorization: `Bearer ${apiKey}`},
+	});
+
+	if (!response.ok) {
+		throw new Error(`Failed to fetch tasks: ${response.statusText}`);
+	}
+
+	const data = (await response.json()) as TaskSummary[];
+	return Array.isArray(data) ? data : [];
+}
+
+export async function fetchTaskDetail(
+	baseUrl: string,
+	apiKey: string,
+	taskId: string,
+): Promise<TaskDetail> {
+	const response = await fetch(`${baseUrl}/api/v1/tasks/${taskId}`, {
+		headers: {Authorization: `Bearer ${apiKey}`},
+	});
+
+	if (!response.ok) {
+		throw new Error(`Failed to fetch task: ${response.statusText}`);
+	}
+
+	return (await response.json()) as TaskDetail;
+}
+
+export async function updateTaskApi(
+	baseUrl: string,
+	apiKey: string,
+	taskId: string,
+	updates: {status?: TaskStatusValue; title?: string; description?: string},
+): Promise<void> {
+	const response = await fetch(`${baseUrl}/api/v1/tasks/${taskId}`, {
+		method: 'POST',
+		headers: {
+			'Content-Type': 'application/json',
+			Authorization: `Bearer ${apiKey}`,
+		},
+		body: JSON.stringify(updates),
+	});
+
+	if (!response.ok) {
+		throw new Error(`Failed to update task: ${response.statusText}`);
+	}
+}
+
+export async function createTaskApi(
+	baseUrl: string,
+	apiKey: string,
+	input: {
+		title: string;
+		description?: string;
+		status?: TaskStatusValue;
+	},
+): Promise<TaskSummary> {
+	const response = await fetch(`${baseUrl}/api/v1/tasks`, {
+		method: 'POST',
+		headers: {
+			'Content-Type': 'application/json',
+			Authorization: `Bearer ${apiKey}`,
+		},
+		body: JSON.stringify({
+			title: input.title,
+			...(input.description ? {description: input.description} : {}),
+			status: input.status ?? 'Todo',
+			source: 'cli',
+		}),
+	});
+
+	if (!response.ok) {
+		throw new Error(`Failed to create task: ${response.statusText}`);
+	}
+
+	return (await response.json()) as TaskSummary;
+}
+
+/**
+ * Predicate matching the webapp's recurring-badge rule
+ * (apps/webapp/app/components/tasks/task-list-panel.tsx:141)
+ * and the user's spec: has schedule AND (maxOccurrences null/unlimited OR > 1).
+ */
+export function isRecurringTask(t: TaskSummary): boolean {
+	return !!t.schedule && (!t.maxOccurrences || t.maxOccurrences > 1);
+}
+
 // ── Fetch conversation history ────────────────────────────────────────────────
 
 export interface HistoryMessage {
