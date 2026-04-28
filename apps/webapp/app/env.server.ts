@@ -200,6 +200,14 @@ const EnvironmentSchema = z
     // Search-v2 label match tuning
     // Default keeps current behavior; lower for embedding providers with lower cosine ranges.
     SEARCH_LABEL_VECTOR_THRESHOLD: z.coerce.number().min(0).max(1).default(0.7),
+    // Optional Search-v2 broad recall backstop.
+    // When enabled, episode-returning handlers merge bounded raw-query recall
+    // candidates before existing reranking/compaction/token budgeting.
+    MEMORY_SEARCH_V2_BROAD_RECALL_BACKSTOP: z
+      .string()
+      .optional()
+      .default("false")
+      .transform((val) => val === "true" || val === "1"),
 
     // Provider configuration
     GRAPH_PROVIDER: z.enum(["neo4j", "falkordb", "helix"]).default("neo4j"),

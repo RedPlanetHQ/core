@@ -2,6 +2,8 @@ import { ProviderFactory, VECTOR_NAMESPACES } from "@core/providers";
 import { logger } from "~/services/logger.service";
 import { applyCohereEpisodeReranking } from "~/services/search/rerank";
 import { prisma } from "~/db.server";
+import { env } from "~/env.server";
+import { SearchService } from "~/services/search.server";
 
 import type {
   HandlerContext,
@@ -30,6 +32,8 @@ import {
 type RankedEpisode = EpisodicNode & { relevanceScore?: number };
 import { CohereClientV2 } from "cohere-ai";
 import { getEmbedding } from "~/lib/model.server";
+
+const broadRecallSearchService = new SearchService();
 
 /**
  * Apply Cohere reranking to statements
@@ -1056,6 +1060,104 @@ async function normalizeToRecallResult(
   };
 }
 
+function shouldUseBroadRecallBackstop(ctx: HandlerContext): boolean {
+  return (
+    Boolean(ctx.options.query?.trim()) &&
+    (ctx.options.enableBroadRecallBackstop ??
+      env.MEMORY_SEARCH_V2_BROAD_RECALL_BACKSTOP)
+  );
+}
+
+async function getBroadRecallBackstopEpisodes(
+  ctx: HandlerContext,
+): Promise<EpisodicNode[]> {
+  if (!shouldUseBroadRecallBackstop(ctx)) {
+    return [];
+  }
+
+  const query = ctx.options.query?.trim();
+  if (!query) {
+    return [];
+  }
+
+  const startedAt = Date.now();
+  const limit = ctx.options.broadRecallBackstopLimit ?? 10;
+  const source = ctx.options.source
+    ? `${ctx.options.source}:search-v2-broad-recall-backstop`
+    : "search-v2-broad-recall-backstop";
+
+  try {
+    const result = await broadRecallSearchService.search(
+      query,
+      ctx.userId,
+      ctx.workspaceId,
+      {
+        structured: true,
+        limit,
+        skipEntityExpansion: true,
+        useLLMValidation: false,
+        skipRecallLog: true,
+        tokenBudget: ctx.options.tokenBudget,
+      },
+      source,
+    );
+
+    if (typeof result === "string") {
+      return [];
+    }
+
+    const episodes = result.episodes.map((episode) => ({
+      uuid: episode.uuid,
+      content: episode.content,
+      originalContent: episode.content,
+      metadata: {},
+      source,
+      createdAt: episode.createdAt,
+      validAt: episode.createdAt,
+      labelIds: episode.labelIds || [],
+      sessionId: episode.uuid,
+      type: episode.isDocument || episode.isCompact ? "DOCUMENT" : undefined,
+      userId: ctx.userId,
+      workspaceId: ctx.workspaceId,
+    })) as EpisodicNode[];
+
+    logger.info(
+      `[SearchV2:broad-recall-backstop] Found ${episodes.length} candidates in ${Date.now() - startedAt}ms`,
+    );
+    return episodes;
+  } catch (error) {
+    logger.warn(
+      `[SearchV2:broad-recall-backstop] Failed, continuing without backstop: ${error}`,
+    );
+    return [];
+  }
+}
+
+async function augmentEpisodesWithBroadRecallBackstop(
+  episodes: EpisodicNode[],
+  ctx: HandlerContext,
+): Promise<EpisodicNode[]> {
+  const backstopEpisodes = await getBroadRecallBackstopEpisodes(ctx);
+  if (backstopEpisodes.length === 0) {
+    return episodes;
+  }
+
+  const byUuid = new Map(episodes.map((episode) => [episode.uuid, episode]));
+  let added = 0;
+
+  for (const episode of backstopEpisodes) {
+    if (!byUuid.has(episode.uuid)) {
+      byUuid.set(episode.uuid, episode);
+      added += 1;
+    }
+  }
+
+  logger.info(
+    `[SearchV2:broad-recall-backstop] Added ${added}/${backstopEpisodes.length} candidates (${episodes.length} → ${byUuid.size})`,
+  );
+  return Array.from(byUuid.values());
+}
+
 /**
  * Handle temporal_facets - enumerate what exists in a time range without reading episode content
  * Runs topic, entity, and aspect queries in parallel based on requested facet dimensions
@@ -1327,8 +1429,12 @@ export async function routeToHandler(
       }
 
       // Broad mode - return episodes with entity
-      const rerankedEpisodes = await applyEpisodeReranking(
+      const augmentedEpisodes = await augmentEpisodesWithBroadRecallBackstop(
         result.episodes,
+        ctx,
+      );
+      const rerankedEpisodes = await applyEpisodeReranking(
+        augmentedEpisodes,
         ctx,
       );
       return await normalizeToRecallResult(
@@ -1347,7 +1453,12 @@ export async function routeToHandler(
         handleAspectQuery(ctx),
         searchVoiceAspectsForQuery(ctx),
       ]);
-      const rerankedEpisodes = await applyEpisodeReranking(episodes, ctx);
+      const augmentedEpisodes =
+        await augmentEpisodesWithBroadRecallBackstop(episodes, ctx);
+      const rerankedEpisodes = await applyEpisodeReranking(
+        augmentedEpisodes,
+        ctx,
+      );
       const result = await normalizeToRecallResult(
         { episodes: rerankedEpisodes },
         ctx,
@@ -1366,9 +1477,12 @@ export async function routeToHandler(
         ctx.routerOutput.entityHints.length > 0 ||
         ctx.routerOutput.selectedLabels.length > 0 ||
         ctx.routerOutput.aspects.length > 0;
+      const augmentedEpisodes = hasTopic
+        ? await augmentEpisodesWithBroadRecallBackstop(episodes, ctx)
+        : episodes;
       const rerankedEpisodes = hasTopic
-        ? await applyEpisodeReranking(episodes, ctx)
-        : episodes
+        ? await applyEpisodeReranking(augmentedEpisodes, ctx)
+        : augmentedEpisodes
             .sort(
               (a, b) =>
                 new Date(b.createdAt).getTime() -
@@ -1391,9 +1505,15 @@ export async function routeToHandler(
 
     case "exploratory": {
       const episodes = await handleExploratory(ctx);
-      const rerankedEpisodes = await applyEpisodeReranking(episodes, ctx, {
-        threshold: 0.2,
-      });
+      const augmentedEpisodes =
+        await augmentEpisodesWithBroadRecallBackstop(episodes, ctx);
+      const rerankedEpisodes = await applyEpisodeReranking(
+        augmentedEpisodes,
+        ctx,
+        {
+          threshold: 0.2,
+        },
+      );
       return await normalizeToRecallResult({ episodes: rerankedEpisodes }, ctx);
     }
 
@@ -1414,7 +1534,12 @@ export async function routeToHandler(
         handleAspectQuery(ctx),
         searchVoiceAspectsForQuery(ctx),
       ]);
-      const rerankedEpisodes = await applyEpisodeReranking(episodes, ctx);
+      const augmentedEpisodes =
+        await augmentEpisodesWithBroadRecallBackstop(episodes, ctx);
+      const rerankedEpisodes = await applyEpisodeReranking(
+        augmentedEpisodes,
+        ctx,
+      );
       const result = await normalizeToRecallResult(
         { episodes: rerankedEpisodes },
         ctx,

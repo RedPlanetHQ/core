@@ -85,11 +85,13 @@ export class SearchService {
       labelIds: options.labelIds || [],
       adaptiveFiltering: options.adaptiveFiltering || false,
       structured: options.structured || false,
-      useLLMValidation: options.useLLMValidation || true,
+      useLLMValidation: options.useLLMValidation ?? true,
       qualityThreshold: options.qualityThreshold || 0.3,
       maxEpisodesForLLM: options.maxEpisodesForLLM || 20,
       sortBy: options.sortBy || "relevance",
       tokenBudget: options.tokenBudget ?? DEFAULT_TOKEN_BUDGET,
+      skipEntityExpansion: options.skipEntityExpansion || false,
+      skipRecallLog: options.skipRecallLog || false,
     };
     // Enhance query with LLM to transform keyword soup into semantic query
 
@@ -98,10 +100,14 @@ export class SearchService {
     logger.info(`Query vectorization: ${vectorEndTime - startTime}ms`);
 
     // Note: We still need to extract entities from graph for Episode Graph search
-    // The LLM entities are just strings, we need EntityNode objects from the graph
-    const entities = await extractEntitiesFromQuery(query, userId, workspaceId, []);
+    // The LLM entities are just strings, we need EntityNode objects from the graph.
+    const entities = opts.skipEntityExpansion
+      ? []
+      : await extractEntitiesFromQuery(query, userId, workspaceId, []);
     logger.info(
-      `Extracted entities ${entities.map((e: EntityNode) => e.name).join(", ")}`,
+      opts.skipEntityExpansion
+        ? "Skipped entity extraction for broad recall search"
+        : `Extracted entities ${entities.map((e: EntityNode) => e.name).join(", ")}`,
     );
     const entityEndTime = Date.now();
     logger.info(`Entity extraction: ${entityEndTime - vectorEndTime}ms`);
@@ -133,20 +139,35 @@ export class SearchService {
         logger.debug(`Vector search completed in ${searchTimings.vector}ms`);
         return r;
       }),
-      performBfsSearch(query, queryVector, userId, workspaceId, entities, opts).then((r) => {
-        searchTimings.bfs = Date.now() - searchStartTime;
-        logger.debug(`BFS search completed in ${searchTimings.bfs}ms`);
-        return r;
-      }),
-      performEpisodeGraphSearch(entities, queryVector, userId, workspaceId, opts).then(
-        (r) => {
-          searchTimings.episodeGraph = Date.now() - searchStartTime;
-          logger.debug(
-            `Episode graph search completed in ${searchTimings.episodeGraph}ms`,
-          );
-          return r;
-        },
-      ),
+      opts.skipEntityExpansion
+        ? Promise.resolve([])
+        : performBfsSearch(
+            query,
+            queryVector,
+            userId,
+            workspaceId,
+            entities,
+            opts,
+          ).then((r) => {
+            searchTimings.bfs = Date.now() - searchStartTime;
+            logger.debug(`BFS search completed in ${searchTimings.bfs}ms`);
+            return r;
+          }),
+      opts.skipEntityExpansion
+        ? Promise.resolve([])
+        : performEpisodeGraphSearch(
+            entities,
+            queryVector,
+            userId,
+            workspaceId,
+            opts,
+          ).then((r) => {
+            searchTimings.episodeGraph = Date.now() - searchStartTime;
+            logger.debug(
+              `Episode graph search completed in ${searchTimings.episodeGraph}ms`,
+            );
+            return r;
+          }),
       performEpisodeVectorSearch(queryVector, userId, workspaceId, opts).then((r) => {
         searchTimings.episodeVector = Date.now() - searchStartTime;
         logger.debug(
@@ -385,18 +406,20 @@ export class SearchService {
       filteredResults.map((item) => item.statement),
     );
 
-    this.logRecallAsync(
-      query,
-      userId,
-      limitedEpisodes.length,
-      opts,
-      responseTime,
-      source,
-      tokenCount,
-      searchTimings,
-    ).catch((error) => {
-      logger.error("Failed to log recall event:", error);
-    });
+    if (!opts.skipRecallLog) {
+      this.logRecallAsync(
+        query,
+        userId,
+        limitedEpisodes.length,
+        opts,
+        responseTime,
+        source,
+        tokenCount,
+        searchTimings,
+      ).catch((error) => {
+        logger.error("Failed to log recall event:", error);
+      });
+    }
 
     // Return markdown by default, structured JSON if requested
     if (opts.structured) {

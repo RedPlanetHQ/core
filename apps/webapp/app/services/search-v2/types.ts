@@ -323,6 +323,10 @@ export interface SearchV2Options {
   // Reranking
   enableReranking?: boolean;
 
+  // Candidate recall augmentation
+  enableBroadRecallBackstop?: boolean;
+  broadRecallBackstopLimit?: number;
+
   // Optional workspace override from caller context
   workspaceId?: string;
 
