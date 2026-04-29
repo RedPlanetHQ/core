@@ -501,10 +501,10 @@ REPARENTING: Pass newParentId to move a task under a different parent (or null t
       inputSchema: z.object({
         taskId: z.string().describe("The task ID"),
         status: z
-          .enum(["Waiting", "Working", "Review"])
+          .enum(["Waiting", "Review"])
           .optional()
           .describe(
-            "New status. Review is your terminal state — once set, stop. The user will move it to Done. To approve a Waiting task, use unblock_task instead.",
+            "New status. Use Waiting when blocked on the user, Review when finished — Review is your terminal state, stop after setting it. NEVER set Working: the system marks a task Working automatically when execution starts. To approve a Waiting task, use unblock_task instead.",
           ),
         title: z.string().optional().describe("Updated title"),
         description: z
