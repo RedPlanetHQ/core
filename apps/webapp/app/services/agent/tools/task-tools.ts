@@ -738,7 +738,7 @@ REPARENTING: Pass newParentId to move a task under a different parent (or null t
             await prisma.conversationHistory.create({
               data: {
                 conversationId,
-                userType: "User",
+                userType: UserType.User,
                 message: reason,
                 parts: [{ type: "text", text: reason }],
                 ...(userId && { userId }),
