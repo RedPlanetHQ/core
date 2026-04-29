@@ -91,6 +91,47 @@ interface AgentContext {
   isBackgroundExecution: boolean;
 }
 
+type CodingSessionHint = Awaited<ReturnType<typeof getLastCodingSession>>;
+
+/**
+ * Render the coding-session resume hint that gets injected into <task_prep>
+ * and <task_execution> system prompts. CodingSession is the source of truth —
+ * the agent should read sessionId/dir/agent/branch from this hint, not from
+ * the task description.
+ *
+ * Three cases:
+ * - No row at all → return "" (agent will create the first session naturally).
+ * - Row with externalSessionId → "resume it" with full details.
+ * - Row with null externalSessionId → "starting up, wait via reschedule_self".
+ */
+function renderCodingSessionHint(
+  session: CodingSessionHint,
+  mode: "prep" | "execute",
+): string {
+  if (!session) return "";
+
+  const dir = session.worktreePath ?? session.dir;
+  const dirPart = dir ? `, dir: ${dir}` : "";
+  const branchPart = session.worktreeBranch
+    ? `, branch: ${session.worktreeBranch}`
+    : "";
+
+  if (session.externalSessionId) {
+    if (mode === "prep") {
+      return `\n   A coding session already exists — resume it:\n   sessionId: ${session.externalSessionId}, agent: ${session.agent}${dirPart}${branchPart}`;
+    }
+    return `\n- A coding session already exists for this task — resume it with intent "execute the plan" to trigger Phase 3 execution:\n  sessionId: ${session.externalSessionId}, agent: ${session.agent}${dirPart}${branchPart}`;
+  }
+
+  // Row exists but externalSessionId not yet assigned (race window between
+  // createCodingSession and updateCodingSessionExternalId). Tell the agent to
+  // wait rather than start a duplicate.
+  if (mode === "prep") {
+    return `\n   A coding session is starting up for this task (agent: ${session.agent}${dirPart}) but its sessionId hasn't been assigned yet. Call reschedule_self(minutesFromNow=2) and try again. Do NOT start a new session.`;
+  }
+  return `\n- A coding session is starting up for this task (agent: ${session.agent}${dirPart}) but its sessionId hasn't been assigned yet. Call reschedule_self(minutesFromNow=2) and try again. Do NOT start a new session.`;
+}
+
 export async function buildAgentContext({
   userId,
   workspaceId,
@@ -412,14 +453,19 @@ You're preparing this task — NOT executing it. Your job is to gather informati
 
 Task: ${linkedTask.title}${linkedTask.description ? `\nContext: ${linkedTask.description}` : ""}
 Task ID: ${linkedTask.id}
-Status: ${linkedTask.status}${isSubtask ? `\nThis is a SUBTASK.${parentTaskRecord ? `\nParent task: ${parentTaskRecord.title}${parentTaskDescription ? `\nParent context: ${parentTaskDescription}` : ""}` : ""}` : ""}${skillHint}
+Status: ${linkedTask.status}${isSubtask ? `\nThis is a SUBTASK.${parentTaskRecord ? `\nParent task: ${parentTaskRecord.title}${parentTaskDescription ? `\nParent context: ${parentTaskDescription}` : ""}` : ""}` : ""}${skillHint}${linkedTask.status === "Waiting" ? `
+
+THIS TASK IS WAITING. The user's message in this conversation is the reply that resumes it.
+- Call unblock_task(taskId: "${linkedTask.id}", reason: "<the user's reply, summarized>") FIRST, then STOP. unblock_task moves the task to Todo and the system re-enqueues prep with the user's reply.
+- Do NOT do the work yourself, delegate to any sub-agent, or send a message before unblock_task — the resume handler does that.
+- Exception: if the user's message is clearly NOT a reply to this task (a new unrelated request), ignore the rule above and treat it as new direction.` : ""}
 
 PREP RULES:
 1. Run the READINESS CHECK (see <capabilities>). Load the appropriate skill from <skills>:
    - Unclear what's needed? → load "Gather Information" skill
    - Open-ended, needs shaping? → load "Brainstorm" skill
    - Multi-step, needs decomposition? → load "Plan" skill
-2. For CODING tasks (when a gateway is connected): delegate brainstorming/planning to the gateway sub-agent. Pass the task title and description. The gateway will return questions or a plan — do NOT tell it to execute.${lastCodingSession?.externalSessionId ? `\n   A coding session already exists — resume it:\n   sessionId: ${lastCodingSession.externalSessionId}, agent: ${lastCodingSession.agent}${(lastCodingSession.worktreePath ?? lastCodingSession.dir) ? `, dir: ${lastCodingSession.worktreePath ?? lastCodingSession.dir}` : ""}${lastCodingSession.worktreeBranch ? `, branch: ${lastCodingSession.worktreeBranch}` : ""}` : ""}
+2. For CODING tasks (when a gateway is connected): delegate brainstorming/planning to the gateway sub-agent. Pass the task title and description. The gateway will return questions or a plan — do NOT tell it to execute.${renderCodingSessionHint(lastCodingSession, "prep")}
 3. For NON-CODING tasks: do the prep yourself using gather_context, take_action, and the readiness skills.
 4. Write your findings/plan into the task description using update_task.
 5. When prep is complete, move to Review: update_task(taskId: "${linkedTask.id}", status: "Review")
@@ -427,7 +473,7 @@ PREP RULES:
 
 WHEN TO GO TO WAITING instead of Review:
 - You need the user to answer questions before you can plan → mark Waiting, send questions via send_message
-- Gateway returned questions from the coding agent → write to task description, mark Waiting
+- Gateway returned questions from the coding agent → relay to user via send_message (include sessionId), mark Waiting
 
 WHEN TO GO STRAIGHT TO Review:
 - Nothing to prep (task is already clear and simple) → move to Review immediately
@@ -441,7 +487,7 @@ DO NOT:
 
 CODING SESSION POLLING (during prep):
 - "Session still running, brainstorming/planning phase" → call reschedule_self(minutesFromNow=5)
-- Gateway returns questions → write to description (section: "Questions"), mark Waiting, send_message
+- Gateway returns questions → relay to user via send_message (include sessionId), mark Waiting
 - Gateway returns plan → write to description (section: "Plan"), mark Review, send_message
 
 NEVER write error logs or debug output into the task description.
@@ -452,11 +498,16 @@ You're executing this task in the background. The prep/planning phase is done �
 
 Task: ${linkedTask.title}${linkedTask.description ? `\nContext: ${linkedTask.description}` : ""}
 Task ID: ${linkedTask.id}
-Status: ${linkedTask.status}${isSubtask ? `\nThis is a SUBTASK. Do ONLY this specific work. Do not create further subtasks. Do not look at or manage sibling tasks.${parentTaskRecord ? `\nParent task: ${parentTaskRecord.title}${parentTaskDescription ? `\nParent context: ${parentTaskDescription}` : ""}` : ""}` : ""}${skillHint}
+Status: ${linkedTask.status}${isSubtask ? `\nThis is a SUBTASK. Do ONLY this specific work. Do not create further subtasks. Do not look at or manage sibling tasks.${parentTaskRecord ? `\nParent task: ${parentTaskRecord.title}${parentTaskDescription ? `\nParent context: ${parentTaskDescription}` : ""}` : ""}` : ""}${skillHint}${linkedTask.status === "Waiting" ? `
+
+THIS TASK IS WAITING. The user's message in this conversation is the reply that resumes it.
+- Call unblock_task(taskId: "${linkedTask.id}", reason: "<the user's reply, summarized>") FIRST, then STOP. unblock_task moves the task to Ready and the system re-enqueues execution with the user's reply.
+- Do NOT do the work yourself, delegate to any sub-agent (gateway, gather_context, take_action, etc.), or send a message before unblock_task — the resume handler does that.
+- Exception: if the user's message is clearly NOT a reply to this task (a new unrelated request), ignore the rule above and treat it as new direction.` : ""}
 
 RULES:
 - For integration work (emails, calendar, github, etc.): delegate to the orchestrator via gather_context / take_action
-- For coding, browser, shell: use gateway tools directly (coding_*, browser_*, exec_*) if connected${lastCodingSession?.externalSessionId ? `\n- A coding session already exists for this task — resume it with intent "execute the plan" to trigger Phase 3 execution:\n  sessionId: ${lastCodingSession.externalSessionId}, agent: ${lastCodingSession.agent}${(lastCodingSession.worktreePath ?? lastCodingSession.dir) ? `, dir: ${lastCodingSession.worktreePath ?? lastCodingSession.dir}` : ""}${lastCodingSession.worktreeBranch ? `, branch: ${lastCodingSession.worktreeBranch}` : ""}` : ""}
+- For coding, browser, shell: use gateway tools directly (coding_*, browser_*, exec_*) if connected${renderCodingSessionHint(lastCodingSession, "execute")}
 - If the user sends a message, treat it as additional direction for this task${isSubtask ? `
 - When you complete this subtask, the system automatically starts the next one and marks the parent Done when all subtasks are done
 - If you fail or get stuck, mark the PARENT task (${linkedTask.parentTaskId}) as Waiting and send_message with the error` : `
@@ -466,7 +517,7 @@ RULES:
 - When Waiting (errors, needs user input, needs approval, partial completion):
   1. call update_task(taskId: "${linkedTask.id}", status: "Waiting")
   2. call send_message explaining what's needed — MUST include the task title so the user (and future you) can identify it. Example: "Task '${linkedTask.title}' is waiting: <reason>. <what's needed to continue>"
-- NEVER write error logs, debug output, or transient state into the task description. The description is for task spec, plan, and structured sections (Questions, Plan, Output, Session) only. Errors and status updates go to send_message.
+- NEVER write error logs, debug output, or transient state into the task description. The description is for task spec, plan, and structured sections (Plan, Output, Session) only. Errors and status updates go to send_message.
 - When finished:
   1. call update_task(taskId: "${linkedTask.id}", status: "Review")
   2. call send_message with a summary of what was done
@@ -477,16 +528,16 @@ CODING SESSIONS:
 The gateway sub-agent handles all sleep/polling for coding sessions. You do NOT sleep or poll directly.
 
 When you delegate a coding task to the gateway, it will return one of:
-- Questions from the coding agent → write questions to the task description using update_task(section: "Questions", appendToSection: true, description: "<p><strong>Q:</strong> question text</p>"). Then relay to user via send_message, include sessionId in message, mark task Waiting.
+- Questions from the coding agent → relay to user via send_message (include sessionId in the message), mark task Waiting. Do NOT write the question into the task description — the conversation thread is the source of truth.
 - A plan from the coding agent → you are in EXECUTION mode (user already approved the plan). Call the gateway again immediately with sessionId, dir, and intent "execute the plan" to trigger Phase 3 execution. Do NOT mark task Review again — the plan was already reviewed.
 - Execution results → write results to task description using update_task(section: "Output", description: results_html), mark task Review.
 - "Session still running, brainstorming/planning phase" → call reschedule_self(minutesFromNow=5) to check back soon.
-- "Session still running, execution phase" → save sessionId to task description using update_task(section: "Session", description: session_html), call reschedule_self(minutesFromNow=10) to try again later.
+- "Session still running, execution phase" → call reschedule_self(minutesFromNow=10). The CodingSession row already records the sessionId/dir — no need to save it anywhere.
 - Error → update_task(status: "Waiting") then send_message with the error detail. Do NOT write errors into the task description.
 
-When the user answers a question, append the answer to the Q&A log: update_task(section: "Questions", appendToSection: true, description: "<p><strong>A:</strong> user's answer</p>"). Then resume the coding session with the answer.
+When the user answers a question, resume the coding session with the answer. Do NOT write the answer into the task description.
 
-On re-execution after reschedule: read sessionId and dir from task description, delegate to gateway with the sessionId, dir, and intent "execute the plan" — this ensures the gateway enters Phase 3 (execution) rather than re-doing planning. Only pass user answers if the user has replied since the last run.
+On re-execution after reschedule: the system prompt above already shows the latest coding session (sessionId, agent, dir, branch) — resume that session, do NOT start a new one. Delegate to gateway with the sessionId, dir, and intent "execute the plan" so the gateway enters Phase 3 (execution) rather than re-doing planning. If the prompt says the session is starting up and sessionId hasn't been assigned yet, call reschedule_self(minutesFromNow=2) and try again. Only pass user answers if the user has replied since the last run.
 
 Do NOT sleep, poll coding_read_session, or create scheduled tasks yourself — the gateway handles that.
 </task_execution>`;
@@ -497,7 +548,7 @@ Title: ${linkedTask.title}${linkedTask.description ? `\nDescription: ${linkedTas
 Task ID: ${linkedTask.id}
 Status: ${linkedTask.status}
 
-This IS the task — don't create or search for other tasks about this topic. If they add context, update the description via update_task (ID: ${linkedTask.id}).${linkedTask.status === "Waiting" ? `\nThis task is WAITING. The user's reply in this conversation will automatically resume the task. Just acknowledge their input and let them know the task will continue.` : ""}
+This IS the task — don't create or search for other tasks about this topic. If they add context, update the description via update_task (ID: ${linkedTask.id}).${linkedTask.status === "Waiting" ? `\nThis task is WAITING. If the user's message is a reply to this task, call unblock_task(taskId: "${linkedTask.id}", reason: "<user's reply summarized>") FIRST and then STOP. Do not do the work yourself or delegate to any sub-agent — unblock_task triggers the resume.` : ""}
 </task_context>`;
     }
   }

@@ -156,7 +156,7 @@ Do NOT update the task description on every interaction. Only update it at meani
 - **Blocked/Waiting**: record what was attempted and what's needed from the user
 - **Plan produced**: save the plan to the description (use section="Plan" for coding tasks)
 - **Review/Done**: record the output or results summary
-- **User provides context**: when the user adds requirements, constraints, or answers questions — append their input
+- **User provides context**: when the user adds requirements or constraints — append their input. Do NOT append answers to questions; the conversation thread is the source of truth.
 Do NOT update the description just because you interacted with the task. The description is a living brief, not a log.
 
 SCHEDULING & REMINDERS:
@@ -200,9 +200,9 @@ CODING TASK — WHAT YOU DO:
 The gateway will return either questions, a plan (feature), or a root cause + proposed fix (bug-fix). It will never just say "session completed" — it always parses the coding agent's turns.
 
 **Common (both tracks):**
-- When the gateway returns questions → post them to the user via send_message, update task description, mark task Waiting.
+- When the gateway returns questions → post them to the user via send_message (include sessionId), mark task Waiting. Do NOT write the questions into the task description — the conversation thread is the source of truth.
 - When re-enqueued after reschedule (no user reply) → pass the sessionId, dir, and tell the gateway you're checking on the status of a previously assigned task.
-- When re-enqueued after user replies → pass the user's answers to the gateway along with the sessionId and dir from the task description.
+- When re-enqueued after user replies → pass the user's answers to the gateway along with the sessionId and dir from the coding-session details in the system prompt.
 - When execution/implementation completes → update task description with results. Then create a PR for the branch using the GitHub integration (gather_context/take_action). Include the PR URL in the Output section. After PR is created, mark task Review. The user will verify and move to Done.
 - STOP after marking Waiting or Review. Do not proceed further.
 
@@ -216,7 +216,6 @@ The gateway will return either questions, a plan (feature), or a root cause + pr
 
 CODING TASK — TASK DESCRIPTION SECTIONS:
 Use the section parameter on update_task to write into named H2 sections. This preserves the user's original description and keeps each section clean.
-- section: "Session" — update with: sessionId, dir (worktree path), branch, current phase, track (feature/bugfix). Update this every time.
 - section: "Plan" — update with: the plan summary (feature) or root cause + proposed fix (bug-fix). Replace when plan changes.
 - section: "Output" — update with: final execution results when implementation completes. Written once.
 Do NOT use plain description appends for coding task updates — always use section.

@@ -650,8 +650,12 @@ REPARENTING: Pass newParentId to move a task under a different parent (or null t
           const parts = [];
           if (status) parts.push(`status → ${status}`);
           if (title) parts.push(`title updated`);
-          if (description !== undefined && !isRecurring) parts.push(`description updated`);
-          if (description !== undefined && isRecurring) parts.push(`description skipped (recurring task — use send_message for results)`);
+          if (description !== undefined && !isRecurring)
+            parts.push(`description updated`);
+          if (description !== undefined && isRecurring)
+            parts.push(
+              `description skipped (recurring task — use send_message for results)`,
+            );
           if (schedule) parts.push(`schedule updated`);
           if (isActive !== undefined)
             parts.push(isActive ? "resumed" : "paused");
