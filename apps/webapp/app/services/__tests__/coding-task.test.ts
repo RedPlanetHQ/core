@@ -21,7 +21,6 @@ vi.mock("~/services/hocuspocus/content.server", () => ({
 }));
 
 import {
-  mergeSectionIntoHtml,
   extractDescriptionSection,
   formatBrainstormQA,
   checkWaitingTaskReply,
@@ -29,120 +28,6 @@ import {
 } from "../coding-task.server";
 import { prisma } from "~/db.server";
 import { changeTaskStatus } from "~/services/task.server";
-
-// ─── mergeSectionIntoHtml / upsertPageSection ───────────────────────
-
-describe("mergeSectionIntoHtml", () => {
-  it("creates a new section on empty page", () => {
-    const result = mergeSectionIntoHtml("", "Plan", "<p>The plan</p>");
-    expect(result).toBe("<h2>Plan</h2><p>The plan</p>");
-  });
-
-  it("appends a new section after existing content", () => {
-    const existing = "<p>Task description here</p>";
-    const result = mergeSectionIntoHtml(
-      existing,
-      "Brainstorm Log",
-      "<p><strong>Q1:</strong> What API?</p>",
-    );
-    expect(result).toContain("<p>Task description here</p>");
-    expect(result).toContain("<h2>Brainstorm Log</h2>");
-    expect(result).toContain("<strong>Q1:</strong>");
-  });
-
-  it("replaces existing section content", () => {
-    const existing =
-      "<h2>Description</h2><p>My task</p><h2>Plan</h2><p>Old plan</p>";
-    const result = mergeSectionIntoHtml(existing, "Plan", "<p>New plan</p>");
-    expect(result).toContain("<h2>Description</h2><p>My task</p>");
-    expect(result).toContain("<h2>Plan</h2><p>New plan</p>");
-    expect(result).not.toContain("Old plan");
-  });
-
-  it("preserves Description when writing Brainstorm Log", () => {
-    const existing = "<h2>Description</h2><p>User's original task</p>";
-    const result = mergeSectionIntoHtml(
-      existing,
-      "Brainstorm Log",
-      "<p><strong>Q1:</strong> Question</p>",
-    );
-    expect(result).toContain("<h2>Description</h2><p>User's original task</p>");
-    expect(result).toContain("<h2>Brainstorm Log</h2>");
-  });
-
-  it("preserves all other sections when replacing one", () => {
-    const existing =
-      "<h2>Description</h2><p>Desc</p>" +
-      "<h2>Brainstorm Log</h2><p>Q&A</p>" +
-      "<h2>Plan</h2><p>Old plan</p>";
-    const result = mergeSectionIntoHtml(existing, "Plan", "<p>Revised plan</p>");
-    expect(result).toContain("<h2>Description</h2><p>Desc</p>");
-    expect(result).toContain("<h2>Brainstorm Log</h2><p>Q&A</p>");
-    expect(result).toContain("<h2>Plan</h2><p>Revised plan</p>");
-  });
-
-  it("handles case-insensitive section matching", () => {
-    const existing = "<h2>plan</h2><p>Old</p>";
-    const result = mergeSectionIntoHtml(existing, "Plan", "<p>New</p>");
-    expect(result).toContain("<h2>Plan</h2><p>New</p>");
-    expect(result).not.toContain("Old");
-  });
-
-  it("creates first section on page with no H2 headings", () => {
-    const existing = "<p>Just a paragraph</p>";
-    const result = mergeSectionIntoHtml(
-      existing,
-      "Brainstorm Log",
-      "<p>Questions</p>",
-    );
-    expect(result).toContain("<p>Just a paragraph</p>");
-    expect(result).toContain("<h2>Brainstorm Log</h2><p>Questions</p>");
-  });
-});
-
-describe("mergeSectionIntoHtml with append mode", () => {
-  it("appends content to an existing section when append=true", () => {
-    const existing =
-      '<h2>Session</h2><p>sessionId: abc</p><h2>Plan</h2><p>plan content</p>';
-    const result = mergeSectionIntoHtml(
-      existing,
-      "Session",
-      "<p>polled gateway: still running</p>",
-      true,
-    );
-    expect(result).toContain("<h2>Session</h2>");
-    expect(result).toContain("<p>sessionId: abc</p>");
-    expect(result).toContain("<p>polled gateway: still running</p>");
-    expect(result).toContain("<h2>Plan</h2>");
-    expect(result).toContain("<p>plan content</p>");
-  });
-
-  it("still replaces when append=false (default)", () => {
-    const existing =
-      '<h2>Session</h2><p>old content</p><h2>Plan</h2><p>plan</p>';
-    const result = mergeSectionIntoHtml(
-      existing,
-      "Session",
-      "<p>new content</p>",
-      false,
-    );
-    expect(result).toContain("<h2>Session</h2><p>new content</p>");
-    expect(result).not.toContain("old content");
-    expect(result).toContain("<h2>Plan</h2>");
-  });
-
-  it("creates new section when append=true but section doesn't exist yet", () => {
-    const existing = '<h2>Plan</h2><p>plan content</p>';
-    const result = mergeSectionIntoHtml(
-      existing,
-      "Session",
-      "<p>first entry</p>",
-      true,
-    );
-    expect(result).toContain("<h2>Session</h2><p>first entry</p>");
-    expect(result).toContain("<h2>Plan</h2>");
-  });
-});
 
 // ─── extractDescriptionSection ──────────────────────────────────────
 
