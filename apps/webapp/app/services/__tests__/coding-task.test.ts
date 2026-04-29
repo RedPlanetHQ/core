@@ -21,50 +21,11 @@ vi.mock("~/services/hocuspocus/content.server", () => ({
 }));
 
 import {
-  extractDescriptionSection,
-  formatBrainstormQA,
   checkWaitingTaskReply,
   mergeStructuredSections,
 } from "../coding-task.server";
 import { prisma } from "~/db.server";
 import { changeTaskStatus } from "~/services/task.server";
-
-// ─── extractDescriptionSection ──────────────────────────────────────
-
-describe("extractDescriptionSection", () => {
-  it("extracts Description section when present", () => {
-    const html =
-      "<h2>Description</h2><p>Build auth</p>" +
-      "<h2>Brainstorm Log</h2><p>Q&A here</p>" +
-      "<h2>Plan</h2><p>The plan</p>";
-    const result = extractDescriptionSection(html);
-    expect(result).toContain("Description");
-    expect(result).toContain("Build auth");
-    expect(result).not.toContain("Brainstorm Log");
-    expect(result).not.toContain("Plan");
-  });
-
-  it("returns content before first H2 when no Description heading", () => {
-    const html =
-      "<p>Original task text</p>" +
-      "<h2>Brainstorm Log</h2><p>Q&A</p>";
-    const result = extractDescriptionSection(html);
-    expect(result).toContain("Original task text");
-    expect(result).not.toContain("Brainstorm Log");
-  });
-
-  it("returns empty string for empty HTML", () => {
-    expect(extractDescriptionSection("")).toBe("");
-    expect(extractDescriptionSection("   ")).toBe("");
-  });
-
-  it("returns full content when page has no H2 headings", () => {
-    const html = "<p>Simple task</p><p>More details</p>";
-    const result = extractDescriptionSection(html);
-    expect(result).toContain("Simple task");
-    expect(result).toContain("More details");
-  });
-});
 
 // ─── Reply Detection ────────────────────────────────────────────────
 
@@ -170,33 +131,6 @@ describe("checkWaitingTaskReply", () => {
     await checkWaitingTaskReply("conv-5", "workspace-1", "user-1");
 
     expect(mockChangeStatus).toHaveBeenCalledTimes(2);
-  });
-});
-
-// ─── Helper utilities ───────────────────────────────────────────────
-
-describe("formatBrainstormQA", () => {
-  it("formats questions and answers with numbering", () => {
-    const html = formatBrainstormQA(
-      ["What API?", "Support threads?"],
-      ["REST", "No"],
-    );
-    expect(html).toContain("<strong>Q1:</strong> What API?");
-    expect(html).toContain("<strong>A1:</strong> REST");
-    expect(html).toContain("<strong>Q2:</strong> Support threads?");
-    expect(html).toContain("<strong>A2:</strong> No");
-  });
-
-  it("handles questions without answers", () => {
-    const html = formatBrainstormQA(["Question?"], []);
-    expect(html).toContain("<strong>Q1:</strong> Question?");
-    expect(html).not.toContain("A1:");
-  });
-
-  it("respects startIndex", () => {
-    const html = formatBrainstormQA(["Follow-up?"], ["Yes"], 4);
-    expect(html).toContain("<strong>Q4:</strong> Follow-up?");
-    expect(html).toContain("<strong>A4:</strong> Yes");
   });
 });
 
