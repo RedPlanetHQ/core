@@ -32,6 +32,8 @@ import {
   WidgetNode,
   WidgetContext,
 } from "~/components/editor/extensions/widget-node-extension";
+import { PlanNode } from "~/components/editor/extensions/plan-extension";
+import { OutputNode } from "~/components/editor/extensions/output-extension";
 import type { WidgetOption } from "~/components/overview/types";
 
 const lowlight = createLowlight(all);
@@ -121,6 +123,8 @@ function buildExtensions(
     buildSlashCommand(widgetOptions),
     TaskPickerExtension,
     WidgetNode,
+    PlanNode,
+    OutputNode,
     Collaboration.configure({ document: ydoc }),
   ];
 }
