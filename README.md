@@ -119,35 +119,17 @@ CORE investigated, created the issue, and assigned the right engineer. You woke 
 
 Open source, self-hosted. Your data never leaves your infra.
 
-**Wizard (fastest):**
+**One step:**
 
 ```bash
-npm install -g @redplanethq/corebrain
-corebrain setup
+npm install -g @redplanethq/corebrain && corebrain setup
 ```
 
-Walks you through install dir, AI provider, API key + chat model, auto-generates secrets, brings the stack up. Opens at `http://localhost:3033`.
+That's it. The wizard asks for an install dir, an AI provider, an API key, and a chat model — then auto-generates secrets, brings the stack up, and opens at `http://localhost:3033`.
 
-**Manual:**
+**Or one click on Railway:**
 
-```bash
-git clone https://github.com/RedPlanetHQ/core.git
-cd core/hosting/docker
-cp .env.example .env
-# Add your model key (see below)
-docker compose up -d
-```
-
-Open `http://localhost:3033` → connect your first app → hand off your first task.
-
-**Pick your model** (edit `.env` or answer the wizard):
-
-```bash
-OPENAI_API_KEY=sk-...                    # OpenAI
-ANTHROPIC_API_KEY=sk-ant-...             # Anthropic Claude
-OLLAMA_URL=http://localhost:11434        # Ollama — fully local, no cloud
-OPENAI_BASE_URL=https://your-proxy.com   # Any OpenAI-compatible endpoint
-```
+[![Deploy on Railway](https://railway.app/button.svg)](https://railway.com/deploy/core)
 
 **Connect a gateway** (laptop, Docker host, or Railway) so CORE can drive your browser, run coding agents, and touch local folders:
 
@@ -158,11 +140,9 @@ corebrain gateway setup      # pick native | docker | railway
 
 **Requirements:** Docker 20.10+, Docker Compose 2.20+, 4 vCPU / 8GB RAM
 
-[Full self-hosting guide →](https://docs.getcore.me/self-hosting/docker)
+[Full self-hosting guide →](https://docs.getcore.me/self-hosting/setup)
 
 > ☁️ Want to download our Mac App, sign up for waitlist [here](https://www.getcore.me/)
-
-[![Deploy on Railway](https://railway.app/button.svg)](https://railway.com/deploy/core)
 
 ---
 
@@ -182,7 +162,7 @@ Want to understand how CORE works under the hood?
 - [**Gateway**](https://docs.getcore.me/access-core/overview) — WhatsApp, Slack, Telegram, email, web, API
 - [**Skills & Triggers**](https://docs.getcore.me/toolkit/overview) — Scheduled automations and event-driven workflows
 - [**API Reference**](https://docs.getcore.me/api-reference) — REST API and endpoints
-- [**Self-hosting**](https://docs.getcore.me/self-hosting/docker) — Full deployment guide
+- [**Self-hosting**](https://docs.getcore.me/self-hosting/setup) — Full deployment guide
 - [**Changelog**](https://docs.getcore.me/opensource/changelog) — What's shipped
 
 ---

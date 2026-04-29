@@ -417,7 +417,7 @@ function TaskDetailLayout() {
                   onClick={toggleTaskChat}
                 >
                   <MessageSquare size={14} />
-                  <span className="hidden md:inline">Task Chat</span>
+                  <span className="hidden md:inline">Chat</span>
                 </Button>
                 <Button
                   variant="ghost"

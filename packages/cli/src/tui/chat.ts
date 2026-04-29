@@ -28,7 +28,7 @@ import {WidgetsView} from './components/widgets-view.js';
 import {DashboardView} from './components/dashboard-view.js';
 import {loadWidgetBundle} from './utils/widget-loader.js';
 import {getPreferences} from '../config/preferences.js';
-import {fetchConversationHistory, fetchWorkspace, fetchWorkspaceAvatar, fetchIntegrationAccounts, openBrowser, createTaskApi} from './utils/stream.js';
+import {fetchConversationHistory, fetchWorkspace, fetchIntegrationAccounts, openBrowser, createTaskApi} from './utils/stream.js';
 import type {HistoryMessage} from './utils/stream.js';
 import {getToolDisplayName} from './utils/tool-names.js';
 import {ApprovalPanel} from './components/approval-panel.js';
@@ -57,6 +57,10 @@ export function startTuiApp(
 	// ── Messages area ─────────────────────────────────────────────────────────
 	const messagesContainer = new Container();
 	tui.addChild(messagesContainer);
+
+	// ── Task title bar (shown above editor when in a task conversation) ─────
+	const taskTitleContainer = new Container();
+	tui.addChild(taskTitleContainer);
 
 	// ── Editor ────────────────────────────────────────────────────────────────
 	const editor = new Editor(tui, editorTheme);
@@ -147,10 +151,14 @@ export function startTuiApp(
 	let workspaceAccent = '#c15e50';
 	let pendingApprovalPanel: ApprovalPanel | null = null;
 	let autoApproveAll = false;
+	let currentTask: TaskSummary | null = null;
+	let taskInfoOverlay: TaskDetail | null = null;
 
 	const conversation = createConversation(baseUrl, apiKey);
 
-	// Fetch workspace name + avatar async
+	let avatarComponent: Component = buildAvatar(butlerName, workspaceAccent);
+	avatarContainer.addChild(avatarComponent);
+
 	fetchWorkspace(baseUrl, apiKey)
 		.then(ws => {
 			if (ws?.name) {
@@ -158,15 +166,11 @@ export function startTuiApp(
 				infoText.setText(
 					chalk.bold.white(ws.name) + '  ' + chalk.dim('v' + version) + '\n' + chalk.gray('ctrl+c to exit'),
 				);
+				avatarContainer.removeChild(avatarComponent);
+				avatarComponent = buildAvatar(butlerName, workspaceAccent);
+				avatarContainer.addChild(avatarComponent);
 				tui.requestRender();
 			}
-		})
-		.catch(() => {});
-
-	fetchWorkspaceAvatar(baseUrl, apiKey)
-		.then(base64Png => {
-			avatarContainer.addChild(buildAvatar(butlerName, workspaceAccent, base64Png));
-			tui.requestRender();
 		})
 		.catch(() => {});
 
@@ -226,6 +230,21 @@ export function startTuiApp(
 		tui.requestRender();
 	}
 
+	function setTaskContext(task: TaskSummary | null): void {
+		currentTask = task;
+		taskTitleContainer.clear();
+		if (task) {
+			const id = task.displayId ? chalk.dim(`[${task.displayId}] `) : '';
+			const title = chalk.bold.white(task.title || 'Untitled');
+			const status = chalk.cyan(`(${task.status})`);
+			const hint = chalk.dim('   ctrl+o info');
+			taskTitleContainer.addChild(
+				new Text(`${id}${title} ${status}${hint}`, 1, 0),
+			);
+		}
+		tui.requestRender();
+	}
+
 	function clearConversation(): void {
 		requestId++; // invalidate any in-flight callbacks
 
@@ -252,6 +271,7 @@ export function startTuiApp(
 		conversation.clear();
 		isProcessing = false;
 		editor.disableSubmit = false;
+		setTaskContext(null);
 		tui.requestRender();
 	}
 
@@ -349,6 +369,7 @@ export function startTuiApp(
 	function hideMainUI(): void {
 		try { tui.removeChild(statusLine); } catch { /* ignore */ }
 		tui.removeChild(messagesContainer);
+		try { tui.removeChild(taskTitleContainer); } catch { /* ignore */ }
 		tui.removeChild(editor);
 		overlayActive = true;
 	}
@@ -356,6 +377,7 @@ export function startTuiApp(
 	function restoreMainUI(): void {
 		overlayActive = false;
 		tui.addChild(messagesContainer);
+		tui.addChild(taskTitleContainer);
 		tui.addChild(editor);
 		tui.addChild(statusLine);
 		tui.setFocus(editor);
@@ -577,7 +599,14 @@ export function startTuiApp(
 		list.onOpenTask = (task: TaskSummary) => {
 			list.dispose();
 			try { tui.removeChild(list); } catch { /* ignore */ }
-			showTaskDetail(task);
+
+			const convIds = task.conversationIds ?? [];
+			if (convIds.length === 0) {
+				showTaskDetail(task);
+				return;
+			}
+
+			openTaskConversation(task, convIds[convIds.length - 1]);
 		};
 
 		list.onCreateTask = () => {
@@ -586,12 +615,19 @@ export function startTuiApp(
 		};
 	}
 
+	function openTaskConversation(task: TaskSummary, conversationId: string): void {
+		restoreMainUI();
+		clearConversation();
+		setTaskContext(task);
+		conversation.resume(conversationId);
+		loadConversationHistoryIntoMessages(conversationId);
+	}
+
 	function showTaskDetail(task: TaskSummary): void {
 		const detail = new TaskDetail(
 			baseUrl,
 			apiKey,
 			task.id,
-			task.conversationIds ?? [],
 			tui,
 			() => tui.requestRender(),
 		);
@@ -602,13 +638,27 @@ export function startTuiApp(
 			try { tui.removeChild(detail); } catch { /* ignore */ }
 			showTaskList();
 		};
+	}
 
-		detail.onOpenConversation = (conversationId: string) => {
+	function showTaskInfoOverlay(task: TaskSummary): void {
+		if (taskInfoOverlay) return;
+		hideMainUI();
+
+		const detail = new TaskDetail(
+			baseUrl,
+			apiKey,
+			task.id,
+			tui,
+			() => tui.requestRender(),
+		);
+		taskInfoOverlay = detail;
+		tui.addChild(detail);
+		tui.setFocus(detail);
+
+		detail.onCancel = () => {
 			try { tui.removeChild(detail); } catch { /* ignore */ }
+			taskInfoOverlay = null;
 			restoreMainUI();
-			clearConversation();
-			conversation.resume(conversationId);
-			loadConversationHistoryIntoMessages(conversationId);
 		};
 	}
 
@@ -917,6 +967,14 @@ export function startTuiApp(
 		}
 
 		if (matchesKey(data, Key.ctrl('o'))) {
+			if (taskInfoOverlay) {
+				taskInfoOverlay.onCancel?.();
+				return;
+			}
+			if (currentTask && !overlayActive && !isProcessing) {
+				showTaskInfoOverlay(currentTask);
+				return;
+			}
 			if (allToolItems.length > 0) {
 				const anyExpanded = allToolItems.some(item => item.isExpanded);
 				for (const item of allToolItems) {

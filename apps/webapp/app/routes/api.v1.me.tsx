@@ -3,6 +3,7 @@ import { createHybridLoaderApiRoute } from "~/services/routeBuilders/apiBuilder.
 
 import { getUserById } from "~/models/user.server";
 import { getDocument, getPersonaForUser } from "~/services/document.server";
+import { generateCollabToken } from "~/services/collab-token.server";
 
 // This route handles the OAuth redirect URL generation, similar to the NestJS controller
 const loader = createHybridLoaderApiRoute(
@@ -27,15 +28,21 @@ const loader = createHybridLoaderApiRoute(
 
     const metadata = user?.metadata as Record<string, unknown> | null;
 
+    const workspaceId = authentication.workspaceId as string;
+    const collabToken = workspaceId
+      ? generateCollabToken(workspaceId, authentication.userId)
+      : null;
+
     return json({
       id: authentication.userId,
       name: user?.name,
       persona: personaLog?.content,
-      workspaceId: authentication.workspaceId,
+      workspaceId,
       phoneNumber: user?.phoneNumber,
       email: user?.email,
       timezone: metadata?.timezone ?? null,
       metadata: user?.metadata,
+      collabToken,
     });
   },
 );

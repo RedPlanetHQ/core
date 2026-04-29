@@ -439,6 +439,7 @@ export interface TaskDetail {
 	description: string | null; // HTML
 	nextRunAt: string | null;
 	schedule: string | null;
+	subtaskCount?: number;
 }
 
 /**

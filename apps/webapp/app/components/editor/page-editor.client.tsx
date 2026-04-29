@@ -132,6 +132,8 @@ function EditorInner({
   minHeight,
   parentTaskId,
   ydoc,
+  onEditor,
+  disableSelectionBubble,
 }: {
   pageId: string;
   isToday: boolean;
@@ -140,6 +142,8 @@ function EditorInner({
   minHeight: string;
   parentTaskId?: string;
   ydoc: Y.Doc;
+  onEditor?: (editor: ReturnType<typeof useEditor>) => void;
+  disableSelectionBubble?: boolean;
 }) {
   const [activeConversation, setActiveConversation] = useState<{
     conversationId: string;
@@ -210,6 +214,12 @@ function EditorInner({
     editorProps,
   });
 
+  // Hand the editor instance up so consumers (e.g. the mobile WebView
+  // embed) can drive it via window.postMessage commands.
+  useEffect(() => {
+    if (editor && onEditor) onEditor(editor);
+  }, [editor, onEditor]);
+
   const { resolveComment } = useButlerComments(ydoc, pageId);
 
   const handleResolvedChange = React.useCallback(
@@ -226,7 +236,9 @@ function EditorInner({
 
   return (
     <>
-      <SelectionBubble editor={editor} parentTaskId={parentTaskId} />
+      {disableSelectionBubble ? null : (
+        <SelectionBubble editor={editor} parentTaskId={parentTaskId} />
+      )}
       <EditorContent editor={editor} className="w-full" />
       <ConversationPopover
         conversationId={activeConversation?.conversationId ?? null}
@@ -247,6 +259,8 @@ export interface PageEditorProps {
   isToday?: boolean;
   parentTaskId?: string;
   minHeight?: string;
+  onEditor?: (editor: ReturnType<typeof useEditor>) => void;
+  disableSelectionBubble?: boolean;
 }
 
 export function PageEditor({
@@ -256,6 +270,8 @@ export function PageEditor({
   isToday = false,
   parentTaskId,
   minHeight = "400px",
+  onEditor,
+  disableSelectionBubble,
 }: PageEditorProps) {
   const [ydoc, setYdoc] = useState<Y.Doc | null>(null);
   const providerRef = useRef<HocuspocusProvider | null>(null);
@@ -319,6 +335,8 @@ export function PageEditor({
       minHeight={minHeight}
       parentTaskId={parentTaskId}
       ydoc={ydoc}
+      onEditor={onEditor}
+      disableSelectionBubble={disableSelectionBubble}
     />
   );
 }
