@@ -28,7 +28,8 @@ import {
 import { upsertPageSection } from "~/services/coding-task.server";
 import { createEmptyConversation } from "~/services/conversation.server";
 import { logger } from "~/services/logger.service";
-import { UserType, type TaskStatus } from "@prisma/client";
+import type { TaskStatus } from "@prisma/client";
+import { UserTypeEnum } from "@core/types";
 import { getTaskPhase } from "~/services/task.phase";
 import { env } from "~/env.server";
 import {
@@ -738,7 +739,7 @@ REPARENTING: Pass newParentId to move a task under a different parent (or null t
             await prisma.conversationHistory.create({
               data: {
                 conversationId,
-                userType: UserType.User,
+                userType: UserTypeEnum.User,
                 message: reason,
                 parts: [{ type: "text", text: reason }],
                 ...(userId && { userId }),
