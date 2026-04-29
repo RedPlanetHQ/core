@@ -14,6 +14,10 @@ import { getUserById } from "~/models/user.server";
 import { getPersonaDocumentForUser } from "~/services/document.server";
 import { IntegrationLoader } from "~/utils/mcp/integration-loader";
 import { getCorePrompt } from "~/services/agent/prompts";
+import {
+  buildVoicePromptBlock,
+  type PageContext,
+} from "~/services/agent/prompts/voice-mode";
 import { type ChannelType } from "~/services/agent/prompts/channel-formats";
 import { type PronounType } from "~/services/agent/prompts/personality";
 import { getCustomPersonalities } from "~/models/personality.server";
@@ -61,6 +65,10 @@ interface BuildAgentContextParams {
   modelConfig?: ModelConfig;
   /** Optional scratchpad page ID for context retrieval */
   scratchpadPageId?: string;
+  /** Voice mode flips on the spoken-reply prompt addendum */
+  mode?: "voice" | "text";
+  /** Optional macOS Accessibility snapshot for the frontmost window when invoked from the voice widget */
+  pageContext?: PageContext | null;
 }
 
 interface AgentContext {
@@ -91,7 +99,8 @@ export async function buildAgentContext({
   interactive = true,
   modelConfig,
   scratchpadPageId,
-  scratchpadType = "mention",
+  mode,
+  pageContext,
 }: BuildAgentContextParams): Promise<AgentContext> {
   // Load context in parallel
   const [
@@ -522,6 +531,11 @@ The intent is your instruction — follow it precisely:
 
 Keep your response concise — this shows up on a scratchpad, not a chat conversation.
 </scratchpad_context>`;
+  }
+
+  // Voice mode addendum — spoken-style reply rules + optional <active_page>
+  if (mode === "voice") {
+    systemPrompt += `\n\n${buildVoicePromptBlock(pageContext)}`;
   }
 
   // Convert UI messages to Mastra-compatible ModelMessage format

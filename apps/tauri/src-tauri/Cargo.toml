@@ -34,6 +34,7 @@ uuid = { version = "1", features = ["v4"] }
 [target.'cfg(target_os = "macos")'.dependencies]
 objc = "0.2"
 core-foundation = "0.9"
+block = "0.1"
 
 [profile.release]
 panic = "abort"

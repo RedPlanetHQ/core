@@ -4,6 +4,10 @@ mod screen_context;
 mod apps;
 #[cfg(target_os = "macos")]
 mod capture;
+#[cfg(target_os = "macos")]
+mod speech;
+#[cfg(target_os = "macos")]
+mod voice_hotkey;
 mod coding_config;
 
 use std::collections::HashSet;
@@ -13,7 +17,7 @@ use base64::Engine as _;
 use serde::{Deserialize, Serialize};
 use tauri::menu::{Menu, MenuItem, PredefinedMenuItem};
 use tauri::tray::TrayIconBuilder;
-use tauri::{Manager, State};
+use tauri::{Emitter, Listener, Manager, PhysicalPosition, State};
 use tauri_plugin_notification::{NotificationExt, PermissionState};
 
 #[cfg(target_os = "macos")]
@@ -357,6 +361,78 @@ fn build_tray_menu<R: tauri::Runtime>(
     Menu::with_items(manager, items)
 }
 
+// ── Voice widget ──────────────────────────────────────────────────────────────
+
+#[cfg(target_os = "macos")]
+fn handle_voice_invoke<R: tauri::Runtime>(app: &tauri::AppHandle<R>, payload: &str) {
+    // payload shape: { pid, app, screen_frame: { x, y, width, height } }
+    #[derive(Deserialize)]
+    struct InvokePayload {
+        pid: i32,
+        app: String,
+        screen_frame: ScreenFrameDe,
+    }
+    #[derive(Deserialize, Clone, Copy)]
+    struct ScreenFrameDe {
+        x: f64,
+        y: f64,
+        width: f64,
+        height: f64,
+    }
+
+    let parsed: InvokePayload = match serde_json::from_str(payload) {
+        Ok(v) => v,
+        Err(err) => {
+            log::warn!("[voice] invoke payload parse failed: {err}");
+            return;
+        }
+    };
+
+    // Snapshot AX context for the pre-invocation frontmost app. Skip if
+    // the app *is* CORE itself — we'd just capture our own UI.
+    let bundle_self = app.config().identifier.clone();
+    let is_self = parsed.app.eq_ignore_ascii_case("core")
+        || parsed.app.eq_ignore_ascii_case(&bundle_self);
+
+    let (title, text) = if parsed.pid > 0 && !is_self {
+        let (title, text, _disabled) = screen_context::query(parsed.pid);
+        (title, text)
+    } else {
+        (None, None)
+    };
+
+    let context_payload = serde_json::json!({
+        "pageContext": {
+            "app": parsed.app,
+            "title": title,
+            "text": text,
+        }
+    });
+
+    // The voice window is declared in tauri.conf.json (visible: false).
+    // Look it up; bail loudly if the config didn't load.
+    let Some(window) = app.get_webview_window("voice") else {
+        log::warn!("[voice] voice window not found — check tauri.conf.json");
+        return;
+    };
+
+    // Position top-right of the active screen with a 24px inset.
+    let inset: f64 = 24.0;
+    let win_w: f64 = 360.0;
+    let target_x = parsed.screen_frame.x + parsed.screen_frame.width - win_w - inset;
+    let target_y = parsed.screen_frame.y + inset;
+    let _ = window.set_position(PhysicalPosition::<i32>::new(
+        target_x as i32,
+        target_y as i32,
+    ));
+
+    let _ = window.show();
+    let _ = window.set_focus();
+
+    // Send context to the widget. It will start its own listening session.
+    let _ = window.emit("voice:invoke-payload", context_payload);
+}
+
 // ── App entry point ───────────────────────────────────────────────────────────
 
 pub fn run() {
@@ -365,7 +441,10 @@ pub fn run() {
     let auth: SharedAuthState =
         Arc::new(Mutex::new(AuthState::default()));
 
-    tauri::Builder::default()
+    #[cfg(target_os = "macos")]
+    let speech_state = speech::shared_state();
+
+    let builder = tauri::Builder::default()
         .plugin(tauri_plugin_log::Builder::new()
             .level(log::LevelFilter::Info)
             .build())
@@ -373,22 +452,60 @@ pub fn run() {
         .plugin(tauri_plugin_updater::Builder::new().build())
         .plugin(tauri_plugin_notification::init())
         .manage(settings.clone())
-        .manage(auth.clone())
-        .invoke_handler(tauri::generate_handler![
-            get_screen_context_settings,
-            set_screen_context_paused,
-            set_enabled_apps,
-            get_running_apps,
-            get_app_icon,
-            store_pat,
-            get_gateway_id,
-            coding_config::check_corebrain_installed,
-            coding_config::get_coding_agents,
-        ])
+        .manage(auth.clone());
+
+    #[cfg(target_os = "macos")]
+    let builder = builder.manage(speech_state.clone());
+
+    #[cfg(target_os = "macos")]
+    let builder = builder.invoke_handler(tauri::generate_handler![
+        get_screen_context_settings,
+        set_screen_context_paused,
+        set_enabled_apps,
+        get_running_apps,
+        get_app_icon,
+        store_pat,
+        get_gateway_id,
+        coding_config::check_corebrain_installed,
+        coding_config::get_coding_agents,
+        speech::voice_request_permissions,
+        speech::voice_start_listening,
+        speech::voice_stop_listening,
+        speech::voice_speak,
+        speech::voice_cancel_speech,
+    ]);
+
+    #[cfg(not(target_os = "macos"))]
+    let builder = builder.invoke_handler(tauri::generate_handler![
+        get_screen_context_settings,
+        set_screen_context_paused,
+        set_enabled_apps,
+        get_running_apps,
+        get_app_icon,
+        store_pat,
+        get_gateway_id,
+        coding_config::check_corebrain_installed,
+        coding_config::get_coding_agents,
+    ]);
+
+    builder
         .setup(move |app| {
             *settings.lock().unwrap() = load_screen_context_settings();
             #[cfg(target_os = "macos")]
             screen_context::start_polling(settings.clone());
+
+            // Voice widget — install global double-tap-Option hotkey and
+            // wire it to the floating call-card window.
+            #[cfg(target_os = "macos")]
+            {
+                voice_hotkey::install(app.handle().clone());
+
+                let voice_app = app.handle().clone();
+                app.listen("voice:invoke", move |event| {
+                    let payload = event.payload();
+                    handle_voice_invoke(&voice_app, payload);
+                });
+            }
 
             // Build system tray icon
             let paused = settings.lock().unwrap().paused;

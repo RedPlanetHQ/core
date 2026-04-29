@@ -311,6 +311,12 @@ dependencies = [
 ]
 
 [[package]]
+name = "block"
+version = "0.1.6"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "0d8c1fef690941d3e7788d328517591fecc684c084084702d6ff1641e993699a"
+
+[[package]]
 name = "block-buffer"
 version = "0.10.4"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -617,6 +623,7 @@ name = "core-desktop"
 version = "0.1.0"
 dependencies = [
  "base64 0.21.7",
+ "block",
  "chrono",
  "core-foundation 0.9.4",
  "log",

@@ -46,6 +46,22 @@
         "titleBarStyle": "Overlay",
         "trafficLightPosition": { "x": 18, "y": 25 },
         "devtools": true
+      },
+      {
+        "label": "voice",
+        "url": "/voice-widget",
+        "title": "Butler",
+        "width": 360,
+        "height": 220,
+        "resizable": false,
+        "decorations": false,
+        "transparent": true,
+        "alwaysOnTop": true,
+        "skipTaskbar": true,
+        "visible": false,
+        "focus": false,
+        "shadow": true,
+        "devtools": true
       }
     ],
     "security": {
