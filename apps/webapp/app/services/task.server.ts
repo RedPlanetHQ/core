@@ -7,7 +7,11 @@ import {
   enqueueScheduledTask,
   enqueueTask,
 } from "~/lib/queue-adapter.server";
-import { computeNextRun, checkShouldDeactivate } from "~/utils/schedule-utils";
+import {
+  computeNextRun,
+  checkShouldDeactivate,
+  formatScheduleForUser,
+} from "~/utils/schedule-utils";
 import { DateTime } from "luxon";
 import { logger } from "./logger.service";
 import {
@@ -679,6 +683,27 @@ export async function updateScheduledTask(
     ? computeNextRun(schedule!, timezone)
     : existing.nextRunAt;
 
+  // When the schedule changes, regenerate metadata.scheduleText so the UI
+  // label stays in sync with the new RRule. Clear it if the schedule was
+  // cleared. Other updates leave metadata untouched.
+  let metadataUpdate: Record<string, unknown> | undefined;
+  if (data.schedule !== undefined) {
+    const existingMeta =
+      (existing.metadata as Record<string, unknown> | null) ?? {};
+    if (schedule) {
+      metadataUpdate = {
+        ...existingMeta,
+        scheduleText: formatScheduleForUser(schedule, timezone),
+      };
+    } else {
+      const { scheduleText: _omitted, ...rest } = existingMeta as Record<
+        string,
+        unknown
+      > & { scheduleText?: string };
+      metadataUpdate = rest;
+    }
+  }
+
   const task = await prisma.task.update({
     where: { id: taskId },
     data: {
@@ -691,6 +716,9 @@ export async function updateScheduledTask(
         maxOccurrences: data.maxOccurrences,
       }),
       ...(data.endDate !== undefined && { endDate: data.endDate }),
+      ...(metadataUpdate !== undefined && {
+        metadata: metadataUpdate as never,
+      }),
     },
   });
 

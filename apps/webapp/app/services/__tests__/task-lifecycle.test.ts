@@ -772,6 +772,90 @@ describe("createScheduledTask — recurring / scheduled", () => {
     expect(enqueueScheduledTaskMock).toHaveBeenCalledTimes(1);
   });
 
+  it("updateScheduledTask with new schedule regenerates metadata.scheduleText", async () => {
+    await prisma.userWorkspace.upsert({
+      where: {
+        userId_workspaceId: {
+          userId: TEST_USER_ID,
+          workspaceId: TEST_WORKSPACE_ID,
+        },
+      },
+      update: {},
+      create: {
+        userId: TEST_USER_ID,
+        workspaceId: TEST_WORKSPACE_ID,
+      },
+    });
+
+    const task = await prisma.task.create({
+      data: {
+        workspaceId: TEST_WORKSPACE_ID,
+        userId: TEST_USER_ID,
+        title: "Daily brief",
+        status: "Ready",
+        metadata: { phase: "execute", scheduleText: "daily at 9:00 am" },
+        schedule: "FREQ=DAILY;BYHOUR=9",
+        nextRunAt: new Date(Date.now() + 60 * 60 * 1000),
+        isActive: true,
+      },
+    });
+
+    await updateScheduledTask(task.id, TEST_WORKSPACE_ID, {
+      schedule: "FREQ=WEEKLY;BYDAY=MO;BYHOUR=15",
+    });
+
+    const reloaded = await prisma.task.findUniqueOrThrow({
+      where: { id: task.id },
+    });
+    const meta = (reloaded.metadata ?? {}) as Record<string, unknown>;
+    expect(meta.phase).toBe("execute"); // unrelated metadata preserved
+    expect(typeof meta.scheduleText).toBe("string");
+    expect(meta.scheduleText).not.toBe("daily at 9:00 am"); // regenerated
+    expect(meta.scheduleText).toMatch(/3:00 pm/);
+  });
+
+  it("updateScheduledTask title-only update does NOT touch scheduleText", async () => {
+    await prisma.userWorkspace.upsert({
+      where: {
+        userId_workspaceId: {
+          userId: TEST_USER_ID,
+          workspaceId: TEST_WORKSPACE_ID,
+        },
+      },
+      update: {},
+      create: {
+        userId: TEST_USER_ID,
+        workspaceId: TEST_WORKSPACE_ID,
+      },
+    });
+
+    const task = await prisma.task.create({
+      data: {
+        workspaceId: TEST_WORKSPACE_ID,
+        userId: TEST_USER_ID,
+        title: "Daily brief",
+        status: "Ready",
+        metadata: {
+          phase: "execute",
+          scheduleText: "every weekday morning",
+        },
+        schedule: "FREQ=DAILY;BYHOUR=9",
+        nextRunAt: new Date(Date.now() + 60 * 60 * 1000),
+        isActive: true,
+      },
+    });
+
+    await updateScheduledTask(task.id, TEST_WORKSPACE_ID, {
+      title: "Renamed daily brief",
+    });
+
+    const reloaded = await prisma.task.findUniqueOrThrow({
+      where: { id: task.id },
+    });
+    const meta = (reloaded.metadata ?? {}) as Record<string, unknown>;
+    expect(meta.scheduleText).toBe("every weekday morning"); // preserved
+  });
+
   it("creates a one-time scheduled task in Ready + phase=execute (no prep)", async () => {
     await prisma.userWorkspace.upsert({
       where: {
