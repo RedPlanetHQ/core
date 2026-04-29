@@ -82,24 +82,23 @@ export function mergeStructuredSections(
 // and <output>...</output> blocks; this function upserts those into the
 // page document while leaving the user's prose untouched. Anything else
 // in the input HTML is ignored.
-//
-// Legacy parameters (sectionName, append) are accepted for backward
-// compatibility with existing callers but are ignored — merge is driven
-// entirely by node types parsed from inputHtml.
 
 export async function upsertPageSection(
   pageId: string,
-  _sectionName: string,
   inputHtml: string,
-  _append: boolean = false,
 ): Promise<void> {
   const existingHtml = (await getPageContentAsHtml(pageId)) || "";
   const existingDoc =
-    (existingHtml ? (htmlToTiptapJson(existingHtml) as any) : null) ?? {
-      type: "doc",
-      content: [],
-    };
-  const inputDoc = htmlToTiptapJson(inputHtml) as any;
+    (existingHtml
+      ? (htmlToTiptapJson(existingHtml) as {
+          type: string;
+          content?: DocNode[];
+        })
+      : null) ?? { type: "doc", content: [] };
+  const inputDoc = htmlToTiptapJson(inputHtml) as {
+    type: string;
+    content?: DocNode[];
+  };
 
   const merged = mergeStructuredSections(existingDoc, inputDoc);
   const mergedHtml = tiptapJsonToHtml(merged);
