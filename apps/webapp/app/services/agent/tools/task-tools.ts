@@ -522,19 +522,7 @@ REPARENTING: Pass newParentId to move a task under a different parent (or null t
           .boolean()
           .optional()
           .describe(
-            "Set true to replace the entire description (only valid for task creation flows). Default: false. Ignored when description contains <plan> or <output> tags.",
-          ),
-        section: z
-          .string()
-          .optional()
-          .describe(
-            "Deprecated — kept for backward compatibility. Ignored. Use <plan> / <output> tags in description instead.",
-          ),
-        appendToSection: z
-          .boolean()
-          .optional()
-          .describe(
-            "Deprecated — kept for backward compatibility. Ignored.",
+            "Set true to replace the entire description verbatim (only valid for task creation flows where the agent writes the user's prose from a brief). Default: false — description is merged via <plan>/<output> upsert.",
           ),
         schedule: z.string().optional().describe("New RRule schedule string"),
         isActive: z
@@ -560,8 +548,6 @@ REPARENTING: Pass newParentId to move a task under a different parent (or null t
         title,
         description,
         replaceDescription,
-        section,
-        appendToSection,
         schedule,
         isActive,
         maxOccurrences,
@@ -604,38 +590,26 @@ REPARENTING: Pass newParentId to move a task under a different parent (or null t
               maxOccurrences: maxOccurrences ?? undefined,
               endDate: endDate ? new Date(endDate) : undefined,
             });
-          } else if (!isRecurring && section && description !== undefined) {
-            // Section-based update: upsert a named H2 section, preserving everything else
-            // Silently skipped for recurring tasks
-            if (currentTask?.pageId) {
-              await upsertPageSection(
-                currentTask.pageId,
-                section,
-                description,
-                appendToSection,
-              );
-            }
-            if (title) {
-              await updateTask(taskId, { title }, false);
-            }
           } else if (!isRecurring && (title || description !== undefined)) {
-            // Description/title update — silently skipped for recurring tasks
-            if (replaceDescription && description !== undefined) {
-              if (currentTask?.pageId) {
+            // Description / title update — silently skipped for recurring tasks.
+            if (description !== undefined && currentTask?.pageId) {
+              if (replaceDescription) {
                 const existingHtml =
                   (await getPageContentAsHtml(currentTask.pageId)) ?? "";
                 if (existingHtml.length > 0) {
                   const similarity = textSimilarity(existingHtml, description);
                   if (similarity < 0.3) {
-                    return `Description update rejected: the new content is too different from the existing description (similarity: ${Math.round(similarity * 100)}%). Prefer appending new context instead — omit replaceDescription and pass only the new content to append.`;
+                    return `Description update rejected: the new content is too different from the existing description (similarity: ${Math.round(similarity * 100)}%). Omit replaceDescription and pass <plan>/<output> tags to upsert sections instead.`;
                   }
                 }
+                await setPageContentFromHtml(currentTask.pageId, description);
+              } else {
+                await upsertPageSection(currentTask.pageId, description);
               }
             }
-            const data: { title?: string; description?: string } = {};
-            if (title) data.title = title;
-            if (description !== undefined) data.description = description;
-            await updateTask(taskId, data, !replaceDescription);
+            if (title) {
+              await updateTask(taskId, { title }, false);
+            }
           } else if (isRecurring && title) {
             // Recurring tasks: allow title updates only (no description)
             await updateTask(taskId, { title }, false);
