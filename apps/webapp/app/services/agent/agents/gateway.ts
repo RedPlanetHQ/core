@@ -468,6 +468,12 @@ export async function createGatewayAgents(
   const agents: Record<string, Agent> = {};
   const agentList: Agent[] = [];
 
+  logger.info(
+    `createGatewayAgents: received ${gateways.length} gateways: ${gateways
+      .map((g) => `${g.name}(${g.status})`)
+      .join(", ")}`,
+  );
+
   for (const gw of gateways) {
     const { agent, connected } = await createGatewayAgent(
       gw.id,
@@ -480,6 +486,10 @@ export async function createGatewayAgents(
       const agentId = `gateway_${gw.name.toLowerCase().replace(/[^a-z0-9]/g, "_")}`;
       agents[agentId] = agent;
       agentList.push(agent);
+    } else {
+      logger.warn(
+        `createGatewayAgents: skipping ${gw.name} (${gw.id}) — not connected after manifest fetch`,
+      );
     }
   }
 

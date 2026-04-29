@@ -6,6 +6,7 @@ import {
   type HealthResponse as HealthResponseT,
 } from "@redplanethq/gateway-protocol";
 import { readSecurityKey } from "./secrets.server";
+import { logger } from "~/services/logger.service";
 
 interface ToolResponseEnvelope {
   ok: boolean;
@@ -180,11 +181,23 @@ export async function fetchManifest(
       method: "GET",
       timeoutMs,
     });
-    if (!res.ok) return null;
+    if (!res.ok) {
+      const body = await res.text().catch(() => "");
+      logger.warn("fetchManifest: non-ok response", {
+        gatewayId,
+        status: res.status,
+        body: body.slice(0, 200),
+      });
+      return null;
+    }
     const etag = res.headers.get("etag") ?? "";
     const manifest = Manifest.parse(await res.json());
     return { manifest, etag };
-  } catch {
+  } catch (err) {
+    logger.warn("fetchManifest: failed", {
+      gatewayId,
+      error: err instanceof Error ? `${err.name}: ${err.message}` : String(err),
+    });
     return null;
   }
 }
