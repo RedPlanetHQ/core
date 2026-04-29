@@ -78,54 +78,37 @@ export function mergeStructuredSections(
 }
 
 // ─── upsertPageSection ───────────────────────────────────────────────
-// Section-aware HTML read/merge/write for task pages.
-// Finds or creates H2 sections by name. Preserves other sections.
+// Node-type-aware merge for task pages. The agent writes <plan>...</plan>
+// and <output>...</output> blocks; this function upserts those into the
+// page document while leaving the user's prose untouched. Anything else
+// in the input HTML is ignored.
+//
+// Legacy parameters (sectionName, append) are accepted for backward
+// compatibility with existing callers but are ignored — merge is driven
+// entirely by node types parsed from inputHtml.
 
 export async function upsertPageSection(
   pageId: string,
-  sectionName: string,
-  sectionHtml: string,
-  append: boolean = false,
+  _sectionName: string,
+  inputHtml: string,
+  _append: boolean = false,
 ): Promise<void> {
   const existingHtml = (await getPageContentAsHtml(pageId)) || "";
+  const existingDoc =
+    (existingHtml ? (htmlToTiptapJson(existingHtml) as any) : null) ?? {
+      type: "doc",
+      content: [],
+    };
+  const inputDoc = htmlToTiptapJson(inputHtml) as any;
 
-  const newHtml = mergeSectionIntoHtml(existingHtml, sectionName, sectionHtml, append);
-  await setPageContentFromHtml(pageId, newHtml);
+  const merged = mergeStructuredSections(existingDoc, inputDoc);
+  const mergedHtml = tiptapJsonToHtml(merged);
+  await setPageContentFromHtml(pageId, mergedHtml);
 }
 
-export function mergeSectionIntoHtml(
-  existingHtml: string,
-  sectionName: string,
-  sectionHtml: string,
-  append: boolean = false,
-): string {
-  // Parse HTML into sections by H2 boundaries
-  const sections = splitByH2(existingHtml);
-
-  const targetIndex = sections.findIndex(
-    (s) => s.heading?.toLowerCase() === sectionName.toLowerCase(),
-  );
-
-  if (targetIndex >= 0) {
-    if (append) {
-      // Append new content after existing section content
-      sections[targetIndex] = {
-        heading: sectionName,
-        html: `${sections[targetIndex].html}${sectionHtml}`,
-      };
-    } else {
-      // Replace existing section
-      const sectionBlock = `<h2>${sectionName}</h2>${sectionHtml}`;
-      sections[targetIndex] = { heading: sectionName, html: sectionBlock };
-    }
-  } else {
-    // Append new section
-    const sectionBlock = `<h2>${sectionName}</h2>${sectionHtml}`;
-    sections.push({ heading: sectionName, html: sectionBlock });
-  }
-
-  return sections.map((s) => s.html).join("");
-}
+// ─── splitByH2 / HtmlSection ─────────────────────────────────────────
+// Retained for `extractDescriptionSection` below, which still needs to
+// strip out non-Description H2 sections from legacy task pages.
 
 interface HtmlSection {
   heading: string | null; // null for content before first H2
