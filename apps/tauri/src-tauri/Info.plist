@@ -1,0 +1,10 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0">
+<dict>
+  <key>NSMicrophoneUsageDescription</key>
+  <string>CORE uses your microphone for voice conversations with butler. Audio stays on this Mac.</string>
+  <key>NSSpeechRecognitionUsageDescription</key>
+  <string>CORE transcribes your voice on-device. Audio is not sent to Apple or any other server.</string>
+</dict>
+</plist>

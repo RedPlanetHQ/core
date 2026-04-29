@@ -229,7 +229,8 @@ fn check_permission() -> bool {
 
 // ── AX query ──────────────────────────────────────────────────────────────────
 
-fn query(pid: i32) -> (Option<String>, Option<String>, bool) {
+/// Snapshot the focused window of `pid`: returns (title, body_text, ax_disabled).
+pub fn query(pid: i32) -> (Option<String>, Option<String>, bool) {
     let app_el = unsafe { AXUIElementCreateApplication(pid) };
     if app_el.is_null() { return (None, None, false); }
 
