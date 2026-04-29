@@ -477,11 +477,15 @@ export async function enqueueScheduledTask(
 
   if (provider === "trigger") {
     const { scheduledTaskRunner } = await import("~/trigger/task/task");
+    // No idempotencyKey: callers MUST removeScheduledTask first when
+    // re-enqueueing. An idempotency key here causes a stall when a
+    // re-enqueue happens at the same nextRunAt — Trigger.dev's idempotency
+    // cache returns the prior (just-cancelled or already-completed) run id
+    // instead of creating a fresh delayed run.
     const handler = await scheduledTaskRunner.trigger(payload, {
       queue: "scheduled-task-queue",
       delay: delay > 0 ? `${Math.ceil(delay / 1000)}s` : undefined,
       concurrencyKey: payload.workspaceId,
-      idempotencyKey: jobId,
       tags: [`scheduledTask:${payload.taskId}`, payload.workspaceId],
     });
     return { id: handler.id };

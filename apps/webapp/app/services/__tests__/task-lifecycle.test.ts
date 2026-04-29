@@ -86,6 +86,7 @@ import {
   createTask,
   changeTaskStatus,
   createScheduledTask,
+  updateScheduledTask,
 } from "~/services/task.server";
 import { processScheduledTask } from "~/jobs/task/scheduled-task.logic";
 
@@ -446,6 +447,32 @@ describe("processScheduledTask — wake-up branching", () => {
     expect(reloaded.nextRunAt!.getTime()).toBeGreaterThan(Date.now());
   });
 
+  it("Working + execute (previous occurrence crashed) → recovery, runs pipeline", async () => {
+    const task = await prisma.task.create({
+      data: {
+        workspaceId: TEST_WORKSPACE_ID,
+        userId: TEST_USER_ID,
+        title: "Stuck working",
+        status: "Working",
+        metadata: { phase: "execute" },
+        schedule: "FREQ=DAILY;BYHOUR=9",
+        nextRunAt: new Date(Date.now() - 1000),
+        isActive: true,
+      },
+    });
+
+    const result = await processScheduledTask({
+      taskId: task.id,
+      workspaceId: TEST_WORKSPACE_ID,
+      userId: TEST_USER_ID,
+      channel: "email",
+    });
+
+    expect(result.success).toBe(true);
+    // Recovery branch: pipeline must run, not no-op
+    expect(runCASEPipelineMock).toHaveBeenCalledTimes(1);
+  });
+
   it("recurring task: out of credits → skips pipeline, schedules next occurrence", async () => {
     await prisma.userWorkspace.upsert({
       where: {
@@ -664,6 +691,85 @@ describe("createScheduledTask — recurring / scheduled", () => {
     const meta = (task.metadata ?? {}) as Record<string, unknown>;
     expect(meta.phase).toBe("execute");
     expect(enqueueScheduledTaskMock).toHaveBeenCalled();
+  });
+
+  it("updateScheduledTask with title only does NOT touch the queue", async () => {
+    await prisma.userWorkspace.upsert({
+      where: {
+        userId_workspaceId: {
+          userId: TEST_USER_ID,
+          workspaceId: TEST_WORKSPACE_ID,
+        },
+      },
+      update: {},
+      create: {
+        userId: TEST_USER_ID,
+        workspaceId: TEST_WORKSPACE_ID,
+      },
+    });
+
+    const task = await prisma.task.create({
+      data: {
+        workspaceId: TEST_WORKSPACE_ID,
+        userId: TEST_USER_ID,
+        title: "Recurring brief",
+        status: "Working", // mid-fire
+        metadata: { phase: "execute" },
+        schedule: "FREQ=DAILY;BYHOUR=9",
+        nextRunAt: new Date(Date.now() + 60 * 60 * 1000),
+        isActive: true,
+      },
+    });
+
+    removeScheduledTaskMock.mockClear();
+    enqueueScheduledTaskMock.mockClear();
+
+    await updateScheduledTask(task.id, TEST_WORKSPACE_ID, {
+      title: "Renamed",
+    });
+
+    // Title-only update must not cancel and re-enqueue the in-flight wake-up.
+    expect(removeScheduledTaskMock).not.toHaveBeenCalled();
+    expect(enqueueScheduledTaskMock).not.toHaveBeenCalled();
+  });
+
+  it("updateScheduledTask with new schedule DOES re-enqueue with new time", async () => {
+    await prisma.userWorkspace.upsert({
+      where: {
+        userId_workspaceId: {
+          userId: TEST_USER_ID,
+          workspaceId: TEST_WORKSPACE_ID,
+        },
+      },
+      update: {},
+      create: {
+        userId: TEST_USER_ID,
+        workspaceId: TEST_WORKSPACE_ID,
+      },
+    });
+
+    const task = await prisma.task.create({
+      data: {
+        workspaceId: TEST_WORKSPACE_ID,
+        userId: TEST_USER_ID,
+        title: "Recurring brief",
+        status: "Ready",
+        metadata: { phase: "execute" },
+        schedule: "FREQ=DAILY;BYHOUR=9",
+        nextRunAt: new Date(Date.now() + 60 * 60 * 1000),
+        isActive: true,
+      },
+    });
+
+    removeScheduledTaskMock.mockClear();
+    enqueueScheduledTaskMock.mockClear();
+
+    await updateScheduledTask(task.id, TEST_WORKSPACE_ID, {
+      schedule: "FREQ=DAILY;BYHOUR=15",
+    });
+
+    expect(removeScheduledTaskMock).toHaveBeenCalledTimes(1);
+    expect(enqueueScheduledTaskMock).toHaveBeenCalledTimes(1);
   });
 
   it("creates a one-time scheduled task in Ready + phase=execute (no prep)", async () => {

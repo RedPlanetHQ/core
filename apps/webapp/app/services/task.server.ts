@@ -703,18 +703,32 @@ export async function updateScheduledTask(
     await setPageContentFromHtml(page.id, data.description);
   }
 
-  // Reschedule job
-  await removeScheduledTask(taskId);
-  if (task.isActive && task.nextRunAt) {
-    await enqueueScheduledTask(
-      {
-        taskId: task.id,
-        workspaceId,
-        userId: existing.userId,
-        channel: task.channel ?? "email",
-      },
-      task.nextRunAt,
-    );
+  // Only touch the queue when a scheduling-relevant field actually changed.
+  // Title/description/channel edits must not cancel and re-enqueue the
+  // pending wake-up — doing so on an in-flight occurrence (status=Working)
+  // races with the running pipeline and can leave the task without any
+  // future delayed run, stalling all subsequent occurrences.
+  const scheduleChanged = data.schedule !== undefined;
+  const activationChanged =
+    data.isActive !== undefined && data.isActive !== existing.isActive;
+  const limitsChanged =
+    data.endDate !== undefined || data.maxOccurrences !== undefined;
+  const queueShouldChange =
+    scheduleChanged || activationChanged || limitsChanged;
+
+  if (queueShouldChange) {
+    await removeScheduledTask(taskId);
+    if (task.isActive && task.nextRunAt) {
+      await enqueueScheduledTask(
+        {
+          taskId: task.id,
+          workspaceId,
+          userId: existing.userId,
+          channel: task.channel ?? "email",
+        },
+        task.nextRunAt,
+      );
+    }
   }
 
   logger.info(`Updated scheduled task ${task.id} for workspace ${workspaceId}`);
