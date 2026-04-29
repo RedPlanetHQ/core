@@ -26,8 +26,9 @@ import {
   getPageContentAsHtml,
 } from "~/services/hocuspocus/content.server";
 import { upsertPageSection } from "~/services/coding-task.server";
+import { createEmptyConversation } from "~/services/conversation.server";
 import { logger } from "~/services/logger.service";
-import type { TaskStatus } from "@prisma/client";
+import { UserType, type TaskStatus } from "@prisma/client";
 import { getTaskPhase } from "~/services/task.phase";
 import { env } from "~/env.server";
 import {
@@ -689,13 +690,13 @@ REPARENTING: Pass newParentId to move a task under a different parent (or null t
     // unblock_task — available in all flows (web chat, channels, etc.)
     ...(source && {
       unblock_task: tool({
-        description: `Approve a Waiting task and move it to Ready so execution can start. Requires a reason explaining why the wait is resolved. The reason is appended to the task description. Only works on tasks currently in Waiting status.`,
+        description: `Approve a Waiting task and move it to Ready (or Todo for prep-phase tasks) so execution can start. Requires a reason explaining why the wait is resolved. The reason is added to the task's conversation as a user reply, so the agent picks it up on its next turn. Only works on tasks currently in Waiting status.`,
         inputSchema: z.object({
           taskId: z.string().describe("The ID of the waiting task"),
           reason: z
             .string()
             .describe(
-              "Why the wait is resolved — this is appended to the task description",
+              "Why the wait is resolved — added to the task conversation as your reply so the agent resumes from there.",
             ),
         }),
         execute: async ({ taskId, reason }) => {
@@ -705,21 +706,44 @@ REPARENTING: Pass newParentId to move a task under a different parent (or null t
             if (task.status !== "Waiting")
               return `Task is not Waiting (current status: ${task.status}). Only Waiting tasks can be approved.`;
 
-            // Append reason to description
-            const page = task.pageId
-              ? await prisma.page.findUnique({ where: { id: task.pageId } })
-              : null;
-            const existingHtml = page
-              ? ((await getPageContentAsHtml(task.pageId!)) ?? "")
-              : "";
-            const reasonHtml = `<p><strong>Approved:</strong> ${reason}</p>`;
-            const mergedHtml = existingHtml
-              ? `${existingHtml}${reasonHtml}`
-              : reasonHtml;
+            // Resolve the most recent conversation tied to this task, or
+            // create a new one if none exists. Then insert the reason as a
+            // userType: User row so the agent's next turn picks it up like
+            // a normal user reply and resumes the conversation.
+            let conversationId =
+              task.conversationIds[task.conversationIds.length - 1] ?? null;
 
-            if (task.pageId) {
-              await setPageContentFromHtml(task.pageId, mergedHtml);
+            if (conversationId) {
+              const exists = await prisma.conversation.findUnique({
+                where: { id: conversationId },
+                select: { id: true },
+              });
+              if (!exists) conversationId = null;
             }
+
+            if (!conversationId) {
+              const conv = await createEmptyConversation(
+                workspaceId,
+                userId,
+                task.title,
+                task.id,
+              );
+              conversationId = conv.id;
+              await prisma.task.update({
+                where: { id: task.id },
+                data: { conversationIds: { push: conv.id } },
+              });
+            }
+
+            await prisma.conversationHistory.create({
+              data: {
+                conversationId,
+                userType: "User",
+                message: reason,
+                parts: [{ type: "text", text: reason }],
+                ...(userId && { userId }),
+              },
+            });
 
             // Phase-aware: prep → back to Todo (continue planning),
             // execute → Ready (auto-enqueues, resumes execution)
