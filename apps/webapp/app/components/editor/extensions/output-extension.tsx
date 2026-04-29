@@ -4,8 +4,8 @@ import {
   ReactNodeViewRenderer,
   NodeViewWrapper,
   NodeViewContent,
+  type NodeViewProps,
 } from "@tiptap/react";
-import type { NodeViewProps } from "@tiptap/react";
 import { ChevronDown, ChevronRight } from "lucide-react";
 
 function OutputNodeView({ node }: NodeViewProps) {
