@@ -469,8 +469,6 @@ export async function createGatewayAgents(
   const agentList: Agent[] = [];
 
   for (const gw of gateways) {
-    if (gw.status !== "CONNECTED") continue;
-
     const { agent, connected } = await createGatewayAgent(
       gw.id,
       executorTools,

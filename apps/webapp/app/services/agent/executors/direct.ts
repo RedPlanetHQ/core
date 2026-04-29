@@ -7,7 +7,7 @@
 
 import { searchMemoryWithAgent } from "../memory";
 import { IntegrationLoader } from "~/utils/mcp/integration-loader";
-import { getConnectedGateways } from "~/services/gateway.server";
+import { listGateways } from "~/services/gateway.server";
 import {
   handleGetIntegrationActions,
   handleExecuteIntegrationAction,
@@ -75,7 +75,7 @@ export class DirectOrchestratorTools extends OrchestratorTools {
   }
 
   async getGateways(workspaceId: string): Promise<GatewayAgentInfo[]> {
-    const gateways = await getConnectedGateways(workspaceId);
+    const gateways = await listGateways(workspaceId);
     return gateways.map((gw) => {
       return {
         id: gw.id,

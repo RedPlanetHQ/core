@@ -353,7 +353,7 @@ export async function createCoreAgents(
   const gateways = executorTools
     ? await executorTools.getGateways(workspaceId)
     : await prisma.gateway.findMany({
-        where: { workspaceId, status: "CONNECTED" },
+        where: { workspaceId },
         select: { id: true, name: true, status: true, description: true },
       });
 
