@@ -63,9 +63,13 @@ export async function applyScheduleToTask(
   result: RecurrenceResult,
 ): Promise<void> {
   if (result.recurrenceRule.length > 0) {
+    // Switching to a recurring schedule: clear any one-time maxOccurrences=1
+    // left over from a previous one-time configuration; otherwise the recurring
+    // task auto-deactivates after the first fire.
     await updateScheduledTask(taskId, workspaceId, {
       schedule: result.recurrenceRule[0],
       isActive: true,
+      maxOccurrences: null,
     });
     if (result.scheduleText) {
       // Merge scheduleText into existing metadata (preserves phase, etc.)

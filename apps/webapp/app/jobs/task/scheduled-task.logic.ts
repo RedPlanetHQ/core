@@ -115,12 +115,17 @@ export async function processScheduledTask(
 
     const isNormalFire = task.status === "Ready" && phase === "execute";
 
-    // Recovery branch: a previous occurrence's pipeline crashed
-    // mid-execution (machine kill, OOM, deploy) before
-    // scheduleNextTaskOccurrence ran, leaving the task stuck at
-    // Working+execute. Without this branch every future wake-up no-ops and
-    // the recurrence dies silently. Treat it as a normal fire.
+    // Recovery branches for recurring tasks. Without these the task gets
+    // stuck and every future wake-up no-ops, silently killing the recurrence.
+    //
+    // Working+execute: previous occurrence's pipeline crashed mid-execution
+    //   (machine kill, OOM, deploy) before scheduleNextTaskOccurrence ran.
+    // Review+execute (recurring only): previous occurrence ended in Review
+    //   and the user/system never moved it back to Ready before the next
+    //   scheduled time arrived. Recurring tasks should auto-loop.
     const isStuckWorking = task.status === "Working" && phase === "execute";
+    const isStuckReview =
+      task.status === "Review" && phase === "execute" && !!task.schedule;
 
     if (isBufferExpiry) {
       return await startPrepFromBuffer(task);
@@ -128,10 +133,15 @@ export async function processScheduledTask(
     if (isScheduledFireDuringPrep) {
       return await executeFireOverride(data, task);
     }
-    if (isNormalFire || isStuckWorking) {
+    if (isNormalFire || isStuckWorking || isStuckReview) {
       if (isStuckWorking) {
         logger.warn(
           `Task ${taskId} wake-up fired while still Working — assuming previous occurrence crashed, recovering`,
+        );
+      }
+      if (isStuckReview) {
+        logger.warn(
+          `Task ${taskId} wake-up fired while in Review — recurring task auto-recovering for next occurrence`,
         );
       }
       return await runExecutionPipeline(data, task);

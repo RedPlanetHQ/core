@@ -447,6 +447,58 @@ describe("processScheduledTask — wake-up branching", () => {
     expect(reloaded.nextRunAt!.getTime()).toBeGreaterThan(Date.now());
   });
 
+  it("recurring task in Review when next time arrives → recovery, runs pipeline", async () => {
+    const task = await prisma.task.create({
+      data: {
+        workspaceId: TEST_WORKSPACE_ID,
+        userId: TEST_USER_ID,
+        title: "Recurring stuck in Review",
+        status: "Review",
+        metadata: { phase: "execute" },
+        schedule: "FREQ=DAILY;BYHOUR=9",
+        nextRunAt: new Date(Date.now() - 1000),
+        isActive: true,
+      },
+    });
+
+    const result = await processScheduledTask({
+      taskId: task.id,
+      workspaceId: TEST_WORKSPACE_ID,
+      userId: TEST_USER_ID,
+      channel: "email",
+    });
+
+    expect(result.success).toBe(true);
+    // Recovery branch: pipeline must run, not no-op
+    expect(runCASEPipelineMock).toHaveBeenCalledTimes(1);
+  });
+
+  it("non-recurring task in Review when wake-up fires → no-op (no auto-recovery)", async () => {
+    const task = await prisma.task.create({
+      data: {
+        workspaceId: TEST_WORKSPACE_ID,
+        userId: TEST_USER_ID,
+        title: "One-time in Review",
+        status: "Review",
+        metadata: { phase: "execute" },
+        schedule: null,
+        nextRunAt: new Date(Date.now() - 1000),
+        isActive: true,
+      },
+    });
+
+    const result = await processScheduledTask({
+      taskId: task.id,
+      workspaceId: TEST_WORKSPACE_ID,
+      userId: TEST_USER_ID,
+      channel: "email",
+    });
+
+    expect(result.success).toBe(true);
+    // Non-recurring task in Review must NOT auto-fire — that's terminal state.
+    expect(runCASEPipelineMock).not.toHaveBeenCalled();
+  });
+
   it("Working + execute (previous occurrence crashed) → recovery, runs pipeline", async () => {
     const task = await prisma.task.create({
       data: {
@@ -582,6 +634,29 @@ describe("changeTaskStatus — butler restrictions", () => {
       changeTaskStatus(
         task.id,
         "Done",
+        TEST_WORKSPACE_ID,
+        TEST_USER_ID,
+        "agent",
+      ),
+    ).rejects.toThrow(/Invalid transition/);
+  });
+
+  it("rejects butler attempting to set Working (system-only)", async () => {
+    const task = await prisma.task.create({
+      data: {
+        workspaceId: TEST_WORKSPACE_ID,
+        userId: TEST_USER_ID,
+        title: "No Working from agent",
+        status: "Ready",
+        metadata: { phase: "execute" },
+        isActive: true,
+      },
+    });
+
+    await expect(
+      changeTaskStatus(
+        task.id,
+        "Working",
         TEST_WORKSPACE_ID,
         TEST_USER_ID,
         "agent",
@@ -854,6 +929,49 @@ describe("createScheduledTask — recurring / scheduled", () => {
     });
     const meta = (reloaded.metadata ?? {}) as Record<string, unknown>;
     expect(meta.scheduleText).toBe("every weekday morning"); // preserved
+  });
+
+  it("updateScheduledTask resets maxOccurrences when explicitly set to null", async () => {
+    await prisma.userWorkspace.upsert({
+      where: {
+        userId_workspaceId: {
+          userId: TEST_USER_ID,
+          workspaceId: TEST_WORKSPACE_ID,
+        },
+      },
+      update: {},
+      create: {
+        userId: TEST_USER_ID,
+        workspaceId: TEST_WORKSPACE_ID,
+      },
+    });
+
+    // Task previously configured as one-time
+    const task = await prisma.task.create({
+      data: {
+        workspaceId: TEST_WORKSPACE_ID,
+        userId: TEST_USER_ID,
+        title: "Was one-time",
+        status: "Ready",
+        metadata: { phase: "execute" },
+        schedule: "FREQ=DAILY;BYHOUR=9",
+        nextRunAt: new Date(Date.now() + 60 * 60 * 1000),
+        maxOccurrences: 1,
+        isActive: true,
+      },
+    });
+
+    // Switch to recurring (mirroring applyScheduleToTask's call shape)
+    await updateScheduledTask(task.id, TEST_WORKSPACE_ID, {
+      schedule: "FREQ=WEEKLY;BYDAY=MO;BYHOUR=15",
+      isActive: true,
+      maxOccurrences: null,
+    });
+
+    const reloaded = await prisma.task.findUniqueOrThrow({
+      where: { id: task.id },
+    });
+    expect(reloaded.maxOccurrences).toBeNull();
   });
 
   it("creates a one-time scheduled task in Ready + phase=execute (no prep)", async () => {

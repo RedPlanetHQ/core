@@ -85,10 +85,13 @@ export function canTransition(
   // Deny-list: only block transitions that are genuinely dangerous.
   // Everything else is allowed — the system and prompts guide correct usage.
 
-  // Ready, Done, Todo — only user or system (code), not agent.
+  // Ready, Working, Done, Todo — only user or system (code), not agent.
   // Agent should not directly set these; the system manages them
-  // (enqueue → Ready, markTaskInProcess → Working, user approves → Done).
-  if ((to === "Ready" || to === "Done" || to === "Todo") && actor === "agent") {
+  // (enqueue → Ready, runtime → Working when execution starts, user → Done).
+  if (
+    (to === "Ready" || to === "Working" || to === "Done" || to === "Todo") &&
+    actor === "agent"
+  ) {
     return false;
   }
 
