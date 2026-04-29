@@ -115,13 +115,25 @@ export async function processScheduledTask(
 
     const isNormalFire = task.status === "Ready" && phase === "execute";
 
+    // Recovery branch: a previous occurrence's pipeline crashed
+    // mid-execution (machine kill, OOM, deploy) before
+    // scheduleNextTaskOccurrence ran, leaving the task stuck at
+    // Working+execute. Without this branch every future wake-up no-ops and
+    // the recurrence dies silently. Treat it as a normal fire.
+    const isStuckWorking = task.status === "Working" && phase === "execute";
+
     if (isBufferExpiry) {
       return await startPrepFromBuffer(task);
     }
     if (isScheduledFireDuringPrep) {
       return await executeFireOverride(data, task);
     }
-    if (isNormalFire) {
+    if (isNormalFire || isStuckWorking) {
+      if (isStuckWorking) {
+        logger.warn(
+          `Task ${taskId} wake-up fired while still Working — assuming previous occurrence crashed, recovering`,
+        );
+      }
       return await runExecutionPipeline(data, task);
     }
 
