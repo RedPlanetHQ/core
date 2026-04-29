@@ -487,15 +487,18 @@ FOLLOW-UP: Set isFollowUp=true and parentTaskId to reschedule an existing task.`
     }),
 
     update_task: tool({
-      description: `Update an existing task — change its status, title, description, scheduling, or parent. Description updates are APPENDED to existing content — just pass the new context, no need to read or merge.
+      description: `Update an existing task — change its status, title, description, scheduling, or parent.
 
-WHEN TO UPDATE DESCRIPTION: Only at phase boundaries — not on every interaction.
-- Plan produced: save the plan (use section parameter for coding tasks)
-- Review/Done: record output or results
-- User provides new context: append their requirements or answers
-Do NOT update the description just because you touched the task. NEVER write error logs, debug output, or transient state into the description.
+DESCRIPTION CONTENT (the task body the user reads):
 
-SECTIONS: Pass section (e.g. "Session", "Plan", "Output", "Questions") to write into a named H2 section. By default this REPLACES the section content. Pass appendToSection=true to APPEND within the section instead (useful for Session logs and Q&A).
+The description has two structured zones the agent owns. Pass HTML in the \`description\` parameter containing one or both of these tags:
+
+- <plan>...</plan> — the current plan or step-by-step approach you are following. Rewrite this in full whenever the plan changes.
+- <output>...</output> — the result the user reads when the work is done. Replace each run.
+
+Strict input contract: at most ONE <plan> tag and at most ONE <output> tag per call. Multiple of either returns an error and the description is not updated. To update both at once, send HTML containing both tags in a single call.
+
+Anything outside these tags is silently dropped — the user's prose elsewhere on the page is sacred and never modified by this tool. Do NOT use the description for status updates, error logs, or transient state; status updates go via send_message.
 
 REPARENTING: Pass newParentId to move a task under a different parent (or null to make it a root task). This deletes the task and recreates it under the new parent — the task gets a new displayId. Subtasks are also deleted.`,
       inputSchema: z.object({
@@ -511,25 +514,25 @@ REPARENTING: Pass newParentId to move a task under a different parent (or null t
           .string()
           .optional()
           .describe(
-            "Task description as HTML — appended to existing content by default",
+            "Task description as HTML — provide <plan>...</plan> and/or <output>...</output> tags to upsert those sections. At most one of each per call. Other content is dropped.",
           ),
         replaceDescription: z
           .boolean()
           .optional()
           .describe(
-            "Set true to replace the entire description instead of appending. Default: false (append).",
+            "Set true to replace the entire description (only valid for task creation flows). Default: false. Ignored when description contains <plan> or <output> tags.",
           ),
         section: z
           .string()
           .optional()
           .describe(
-            "Write description content into a named H2 section (e.g. 'Session', 'Plan', 'Output', 'Questions'). Preserves the user's original description and other sections. When set, replaceDescription is ignored.",
+            "Deprecated — kept for backward compatibility. Ignored. Use <plan> / <output> tags in description instead.",
           ),
         appendToSection: z
           .boolean()
           .optional()
           .describe(
-            "When true and section is set, appends content to the existing section instead of replacing it. Default: false (replace).",
+            "Deprecated — kept for backward compatibility. Ignored.",
           ),
         schedule: z.string().optional().describe("New RRule schedule string"),
         isActive: z
