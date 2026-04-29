@@ -70,6 +70,17 @@ vi.mock("~/services/page.server", () => ({
   })),
 }));
 
+const creditMocks = vi.hoisted(() => ({
+  hasCredits: vi.fn(async () => true),
+  deductCredits: vi.fn(async () => undefined),
+}));
+vi.mock("~/trigger/utils/utils", () => creditMocks);
+const hasCreditsMock = creditMocks.hasCredits;
+
+vi.mock("~/services/byok.server", () => ({
+  isWorkspaceBYOK: vi.fn(async () => false),
+}));
+
 import { prisma } from "~/db.server";
 import {
   createTask,
@@ -126,6 +137,8 @@ beforeEach(async () => {
     shouldMessage: false,
     conversationId: "conv-test",
   });
+  hasCreditsMock.mockClear();
+  hasCreditsMock.mockResolvedValue(true);
   await ensureFixture();
   await cleanTasks();
 });
@@ -323,6 +336,203 @@ describe("processScheduledTask — wake-up branching", () => {
 
     expect(runCASEPipelineMock).not.toHaveBeenCalled();
     expect(enqueueTaskMock).not.toHaveBeenCalled();
+  });
+
+  it("recurring task: pipeline returns failure → still schedules next occurrence", async () => {
+    await prisma.userWorkspace.upsert({
+      where: {
+        userId_workspaceId: {
+          userId: TEST_USER_ID,
+          workspaceId: TEST_WORKSPACE_ID,
+        },
+      },
+      update: {},
+      create: {
+        userId: TEST_USER_ID,
+        workspaceId: TEST_WORKSPACE_ID,
+      },
+    });
+
+    const task = await prisma.task.create({
+      data: {
+        workspaceId: TEST_WORKSPACE_ID,
+        userId: TEST_USER_ID,
+        title: "Recurring brief",
+        status: "Ready",
+        metadata: { phase: "execute" },
+        schedule: "FREQ=DAILY;BYHOUR=9",
+        nextRunAt: new Date(Date.now() - 1000),
+        isActive: true,
+      },
+    });
+
+    runCASEPipelineMock.mockResolvedValueOnce({
+      success: false,
+      shouldMessage: false,
+      reasoning: "Pipeline error",
+      error: "out of credits",
+    });
+
+    enqueueScheduledTaskMock.mockClear();
+
+    await processScheduledTask({
+      taskId: task.id,
+      workspaceId: TEST_WORKSPACE_ID,
+      userId: TEST_USER_ID,
+      channel: "email",
+    });
+
+    expect(runCASEPipelineMock).toHaveBeenCalledTimes(1);
+    // Bug A: pipeline failure must NOT skip rescheduling for recurring tasks
+    expect(enqueueScheduledTaskMock).toHaveBeenCalledTimes(1);
+    const [payload] = enqueueScheduledTaskMock.mock.calls[0];
+    expect(payload.taskId).toBe(task.id);
+
+    const reloaded = await prisma.task.findUniqueOrThrow({
+      where: { id: task.id },
+    });
+    expect(reloaded.isActive).toBe(true);
+    expect(reloaded.nextRunAt).toBeTruthy();
+    expect(reloaded.nextRunAt!.getTime()).toBeGreaterThan(Date.now());
+  });
+
+  it("recurring task: pipeline throws → still schedules next occurrence", async () => {
+    await prisma.userWorkspace.upsert({
+      where: {
+        userId_workspaceId: {
+          userId: TEST_USER_ID,
+          workspaceId: TEST_WORKSPACE_ID,
+        },
+      },
+      update: {},
+      create: {
+        userId: TEST_USER_ID,
+        workspaceId: TEST_WORKSPACE_ID,
+      },
+    });
+
+    const task = await prisma.task.create({
+      data: {
+        workspaceId: TEST_WORKSPACE_ID,
+        userId: TEST_USER_ID,
+        title: "Recurring brief",
+        status: "Ready",
+        metadata: { phase: "execute" },
+        schedule: "FREQ=DAILY;BYHOUR=9",
+        nextRunAt: new Date(Date.now() - 1000),
+        isActive: true,
+      },
+    });
+
+    runCASEPipelineMock.mockRejectedValueOnce(new Error("model timeout"));
+
+    enqueueScheduledTaskMock.mockClear();
+
+    const result = await processScheduledTask({
+      taskId: task.id,
+      workspaceId: TEST_WORKSPACE_ID,
+      userId: TEST_USER_ID,
+      channel: "email",
+    });
+
+    expect(result.success).toBe(false);
+    // Bug A: thrown pipeline must NOT skip rescheduling for recurring tasks
+    expect(enqueueScheduledTaskMock).toHaveBeenCalledTimes(1);
+
+    const reloaded = await prisma.task.findUniqueOrThrow({
+      where: { id: task.id },
+    });
+    expect(reloaded.isActive).toBe(true);
+    expect(reloaded.nextRunAt!.getTime()).toBeGreaterThan(Date.now());
+  });
+
+  it("recurring task: out of credits → skips pipeline, schedules next occurrence", async () => {
+    await prisma.userWorkspace.upsert({
+      where: {
+        userId_workspaceId: {
+          userId: TEST_USER_ID,
+          workspaceId: TEST_WORKSPACE_ID,
+        },
+      },
+      update: {},
+      create: {
+        userId: TEST_USER_ID,
+        workspaceId: TEST_WORKSPACE_ID,
+      },
+    });
+
+    const task = await prisma.task.create({
+      data: {
+        workspaceId: TEST_WORKSPACE_ID,
+        userId: TEST_USER_ID,
+        title: "Recurring brief",
+        status: "Ready",
+        metadata: { phase: "execute" },
+        schedule: "FREQ=DAILY;BYHOUR=9",
+        nextRunAt: new Date(Date.now() - 1000),
+        isActive: true,
+      },
+    });
+
+    hasCreditsMock.mockResolvedValueOnce(false);
+    enqueueScheduledTaskMock.mockClear();
+
+    const result = await processScheduledTask({
+      taskId: task.id,
+      workspaceId: TEST_WORKSPACE_ID,
+      userId: TEST_USER_ID,
+      channel: "email",
+    });
+
+    // Pipeline must be skipped — we don't burn an LLM call when we know we
+    // can't pay for it.
+    expect(runCASEPipelineMock).not.toHaveBeenCalled();
+    expect(result.success).toBe(false);
+    expect(result.error).toBe("insufficient_credits");
+
+    // But the recurrence stays alive: next occurrence is queued.
+    expect(enqueueScheduledTaskMock).toHaveBeenCalledTimes(1);
+
+    const reloaded = await prisma.task.findUniqueOrThrow({
+      where: { id: task.id },
+    });
+    expect(reloaded.isActive).toBe(true);
+    expect(reloaded.nextRunAt!.getTime()).toBeGreaterThan(Date.now());
+  });
+
+  it("one-time scheduled task: pipeline failure → does NOT reschedule (no schedule field)", async () => {
+    const task = await prisma.task.create({
+      data: {
+        workspaceId: TEST_WORKSPACE_ID,
+        userId: TEST_USER_ID,
+        title: "One-time",
+        status: "Ready",
+        metadata: { phase: "execute" },
+        schedule: null, // one-time tasks have no RRule
+        nextRunAt: new Date(Date.now() - 1000),
+        maxOccurrences: 1,
+        isActive: true,
+      },
+    });
+
+    runCASEPipelineMock.mockResolvedValueOnce({
+      success: false,
+      shouldMessage: false,
+      reasoning: "Pipeline error",
+      error: "out of credits",
+    });
+
+    enqueueScheduledTaskMock.mockClear();
+
+    await processScheduledTask({
+      taskId: task.id,
+      workspaceId: TEST_WORKSPACE_ID,
+      userId: TEST_USER_ID,
+      channel: "email",
+    });
+
+    // No schedule means scheduleNextTaskOccurrence short-circuits; no enqueue
+    expect(enqueueScheduledTaskMock).not.toHaveBeenCalled();
   });
 });
 
