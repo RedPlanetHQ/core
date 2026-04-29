@@ -10,7 +10,7 @@ import { Table } from "@tiptap/extension-table";
 import TableRow from "@tiptap/extension-table-row";
 import TableHeader from "@tiptap/extension-table-header";
 import TableCell from "@tiptap/extension-table-cell";
-import type { Extensions } from "@tiptap/core";
+import { Node, type Extensions } from "@tiptap/core";
 import * as Y from "yjs";
 import { prisma } from "~/db.server";
 import { verifyCollabToken } from "~/services/collab-token.server";
@@ -66,6 +66,32 @@ export const hocuspocus: Hocuspocus =
     ],
   }));
 
+const ServerPlanNode = Node.create({
+  name: "plan",
+  group: "block",
+  content: "block+",
+  defining: true,
+  parseHTML() {
+    return [{ tag: "plan" }];
+  },
+  renderHTML() {
+    return ["plan", 0];
+  },
+});
+
+const ServerOutputNode = Node.create({
+  name: "output",
+  group: "block",
+  content: "block+",
+  defining: true,
+  parseHTML() {
+    return [{ tag: "output" }];
+  },
+  renderHTML() {
+    return ["output", 0];
+  },
+});
+
 /**
  * Returns server-safe TipTap extensions (no React renderers).
  */
@@ -80,6 +106,8 @@ export function getServerExtensions(): Extensions {
     TableRow,
     TableHeader,
     TableCell,
+    ServerPlanNode,
+    ServerOutputNode,
   ];
 }
 
