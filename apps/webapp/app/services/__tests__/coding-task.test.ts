@@ -216,7 +216,7 @@ describe("mergeStructuredSections", () => {
   it("appends a plan node into an empty document", () => {
     const existing = doc();
     const input = doc(planNode(para("step 1")));
-    const merged = mergeStructuredSections(existing, input);
+    const merged = mergeStructuredSections(existing, input) as any;
     expect(merged.content).toHaveLength(1);
     expect(merged.content[0].type).toBe("plan");
     expect(merged.content[0].content[0].content[0].text).toBe("step 1");
@@ -225,7 +225,7 @@ describe("mergeStructuredSections", () => {
   it("appends a plan after existing user prose", () => {
     const existing = doc(para("user description"));
     const input = doc(planNode(para("step 1")));
-    const merged = mergeStructuredSections(existing, input);
+    const merged = mergeStructuredSections(existing, input) as any;
     expect(merged.content).toHaveLength(2);
     expect(merged.content[0].type).toBe("paragraph");
     expect(merged.content[1].type).toBe("plan");
@@ -238,7 +238,7 @@ describe("mergeStructuredSections", () => {
       para("trailing note"),
     );
     const input = doc(planNode(para("new step")));
-    const merged = mergeStructuredSections(existing, input);
+    const merged = mergeStructuredSections(existing, input) as any;
     expect(merged.content).toHaveLength(3);
     expect(merged.content[0].type).toBe("paragraph");
     expect(merged.content[1].type).toBe("plan");
@@ -253,7 +253,7 @@ describe("mergeStructuredSections", () => {
       outputNode(para("old output")),
     );
     const input = doc(planNode(para("new step")));
-    const merged = mergeStructuredSections(existing, input);
+    const merged = mergeStructuredSections(existing, input) as any;
     expect(merged.content).toHaveLength(2);
     expect(merged.content[0].content[0].content[0].text).toBe("new step");
     expect(merged.content[1].content[0].content[0].text).toBe("old output");
@@ -266,7 +266,7 @@ describe("mergeStructuredSections", () => {
       planNode(para("step 1")),
       para("more stray"),
     );
-    const merged = mergeStructuredSections(existing, input);
+    const merged = mergeStructuredSections(existing, input) as any;
     expect(merged.content).toHaveLength(2);
     expect(merged.content[0].content[0].text).toBe("user description");
     expect(merged.content[1].type).toBe("plan");
@@ -295,7 +295,7 @@ describe("mergeStructuredSections", () => {
       planNode(para("second plan")),
     );
     const input = doc(planNode(para("new plan")));
-    const merged = mergeStructuredSections(existing, input);
+    const merged = mergeStructuredSections(existing, input) as any;
     // No dedupe: target duplicates remain. Only the first matching node is updated.
     expect(merged.content).toHaveLength(3);
     expect(merged.content[0].type).toBe("plan");
@@ -307,7 +307,7 @@ describe("mergeStructuredSections", () => {
   it("appends output when input has output but existing has none", () => {
     const existing = doc(para("user prose"), planNode(para("step 1")));
     const input = doc(outputNode(para("the result")));
-    const merged = mergeStructuredSections(existing, input);
+    const merged = mergeStructuredSections(existing, input) as any;
     expect(merged.content).toHaveLength(3);
     expect(merged.content[2].type).toBe("output");
   });
@@ -318,7 +318,7 @@ describe("mergeStructuredSections", () => {
       type: "blockquote",
       content: [planNode(para("nested step"))],
     });
-    const merged = mergeStructuredSections(existing, input);
+    const merged = mergeStructuredSections(existing, input) as any;
     // Nothing changed: nested plan is not honored, blockquote is dropped
     expect(merged.content).toHaveLength(1);
     expect(merged.content[0].type).toBe("paragraph");
