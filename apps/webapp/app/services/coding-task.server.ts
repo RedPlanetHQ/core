@@ -1,6 +1,8 @@
 import {
   getPageContentAsHtml,
   setPageContentFromHtml,
+  htmlToTiptapJson,
+  tiptapJsonToHtml,
 } from "~/services/hocuspocus/content.server";
 import { prisma } from "~/db.server";
 import { changeTaskStatus } from "~/services/task.server";
@@ -14,16 +16,14 @@ type DocNode = { type: string; content?: DocNode[]; [key: string]: unknown };
 /**
  * Merge structured agent sections (`plan`, `output`) from `input` into `existing`.
  *
- * Top-level walk only. For each `plan` or `output` node found at the top of
- * `input.content`, locate an existing top-level node of the same type in
- * `existing.content`. If found, replace its content with the input's content.
- * If not found, append the input node to the end of the existing content.
- * Everything else in `input` is dropped — the user's prose in `existing`
- * is never modified by this path.
+ * Strict input contract: at most one top-level <plan> and at most one
+ * top-level <output> per call. Multiple of either throws — the agent sees
+ * the error and self-corrects.
  *
- * Also dedupes pre-existing duplicate `plan` / `output` nodes in the target,
- * keeping the first occurrence (so collab races or legacy data self-heal on
- * the next agent write).
+ * For each (≤1) plan/output node in the input: replace the FIRST matching
+ * node in `existing` in place (position preserved); append at end if no
+ * match exists. Everything else in `input` is dropped — the user's prose
+ * is never modified. Pre-existing duplicates in `existing` are NOT deduped.
  *
  * Returns a new document; inputs are not mutated.
  */
@@ -31,23 +31,20 @@ export function mergeStructuredSections(
   existing: { type: string; content?: DocNode[] },
   input: { type: string; content?: DocNode[] },
 ): { type: string; content: DocNode[] } {
-  const existingChildren = (existing.content ?? []).map((n) =>
-    structuredClone(n) as DocNode,
-  );
-
-  // Step 1: dedupe pre-existing structured nodes (keep first of each type).
-  const seen = new Set<string>();
-  const deduped: DocNode[] = [];
-  for (const node of existingChildren) {
+  const inputCounts = new Map<string, number>();
+  for (const node of input.content ?? []) {
     if (STRUCTURED_TYPES.has(node.type)) {
-      if (seen.has(node.type)) continue;
-      seen.add(node.type);
+      inputCounts.set(node.type, (inputCounts.get(node.type) ?? 0) + 1);
     }
-    deduped.push(node);
+  }
+  for (const [type, count] of inputCounts.entries()) {
+    if (count > 1) {
+      throw new Error(
+        `Description input contains ${count} <${type}> nodes; at most one <${type}> is allowed per call. Combine into a single <${type}>...</${type}> block.`,
+      );
+    }
   }
 
-  // Step 2: collect top-level structured nodes from input (last wins
-  // if input has duplicates — predictable for the agent).
   const inputStructured = new Map<string, DocNode>();
   for (const node of input.content ?? []) {
     if (STRUCTURED_TYPES.has(node.type)) {
@@ -55,20 +52,22 @@ export function mergeStructuredSections(
     }
   }
 
-  // Step 3: upsert each input structured node.
   const merged: DocNode[] = [];
   const usedTypes = new Set<string>();
-  for (const node of deduped) {
-    if (STRUCTURED_TYPES.has(node.type) && inputStructured.has(node.type)) {
-      const replacement = inputStructured.get(node.type)!;
-      // Replace content in place, preserving position.
-      merged.push({ ...node, content: replacement.content ?? [] });
-      usedTypes.add(node.type);
+  for (const node of existing.content ?? []) {
+    const cloned = structuredClone(node) as DocNode;
+    if (
+      STRUCTURED_TYPES.has(cloned.type) &&
+      inputStructured.has(cloned.type) &&
+      !usedTypes.has(cloned.type)
+    ) {
+      const replacement = inputStructured.get(cloned.type)!;
+      merged.push({ ...cloned, content: replacement.content ?? [] });
+      usedTypes.add(cloned.type);
     } else {
-      merged.push(node);
+      merged.push(cloned);
     }
   }
-  // Append any input structured nodes that had no existing counterpart.
   for (const [type, node] of inputStructured.entries()) {
     if (!usedTypes.has(type)) {
       merged.push(node);
