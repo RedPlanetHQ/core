@@ -100,13 +100,20 @@ fn read_str(element: CFTypeRef, attr: &str) -> Option<String> {
     take_cf_string(v)
 }
 
+/// Soft cap on the collected buffer — same in both modes; visible-only
+/// just gets there with less noise.
+const COLLECT_BUDGET: usize = 4000;
+
 fn collect_text(
-    element: CFTypeRef,
-    depth:   u32,
-    seen:    &mut HashSet<String>,
-    out:     &mut String,
+    element:      CFTypeRef,
+    depth:        u32,
+    visible_only: bool,
+    seen:         &mut HashSet<String>,
+    out:          &mut String,
 ) {
-    if depth > 25 || out.len() > 8000 { return; }
+    let budget = COLLECT_BUDGET;
+    let max_depth = if visible_only { 15 } else { 25 };
+    if depth > max_depth || out.len() > budget { return; }
 
     let role    = read_str(element, "AXRole").unwrap_or_default();
     let subrole = read_str(element, "AXSubrole").unwrap_or_default();
@@ -128,17 +135,38 @@ fn collect_text(
         }
     }
 
-    for child_attr in &["AXChildren", "AXContents", "AXRows", "AXVisibleRows"] {
+    // Visible-only walk:
+    //   - AXVisibleChildren if the element publishes it (most Cocoa apps do)
+    //     → falls back to AXChildren when absent so we still see *something*
+    //   - AXVisibleRows over AXRows for tables/lists
+    //   - AXContents kept either way (e.g. AXScrollArea contents)
+    // Full-tree walk is unchanged for the background episode pollers.
+    let child_attrs: &[&str] = if visible_only {
+        &["AXVisibleChildren", "AXChildren", "AXContents", "AXVisibleRows"]
+    } else {
+        &["AXChildren", "AXContents", "AXRows", "AXVisibleRows"]
+    };
+
+    let mut walked_visible_children = false;
+    for child_attr in child_attrs {
+        // Don't double-walk: if AXVisibleChildren returned content, skip
+        // AXChildren (the visible set is a strict subset).
+        if visible_only && *child_attr == "AXChildren" && walked_visible_children {
+            continue;
+        }
         let (arr, err) = ax_attr(element, child_attr);
         if err != AX_SUCCESS || arr.is_null() { continue; }
         let count = unsafe { CFArrayGetCount(arr) };
+        if visible_only && *child_attr == "AXVisibleChildren" && count > 0 {
+            walked_visible_children = true;
+        }
         for i in 0..count {
             let child = unsafe { CFArrayGetValueAtIndex(arr, i) };
-            if !child.is_null() { collect_text(child, depth + 1, seen, out); }
-            if out.len() > 8000 { break; }
+            if !child.is_null() { collect_text(child, depth + 1, visible_only, seen, out); }
+            if out.len() > budget { break; }
         }
         unsafe { CFRelease(arr) };
-        if out.len() > 8000 { break; }
+        if out.len() > budget { break; }
     }
 }
 
@@ -230,7 +258,20 @@ fn check_permission() -> bool {
 // ── AX query ──────────────────────────────────────────────────────────────────
 
 /// Snapshot the focused window of `pid`: returns (title, body_text, ax_disabled).
+/// Walks the full tree — used by the background episode poller.
 pub fn query(pid: i32) -> (Option<String>, Option<String>, bool) {
+    query_inner(pid, false)
+}
+
+/// Same as `query` but only walks the AX subtree marked visible by the app
+/// (AXVisibleChildren / AXVisibleRows). Used by the voice widget so butler
+/// gets a "what is on screen right now" snapshot instead of the entire
+/// document — keeps the prompt from blowing up on long pages or scrollback.
+pub fn query_visible(pid: i32) -> (Option<String>, Option<String>, bool) {
+    query_inner(pid, true)
+}
+
+fn query_inner(pid: i32, visible_only: bool) -> (Option<String>, Option<String>, bool) {
     let app_el = unsafe { AXUIElementCreateApplication(pid) };
     if app_el.is_null() { return (None, None, false); }
 
@@ -247,7 +288,7 @@ pub fn query(pid: i32) -> (Option<String>, Option<String>, bool) {
         title = read_str(win, "AXTitle");
         let mut seen = HashSet::new();
         let mut buf  = String::new();
-        collect_text(win, 0, &mut seen, &mut buf);
+        collect_text(win, 0, visible_only, &mut seen, &mut buf);
         if !buf.is_empty() { text = Some(buf); }
         unsafe { CFRelease(win) };
     }

@@ -17,7 +17,7 @@ import { getCorePrompt } from "~/services/agent/prompts";
 import {
   buildVoiceConstraintsBlock,
   buildActivePageBlock,
-  type PageContext,
+  type ScreenContext,
 } from "~/services/agent/prompts/voice-mode";
 import {
   resolvePersonalityPrompt,
@@ -75,7 +75,7 @@ interface BuildAgentContextParams {
   /** Voice mode flips on the spoken-reply prompt addendum */
   mode?: "voice" | "text";
   /** Optional macOS Accessibility snapshot for the frontmost window when invoked from the voice widget */
-  pageContext?: PageContext | null;
+  screenContext?: ScreenContext | null;
 }
 
 interface AgentContext {
@@ -148,7 +148,7 @@ export async function buildAgentContext({
   modelConfig,
   scratchpadPageId,
   mode,
-  pageContext,
+  screenContext,
 }: BuildAgentContextParams): Promise<AgentContext> {
   // Load context in parallel
   const [
@@ -663,7 +663,7 @@ Keep your response concise — this shows up on a scratchpad, not a chat convers
 
   // Active-page snapshot — flows through in BOTH modes whenever the
   // desktop widget captured AX text from the frontmost macOS window.
-  const activePageBlock = buildActivePageBlock(pageContext);
+  const activePageBlock = buildActivePageBlock(screenContext);
   if (activePageBlock) {
     systemPrompt += `\n\n${activePageBlock}`;
   }

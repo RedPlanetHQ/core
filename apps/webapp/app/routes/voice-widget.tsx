@@ -54,7 +54,7 @@ type Status =
   | "speaking"
   | "error";
 
-interface PageContext {
+interface ScreenContext {
   app: string;
   title?: string | null;
   text?: string | null;
@@ -82,7 +82,7 @@ export default function VoiceWidget() {
   const { workspaceName } = useLoaderData<typeof loader>();
 
   const conversationIdRef = useRef<string | null>(null);
-  const pageContextRef = useRef<PageContext | null>(null);
+  const screenContextRef = useRef<ScreenContext | null>(null);
   const ttsBufferRef = useRef<string>("");
   const ttsConsumedRef = useRef<number>(0);
   const ttsActiveRef = useRef<boolean>(false);
@@ -150,10 +150,10 @@ export default function VoiceWidget() {
     const unsubs: Array<Promise<() => void>> = [];
 
     unsubs.push(
-      tauriListen<{ pageContext: PageContext | null }>(
+      tauriListen<{ screenContext: ScreenContext | null }>(
         "voice:invoke-payload",
         (event) => {
-          pageContextRef.current = event.payload?.pageContext ?? null;
+          screenContextRef.current = event.payload?.screenContext ?? null;
           startHoldSession();
         },
       ),
@@ -162,10 +162,10 @@ export default function VoiceWidget() {
     // Double-tap Ctrl: open in expanded mode without starting to listen.
     // Stays open until Esc.
     unsubs.push(
-      tauriListen<{ pageContext: PageContext | null }>(
+      tauriListen<{ screenContext: ScreenContext | null }>(
         "voice:invoke-expand-payload",
         (event) => {
-          pageContextRef.current = event.payload?.pageContext ?? null;
+          screenContextRef.current = event.payload?.screenContext ?? null;
           clearHideTimer();
           setError(null);
           setExpanded(true);
@@ -357,21 +357,21 @@ export default function VoiceWidget() {
     // frontmost right now, not whatever was captured at panel open.
     if (turnMode === "text" && isTauri()) {
       try {
-        const fresh = await tauriInvoke<PageContext | null>(
+        const fresh = await tauriInvoke<ScreenContext | null>(
           "get_current_screen_text",
         );
-        if (fresh) pageContextRef.current = fresh;
+        if (fresh) screenContextRef.current = fresh;
       } catch (err) {
         console.warn("[voice-widget] get_current_screen_text failed", err);
       }
     }
 
-    const ctx = pageContextRef.current;
+    const ctx = screenContextRef.current;
     console.log("[voice-widget] sending turn", {
       mode: turnMode,
       transcript_len: transcript.length,
       transcript_preview: transcript.slice(0, 80),
-      page_context: ctx
+      screen_context: ctx
         ? {
             app: ctx.app,
             title: ctx.title,
@@ -396,7 +396,7 @@ export default function VoiceWidget() {
         body: JSON.stringify({
           conversationId: conversationIdRef.current,
           transcript,
-          pageContext: pageContextRef.current,
+          screenContext: screenContextRef.current,
           mode: turnMode,
         }),
       });

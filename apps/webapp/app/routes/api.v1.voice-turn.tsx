@@ -1,9 +1,9 @@
 /**
  * Voice-turn endpoint — entry point for the desktop voice widget.
  *
- * POST { conversationId?, transcript, pageContext?, mode? }
+ * POST { conversationId?, transcript, screenContext?, mode? }
  *   - Resolves (or creates) the user's persistent "Quick Chat" conversation.
- *   - Persists the user's turn (transcript only — pageContext is per-request,
+ *   - Persists the user's turn (transcript only — screenContext is per-request,
  *     not stored in conversation history).
  *   - Streams the agent reply via the same Mastra runtime as the main chat,
  *     with the voice-mode prompt block appended when mode === "voice".
@@ -43,7 +43,7 @@ import {
 import { logger } from "~/services/logger.service";
 import { getOrCreateQuickChat } from "~/services/voice-conversation.server";
 
-const PageContextSchema = z.object({
+const ScreenContextSchema = z.object({
   app: z.string(),
   title: z.string().optional(),
   text: z.string().optional(),
@@ -52,7 +52,7 @@ const PageContextSchema = z.object({
 const VoiceTurnRequestSchema = z.object({
   conversationId: z.string().nullish(),
   transcript: z.string().min(1),
-  pageContext: PageContextSchema.nullish(),
+  screenContext: ScreenContextSchema.nullish(),
   mode: z.enum(["voice", "text"]).default("voice"),
   modelId: z.string().nullish(),
 });
@@ -71,7 +71,7 @@ const { loader, action } = createHybridActionApiRoute(
     const conversationId =
       body.conversationId ?? (await getOrCreateQuickChat(workspaceId, userId));
 
-    // Persist user turn (transcript text only — pageContext stays per-request)
+    // Persist user turn (transcript text only — screenContext stays per-request)
     const userMessageId = crypto.randomUUID();
     await upsertConversationHistory(
       userMessageId,
@@ -115,7 +115,7 @@ const { loader, action } = createHybridActionApiRoute(
       interactive: false,
       modelConfig,
       mode: body.mode,
-      pageContext: body.pageContext ?? null,
+      screenContext: body.screenContext ?? null,
     });
 
     const subagents: Record<string, Agent> = {

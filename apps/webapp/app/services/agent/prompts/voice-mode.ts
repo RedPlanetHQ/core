@@ -8,7 +8,7 @@
  *   - buildActivePageBlock(ctx)      → both modes when AX text was captured
  */
 
-export interface PageContext {
+export interface ScreenContext {
   app: string;
   title?: string;
   text?: string;
@@ -95,14 +95,18 @@ export function buildVoiceConstraintsBlock(): string {
 }
 
 export function buildActivePageBlock(
-  pageContext?: PageContext | null,
+  screenContext?: ScreenContext | null,
 ): string | null {
-  if (!pageContext || !pageContext.text || pageContext.text.trim().length === 0) {
+  if (
+    !screenContext ||
+    !screenContext.text ||
+    screenContext.text.trim().length === 0
+  ) {
     return null;
   }
-  const app = escapeXml(pageContext.app ?? "");
-  const title = escapeXml(pageContext.title ?? "");
-  const text = escapeXml(pageContext.text);
+  const app = escapeXml(screenContext.app ?? "");
+  const title = escapeXml(screenContext.title ?? "");
+  const text = escapeXml(screenContext.text);
   return `<active_page app="${app}" title="${title}">
 ${text}
 </active_page>
@@ -115,8 +119,8 @@ volunteer page details unprompted — it's context, not the topic.`;
 
 /** Back-compat for callers that want voice rules + active page in one shot. */
 export function buildVoicePromptBlock(
-  pageContext?: PageContext | null,
+  screenContext?: ScreenContext | null,
 ): string {
-  const page = buildActivePageBlock(pageContext);
+  const page = buildActivePageBlock(screenContext);
   return page ? `${VOICE_RULES}\n\n${page}` : VOICE_RULES;
 }

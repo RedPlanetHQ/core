@@ -399,7 +399,7 @@ fn get_current_screen_text() -> serde_json::Value {
         || app_name.eq_ignore_ascii_case(bundle_self);
 
     let (title, text) = if pid > 0 && !is_self {
-        let (title, text, _disabled) = screen_context::query(pid);
+        let (title, text, _disabled) = screen_context::query_visible(pid);
         (title, text)
     } else {
         (None, None)
@@ -522,14 +522,14 @@ fn handle_voice_invoke<R: tauri::Runtime>(
         || parsed.app.eq_ignore_ascii_case(&bundle_self);
 
     let (title, text) = if parsed.pid > 0 && !is_self {
-        let (title, text, _disabled) = screen_context::query(parsed.pid);
+        let (title, text, _disabled) = screen_context::query_visible(parsed.pid);
         (title, text)
     } else {
         (None, None)
     };
 
     let context_payload = serde_json::json!({
-        "pageContext": {
+        "screenContext": {
             "app": parsed.app,
             "title": title,
             "text": text,
