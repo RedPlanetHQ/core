@@ -35,6 +35,25 @@ jobs:
       - name: Install dependencies
         run: pnpm install --frozen-lockfile
 
+      - name: Build universal Swift voice helper
+        # Build the Swift helper for both Mac architectures, then lipo
+        # them into a single fat binary. Tauri's tauri-action below
+        # wires this into Core.app/Contents/Resources/core-voice via
+        # `bundle.resources` in tauri.conf.json. CORE_VOICE_PREBUILT
+        # tells build.rs not to overwrite this with a single-arch
+        # build during the per-arch cargo passes.
+        run: |
+          set -euo pipefail
+          cd apps/tauri/src-tauri/swift-voice
+          swift build -c release --arch arm64
+          swift build -c release --arch x86_64
+          mkdir -p ../binaries
+          lipo -create \
+            .build/arm64-apple-macosx/release/core-voice \
+            .build/x86_64-apple-macosx/release/core-voice \
+            -output ../binaries/core-voice
+          lipo -info ../binaries/core-voice
+
       - name: Build and release (macOS universal)
         uses: tauri-apps/tauri-action@v0
         env:
@@ -47,6 +66,9 @@ jobs:
           APPLE_TEAM_ID: ${{ secrets.TEAM_ID }}
           TAURI_SIGNING_PRIVATE_KEY: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY }}
           TAURI_SIGNING_PRIVATE_KEY_PASSWORD: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY_PASSWORD }}
+          # Skip the swift compile inside build.rs — we already produced
+          # a universal helper above and don't want it overwritten.
+          CORE_VOICE_PREBUILT: "1"
         with:
           projectPath: apps/tauri
           tagName: ${{ github.ref_name }}
