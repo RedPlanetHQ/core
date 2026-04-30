@@ -236,6 +236,15 @@ export default function VoiceWidget() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
+  // When the widget expands, promote the NSPanel to key so clicks on
+  // buttons (like the X) register on the first try. Without this, a
+  // non-activating panel eats the first mouse click just to become
+  // key, and the user has to click twice on the close button.
+  useEffect(() => {
+    if (!expanded || !isTauri()) return;
+    void tauriInvoke("voice_make_panel_key");
+  }, [expanded]);
+
   function closeWidget() {
     setExpanded(false);
     void hideWindow();

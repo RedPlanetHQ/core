@@ -21,6 +21,8 @@ use tauri_nspanel::{
     tauri_panel, CollectionBehavior, ManagerExt, PanelLevel, StyleMask, WebviewWindowExt,
 };
 
+use crate::speech;
+
 pub const VOICE_PANEL_LABEL: &str = "voice";
 
 tauri_panel! {
@@ -107,11 +109,19 @@ pub fn show<R: Runtime>(app: &AppHandle<R>) {
 
 /// Hide the panel. Safe to call even if it isn't visible.
 ///
+/// Always releases the mic + cancels any in-flight TTS first — otherwise
+/// macOS's mic-in-use indicator (orange dot) sticks around forever
+/// because the SFSpeechRecognizer task and audio engine in the Swift
+/// helper outlive the panel that triggered them. The next Ctrl-Option
+/// hold's `voice_start_listening` re-arms cleanly.
+///
 /// Belt-and-suspenders: we call BOTH the swizzled NSPanel hide AND the
 /// underlying WebviewWindow's hide. Either one alone has been
 /// observed to no-op on high-level panels (`NSScreenSaverWindowLevel` +
 /// `canJoinAllSpaces`) on certain macOS versions.
 pub fn hide<R: Runtime>(app: &AppHandle<R>) {
+    speech::release_audio(app);
+
     if let Some(window) = app.get_webview_window(VOICE_PANEL_LABEL) {
         match window.hide() {
             Ok(()) => log::info!("[voice_panel] WebviewWindow.hide() ok"),
@@ -141,4 +151,25 @@ pub fn hide<R: Runtime>(app: &AppHandle<R>) {
 pub fn voice_hide_panel<R: Runtime>(app: AppHandle<R>) {
     log::info!("[voice_panel] voice_hide_panel command");
     hide(&app);
+}
+
+/// Promote the panel to key window without activating the CORE app.
+/// Needed when the user expands the pill into the chat box: a
+/// non-activating panel that isn't key eats the first mouse click on
+/// any button (the click is consumed becoming-key), so the close X
+/// would need two clicks to register. Calling `make_key_window` once
+/// the user has clearly committed to interacting (i.e. expanded the
+/// panel) lets every subsequent click land on its target on the first
+/// try, while orderFrontRegardless preserves the non-activating
+/// "user's previous app stays in front" property.
+#[tauri::command]
+pub fn voice_make_panel_key<R: Runtime>(app: AppHandle<R>) {
+    match app.get_webview_panel(VOICE_PANEL_LABEL) {
+        Ok(panel) => {
+            panel.order_front_regardless();
+            panel.make_key_window();
+            log::info!("[voice_panel] panel promoted to key");
+        }
+        Err(_) => log::warn!("[voice_panel] make_panel_key: panel not registered"),
+    }
 }

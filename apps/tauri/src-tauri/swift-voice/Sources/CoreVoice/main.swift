@@ -268,14 +268,22 @@ final class VoiceController: NSObject, AVSpeechSynthesizerDelegate {
 
                 if self.hasEndAudioed {
                     self.deliverFinalIfNeeded(self.latestPartialText)
-                } else if isNoSpeech {
+                } else if isNoSpeech && !self.hasDeliveredFinal {
                     // Mic was open but no audio yet — quietly restart so
                     // the mic stays alive for the next attempt.
+                    //
+                    // `hasDeliveredFinal` is also flipped true by
+                    // `cancelListening`, which is how we tell apart
+                    // "recognizer hit a benign empty-buffer error mid
+                    // session" (restart) from "user dismissed the panel
+                    // and we explicitly tore down the engine" (don't
+                    // restart — that's what was leaving the orange mic
+                    // indicator stuck after the panel hid).
                     DispatchQueue.main.async {
                         self.cancelListening()
                         self.startListening()
                     }
-                } else {
+                } else if !isNoSpeech {
                     emitError("recognition: \(error.localizedDescription)")
                 }
             }

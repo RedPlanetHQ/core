@@ -344,6 +344,25 @@ pub fn shared_state() -> SharedSpeech {
     Arc::new(Mutex::new(SpeechProcess::default()))
 }
 
+/// Release any held audio resources — cancels in-flight recognition AND
+/// any active TTS playback. Safe to call when the helper is idle (the
+/// Swift side guards both `cancelListening` and `cancelSpeech` against
+/// no-op state). Used by `voice_panel::hide` so dismissing the widget
+/// always frees the mic, regardless of which UI path got us there
+/// (auto-hide, Esc, X-button, …).
+pub fn release_audio<R: Runtime>(app: &AppHandle<R>) {
+    let Some(state) = app.try_state::<SharedSpeech>() else {
+        return;
+    };
+    let mut proc = state.lock().unwrap();
+    if let Err(e) = send_command(app, &mut proc, json!({"cmd": "cancel_listening"})) {
+        log::warn!("[speech] release_audio cancel_listening failed: {e}");
+    }
+    if let Err(e) = send_command(app, &mut proc, json!({"cmd": "cancel_speech"})) {
+        log::warn!("[speech] release_audio cancel_speech failed: {e}");
+    }
+}
+
 // Manually drains and kills the helper on app exit. Tauri doesn't run
 // Drop on managed states reliably, so we invoke this from the run loop's
 // shutdown handler.

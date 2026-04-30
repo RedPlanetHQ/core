@@ -641,6 +641,7 @@ pub fn run() {
         speech::voice_set_voice,
         speech::voice_get_voice,
         voice_panel::voice_hide_panel,
+        voice_panel::voice_make_panel_key,
         get_current_screen_text,
     ]);
 

@@ -62,6 +62,7 @@
         "focus": false,
         "shadow": true,
         "visibleOnAllWorkspaces": true,
+        "acceptFirstMouse": true,
         "devtools": true
       }
     ],
