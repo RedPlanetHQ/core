@@ -74,6 +74,9 @@ export default function VoiceWidget() {
   const [error, setError] = useState<string | null>(null);
   const [turns, setTurns] = useState<Turn[]>([]);
   const [textDraft, setTextDraft] = useState("");
+  // Live partial transcript shown under the pill while the user is
+  // speaking. Cleared at start of each hold and once the turn is sent.
+  const [partialText, setPartialText] = useState("");
   const [theme] = useTheme();
   const isDark = theme === Theme.DARK;
   const { workspaceName } = useLoaderData<typeof loader>();
@@ -99,6 +102,30 @@ export default function VoiceWidget() {
   useEffect(() => {
     expandedRef.current = expanded;
   }, [expanded]);
+
+  // ── Layout preview: visit /voice-widget?preview=1 to see the pill +
+  //    partial-transcript bubble without holding the chord. Cycles
+  //    through a few sample lines so you can sanity-check wrap, max
+  //    width, and how it sits under the pill. Removable in production.
+  useEffect(() => {
+    if (typeof window === "undefined") return;
+    const params = new URLSearchParams(window.location.search);
+    if (params.get("preview") !== "1") return;
+    const samples = [
+      "hey",
+      "hey butler, what's on my calendar",
+      "hey butler, can you remind me to call mom at seven",
+      "hey butler, can you remind me to call mom at seven and also check what's on my calendar tomorrow morning",
+    ];
+    let i = 0;
+    setStatus("listening");
+    setPartialText(samples[0]);
+    const id = setInterval(() => {
+      i = (i + 1) % samples.length;
+      setPartialText(samples[i]);
+    }, 2000);
+    return () => clearInterval(id);
+  }, []);
 
   // ── Make the host html/body transparent so the pill / rounded panel
   //    has no surrounding solid frame. Scoped to this route via cleanup.
@@ -162,6 +189,7 @@ export default function VoiceWidget() {
             // First partial transitions "armed" → "listening".
             setStatus((s) => (s === "armed" ? "listening" : s));
           }
+          setPartialText(text);
           // Barge-in during TTS: any meaningful partial cancels speech.
           if (ttsActiveRef.current && text.split(/\s+/).length > 3) {
             cancelAllTTS();
@@ -256,6 +284,7 @@ export default function VoiceWidget() {
     heardSpeechRef.current = false;
     clearHideTimer();
     setError(null);
+    setPartialText("");
     // Each new push-to-talk session starts in pill (collapsed) mode —
     // any leftover expanded state from a previous conversation is reset.
     setExpanded(false);
@@ -353,6 +382,7 @@ export default function VoiceWidget() {
     });
 
     setTurns((prev) => [...prev, { role: "user", text: transcript }]);
+    setPartialText("");
     setStatus("thinking");
     ttsBufferRef.current = "";
     ttsConsumedRef.current = 0;
@@ -569,8 +599,15 @@ export default function VoiceWidget() {
       : "oklch(30.87% 0 0)";
 
   if (!expanded) {
+    // Show the live partial transcript under the pill while listening
+    // (and briefly while thinking, so the user sees what was captured
+    // until the assistant bubble appears in the expanded view).
+    const showTranscript =
+      (status === "listening" || status === "thinking") &&
+      partialText.trim().length > 0;
+
     return (
-      <div className="flex h-screen w-screen items-start justify-end p-2">
+      <div className="flex h-screen w-screen flex-col items-end gap-1 p-2">
         <button
           type="button"
           onClick={() => setExpanded(true)}
@@ -590,6 +627,14 @@ export default function VoiceWidget() {
           </div>
           {stateLabel}
         </button>
+        {showTranscript && (
+          <div
+            className="border-border bg-background-3 text-foreground max-w-[320px] rounded-lg border px-2.5 py-1.5 text-xs leading-snug shadow-md"
+            aria-live="polite"
+          >
+            {partialText}
+          </div>
+        )}
       </div>
     );
   }
