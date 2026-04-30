@@ -25,12 +25,16 @@ export interface UserInfo {
 /**
  * Get Core brain's prompt for synthesizing responses.
  * Combines personality (who Core brain is) + capabilities (what Core brain can do) + channel format (how to communicate).
+ *
+ * `mode` selects the spoken vs written variant of the personality
+ * prompt — voice-widget turns use "voice", everything else uses "text".
  */
 export function getCorePrompt(
   channel: ChannelType,
   userInfo?: UserInfo,
   userPersona?: string,
   butlerName?: string,
+  mode: "text" | "voice" = "text",
 ): string {
   let channelFormat: string;
   try {
@@ -64,7 +68,7 @@ ${userPersona}
   }
 
   const personalityType = (userInfo?.personality as PersonalityType) || "tars";
-  return `${PERSONALITY(userInfo?.name ?? "User", personalityType, userInfo?.pronoun, butlerName, userInfo?.customPersonality)}\n\n${CAPABILITIES}\n\n${channelFormat}\n\n${currentTime}${userContext}${personaSection}`;
+  return `${PERSONALITY(userInfo?.name ?? "User", personalityType, userInfo?.pronoun, butlerName, userInfo?.customPersonality, mode)}\n\n${CAPABILITIES}\n\n${channelFormat}\n\n${currentTime}${userContext}${personaSection}`;
 }
 
 // Re-export for convenience

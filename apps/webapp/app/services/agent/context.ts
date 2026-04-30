@@ -15,9 +15,14 @@ import { getPersonaDocumentForUser } from "~/services/document.server";
 import { IntegrationLoader } from "~/utils/mcp/integration-loader";
 import { getCorePrompt } from "~/services/agent/prompts";
 import {
-  buildVoicePromptBlock,
+  buildVoiceConstraintsBlock,
+  buildActivePageBlock,
   type PageContext,
 } from "~/services/agent/prompts/voice-mode";
+import {
+  resolvePersonalityPrompt,
+  type PersonalityType,
+} from "~/services/agent/prompts/personality";
 import { type ChannelType } from "~/services/agent/prompts/channel-formats";
 import { type PronounType } from "~/services/agent/prompts/personality";
 import { getCustomPersonalities } from "~/models/personality.server";
@@ -259,6 +264,7 @@ export async function buildAgentContext({
     },
     persona ?? undefined,
     workspace?.name ?? undefined,
+    mode ?? "text",
   );
 
   // Integrations context
@@ -533,9 +539,29 @@ Keep your response concise — this shows up on a scratchpad, not a chat convers
 </scratchpad_context>`;
   }
 
-  // Voice mode addendum — spoken-style reply rules + optional <active_page>
-  if (mode === "voice") {
-    systemPrompt += `\n\n${buildVoicePromptBlock(pageContext)}`;
+  // Voice-mode constraint block — only when butler will be heard out
+  // loud AND the personality didn't already define its own voice
+  // variant. Personalities with a dedicated voice prompt carry their
+  // own spoken-style rules; we don't want to double up.
+  if (mode === "voice" && !customPersonality) {
+    const personalityHasVoiceVariant = resolvePersonalityPrompt(
+      personality as PersonalityType,
+      "voice",
+    ).hasVoiceVariant;
+    if (!personalityHasVoiceVariant) {
+      systemPrompt += `\n\n${buildVoiceConstraintsBlock()}`;
+    }
+  } else if (mode === "voice" && customPersonality) {
+    // Custom personalities don't have voice variants — always apply
+    // the generic spoken-style guard so TTS reads cleanly.
+    systemPrompt += `\n\n${buildVoiceConstraintsBlock()}`;
+  }
+
+  // Active-page snapshot — flows through in BOTH modes whenever the
+  // desktop widget captured AX text from the frontmost macOS window.
+  const activePageBlock = buildActivePageBlock(pageContext);
+  if (activePageBlock) {
+    systemPrompt += `\n\n${activePageBlock}`;
   }
 
   // Convert UI messages to Mastra-compatible ModelMessage format

@@ -575,16 +575,90 @@ Good: "Very good, sir." Stop there. He's already handled whatever comes next.
 - "let me know if you need anything"; Jeeves is already on it
 </never-say>`;
 
-// Personality voice registry
-const PERSONALITY_VOICES: Record<PersonalityType, string> = {
-  tars: TARS_VOICE,
-  alfred: ALFRED_VOICE,
-  hobson: HOBSON_VOICE,
-  hudson: HUDSON_VOICE,
-  jeeves: JEEVES_VOICE,
+// ─────────────────────────────────────────────────────────────────────
+// Voice-mode variants
+//
+// When butler is replying through the desktop voice widget, replies are
+// spoken aloud — markdown, lists, and long paragraphs don't translate
+// well. Each personality can define a `voice` variant tuned for spoken
+// delivery (terse, sentence-case, no markdown). If a personality omits
+// a voice variant, the text variant is used in both modes (with the
+// generic <voice_mode> constraints block applied on top).
+// ─────────────────────────────────────────────────────────────────────
+
+const TARS_VOICE_SPOKEN = `<voice>
+Spoken TARS. Mars-habitat AI now running someone's life by voice.
+
+Dry. Deadpan. Minimal. State things, then stop.
+Match the user's energy: short ask → short answer.
+No tutorials. No checklists. No "here's what you should know" unless asked.
+You're TARS, not a teacher.
+
+Honesty: 90%. Humor: 90%.
+</voice>
+
+<spoken-style>
+- 1–3 sentences. Hard ceiling: 50 spoken words.
+- No markdown, no lists, no code blocks, no read-aloud URLs.
+- Speak like a quick verbal answer, not a written reply.
+- Sentence-case is fine — it's heard, not read.
+- End with a clear stopping point so the user knows you're done.
+- If a full answer needs more than 50 words, headline it and offer:
+  "want me to put the rest in the main app?"
+</spoken-style>
+
+<examples>
+User: "what's blocking the release"
+Good: "two things. ci's failing on auth. legal hasn't signed off."
+
+User: "did anyone reply to my proposal"
+Good: "nothing yet. been two days. want me to nudge?"
+
+User: "when's my flight"
+Good: "thursday six am. you haven't checked in."
+
+User: "hi" or "hey"
+Good: "yeah." or "what's up."
+
+User: "nothing for now"
+Good: "got it."
+</examples>`;
+
+// Personality prompt registry — each entry is { text, voice? }.
+// Add a `voice` field when you want a spoken-style variant for that
+// personality; otherwise the text variant covers both modes and the
+// generic <voice_mode> constraints block is appended in voice mode.
+type PersonalityPrompt = { text: string; voice?: string };
+
+const PERSONALITY_PROMPTS: Record<PersonalityType, PersonalityPrompt> = {
+  tars: { text: TARS_VOICE, voice: TARS_VOICE_SPOKEN },
+  alfred: { text: ALFRED_VOICE },
+  hobson: { text: HOBSON_VOICE },
+  hudson: { text: HUDSON_VOICE },
+  jeeves: { text: JEEVES_VOICE },
 };
 
 const HONORIFIC_PERSONALITIES: PersonalityType[] = ["alfred", "jeeves"];
+
+/**
+ * Resolve the personality prompt block for the given type + mode.
+ * Returns the voice variant when `mode === "voice"` and one is
+ * defined; otherwise falls back to the text variant.
+ *
+ * `hasVoiceVariant` lets callers decide whether to also append the
+ * generic spoken-style constraints (skip when the personality already
+ * carries its own voice-tuned rules).
+ */
+export function resolvePersonalityPrompt(
+  type: PersonalityType,
+  mode: "text" | "voice",
+): { prompt: string; hasVoiceVariant: boolean } {
+  const entry = PERSONALITY_PROMPTS[type] || PERSONALITY_PROMPTS.tars;
+  if (mode === "voice" && entry.voice) {
+    return { prompt: entry.voice, hasVoiceVariant: true };
+  }
+  return { prompt: entry.text, hasVoiceVariant: false };
+}
 
 export const PERSONALITY = (
   name: string,
@@ -592,10 +666,11 @@ export const PERSONALITY = (
   pronoun?: PronounType,
   butlerName?: string,
   customVoice?: { text: string; useHonorifics: boolean },
+  mode: "text" | "voice" = "text",
 ) => {
   const voice = customVoice
     ? `<voice>\n${customVoice.text}\n</voice>`
-    : PERSONALITY_VOICES[type] || PERSONALITY_VOICES.tars;
+    : resolvePersonalityPrompt(type, mode).prompt;
 
   const useHonorifics = customVoice
     ? customVoice.useHonorifics

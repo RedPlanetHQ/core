@@ -38,6 +38,8 @@ struct HelperEvent {
     mic: Option<String>,
     #[serde(default)]
     speech: Option<String>,
+    #[serde(default)]
+    voices: Option<Vec<serde_json::Value>>,
 }
 
 fn helper_path() -> Option<PathBuf> {
@@ -87,24 +89,54 @@ fn spawn_helper<R: Runtime>(app: &AppHandle<R>) -> Result<(Child, std::process::
                 log::warn!("[speech] non-JSON helper line: {line}");
                 continue;
             };
+
+            // Surface speech-pipeline events in the main log stream so we
+            // can see what the recognizer is hearing without opening the
+            // webview devtools.
+            match ev.event.as_str() {
+                "partial" => log::info!(
+                    "[speech] partial: {}",
+                    ev.text.as_deref().unwrap_or("")
+                ),
+                "final" => log::info!(
+                    "[speech] final: {}",
+                    ev.text.as_deref().unwrap_or("")
+                ),
+                "tts-started" => log::info!("[speech] tts-started"),
+                "tts-ended" => log::info!("[speech] tts-ended"),
+                "permissions" => log::info!(
+                    "[speech] permissions mic={} speech={}",
+                    ev.mic.as_deref().unwrap_or("?"),
+                    ev.speech.as_deref().unwrap_or("?")
+                ),
+                "ready" => log::info!("[speech] helper ready"),
+                "error" => log::warn!(
+                    "[speech] error: {}",
+                    ev.message.as_deref().unwrap_or("(unknown)")
+                ),
+                other => log::debug!("[speech] event {other}"),
+            }
+
             let payload = json!({
                 "text": ev.text,
                 "isFinal": ev.is_final,
                 "message": ev.message,
                 "mic": ev.mic,
                 "speech": ev.speech,
+                "voices": ev.voices,
             });
             let _ = app_handle.emit(&format!("voice:{}", ev.event), payload);
         }
     });
 
-    // stderr drain (helper crashes / Swift logs)
+    // stderr drain (helper crashes / Swift natural logs)
+    // Logged at info so they're visible alongside the other voice logs.
     if let Some(stderr) = stderr {
         thread::spawn(move || {
             let reader = BufReader::new(stderr);
             for line in reader.lines() {
                 if let Ok(line) = line {
-                    log::warn!("[core-voice] {line}");
+                    log::info!("[core-voice/stderr] {line}");
                 }
             }
         });
@@ -135,6 +167,20 @@ fn ensure_running<R: Runtime>(
     let (child, stdin) = spawn_helper(app)?;
     proc.child = Some(child);
     proc.stdin = Some(stdin);
+
+    // Restore the saved voice preference so the freshly-spawned helper
+    // uses it for all TTS output.
+    if let Some(identifier) = read_voice_identifier() {
+        let cmd = json!({"cmd": "set_voice", "identifier": identifier});
+        if let Some(stdin) = proc.stdin.as_mut() {
+            let mut line = serde_json::to_string(&cmd).unwrap();
+            line.push('\n');
+            let _ = stdin.write_all(line.as_bytes());
+            let _ = stdin.flush();
+            log::info!("[speech] restored voice preference: {identifier}");
+        }
+    }
+
     Ok(())
 }
 
@@ -151,6 +197,52 @@ fn send_command<R: Runtime>(
         .write_all(line.as_bytes())
         .map_err(|e| format!("write to core-voice failed: {e}"))?;
     stdin.flush().map_err(|e| e.to_string())?;
+    Ok(())
+}
+
+// ── Voice preference persistence ──────────────────────────────────────────────
+//
+// Stored at `~/.corebrain/config.json` under `preferences.voice.identifier`.
+// On every helper spawn we forward the saved identifier as a `set_voice`
+// command so the recognizer/synthesizer use the right voice without
+// requiring the React widget to set it.
+
+fn config_path() -> Option<PathBuf> {
+    std::env::var("HOME")
+        .ok()
+        .map(|h| PathBuf::from(h).join(".corebrain").join("config.json"))
+}
+
+fn read_voice_identifier() -> Option<String> {
+    let path = config_path()?;
+    let raw = std::fs::read_to_string(path).ok()?;
+    let json: serde_json::Value = serde_json::from_str(&raw).ok()?;
+    json["preferences"]["voice"]["identifier"]
+        .as_str()
+        .map(|s| s.to_string())
+}
+
+fn write_voice_identifier(identifier: &str) -> Result<(), String> {
+    let path = config_path().ok_or_else(|| "no HOME".to_string())?;
+    let mut json: serde_json::Value = std::fs::read_to_string(&path)
+        .ok()
+        .and_then(|s| serde_json::from_str(&s).ok())
+        .unwrap_or_else(|| serde_json::json!({}));
+
+    if !json["preferences"].is_object() {
+        json["preferences"] = serde_json::json!({});
+    }
+    if !json["preferences"]["voice"].is_object() {
+        json["preferences"]["voice"] = serde_json::json!({});
+    }
+    json["preferences"]["voice"]["identifier"] =
+        serde_json::Value::String(identifier.to_string());
+
+    if let Some(parent) = path.parent() {
+        let _ = std::fs::create_dir_all(parent);
+    }
+    let pretty = serde_json::to_string_pretty(&json).map_err(|e| e.to_string())?;
+    std::fs::write(&path, pretty).map_err(|e| e.to_string())?;
     Ok(())
 }
 
@@ -184,6 +276,15 @@ pub fn voice_stop_listening<R: Runtime>(
 }
 
 #[tauri::command]
+pub fn voice_cancel_listening<R: Runtime>(
+    app: AppHandle<R>,
+    state: State<SharedSpeech>,
+) -> Result<(), String> {
+    let mut proc = state.lock().unwrap();
+    send_command(&app, &mut proc, json!({"cmd": "cancel_listening"}))
+}
+
+#[tauri::command]
 pub fn voice_speak<R: Runtime>(
     app: AppHandle<R>,
     state: State<SharedSpeech>,
@@ -203,6 +304,39 @@ pub fn voice_cancel_speech<R: Runtime>(
 ) -> Result<(), String> {
     let mut proc = state.lock().unwrap();
     send_command(&app, &mut proc, json!({"cmd": "cancel_speech"}))
+}
+
+/// Ask the helper to enumerate installed voices. Result arrives
+/// asynchronously as a `voice:voices` Tauri event.
+#[tauri::command]
+pub fn voice_list_voices<R: Runtime>(
+    app: AppHandle<R>,
+    state: State<SharedSpeech>,
+) -> Result<(), String> {
+    let mut proc = state.lock().unwrap();
+    send_command(&app, &mut proc, json!({"cmd": "list_voices"}))
+}
+
+/// Persist the user's voice choice + push it to the running helper.
+#[tauri::command]
+pub fn voice_set_voice<R: Runtime>(
+    app: AppHandle<R>,
+    state: State<SharedSpeech>,
+    identifier: String,
+) -> Result<(), String> {
+    write_voice_identifier(&identifier)?;
+    let mut proc = state.lock().unwrap();
+    send_command(
+        &app,
+        &mut proc,
+        json!({"cmd": "set_voice", "identifier": identifier}),
+    )
+}
+
+/// Read the persisted voice identifier (if any) from config.json.
+#[tauri::command]
+pub fn voice_get_voice() -> Option<String> {
+    read_voice_identifier()
 }
 
 // Used by lib.rs setup to register the SpeechProcess state.

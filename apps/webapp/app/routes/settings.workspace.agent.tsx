@@ -7,8 +7,11 @@ import { useLoaderData, useFetcher } from "@remix-run/react";
 import { useState } from "react";
 import { requireUser } from "~/services/session.server";
 import { prisma } from "~/db.server";
+import { env } from "~/env.server";
+import { hasWorkspaceElevenLabsKey } from "~/services/voice-tts.server";
 import { SettingSection } from "~/components/setting-section";
 import { Card } from "~/components/ui/card";
+import { Button } from "~/components/ui";
 import { Check, Plus, Trash2, Pencil } from "lucide-react";
 import {
   Select,
@@ -31,6 +34,7 @@ import {
   type CustomPersonality,
 } from "~/models/personality.server";
 import { cn } from "~/lib/utils";
+import { VoiceSection } from "~/components/voice";
 
 const PRONOUN_OPTIONS: { id: PronounType; label: string; honorific: string }[] =
   [
@@ -49,13 +53,35 @@ export const loader = async ({ request }: LoaderFunctionArgs) => {
   const userMetadata = user.metadata as Record<string, unknown> | null;
   const personality = (userMetadata?.personality as string) || "tars";
   const pronoun = (userMetadata?.pronoun as PronounType) || "he/him";
+  // Empty string / undefined = "same as default" (use personality for voice too)
+  const voicePersonality =
+    (userMetadata?.voicePersonality as string | undefined) ?? "";
+  // ElevenLabs is "available" (i.e. will actually make sound) if either
+  // the operator set ELEVENLABS_API_KEY on the server, or the workspace
+  // stored its own BYOK key. The proxy prefers the workspace key.
+  // We surface both flags to the UI; we DON'T overwrite the user's
+  // saved preference if they're on ElevenLabs without a key — instead
+  // the picker shows the BYOK input so they can configure it.
+  const workspaceHasOwnKey = await hasWorkspaceElevenLabsKey(user.workspaceId);
+  const hasElevenLabs = Boolean(env.ELEVENLABS_API_KEY) || workspaceHasOwnKey;
+  const persistedProvider = userMetadata?.ttsProvider as string | undefined;
+  const ttsProvider: "apple" | "elevenlabs" =
+    persistedProvider === "elevenlabs" ? "elevenlabs" : "apple";
+
+  const elevenLabsVoiceId =
+    (userMetadata?.elevenLabsVoiceId as string | undefined) ?? "";
   const customPersonalities = await getCustomPersonalities(user.workspaceId);
 
   return json({
     personality,
+    voicePersonality,
     pronoun,
     personalityOptions: PERSONALITY_OPTIONS,
     customPersonality: customPersonalities[0] ?? null,
+    ttsProvider,
+    elevenLabsVoiceId,
+    hasElevenLabs,
+    workspaceHasOwnKey,
   });
 };
 
@@ -100,6 +126,39 @@ export const action = async ({ request }: ActionFunctionArgs) => {
     return json({ success: true });
   }
 
+  if (intent === "updateVoicePersonality") {
+    // Empty string = "same as default" (clear the override).
+    const voicePersonality = (formData.get("voicePersonality") as string) ?? "";
+    const currentMetadata = (user.metadata as Record<string, unknown>) || {};
+    await prisma.user.update({
+      where: { id: user.id },
+      data: { metadata: { ...currentMetadata, voicePersonality } },
+    });
+    return json({ success: true });
+  }
+
+  if (intent === "updateTtsProvider") {
+    const raw = formData.get("ttsProvider") as string;
+    const ttsProvider = raw === "elevenlabs" ? "elevenlabs" : "apple";
+    const currentMetadata = (user.metadata as Record<string, unknown>) || {};
+    await prisma.user.update({
+      where: { id: user.id },
+      data: { metadata: { ...currentMetadata, ttsProvider } },
+    });
+    return json({ success: true });
+  }
+
+  if (intent === "updateElevenLabsVoice") {
+    const elevenLabsVoiceId =
+      (formData.get("elevenLabsVoiceId") as string) ?? "";
+    const currentMetadata = (user.metadata as Record<string, unknown>) || {};
+    await prisma.user.update({
+      where: { id: user.id },
+      data: { metadata: { ...currentMetadata, elevenLabsVoiceId } },
+    });
+    return json({ success: true });
+  }
+
   if (intent === "createPersonality") {
     const raw = formData.get("personality") as string;
     if (!raw) {
@@ -136,9 +195,19 @@ export const action = async ({ request }: ActionFunctionArgs) => {
 };
 
 export default function AgentSettings() {
-  const { personality, pronoun, personalityOptions, customPersonality } =
-    useLoaderData<typeof loader>();
+  const {
+    personality,
+    voicePersonality,
+    pronoun,
+    personalityOptions,
+    customPersonality,
+    ttsProvider,
+    elevenLabsVoiceId,
+    hasElevenLabs,
+    workspaceHasOwnKey,
+  } = useLoaderData<typeof loader>();
   const personalityFetcher = useFetcher();
+  const voicePersonalityFetcher = useFetcher();
   const pronounFetcher = useFetcher();
   const deleteFetcher = useFetcher();
 
@@ -147,6 +216,9 @@ export default function AgentSettings() {
 
   const currentPersonality =
     personalityFetcher.formData?.get("personality")?.toString() || personality;
+  const currentVoicePersonality =
+    voicePersonalityFetcher.formData?.get("voicePersonality")?.toString() ??
+    voicePersonality;
   const currentPronoun =
     (pronounFetcher.formData?.get("pronoun")?.toString() as PronounType) ||
     pronoun;
@@ -296,13 +368,22 @@ export default function AgentSettings() {
                 }}
               >
                 <Plus className="text-muted-foreground h-5 w-5" />
-                <p className="text-muted-foreground text-sm">
-                  Create your own
-                </p>
+                <p className="text-muted-foreground text-sm">Create your own</p>
               </Card>
             )}
           </div>
         </div>
+
+        <ClientOnly>
+          {() => (
+            <VoiceSection
+              ttsProvider={ttsProvider}
+              elevenLabsVoiceId={elevenLabsVoiceId}
+              hasElevenLabs={hasElevenLabs}
+              workspaceHasOwnKey={workspaceHasOwnKey}
+            />
+          )}
+        </ClientOnly>
       </SettingSection>
 
       <ClientOnly>
@@ -318,3 +399,4 @@ export default function AgentSettings() {
     </div>
   );
 }
+

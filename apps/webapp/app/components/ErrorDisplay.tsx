@@ -1,6 +1,7 @@
 import {
   isRouteErrorResponse,
   useNavigate,
+  useRevalidator,
   useRouteError,
 } from "@remix-run/react";
 import { useEffect } from "react";
@@ -22,6 +23,14 @@ type ErrorDisplayOptions = {
 
 export function RouteErrorDisplay(options?: ErrorDisplayOptions) {
   const error = useRouteError();
+  const revalidator = useRevalidator();
+
+  const isNetworkError =
+    error instanceof Error &&
+    (/Failed to fetch|Load failed|NetworkError|network request failed/i.test(
+      error.message,
+    ) ||
+      (typeof navigator !== "undefined" && !navigator.onLine));
 
   useEffect(() => {
     if (error instanceof Error && error.message.includes("turbo-stream")) {
@@ -29,7 +38,18 @@ export function RouteErrorDisplay(options?: ErrorDisplayOptions) {
     }
   }, [error]);
 
+  useEffect(() => {
+    if (!isNetworkError) return;
+    const onOnline = () => revalidator.revalidate();
+    window.addEventListener("online", onOnline);
+    return () => window.removeEventListener("online", onOnline);
+  }, [isNetworkError, revalidator]);
+
   if (error instanceof Error && error.message.includes("turbo-stream")) {
+    return null;
+  }
+
+  if (isNetworkError) {
     return null;
   }
 

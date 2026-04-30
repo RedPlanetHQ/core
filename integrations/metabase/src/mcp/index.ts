@@ -24,14 +24,27 @@ const UpdateDashboardSchema = z.object({
 const CreateQuestionSchema = z.object({
   name: z.string().describe('Question name'),
   database_id: z.number().describe('Database ID to query'),
-  query_type: z.enum(['native', 'query']).describe('Type of query: native (SQL) or query (GUI)'),
-  native_query: z.string().optional().describe('SQL query string (required for native type)'),
+  query: z.string().describe('SQL query string for the question'),
   collection_id: z.number().optional().describe('Collection ID to place the question in'),
+  description: z.string().optional().describe('Question description'),
+  display: z
+    .string()
+    .optional()
+    .describe('Visualization type: table, line, bar, scalar, pie, etc. Defaults to table'),
 });
 
 const ExecuteQuerySchema = z.object({
   query: z.string().describe('SQL query to execute'),
   database_id: z.number().describe('Database ID to run the query on'),
+});
+
+const AddCardToDashboardSchema = z.object({
+  dashboard_id: z.number().describe('Dashboard ID to add the card to'),
+  card_id: z.number().describe('Card/question ID to attach'),
+  row: z.number().optional().describe('Grid row position. Defaults to placement below existing cards'),
+  col: z.number().optional().describe('Grid column position. Defaults to 0'),
+  size_x: z.number().optional().describe('Width in grid units (1-24). Defaults to 12'),
+  size_y: z.number().optional().describe('Height in grid units. Defaults to 8'),
 });
 
 export function getTools() {
@@ -65,6 +78,20 @@ export function getTools() {
       description: 'List all saved questions (cards) in Metabase',
       annotations: { readOnlyHint: true, destructiveHint: false, idempotentHint: true },
       inputSchema: zodToJsonSchema(ListSchema),
+    },
+    {
+      name: 'create_question',
+      description:
+        'Create a new saved question (card) in Metabase from a native SQL query. Returns the created card including its id, which can be passed to add_card_to_dashboard.',
+      annotations: { readOnlyHint: false, destructiveHint: false, idempotentHint: false },
+      inputSchema: zodToJsonSchema(CreateQuestionSchema),
+    },
+    {
+      name: 'add_card_to_dashboard',
+      description:
+        'Attach an existing saved question (card) to a dashboard. Appends the card to the dashboard layout via the v0.50+ PUT /api/dashboard/:id flow.',
+      annotations: { readOnlyHint: false, destructiveHint: false, idempotentHint: false },
+      inputSchema: zodToJsonSchema(AddCardToDashboardSchema),
     },
     {
       name: 'get_question',
@@ -196,6 +223,60 @@ export async function callTool(name: string, args: any, config: Record<string, s
       return JSON.stringify(cards.slice(0, args.limit || 50), null, 2);
     }
 
+    case 'create_question': {
+      const body = CreateQuestionSchema.parse(args);
+      const payload = {
+        name: body.name,
+        description: body.description,
+        collection_id: body.collection_id,
+        display: body.display || 'table',
+        visualization_settings: {},
+        dataset_query: {
+          type: 'native',
+          database: body.database_id,
+          native: { query: body.query },
+        },
+      };
+      const response = await client.post('/card', payload);
+      return JSON.stringify(response.data, null, 2);
+    }
+
+    case 'add_card_to_dashboard': {
+      const { dashboard_id, card_id, row, col, size_x, size_y } =
+        AddCardToDashboardSchema.parse(args);
+
+      const dashboardResp = await client.get(`/dashboard/${dashboard_id}`);
+      const existing = Array.isArray(dashboardResp.data?.dashcards)
+        ? dashboardResp.data.dashcards
+        : [];
+
+      const width = size_x ?? 12;
+      const height = size_y ?? 8;
+      const colPos = col ?? 0;
+      const rowPos =
+        row ??
+        existing.reduce(
+          (max: number, dc: any) => Math.max(max, (dc.row ?? 0) + (dc.size_y ?? 0)),
+          0,
+        );
+
+      const newDashcard = {
+        id: -1,
+        card_id,
+        row: rowPos,
+        col: colPos,
+        size_x: width,
+        size_y: height,
+        parameter_mappings: [],
+        visualization_settings: {},
+      };
+
+      const response = await client.put(`/dashboard/${dashboard_id}`, {
+        dashcards: [...existing, newDashcard],
+      });
+      return JSON.stringify(response.data, null, 2);
+    }
+
     case 'get_question': {
       const { id } = IdSchema.parse(args);
       const response = await client.get(`/card/${id}`);
@@ -253,8 +334,14 @@ export async function callTool(name: string, args: any, config: Record<string, s
     }
 
     case 'get_recent_activity': {
-      const response = await client.get('/activity/');
-      const activities = Array.isArray(response.data) ? response.data : [];
+      const response = await client.get('/activity/recents', {
+        params: { context: 'views' },
+      });
+      const activities = Array.isArray(response.data?.recents)
+        ? response.data.recents
+        : Array.isArray(response.data)
+          ? response.data
+          : [];
       return JSON.stringify(activities.slice(0, args.limit || 20), null, 2);
     }
 

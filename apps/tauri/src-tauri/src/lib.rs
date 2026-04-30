@@ -8,6 +8,8 @@ mod capture;
 mod speech;
 #[cfg(target_os = "macos")]
 mod voice_hotkey;
+#[cfg(target_os = "macos")]
+mod voice_panel;
 mod coding_config;
 
 use std::collections::HashSet;
@@ -17,7 +19,7 @@ use base64::Engine as _;
 use serde::{Deserialize, Serialize};
 use tauri::menu::{Menu, MenuItem, PredefinedMenuItem};
 use tauri::tray::TrayIconBuilder;
-use tauri::{Emitter, Listener, Manager, PhysicalPosition, State};
+use tauri::{Emitter, Listener, LogicalPosition, Manager, State};
 use tauri_plugin_notification::{NotificationExt, PermissionState};
 
 #[cfg(target_os = "macos")]
@@ -363,8 +365,131 @@ fn build_tray_menu<R: tauri::Runtime>(
 
 // ── Voice widget ──────────────────────────────────────────────────────────────
 
+/// On-demand AX snapshot of whatever app is currently frontmost
+/// (excluding CORE itself). Used by the voice widget when sending a
+/// text-mode turn so butler always gets the freshest page context,
+/// even if the user switched apps after opening the panel.
 #[cfg(target_os = "macos")]
-fn handle_voice_invoke<R: tauri::Runtime>(app: &tauri::AppHandle<R>, payload: &str) {
+#[tauri::command]
+fn get_current_screen_text() -> serde_json::Value {
+    use objc::{class, msg_send, sel, sel_impl, runtime::Object};
+
+    let mut pid: i32 = -1;
+    let mut app_name = String::new();
+    unsafe {
+        let ws: *mut Object = msg_send![class!(NSWorkspace), sharedWorkspace];
+        let app: *mut Object = msg_send![ws, frontmostApplication];
+        if !app.is_null() {
+            pid = msg_send![app, processIdentifier];
+            let name_obj: *mut Object = msg_send![app, localizedName];
+            if !name_obj.is_null() {
+                let bytes: *const std::os::raw::c_char =
+                    msg_send![name_obj, UTF8String];
+                if !bytes.is_null() {
+                    app_name = std::ffi::CStr::from_ptr(bytes)
+                        .to_string_lossy()
+                        .into_owned();
+                }
+            }
+        }
+    }
+
+    let bundle_self = "core";
+    let is_self = app_name.eq_ignore_ascii_case("core")
+        || app_name.eq_ignore_ascii_case(bundle_self);
+
+    let (title, text) = if pid > 0 && !is_self {
+        let (title, text, _disabled) = screen_context::query(pid);
+        (title, text)
+    } else {
+        (None, None)
+    };
+
+    log::info!(
+        "[voice] get_current_screen_text → app=\"{}\" pid={} title={:?} text_len={}",
+        app_name,
+        pid,
+        title,
+        text.as_deref().map(str::len).unwrap_or(0)
+    );
+
+    serde_json::json!({
+        "app": app_name,
+        "title": title,
+        "text": text,
+    })
+}
+
+#[cfg(not(target_os = "macos"))]
+#[tauri::command]
+fn get_current_screen_text() -> serde_json::Value {
+    serde_json::json!({ "app": "", "title": null, "text": null })
+}
+
+
+#[cfg(target_os = "macos")]
+fn position_voice_window<R: tauri::Runtime>(
+    window: &tauri::WebviewWindow<R>,
+    sx: f64,
+    sy: f64,
+    sw: f64,
+    _sh: f64,
+) {
+    // NSScreen.frame is in logical points; pass logical coordinates to
+    // Tauri so it scales for the display's backing factor (Retina = 2x).
+    let inset: f64 = 24.0;
+    let win_w: f64 = 360.0;
+    let target_x = sx + sw - win_w - inset;
+    let target_y = sy + inset;
+    log::info!(
+        "[voice] set_position logical=({}, {})",
+        target_x,
+        target_y
+    );
+    if let Err(e) = window.set_position(LogicalPosition::new(target_x, target_y)) {
+        log::warn!("[voice] set_position failed: {e}");
+    }
+}
+
+#[cfg(target_os = "macos")]
+fn reposition_voice_window<R: tauri::Runtime>(app: &tauri::AppHandle<R>, payload: &str) {
+    let Some(window) = app.get_webview_window("voice") else {
+        return;
+    };
+    // Skip if the widget isn't visible — no point chasing the cursor.
+    if !window.is_visible().unwrap_or(false) {
+        return;
+    }
+
+    #[derive(Deserialize)]
+    struct ScreenFrameDe {
+        x: f64,
+        y: f64,
+        width: f64,
+        height: f64,
+    }
+    let Ok(frame) = serde_json::from_str::<ScreenFrameDe>(payload) else {
+        log::warn!("[voice] reposition payload parse failed: {payload}");
+        return;
+    };
+
+    log::info!(
+        "[voice] following active screen — repositioning to ({},{} {}x{})",
+        frame.x,
+        frame.y,
+        frame.width,
+        frame.height
+    );
+    position_voice_window(&window, frame.x, frame.y, frame.width, frame.height);
+}
+
+
+#[cfg(target_os = "macos")]
+fn handle_voice_invoke<R: tauri::Runtime>(
+    app: &tauri::AppHandle<R>,
+    payload: &str,
+    expand: bool,
+) {
     // payload shape: { pid, app, screen_frame: { x, y, width, height } }
     #[derive(Deserialize)]
     struct InvokePayload {
@@ -379,6 +504,8 @@ fn handle_voice_invoke<R: tauri::Runtime>(app: &tauri::AppHandle<R>, payload: &s
         width: f64,
         height: f64,
     }
+
+    log::info!("[voice] handle_voice_invoke entered, payload={}", payload);
 
     let parsed: InvokePayload = match serde_json::from_str(payload) {
         Ok(v) => v,
@@ -416,21 +543,55 @@ fn handle_voice_invoke<R: tauri::Runtime>(app: &tauri::AppHandle<R>, payload: &s
         return;
     };
 
-    // Position top-right of the active screen with a 24px inset.
-    let inset: f64 = 24.0;
-    let win_w: f64 = 360.0;
-    let target_x = parsed.screen_frame.x + parsed.screen_frame.width - win_w - inset;
-    let target_y = parsed.screen_frame.y + inset;
-    let _ = window.set_position(PhysicalPosition::<i32>::new(
-        target_x as i32,
-        target_y as i32,
-    ));
+    log::info!(
+        "[voice] showing voice window (page_text_len={})",
+        text.as_deref().map(str::len).unwrap_or(0)
+    );
 
-    let _ = window.show();
-    let _ = window.set_focus();
+    // Log the URL the webview is currently pointed at — most useful when
+    // the window appears but is blank (route doesn't exist on the host
+    // the webview is loading from).
+    match window.url() {
+        Ok(url) => log::info!("[voice] voice window URL = {url}"),
+        Err(e) => log::warn!("[voice] window.url() failed: {e}"),
+    }
 
-    // Send context to the widget. It will start its own listening session.
-    let _ = window.emit("voice:invoke-payload", context_payload);
+    log::info!(
+        "[voice] setting position from screen ({},{} {}x{})",
+        parsed.screen_frame.x,
+        parsed.screen_frame.y,
+        parsed.screen_frame.width,
+        parsed.screen_frame.height
+    );
+    position_voice_window(
+        &window,
+        parsed.screen_frame.x,
+        parsed.screen_frame.y,
+        parsed.screen_frame.width,
+        parsed.screen_frame.height,
+    );
+
+    // Bring the panel forward without activating CORE — non-activating
+    // NSPanel preserves whatever app the user was in.
+    voice_panel::show(app);
+
+    match window.is_visible() {
+        Ok(v) => log::info!("[voice] window.is_visible() = {v}"),
+        Err(e) => log::warn!("[voice] is_visible failed: {e}"),
+    }
+
+    // Send context to the widget. The event name distinguishes between
+    // the two entry paths:
+    //   voice:invoke-payload         → push-to-talk (auto-start listening)
+    //   voice:invoke-expand-payload  → just open the expanded view
+    let event_name = if expand {
+        "voice:invoke-expand-payload"
+    } else {
+        "voice:invoke-payload"
+    };
+    if let Err(e) = window.emit(event_name, context_payload) {
+        log::warn!("[voice] emit {event_name} failed: {e}");
+    }
 }
 
 // ── App entry point ───────────────────────────────────────────────────────────
@@ -455,7 +616,9 @@ pub fn run() {
         .manage(auth.clone());
 
     #[cfg(target_os = "macos")]
-    let builder = builder.manage(speech_state.clone());
+    let builder = builder
+        .manage(speech_state.clone())
+        .plugin(tauri_nspanel::init());
 
     #[cfg(target_os = "macos")]
     let builder = builder.invoke_handler(tauri::generate_handler![
@@ -471,8 +634,14 @@ pub fn run() {
         speech::voice_request_permissions,
         speech::voice_start_listening,
         speech::voice_stop_listening,
+        speech::voice_cancel_listening,
         speech::voice_speak,
         speech::voice_cancel_speech,
+        speech::voice_list_voices,
+        speech::voice_set_voice,
+        speech::voice_get_voice,
+        voice_panel::voice_hide_panel,
+        get_current_screen_text,
     ]);
 
     #[cfg(not(target_os = "macos"))]
@@ -486,6 +655,7 @@ pub fn run() {
         get_gateway_id,
         coding_config::check_corebrain_installed,
         coding_config::get_coding_agents,
+        get_current_screen_text,
     ]);
 
     builder
@@ -498,13 +668,56 @@ pub fn run() {
             // wire it to the floating call-card window.
             #[cfg(target_os = "macos")]
             {
+                log::info!("[voice] setup: installing hotkey + listener");
                 voice_hotkey::install(app.handle().clone());
+                voice_hotkey::install_screen_follower(app.handle().clone());
+
+                // Convert the `voice` Tauri window into an NSPanel so it
+                // floats above other apps without stealing focus and
+                // appears on every Space (incl. fullscreen Spaces).
+                if let Err(e) = voice_panel::install(app.handle()) {
+                    log::warn!("[voice_panel] install failed: {e}");
+                }
 
                 let voice_app = app.handle().clone();
-                app.listen("voice:invoke", move |event| {
+                let _id = app.listen("voice:invoke", move |event| {
+                    log::info!("[voice] voice:invoke received");
                     let payload = event.payload();
-                    handle_voice_invoke(&voice_app, payload);
+                    handle_voice_invoke(&voice_app, payload, false);
                 });
+
+                let expand_app = app.handle().clone();
+                let _expand_id = app.listen("voice:invoke-expand", move |event| {
+                    log::info!("[voice] voice:invoke-expand received");
+                    let payload = event.payload();
+                    handle_voice_invoke(&expand_app, payload, true);
+                });
+
+                // When the user switches to an app on a different screen,
+                // reposition the voice window to that screen's top-right
+                // — but only if it's currently visible.
+                let follow_app = app.handle().clone();
+                let _follow_id = app.listen("voice:active-screen-changed", move |event| {
+                    let payload = event.payload();
+                    reposition_voice_window(&follow_app, payload);
+                });
+
+                // Hold-end (Ctrl+Option released): forward to the widget so it
+                // can finalize the recognition and submit the turn.
+                let hold_end_app = app.handle().clone();
+                let _hold_end_id = app.listen("voice:hold-end", move |_event| {
+                    log::info!("[voice] voice:hold-end received");
+                    if let Some(window) = hold_end_app.get_webview_window("voice") {
+                        let _ = window.emit("voice:hold-end-payload", ());
+                    }
+                });
+
+                log::info!(
+                    "[voice] listeners registered (invoke={:?} follow={:?} hold-end={:?})",
+                    _id,
+                    _follow_id,
+                    _hold_end_id
+                );
             }
 
             // Build system tray icon

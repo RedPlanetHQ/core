@@ -1,31 +1,58 @@
 /**
- * Voice widget — call-card UI for the Tauri "voice" window.
+ * Voice widget — push-to-talk pill for the Tauri "voice" window.
  *
- * Subscribes to Rust-side events:
- *   - voice:invoke-payload → { pageContext }
- *   - voice:partial         → { text, isFinal }
- *   - voice:final           → { text }
- *   - voice:tts-started / :tts-ended
- *   - voice:permissions
- *   - voice:error
+ * Default state: a small pill (FlickeringGrid + label) at the top-right
+ * of the floating voice window.
  *
- * Calls Tauri commands:
- *   voice_start_listening / voice_stop_listening / voice_speak / voice_cancel_speech
+ * Lifecycle (driven by Rust hotkey events):
+ *   voice:invoke           → user pressed Ctrl+Option → start listening
+ *   voice:partial          → audio detected; pill flips to "Listening…"
+ *   voice:hold-end-payload → user released the chord → finalize the
+ *                            recognition; pill enters "Thinking…" once
+ *                            we've sent the turn
+ *   stream complete + TTS  → pill shows "Speaking…" then auto-hides
  *
- * Posts each user turn to /api/v1/voice-turn (SSE), accumulates the
- * reply, and feeds each completed sentence into voice_speak so TTS
- * starts before the full reply has streamed.
+ * Click the pill → panel expands to show the full conversation. Esc on
+ * the expanded panel collapses back to the pill.
  */
 
 import { useEffect, useRef, useState } from "react";
-import type { MetaFunction } from "@remix-run/node";
+import {
+  json,
+  type LoaderFunctionArgs,
+  type MetaFunction,
+} from "@remix-run/node";
+import { useLoaderData } from "@remix-run/react";
+import { Theme, useTheme } from "remix-themes";
 
 import { isTauri, tauriInvoke, tauriListen } from "~/lib/tauri.client";
+import { FlickeringGrid } from "~/components/ui/flickering-grid";
+import { Button, Input } from "~/components/ui";
+import { cn } from "~/lib/utils";
+import { ArrowRight, X } from "lucide-react";
+import { requireWorkpace } from "~/services/session.server";
 
 export const meta: MetaFunction = () => [{ title: "Butler" }];
 
-type Status = "idle" | "listening" | "thinking" | "speaking" | "error";
-type Mode = "voice" | "text";
+export const loader = async ({ request }: LoaderFunctionArgs) => {
+  // The pill's idle label shows the workspace name as a quick "this is
+  // your butler" identifier. Falls back to "Butler" if no workspace
+  // (shouldn't happen in practice for an authed widget mount).
+  try {
+    const workspace = await requireWorkpace(request);
+    return json({ workspaceName: workspace?.name ?? "Butler" });
+  } catch {
+    return json({ workspaceName: "Butler" });
+  }
+};
+
+type Status =
+  | "idle"
+  | "armed"
+  | "listening"
+  | "thinking"
+  | "speaking"
+  | "error";
 
 interface PageContext {
   app: string;
@@ -39,14 +66,17 @@ interface Turn {
 }
 
 const SENTENCE_BOUNDARY = /([.!?])\s/;
+const AUTO_HIDE_DELAY_MS = 1200;
 
 export default function VoiceWidget() {
-  const [status, setStatus] = useState<Status>("listening");
-  const [mode, setMode] = useState<Mode>("voice");
+  const [status, setStatus] = useState<Status>("idle");
+  const [expanded, setExpanded] = useState(false);
   const [error, setError] = useState<string | null>(null);
-  const [partial, setPartial] = useState("");
   const [turns, setTurns] = useState<Turn[]>([]);
   const [textDraft, setTextDraft] = useState("");
+  const [theme] = useTheme();
+  const isDark = theme === Theme.DARK;
+  const { workspaceName } = useLoaderData<typeof loader>();
 
   const conversationIdRef = useRef<string | null>(null);
   const pageContextRef = useRef<PageContext | null>(null);
@@ -54,6 +84,37 @@ export default function VoiceWidget() {
   const ttsConsumedRef = useRef<number>(0);
   const ttsActiveRef = useRef<boolean>(false);
   const inFlightRef = useRef<AbortController | null>(null);
+  /** Mode of the in-flight turn — drives whether the streamed reply is spoken. */
+  const currentTurnModeRef = useRef<"voice" | "text">("voice");
+  const hideTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  /** ElevenLabs audio queue — sentences play sequentially via <audio>. */
+  const elQueueRef = useRef<HTMLAudioElement[]>([]);
+  const elActiveRef = useRef<HTMLAudioElement | null>(null);
+  /** True while the user has the chord held — controls "armed" vs "listening" transition */
+  const chordHeldRef = useRef<boolean>(false);
+  /** Did we receive any partial transcript during this hold? Drives finalization. */
+  const heardSpeechRef = useRef<boolean>(false);
+  const expandedRef = useRef<boolean>(false);
+
+  useEffect(() => {
+    expandedRef.current = expanded;
+  }, [expanded]);
+
+  // ── Make the host html/body transparent so the pill / rounded panel
+  //    has no surrounding solid frame. Scoped to this route via cleanup.
+  useEffect(() => {
+    if (typeof document === "undefined") return;
+    const previousHtmlBg = document.documentElement.style.background;
+    const previousBodyBg = document.body.style.background;
+    document.documentElement.style.background = "transparent";
+    document.body.style.background = "transparent";
+    document.body.classList.add("voice-widget-host");
+    return () => {
+      document.documentElement.style.background = previousHtmlBg;
+      document.body.style.background = previousBodyBg;
+      document.body.classList.remove("voice-widget-host");
+    };
+  }, []);
 
   // ── Tauri event subscriptions ────────────────────────────────────────────
   useEffect(() => {
@@ -66,10 +127,29 @@ export default function VoiceWidget() {
         "voice:invoke-payload",
         (event) => {
           pageContextRef.current = event.payload?.pageContext ?? null;
-          // Cancel any in-flight TTS / request and start a fresh turn.
-          startListeningSession();
+          startHoldSession();
         },
       ),
+    );
+
+    // Double-tap Ctrl: open in expanded mode without starting to listen.
+    // Stays open until Esc.
+    unsubs.push(
+      tauriListen<{ pageContext: PageContext | null }>(
+        "voice:invoke-expand-payload",
+        (event) => {
+          pageContextRef.current = event.payload?.pageContext ?? null;
+          clearHideTimer();
+          setError(null);
+          setExpanded(true);
+        },
+      ),
+    );
+
+    unsubs.push(
+      tauriListen("voice:hold-end-payload", () => {
+        endHoldSession();
+      }),
     );
 
     unsubs.push(
@@ -77,14 +157,14 @@ export default function VoiceWidget() {
         "voice:partial",
         (event) => {
           const text = event.payload?.text ?? "";
-          setPartial(text);
-
-          // Barge-in: while butler is speaking, a partial >3 words means
-          // the user has actually started talking (and not just an echo
-          // blip). Cancel TTS and treat this as the next user turn.
+          if (text.trim().length > 0) {
+            heardSpeechRef.current = true;
+            // First partial transitions "armed" → "listening".
+            setStatus((s) => (s === "armed" ? "listening" : s));
+          }
+          // Barge-in during TTS: any meaningful partial cancels speech.
           if (ttsActiveRef.current && text.split(/\s+/).length > 3) {
-            void tauriInvoke("voice_cancel_speech");
-            ttsActiveRef.current = false;
+            cancelAllTTS();
           }
         },
       ),
@@ -94,23 +174,24 @@ export default function VoiceWidget() {
       tauriListen<{ text: string }>("voice:final", (event) => {
         const text = (event.payload?.text ?? "").trim();
         if (!text) return;
-        setPartial("");
-        sendTurn(text, "voice");
+        sendTurn(text);
       }),
     );
 
     unsubs.push(
       tauriListen("voice:tts-started", () => {
         ttsActiveRef.current = true;
+        clearHideTimer();
         setStatus("speaking");
       }),
     );
 
     unsubs.push(
       tauriListen("voice:tts-ended", () => {
+        console.log("[voice-widget] tts-ended → scheduling auto-hide");
         ttsActiveRef.current = false;
-        // After TTS, drop back to listening for the next turn.
-        setStatus("listening");
+        setStatus("idle");
+        scheduleAutoHide();
       }),
     );
 
@@ -127,75 +208,140 @@ export default function VoiceWidget() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
-  // ── Lifecycle: start listening on mount, cleanup on unmount ──────────────
+  // ── Permissions on mount ─────────────────────────────────────────────────
   useEffect(() => {
     if (!isTauri()) return;
     void tauriInvoke("voice_request_permissions");
-    startListeningSession();
     return () => {
       inFlightRef.current?.abort();
-      void tauriInvoke("voice_cancel_speech");
-      void tauriInvoke("voice_stop_listening");
+      cancelAllTTS();
+      void tauriInvoke("voice_cancel_listening");
+      clearHideTimer();
     };
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
-  // ── Esc + click-outside dismissal ────────────────────────────────────────
+  // ── Esc closes the panel entirely (when expanded). The pill alone has
+  //    no Esc binding — it auto-hides via the lifecycle.
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => {
-      if (e.key === "Escape") void closeWindow();
-      if (e.key === "Tab") {
+      if (e.key === "Escape" && expandedRef.current) {
         e.preventDefault();
-        toggleMode();
+        e.stopPropagation();
+        closeWidget();
       }
     };
-    window.addEventListener("keydown", onKey);
-    return () => window.removeEventListener("keydown", onKey);
+    document.addEventListener("keydown", onKey, true);
+    return () => document.removeEventListener("keydown", onKey, true);
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [mode]);
+  }, []);
 
-  function startListeningSession() {
-    if (mode !== "voice") return;
-    setStatus("listening");
-    setPartial("");
+  function closeWidget() {
+    setExpanded(false);
+    void hideWindow();
+  }
+
+  // ── Lifecycle helpers ────────────────────────────────────────────────────
+  function startHoldSession() {
+    chordHeldRef.current = true;
+    heardSpeechRef.current = false;
+    clearHideTimer();
+    setError(null);
+    // Each new push-to-talk session starts in pill (collapsed) mode —
+    // any leftover expanded state from a previous conversation is reset.
+    setExpanded(false);
+    // Cancel any in-flight TTS — barge-in into a fresh turn.
+    if (ttsActiveRef.current) {
+      cancelAllTTS();
+    }
+    setStatus("armed");
     void tauriInvoke("voice_start_listening");
   }
 
-  function toggleMode() {
-    setMode((prev) => {
-      const next = prev === "voice" ? "text" : "voice";
-      if (next === "text") {
-        void tauriInvoke("voice_stop_listening");
-        setStatus("idle");
-      } else {
-        startListeningSession();
+  function endHoldSession() {
+    chordHeldRef.current = false;
+    if (heardSpeechRef.current) {
+      // Heard speech — finalize. Recognizer will emit one last `final`
+      // and we'll process it through to TTS. Pill stays visible
+      // through the thinking → speaking cycle, then auto-hides.
+      setStatus("thinking");
+      void tauriInvoke("voice_stop_listening");
+    } else {
+      // Silent release — hide immediately unless the user has
+      // expanded the panel (they're actively reading history).
+      void tauriInvoke("voice_cancel_listening");
+      setStatus("idle");
+      if (!expandedRef.current) {
+        void hideWindow();
       }
-      return next;
-    });
-  }
-
-  async function closeWindow() {
-    inFlightRef.current?.abort();
-    await tauriInvoke("voice_cancel_speech");
-    await tauriInvoke("voice_stop_listening");
-    if (isTauri()) {
-      const { getCurrentWindow } = await import("@tauri-apps/api/window");
-      await getCurrentWindow().hide();
     }
   }
 
-  function sendTextDraft(e: React.FormEvent) {
-    e.preventDefault();
-    const text = textDraft.trim();
-    if (!text) return;
-    setTextDraft("");
-    sendTurn(text, "text");
+  async function hideWindow() {
+    if (!isTauri()) return;
+    // Route through the Rust-side NSPanel hide — Tauri's JS hide() does
+    // not always trigger the swizzled NSPanel hide path on macOS.
+    await tauriInvoke("voice_hide_panel");
   }
 
-  async function sendTurn(transcript: string, turnMode: Mode) {
+  function scheduleAutoHide() {
+    clearHideTimer();
+    hideTimerRef.current = setTimeout(() => {
+      // Don't auto-hide if the user has expanded the panel — they're
+      // actively reading the conversation.
+      if (expandedRef.current) {
+        console.log("[voice-widget] auto-hide skipped (expanded)");
+        return;
+      }
+      console.log("[voice-widget] auto-hide firing → voice_hide_panel");
+      void hideWindow();
+    }, AUTO_HIDE_DELAY_MS);
+  }
+
+  function clearHideTimer() {
+    if (hideTimerRef.current) {
+      clearTimeout(hideTimerRef.current);
+      hideTimerRef.current = null;
+    }
+  }
+
+  async function sendTurn(
+    transcript: string,
+    turnMode: "voice" | "text" = "voice",
+  ) {
     inFlightRef.current?.abort();
     const controller = new AbortController();
     inFlightRef.current = controller;
+    currentTurnModeRef.current = turnMode;
+
+    // For text-mode turns, the user might have typed in the panel
+    // after switching apps — get a fresh AX snapshot of whatever's
+    // frontmost right now, not whatever was captured at panel open.
+    if (turnMode === "text" && isTauri()) {
+      try {
+        const fresh = await tauriInvoke<PageContext | null>(
+          "get_current_screen_text",
+        );
+        if (fresh) pageContextRef.current = fresh;
+      } catch (err) {
+        console.warn("[voice-widget] get_current_screen_text failed", err);
+      }
+    }
+
+    const ctx = pageContextRef.current;
+    console.log("[voice-widget] sending turn", {
+      mode: turnMode,
+      transcript_len: transcript.length,
+      transcript_preview: transcript.slice(0, 80),
+      page_context: ctx
+        ? {
+            app: ctx.app,
+            title: ctx.title,
+            text_len: ctx.text?.length ?? 0,
+            text_preview: ctx.text?.slice(0, 200) ?? null,
+          }
+        : null,
+    });
 
     setTurns((prev) => [...prev, { role: "user", text: transcript }]);
     setStatus("thinking");
@@ -220,18 +366,15 @@ export default function VoiceWidget() {
         throw new Error(`voice-turn: ${response.status}`);
       }
 
-      // Optimistically append an empty assistant turn — fill it as we stream.
       setTurns((prev) => [...prev, { role: "assistant", text: "" }]);
 
       const reader = response.body.getReader();
       const decoder = new TextDecoder();
       let buffer = "";
-
       while (true) {
         const { value, done } = await reader.read();
         if (done) break;
         buffer += decoder.decode(value, { stream: true });
-
         let nl: number;
         while ((nl = buffer.indexOf("\n")) !== -1) {
           const line = buffer.slice(0, nl).trim();
@@ -241,9 +384,9 @@ export default function VoiceWidget() {
           if (!data || data === "[DONE]") continue;
           try {
             const event = JSON.parse(data);
-            handleStreamEvent(event, turnMode);
+            handleStreamEvent(event);
           } catch {
-            // ignore malformed line
+            /* ignore malformed line */
           }
         }
       }
@@ -251,44 +394,43 @@ export default function VoiceWidget() {
       if ((err as Error).name === "AbortError") return;
       setError(err instanceof Error ? err.message : String(err));
       setStatus("error");
+      scheduleAutoHide();
       return;
     }
 
-    // Flush any tail TTS that hasn't crossed a sentence boundary.
-    if (turnMode === "voice") {
+    // Flush any tail TTS that didn't cross a sentence boundary —
+    // voice-mode turns only. Text-mode turns are silent.
+    if (currentTurnModeRef.current === "voice") {
       const tail = ttsBufferRef.current.slice(ttsConsumedRef.current).trim();
       if (tail) {
-        await tauriInvoke("voice_speak", { text: tail });
+        await speakSentence(tail);
       } else if (!ttsActiveRef.current) {
-        setStatus("listening");
+        setStatus("idle");
+        scheduleAutoHide();
       }
     } else {
+      // Text-mode reply rendered to screen; no TTS, no auto-hide
+      // (user is reading the expanded panel).
       setStatus("idle");
     }
 
     inFlightRef.current = null;
-    if (turnMode === "voice") {
-      // Reopen mic for the next turn.
-      void tauriInvoke("voice_start_listening");
-    }
   }
 
-  function handleStreamEvent(event: any, turnMode: Mode) {
-    // AI SDK v6 UIMessage stream emits a variety of event types. We only
-    // care about text-delta-style chunks here.
+  function handleStreamEvent(event: any) {
     if (event.type === "text-delta" && typeof event.delta === "string") {
-      appendAssistantText(event.delta, turnMode);
+      appendAssistantText(event.delta);
     } else if (event.type === "text" && typeof event.text === "string") {
-      appendAssistantText(event.text, turnMode);
+      appendAssistantText(event.text);
     } else if (
       event.type === "data-text-delta" &&
       typeof event.data === "string"
     ) {
-      appendAssistantText(event.data, turnMode);
+      appendAssistantText(event.data);
     }
   }
 
-  function appendAssistantText(delta: string, turnMode: Mode) {
+  function appendAssistantText(delta: string) {
     setTurns((prev) => {
       if (prev.length === 0) return prev;
       const next = [...prev];
@@ -298,10 +440,10 @@ export default function VoiceWidget() {
       return next;
     });
 
-    if (turnMode !== "voice") return;
-    ttsBufferRef.current += delta;
+    // Text-mode turns are read silently — skip TTS.
+    if (currentTurnModeRef.current !== "voice") return;
 
-    // Speak each completed sentence as soon as it lands.
+    ttsBufferRef.current += delta;
     while (true) {
       const remaining = ttsBufferRef.current.slice(ttsConsumedRef.current);
       const match = remaining.match(SENTENCE_BOUNDARY);
@@ -310,125 +452,226 @@ export default function VoiceWidget() {
       const sentence = remaining.slice(0, cut).trim();
       ttsConsumedRef.current += cut;
       if (sentence) {
-        void tauriInvoke("voice_speak", { text: sentence });
+        void speakSentence(sentence);
       }
     }
   }
 
-  // ── Render ───────────────────────────────────────────────────────────────
-  const lastTurn = turns.length ? turns[turns.length - 1] : null;
-  const showingPartial = mode === "voice" && partial.length > 0 && status === "listening";
+  // ── Sentence-level TTS dispatch ──────────────────────────────────────────
+  // Try ElevenLabs (server proxy) first. If the server returns 204
+  // (user opted into Apple, or no API key), fall back to the local
+  // Swift helper. Either path emits voice:tts-started / voice:tts-ended
+  // so the UI state machine works the same.
+  async function speakSentence(text: string) {
+    if (!isTauri()) return;
+    try {
+      const res = await fetch("/api/v1/voice-tts", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        credentials: "include",
+        body: JSON.stringify({ text }),
+      });
 
-  return (
-    <div
-      className="flex h-screen flex-col gap-2 rounded-3xl border border-white/10 bg-zinc-900/85 p-4 text-sm text-zinc-100 shadow-2xl backdrop-blur-xl"
-      style={{ borderRadius: 24 }}
-      onMouseDown={(e) => {
-        // Click-outside dismissal: the window itself is just the panel,
-        // so background click-through isn't possible without a separate
-        // overlay. Instead, we rely on Esc + the window losing focus.
-        e.stopPropagation();
-      }}
-    >
-      <header className="flex items-center justify-between">
-        <div className="flex items-center gap-2">
-          <div className="grid h-8 w-8 place-items-center rounded-full bg-emerald-500/20 text-emerald-300">
-            B
-          </div>
-          <div className="font-medium">Butler</div>
-        </div>
+      if (res.status === 204 || !res.ok) {
+        await tauriInvoke("voice_speak", { text });
+        return;
+      }
+
+      const blob = await res.blob();
+      const url = URL.createObjectURL(blob);
+      const audio = new Audio(url);
+
+      audio.addEventListener("ended", () => {
+        URL.revokeObjectURL(url);
+        elActiveRef.current = null;
+        const next = elQueueRef.current.shift();
+        if (next) {
+          elActiveRef.current = next;
+          void next.play();
+        } else {
+          // Queue drained — surface the same end-of-speech transition the
+          // Swift helper emits, so scheduleAutoHide / status updates run.
+          ttsActiveRef.current = false;
+          setStatus("idle");
+          scheduleAutoHide();
+        }
+      });
+      audio.addEventListener("error", () => {
+        URL.revokeObjectURL(url);
+        elActiveRef.current = null;
+      });
+
+      if (elActiveRef.current) {
+        elQueueRef.current.push(audio);
+      } else {
+        elActiveRef.current = audio;
+        ttsActiveRef.current = true;
+        clearHideTimer();
+        setStatus("speaking");
+        await audio.play();
+      }
+    } catch (err) {
+      console.warn("[voice-widget] elevenlabs speak failed, falling back", err);
+      void tauriInvoke("voice_speak", { text });
+    }
+  }
+
+  /** Cancel both ElevenLabs queued audio AND any in-flight Apple speech. */
+  function cancelAllTTS() {
+    void tauriInvoke("voice_cancel_speech");
+    for (const a of elQueueRef.current) {
+      try {
+        a.pause();
+      } catch {
+        // ignore
+      }
+    }
+    elQueueRef.current = [];
+    if (elActiveRef.current) {
+      try {
+        elActiveRef.current.pause();
+      } catch {
+        // ignore
+      }
+      elActiveRef.current = null;
+    }
+    ttsActiveRef.current = false;
+  }
+
+  // ── Render ───────────────────────────────────────────────────────────────
+  // Primary tint only when mic is actively picking up the user (listening)
+  // or butler is talking back (speaking). "Armed" and "Thinking" stay muted
+  // — there's no audio flowing in either direction.
+  const isActive = status === "listening" || status === "speaking";
+
+  const stateLabel = (() => {
+    if (status === "armed") return "Ready";
+    if (status === "listening") return "Listening…";
+    if (status === "thinking") return "Thinking…";
+    if (status === "speaking") return "Speaking…";
+    if (status === "error") return "Error";
+    return workspaceName;
+  })();
+
+  const gridColor = isActive
+    ? "rgb(var(--primary))"
+    : isDark
+      ? "oklch(85.8% 0 0)"
+      : "oklch(30.87% 0 0)";
+
+  if (!expanded) {
+    return (
+      <div className="flex h-screen w-screen items-start justify-end p-2">
         <button
           type="button"
-          onClick={toggleMode}
-          className="rounded-full bg-white/5 px-3 py-1 text-xs text-zinc-300 hover:bg-white/10"
-          title="Tab to toggle"
+          onClick={() => setExpanded(true)}
+          className="border-border bg-background-3 text-muted-foreground flex h-7 items-center gap-1.5 rounded-lg border px-2 text-xs font-medium shadow-md transition-colors"
+          title="Click to expand"
         >
-          {mode === "voice" ? "🎤 voice" : "ABC text"}
+          <div className="relative h-3.5 w-5 overflow-hidden rounded-sm">
+            <FlickeringGrid
+              width={20}
+              height={14}
+              squareSize={2}
+              gridGap={2}
+              flickerChance={isActive ? 0.8 : 0.3}
+              maxOpacity={isActive ? 0.9 : 0.25}
+              color={gridColor}
+            />
+          </div>
+          {stateLabel}
         </button>
-      </header>
-
-      <StatusRow status={status} error={error} />
-
-      <div className="flex flex-1 flex-col gap-2 overflow-y-auto pr-1">
-        {turns.map((t, i) => (
-          <div
-            key={i}
-            className={`max-w-[85%] rounded-2xl px-3 py-2 ${
-              t.role === "user"
-                ? "self-end bg-emerald-600/30 text-emerald-50"
-                : "self-start bg-white/5 text-zinc-100"
-            }`}
-          >
-            {t.text || (t.role === "assistant" ? "…" : "")}
-          </div>
-        ))}
-        {showingPartial && (
-          <div className="max-w-[85%] self-end rounded-2xl bg-emerald-600/15 px-3 py-2 text-emerald-100/80 italic">
-            {partial}
-          </div>
-        )}
-      </div>
-
-      {mode === "text" && (
-        <form onSubmit={sendTextDraft} className="flex gap-2">
-          <input
-            autoFocus
-            value={textDraft}
-            onChange={(e) => setTextDraft(e.target.value)}
-            placeholder="type a message…"
-            className="flex-1 rounded-full bg-white/5 px-3 py-2 outline-none placeholder:text-zinc-500 focus:bg-white/10"
-          />
-          <button
-            type="submit"
-            disabled={!textDraft.trim() || status === "thinking"}
-            className="rounded-full bg-emerald-500/80 px-3 py-2 text-zinc-950 hover:bg-emerald-500 disabled:opacity-40"
-          >
-            ↵
-          </button>
-        </form>
-      )}
-
-      <footer className="text-center text-[10px] text-zinc-500">
-        Esc to close · Tab to switch mode
-      </footer>
-    </div>
-  );
-}
-
-function StatusRow({
-  status,
-  error,
-}: {
-  status: Status;
-  error: string | null;
-}) {
-  if (status === "error") {
-    return (
-      <div className="rounded-xl bg-red-500/15 px-3 py-2 text-xs text-red-200">
-        ⚠ {error ?? "Something went wrong."}
       </div>
     );
   }
 
-  const dot = {
-    listening: "bg-emerald-400 animate-pulse",
-    thinking: "bg-amber-400 animate-pulse",
-    speaking: "bg-sky-400 animate-pulse",
-    idle: "bg-zinc-500",
-    error: "bg-red-400",
-  }[status];
-  const label = {
-    listening: "Listening…",
-    thinking: "Thinking…",
-    speaking: "Speaking…",
-    idle: "Ready",
-    error: "Error",
-  }[status];
-
   return (
-    <div className="flex items-center gap-2 text-xs text-zinc-400">
-      <span className={`h-2 w-2 rounded-full ${dot}`} />
-      {label}
+    <div className="bg-background-3 text-foreground border-border relative flex h-screen flex-col gap-2 overflow-hidden rounded-lg border p-3 text-sm shadow-2xl">
+      <div className="flex items-center justify-between">
+        <div className="flex items-center gap-2">
+          <div className="relative h-3.5 w-5 overflow-hidden rounded-sm">
+            <FlickeringGrid
+              width={20}
+              height={14}
+              squareSize={2}
+              gridGap={2}
+              flickerChance={isActive ? 0.8 : 0.3}
+              maxOpacity={isActive ? 0.9 : 0.25}
+              color={gridColor}
+            />
+          </div>
+          <div className="text-muted-foreground text-xs">{stateLabel}</div>
+        </div>
+        <button
+          type="button"
+          onClick={closeWidget}
+          className="text-muted-foreground hover:text-foreground hover:bg-accent grid h-6 w-6 place-items-center rounded text-xs"
+          aria-label="Close"
+          title="Esc to close"
+        >
+          <X size={16} />
+        </button>
+      </div>
+
+      {error && (
+        <div className="bg-destructive/15 text-destructive rounded-md px-3 py-1.5 text-xs">
+          ⚠ {error}
+        </div>
+      )}
+
+      <div className="flex flex-1 flex-col gap-1.5 overflow-y-auto pr-1">
+        {turns.length === 0 && !error && (
+          <div className="text-muted-foreground my-auto text-center text-xs">
+            Type below, or hold <kbd>Ctrl</kbd>+<kbd>Option</kbd> and speak.
+          </div>
+        )}
+        {turns.map((t, i) => (
+          <div
+            key={i}
+            className={cn(
+              "max-w-[85%] rounded-md px-3 py-1.5 text-[13px] leading-snug",
+              t.role === "user"
+                ? "bg-primary/15 text-foreground self-end"
+                : "bg-accent text-foreground self-start",
+            )}
+          >
+            {t.text || (t.role === "assistant" ? "…" : "")}
+          </div>
+        ))}
+      </div>
+
+      <form
+        onSubmit={(e) => {
+          e.preventDefault();
+          const text = textDraft.trim();
+          if (!text) return;
+          setTextDraft("");
+          sendTurn(text, "text");
+        }}
+        className="flex items-center gap-2"
+      >
+        <Input
+          autoFocus
+          value={textDraft}
+          onChange={(e) => setTextDraft(e.target.value)}
+          placeholder="message butler…"
+          disabled={status === "thinking"}
+          className="!h-9 !min-h-9 flex-1"
+        />
+        <Button
+          type="submit"
+          variant="secondary"
+          className="h-9 shrink-0"
+          disabled={!textDraft.trim() || status === "thinking"}
+          aria-label="Send"
+        >
+          <ArrowRight className="h-4 w-4" />
+        </Button>
+      </form>
+
+      <div className="text-muted-foreground mt-1 text-center font-mono text-[10px]">
+        Esc to close
+      </div>
     </div>
   );
 }
