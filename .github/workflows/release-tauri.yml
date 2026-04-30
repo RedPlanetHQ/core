@@ -35,13 +35,23 @@ jobs:
       - name: Install dependencies
         run: pnpm install --frozen-lockfile
 
+      - name: Import Apple signing certificate
+        # Imports the .p12 into a fresh keychain so subsequent codesign
+        # calls (for the Swift helper, below) can find the identity.
+        # tauri-action will also import the cert during its own signing
+        # phase later — both imports are idempotent.
+        uses: apple-actions/import-codesign-certs@v3
+        with:
+          p12-file-base64: ${{ secrets.APPLE_CERTIFICATE }}
+          p12-password: ${{ secrets.APPLE_CERTIFICATE_PASSWORD }}
+
       - name: Build universal Swift voice helper
-        # Build the Swift helper for both Mac architectures, then lipo
-        # them into a single fat binary. Tauri's tauri-action below
-        # wires this into Core.app/Contents/Resources/core-voice via
-        # `bundle.resources` in tauri.conf.json. CORE_VOICE_PREBUILT
-        # tells build.rs not to overwrite this with a single-arch
-        # build during the per-arch cargo passes.
+        # Build for both Mac architectures, lipo into a fat binary.
+        # Tauri's tauri-action below copies this into
+        # Core.app/Contents/Resources/core-voice via the bundle.resources
+        # entry in tauri.macos.conf.json. CORE_VOICE_PREBUILT tells
+        # build.rs not to overwrite this with a single-arch build
+        # during the per-arch cargo passes.
         run: |
           set -euo pipefail
           cd apps/tauri/src-tauri/swift-voice
@@ -53,6 +63,23 @@ jobs:
             .build/x86_64-apple-macosx/release/core-voice \
             -output ../binaries/core-voice
           lipo -info ../binaries/core-voice
+
+      - name: Codesign Swift voice helper
+        # Apple notarization rejects unsigned binaries inside the .app
+        # bundle. Tauri only signs the bundle's main executable + the
+        # bundle itself; nested binaries in Contents/Resources/ aren't
+        # touched. Sign the helper here with hardened runtime, secure
+        # timestamp, and the same Developer ID Tauri will use for the app.
+        env:
+          APPLE_SIGNING_IDENTITY: ${{ secrets.APPLE_SIGNING_IDENTITY }}
+        run: |
+          set -euo pipefail
+          cd apps/tauri/src-tauri
+          codesign --force --options runtime --timestamp \
+            --entitlements entitlements.mac.plist \
+            --sign "$APPLE_SIGNING_IDENTITY" \
+            binaries/core-voice
+          codesign --verify --strict --verbose=2 binaries/core-voice
 
       - name: Build and release (macOS universal)
         uses: tauri-apps/tauri-action@v0

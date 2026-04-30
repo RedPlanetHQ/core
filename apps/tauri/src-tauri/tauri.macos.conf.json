@@ -1,8 +1,5 @@
 {
   "$schema": "schema.json",
-  "build": {
-    "beforeBundleCommand": "bash scripts/sign-voice-helper.sh"
-  },
   "bundle": {
     "resources": {
       "binaries/core-voice": "core-voice"
