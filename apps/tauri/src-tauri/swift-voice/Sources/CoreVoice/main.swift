@@ -44,6 +44,16 @@ func emitError(_ message: String) {
     emit(["event": "error", "message": message])
 }
 
+func emitLog(_ msg: String) {
+    // Diagnostic events surfaced to the main Tauri log.
+    emit(["event": "log", "message": msg])
+}
+
+func stderrLog(_ msg: String) {
+    // Natural Swift logging — ends up in [core-voice/stderr] info lines.
+    FileHandle.standardError.write(("[core-voice] " + msg + "\n").data(using: .utf8) ?? Data())
+}
+
 // ------------------------------------------------------------------
 // Speech recognition + synthesis controller
 // ------------------------------------------------------------------
@@ -55,6 +65,30 @@ final class VoiceController: NSObject, AVSpeechSynthesizerDelegate {
     private var task: SFSpeechRecognitionTask?
     private let synthesizer = AVSpeechSynthesizer()
     private var lastEmittedFinalText: String = ""
+    private var latestPartialText: String = ""
+    private var hasEndAudioed: Bool = false
+    private var hasDeliveredFinal: Bool = false
+    private var fallbackFinalWorkItem: DispatchWorkItem?
+
+    // Target format for SFSpeechRecognizer — mono 16kHz Float32. Apple's
+    // recognizer tolerates the device's native format on most Macs, but
+    // when the default input is a multi-channel device (aggregate /
+    // virtual audio / pro audio interface) the recognizer silently
+    // drops the buffer. Converting once gives us a stable contract.
+    private lazy var recognitionFormat: AVAudioFormat = {
+        AVAudioFormat(
+            commonFormat: .pcmFormatFloat32,
+            sampleRate: 16000,
+            channels: 1,
+            interleaved: false
+        )!
+    }()
+    private var converter: AVAudioConverter?
+
+    /// User-chosen voice identifier (e.g. "com.apple.voice.premium.en-US.Zoe").
+    /// Set by the Rust side either at helper startup (from config.json) or
+    /// when the user picks a voice in Settings. nil = pick automatically.
+    private var preferredVoiceIdentifier: String?
 
     override init() {
         super.init()
@@ -102,74 +136,192 @@ final class VoiceController: NSObject, AVSpeechSynthesizerDelegate {
     // -------- listening --------
 
     func startListening() {
-        guard let recognizer, recognizer.isAvailable else {
-            emitError("speech recognizer unavailable in this locale")
+        stderrLog("startListening called")
+        guard let recognizer else {
+            emitError("speech recognizer init failed (locale?)")
             return
         }
+        guard recognizer.isAvailable else {
+            emitError("speech recognizer unavailable — enable Siri/Dictation in System Settings")
+            return
+        }
+        stderrLog("recognizer available, supportsOnDevice=\(recognizer.supportsOnDeviceRecognition)")
 
         if audioEngine.isRunning {
-            // already listening; ignore
+            stderrLog("audio engine already running, ignoring start")
             return
         }
 
         let req = SFSpeechAudioBufferRecognitionRequest()
         req.shouldReportPartialResults = true
+        req.taskHint = .dictation
+        if #available(macOS 13.0, *) {
+            req.addsPunctuation = true
+        }
         if #available(macOS 10.15, *) {
-            req.requiresOnDeviceRecognition = true
+            if recognizer.supportsOnDeviceRecognition {
+                req.requiresOnDeviceRecognition = true
+                stderrLog("requiresOnDeviceRecognition = true")
+            } else {
+                stderrLog("on-device recognition NOT supported — using cloud")
+            }
         }
         request = req
 
+        // NOTE: deliberately not calling setVoiceProcessingEnabled —
+        // it inserts AEC reference channels into the buffer that the
+        // recognizer can't parse. We instead convert whatever the
+        // device gives us into mono 16kHz Float32 in the tap callback.
         let inputNode = audioEngine.inputNode
-        // Voice processing on the input node gives us hardware-grade echo
-        // cancellation + noise suppression on macOS 13+. Older OSes fall back
-        // silently — barge-in then relies on the 3-word partial filter
-        // applied by the frontend.
-        if #available(macOS 13.0, *) {
-            do {
-                try inputNode.setVoiceProcessingEnabled(true)
-            } catch {
-                // non-fatal — keep going without echo cancel
-            }
+        let inputFormat = inputNode.outputFormat(forBus: 0)
+        stderrLog("input format: \(inputFormat)")
+        stderrLog("recognition format: \(recognitionFormat)")
+        converter = AVAudioConverter(from: inputFormat, to: recognitionFormat)
+        if converter == nil {
+            stderrLog("AVAudioConverter init FAILED for these formats")
         }
-
-        let format = inputNode.outputFormat(forBus: 0)
+        let conv = converter
+        let recogFormat = recognitionFormat
         inputNode.removeTap(onBus: 0)
-        inputNode.installTap(onBus: 0, bufferSize: 1024, format: format) { [weak self] buffer, _ in
-            self?.request?.append(buffer)
+        var bufferCount = 0
+        inputNode.installTap(onBus: 0, bufferSize: 1024, format: inputFormat) { [weak self] inputBuffer, _ in
+            guard let self else { return }
+            bufferCount &+= 1
+            if bufferCount == 1 {
+                stderrLog("first audio buffer received (\(inputBuffer.frameLength) frames, \(inputBuffer.format.channelCount)ch)")
+            } else if bufferCount % 200 == 0 {
+                stderrLog("audio buffers delivered: \(bufferCount)")
+            }
+
+            guard let conv else {
+                self.request?.append(inputBuffer)
+                return
+            }
+
+            // Convert to mono 16kHz Float32 before feeding the recognizer.
+            let outCapacity = AVAudioFrameCount(
+                Double(inputBuffer.frameLength)
+                    * recogFormat.sampleRate
+                    / inputBuffer.format.sampleRate
+                    + 32
+            )
+            guard let outBuffer = AVAudioPCMBuffer(pcmFormat: recogFormat, frameCapacity: outCapacity) else {
+                return
+            }
+
+            var hasProvided = false
+            var error: NSError?
+            let status = conv.convert(to: outBuffer, error: &error) { _, outStatus in
+                if hasProvided {
+                    outStatus.pointee = .noDataNow
+                    return nil
+                }
+                hasProvided = true
+                outStatus.pointee = .haveData
+                return inputBuffer
+            }
+            if status == .error {
+                if let error, bufferCount % 200 == 1 {
+                    stderrLog("audio convert error: \(error.localizedDescription)")
+                }
+                return
+            }
+            self.request?.append(outBuffer)
         }
 
         audioEngine.prepare()
         do {
             try audioEngine.start()
+            stderrLog("audio engine started, running=\(audioEngine.isRunning)")
         } catch {
             emitError("audio engine failed: \(error.localizedDescription)")
             return
         }
 
         lastEmittedFinalText = ""
+        latestPartialText = ""
+        hasEndAudioed = false
+        hasDeliveredFinal = false
+        stderrLog("creating recognition task")
         task = recognizer.recognitionTask(with: req) { [weak self] result, error in
             guard let self else { return }
             if let result {
                 let text = result.bestTranscription.formattedString
+                self.latestPartialText = text
                 if result.isFinal {
-                    if !text.isEmpty && text != self.lastEmittedFinalText {
-                        self.lastEmittedFinalText = text
-                        emit(["event": "final", "text": text])
-                    }
+                    self.deliverFinalIfNeeded(text)
                 } else {
                     emit(["event": "partial", "text": text, "isFinal": false])
                 }
             }
             if let error = error as NSError? {
-                // 203 / kAFAssistantErrorDomain "no speech detected" is benign
-                if error.code != 203 {
+                // After endAudio() the recognizer often fires an error
+                // (e.g., kAFAssistantErrorDomain code 1110, "no speech")
+                // INSTEAD of a result.isFinal=true. Treat it as the final
+                // transcript when we have a non-empty partial.
+                let msg = error.localizedDescription.lowercased()
+                let isNoSpeech = msg.contains("no speech")
+                    || error.code == 203
+                    || error.code == 301
+                    || error.code == 1101
+                    || error.code == 1110
+
+                if self.hasEndAudioed {
+                    self.deliverFinalIfNeeded(self.latestPartialText)
+                } else if isNoSpeech {
+                    // Mic was open but no audio yet — quietly restart so
+                    // the mic stays alive for the next attempt.
+                    DispatchQueue.main.async {
+                        self.cancelListening()
+                        self.startListening()
+                    }
+                } else {
                     emitError("recognition: \(error.localizedDescription)")
                 }
             }
         }
     }
 
+    /// Emit the final transcript at most once per session.
+    private func deliverFinalIfNeeded(_ text: String) {
+        guard !hasDeliveredFinal else { return }
+        let trimmed = text.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !trimmed.isEmpty else {
+            hasDeliveredFinal = true
+            return
+        }
+        hasDeliveredFinal = true
+        lastEmittedFinalText = trimmed
+        fallbackFinalWorkItem?.cancel()
+        fallbackFinalWorkItem = nil
+        emit(["event": "final", "text": trimmed])
+    }
+
+    /// Finalize the current dictation without canceling — `endAudio()`
+    /// asks the recognizer to flush its buffer. With on-device
+    /// SFSpeechRecognizer this often produces an *error* (1110, etc.)
+    /// rather than a `result.isFinal=true`; the recognitionTask
+    /// callback handles both paths via deliverFinalIfNeeded. We also
+    /// arm a fallback timer that emits the latest partial as final if
+    /// the recognizer never calls back.
     func stopListening() {
+        stderrLog("stopListening (endAudio)")
+        hasEndAudioed = true
+        request?.endAudio()
+        audioEngine.inputNode.removeTap(onBus: 0)
+        if audioEngine.isRunning {
+            audioEngine.stop()
+        }
+        armFinalFallback()
+    }
+
+    /// Hard-cancel — used when the user dismisses the widget without
+    /// wanting a final transcript.
+    func cancelListening() {
+        stderrLog("cancelListening")
+        fallbackFinalWorkItem?.cancel()
+        fallbackFinalWorkItem = nil
+        hasDeliveredFinal = true // suppress any late callback
         task?.cancel()
         task = nil
         request?.endAudio()
@@ -180,12 +332,26 @@ final class VoiceController: NSObject, AVSpeechSynthesizerDelegate {
         }
     }
 
+    private func armFinalFallback() {
+        fallbackFinalWorkItem?.cancel()
+        let work = DispatchWorkItem { [weak self] in
+            guard let self else { return }
+            // If the recognizer hasn't called back within the window,
+            // commit the latest partial as the final transcript.
+            self.deliverFinalIfNeeded(self.latestPartialText)
+        }
+        fallbackFinalWorkItem = work
+        DispatchQueue.main.asyncAfter(deadline: .now() + 1.8, execute: work)
+    }
+
     // -------- speaking --------
 
     func speak(_ text: String) {
         let utterance = AVSpeechUtterance(string: text)
-        // Prefer a Premium voice if installed; AVSpeechSynthesisVoice picks
-        // the default for the user's region otherwise.
+        // Default rate (0.5) feels noticeably slow. 0.55 is a natural
+        // conversation pace without sounding rushed; AVSpeechUtterance
+        // accepts 0.0–1.0 (Slow…Default…Fast).
+        utterance.rate = 0.55
         if let voice = preferredVoice() {
             utterance.voice = voice
         }
@@ -199,6 +365,10 @@ final class VoiceController: NSObject, AVSpeechSynthesizerDelegate {
     }
 
     private func preferredVoice() -> AVSpeechSynthesisVoice? {
+        if let id = preferredVoiceIdentifier,
+           let voice = AVSpeechSynthesisVoice(identifier: id) {
+            return voice
+        }
         let voices = AVSpeechSynthesisVoice.speechVoices()
         // Prefer Enhanced English voices over Compact. (Premium tier
         // exists on macOS 13+ but Enhanced is plenty good and works on
@@ -215,6 +385,37 @@ final class VoiceController: NSObject, AVSpeechSynthesizerDelegate {
             }
         }
         return AVSpeechSynthesisVoice(language: "en-US")
+    }
+
+    func setPreferredVoice(_ identifier: String) {
+        stderrLog("setPreferredVoice = \(identifier)")
+        preferredVoiceIdentifier = identifier
+    }
+
+    /// Enumerate all installed voices and emit them as a `voices` event.
+    /// Filtered to English locales; quality reported as a coarse string
+    /// the React UI can show ("default", "enhanced", "premium").
+    func listVoices() {
+        let voices = AVSpeechSynthesisVoice.speechVoices()
+        let payload: [[String: Any]] = voices
+            .filter { $0.language.hasPrefix("en") }
+            .map { v in
+                [
+                    "identifier": v.identifier,
+                    "name": v.name,
+                    "language": v.language,
+                    "quality": Self.qualityString(v.quality),
+                ]
+            }
+        emit(["event": "voices", "voices": payload])
+    }
+
+    private static func qualityString(_ q: AVSpeechSynthesisVoiceQuality) -> String {
+        if #available(macOS 13.0, *) {
+            if q == .premium { return "premium" }
+        }
+        if q == .enhanced { return "enhanced" }
+        return "default"
     }
 
     // -------- AVSpeechSynthesizerDelegate --------
@@ -238,44 +439,62 @@ final class VoiceController: NSObject, AVSpeechSynthesizerDelegate {
 
 let controller = VoiceController()
 emit(["event": "ready"])
+stderrLog("helper started, pid=\(getpid())")
 
 let stdinHandle = FileHandle.standardInput
+var stdinBuffer = Data()
 
-DispatchQueue.global(qos: .userInteractive).async {
-    var buffer = Data()
-    while true {
-        let chunk = stdinHandle.availableData
-        if chunk.isEmpty {
-            // stdin closed → parent died → exit
-            exit(0)
-        }
-        buffer.append(chunk)
-
-        while let nl = buffer.firstIndex(of: 0x0A) {
-            let lineData = buffer.subdata(in: 0..<nl)
-            buffer.removeSubrange(0...nl)
-            handleLine(lineData)
-        }
+// readabilityHandler integrates with the main run loop — more robust
+// than a polling background thread. EOF still triggers exit, but
+// transient empty reads (which can happen on macOS pipes) don't.
+stdinHandle.readabilityHandler = { handle in
+    let chunk = handle.availableData
+    if chunk.isEmpty {
+        // EOF — parent closed stdin
+        stderrLog("stdin EOF, exiting")
+        DispatchQueue.main.async { exit(0) }
+        return
+    }
+    stdinBuffer.append(chunk)
+    while let nl = stdinBuffer.firstIndex(of: 0x0A) {
+        let lineData = stdinBuffer.subdata(in: 0..<nl)
+        stdinBuffer.removeSubrange(0...nl)
+        DispatchQueue.main.async { handleLine(lineData) }
     }
 }
 
 func handleLine(_ data: Data) {
-    guard let obj = try? JSONSerialization.jsonObject(with: data) as? [String: Any] else { return }
-    guard let cmd = obj["cmd"] as? String else { return }
+    guard let obj = try? JSONSerialization.jsonObject(with: data) as? [String: Any] else {
+        stderrLog("malformed stdin line (\(data.count) bytes)")
+        return
+    }
+    guard let cmd = obj["cmd"] as? String else {
+        stderrLog("missing cmd field")
+        return
+    }
 
+    stderrLog("cmd=\(cmd)")
     switch cmd {
     case "request_permissions":
         controller.requestPermissions()
     case "start_listening":
-        DispatchQueue.main.async { controller.startListening() }
+        controller.startListening()
     case "stop_listening":
-        DispatchQueue.main.async { controller.stopListening() }
+        controller.stopListening()
+    case "cancel_listening":
+        controller.cancelListening()
     case "speak":
         if let text = obj["text"] as? String, !text.isEmpty {
-            DispatchQueue.main.async { controller.speak(text) }
+            controller.speak(text)
         }
     case "cancel_speech":
-        DispatchQueue.main.async { controller.cancelSpeech() }
+        controller.cancelSpeech()
+    case "list_voices":
+        controller.listVoices()
+    case "set_voice":
+        if let id = obj["identifier"] as? String, !id.isEmpty {
+            controller.setPreferredVoice(id)
+        }
     default:
         emitError("unknown cmd: \(cmd)")
     }

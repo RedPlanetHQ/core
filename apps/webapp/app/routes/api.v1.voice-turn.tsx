@@ -50,11 +50,11 @@ const PageContextSchema = z.object({
 });
 
 const VoiceTurnRequestSchema = z.object({
-  conversationId: z.string().optional(),
+  conversationId: z.string().nullish(),
   transcript: z.string().min(1),
   pageContext: PageContextSchema.nullish(),
   mode: z.enum(["voice", "text"]).default("voice"),
-  modelId: z.string().optional(),
+  modelId: z.string().nullish(),
 });
 
 const { loader, action } = createHybridActionApiRoute(

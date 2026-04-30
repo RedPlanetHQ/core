@@ -52,7 +52,7 @@
         "url": "/voice-widget",
         "title": "Butler",
         "width": 360,
-        "height": 220,
+        "height": 320,
         "resizable": false,
         "decorations": false,
         "transparent": true,
@@ -61,11 +61,13 @@
         "visible": false,
         "focus": false,
         "shadow": true,
+        "visibleOnAllWorkspaces": true,
         "devtools": true
       }
     ],
     "security": {
       "csp": null
-    }
+    },
+    "macOSPrivateApi": true
   }
 }

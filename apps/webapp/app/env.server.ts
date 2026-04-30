@@ -62,6 +62,7 @@ const EnvironmentSchema = z
     ACCESS_KEY_ID: z.string().optional(),
     SECRET_ACCESS_KEY: z.string().optional(),
     BUCKET: z.string().optional(),
+    ELEVENLABS_API_KEY: z.string().optional(),
 
     // google auth
     AUTH_GOOGLE_CLIENT_ID: z.string().optional(),
