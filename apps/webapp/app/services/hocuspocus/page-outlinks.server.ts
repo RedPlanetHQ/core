@@ -91,6 +91,69 @@ function updateTaskTitleInDoc(node: any, taskId: string, newTitle: string): bool
 }
 
 /**
+ * Recursively strip taskItem nodes that match taskId from the doc.
+ * Mutates `node.content` in place. Returns true if anything was removed.
+ */
+function removeTaskItemFromDoc(node: any, taskId: string): boolean {
+  let updated = false;
+
+  if (Array.isArray(node.content)) {
+    const filtered = node.content.filter(
+      (child: any) =>
+        !(child.type === "taskItem" && child.attrs?.id === taskId),
+    );
+    if (filtered.length !== node.content.length) {
+      node.content = filtered;
+      updated = true;
+    }
+    for (const child of node.content) {
+      if (removeTaskItemFromDoc(child, taskId)) updated = true;
+    }
+  }
+
+  return updated;
+}
+
+/**
+ * Remove every taskItem node referencing `taskId` from any page that
+ * outlinks to it. Persists via Hocuspocus so live clients see the removal
+ * in real-time.
+ *
+ * Used by the buffer-expiry auto-delete path: when the 2-minute window
+ * closes on an empty scratchpad-created task, we drop the task and pull
+ * its node out of the originating page so the user doesn't see a stub.
+ */
+export async function removeTaskItemFromPages(taskId: string): Promise<void> {
+  try {
+    const pages = await prisma.page.findMany({
+      where: {
+        outlinks: {
+          array_contains: [{ type: "Task", id: taskId }] as any,
+        },
+      },
+      select: { id: true, description: true },
+    });
+
+    for (const page of pages) {
+      if (!page.description) continue;
+
+      let doc: any;
+      try {
+        doc = JSON.parse(page.description);
+      } catch {
+        continue;
+      }
+
+      if (removeTaskItemFromDoc(doc, taskId)) {
+        await updateContentForDocument(page.id, doc);
+      }
+    }
+  } catch (err) {
+    console.error("[removeTaskItemFromPages] failed for task", taskId, err);
+  }
+}
+
+/**
  * When a task's title changes, find all pages that reference it via outlinks
  * and update the taskItem text in each page's stored JSON.
  * Persists via Hocuspocus so live clients get the update in real-time.

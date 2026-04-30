@@ -19,6 +19,7 @@ import {
 import { logger } from "~/services/logger.service";
 import { getOrCreatePersonalAccessToken } from "~/services/personalAccessToken.server";
 import {
+  deleteTask,
   incrementTaskOccurrenceCount,
   incrementTaskUnrespondedCount,
   scheduleNextTaskOccurrence,
@@ -28,6 +29,7 @@ import { prisma } from "~/db.server";
 import { CoreClient } from "@redplanethq/sdk";
 import { HttpOrchestratorTools } from "~/services/agent/orchestrator-tools.http";
 import { getPageContentAsHtml } from "~/services/hocuspocus/content.server";
+import { removeTaskItemFromPages } from "~/services/hocuspocus/page-outlinks.server";
 import { enqueueTask } from "~/lib/queue-adapter.server";
 import {
   getTaskPhase,
@@ -171,10 +173,26 @@ export async function processScheduledTask(
  * Buffer-expiry branch: the 2-minute Todo window is up. Clear nextRunAt and
  * hand off to the normal task runner, which runs the agent in prep mode
  * (driven by phase=prep in context.ts).
+ *
+ * Parity with the client-side delete-on-removal in scratchpad-task-item.tsx:
+ * if a scratchpad-created task (`source === "daily"`) sits in the editor
+ * for the full 2 minutes without ever getting a title or description, drop
+ * it and pull its node out of any pages that still reference it instead of
+ * starting prep — these are the abandoned `[ ]` lines users typed and
+ * walked away from.
  */
 async function startPrepFromBuffer(
   task: Task,
 ): Promise<ScheduledTaskProcessResult> {
+  if (task.source === "daily" && (await isTaskEmpty(task))) {
+    logger.info(
+      `Auto-deleting empty scratchpad task ${task.id} at buffer expiry`,
+    );
+    await removeTaskItemFromPages(task.id);
+    await deleteTask(task.id, task.workspaceId);
+    return { success: true };
+  }
+
   await prisma.task.update({
     where: { id: task.id },
     data: { nextRunAt: null },
@@ -187,6 +205,25 @@ async function startPrepFromBuffer(
   });
 
   return { success: true };
+}
+
+/**
+ * Mirrors the client-side empty check in scratchpad-task-item.tsx: a task
+ * is "empty" if its title was never set past the placeholder and its page
+ * has no description content.
+ */
+async function isTaskEmpty(task: Task): Promise<boolean> {
+  const trimmedTitle = task.title?.trim() ?? "";
+  const isUntitled = trimmedTitle === "" || trimmedTitle === "Untitled task";
+  if (!isUntitled) return false;
+
+  if (!task.pageId) return true;
+  const html = await getPageContentAsHtml(task.pageId);
+  if (!html) return true;
+  // generateHTML wraps even an empty Tiptap doc in a single `<p></p>`;
+  // strip tags+whitespace and treat that as no content.
+  const stripped = html.replace(/<[^>]*>/g, "").trim();
+  return stripped === "";
 }
 
 /**

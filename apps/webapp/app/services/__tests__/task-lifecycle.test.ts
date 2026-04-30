@@ -57,13 +57,19 @@ vi.mock("~/services/agent/context/decision-context", () => ({
 vi.mock("~/models/workspace.server", () => ({
   getWorkspacePersona: vi.fn(async () => ({ content: "" })),
 }));
-vi.mock("~/services/hocuspocus/content.server", () => ({
+const contentMocks = vi.hoisted(() => ({
   getPageContentAsHtml: vi.fn(async () => ""),
   setPageContentFromHtml: vi.fn(),
 }));
-vi.mock("~/services/hocuspocus/page-outlinks.server", () => ({
+vi.mock("~/services/hocuspocus/content.server", () => contentMocks);
+const getPageContentAsHtmlMock = contentMocks.getPageContentAsHtml;
+
+const outlinksMocks = vi.hoisted(() => ({
   updateTaskTitleInPages: vi.fn(),
+  removeTaskItemFromPages: vi.fn(),
 }));
+vi.mock("~/services/hocuspocus/page-outlinks.server", () => outlinksMocks);
+const removeTaskItemFromPagesMock = outlinksMocks.removeTaskItemFromPages;
 vi.mock("~/services/page.server", () => ({
   findOrCreateTaskPage: vi.fn(async (_ws, _u, taskId) => ({
     id: `page-for-${taskId}`,
@@ -140,6 +146,10 @@ beforeEach(async () => {
   });
   hasCreditsMock.mockClear();
   hasCreditsMock.mockResolvedValue(true);
+  getPageContentAsHtmlMock.mockClear();
+  getPageContentAsHtmlMock.mockResolvedValue("");
+  removeTaskItemFromPagesMock.mockClear();
+  removeTaskItemFromPagesMock.mockResolvedValue(undefined);
   await ensureFixture();
   await cleanTasks();
 });
@@ -232,6 +242,163 @@ describe("processScheduledTask — wake-up branching", () => {
     });
     expect(reloaded.nextRunAt).toBeNull();
     expect(reloaded.status).toBe("Todo"); // prep starts in Todo, no status change yet
+  });
+
+  it("buffer expiry: empty scratchpad task (source=daily, Untitled, no description) → auto-deleted, scratchpad node pulled, no prep enqueued", async () => {
+    const page = await prisma.page.create({
+      data: {
+        workspaceId: TEST_WORKSPACE_ID,
+        userId: TEST_USER_ID,
+        type: "Task",
+      },
+    });
+    const task = await prisma.task.create({
+      data: {
+        workspaceId: TEST_WORKSPACE_ID,
+        userId: TEST_USER_ID,
+        title: "Untitled task",
+        status: "Todo",
+        source: "daily",
+        metadata: { phase: "prep" },
+        nextRunAt: new Date(Date.now() - 1000),
+        isActive: true,
+        pageId: page.id,
+      },
+    });
+    getPageContentAsHtmlMock.mockResolvedValueOnce("<p></p>");
+
+    const result = await processScheduledTask({
+      taskId: task.id,
+      workspaceId: TEST_WORKSPACE_ID,
+      userId: TEST_USER_ID,
+      channel: "email",
+    });
+
+    expect(result.success).toBe(true);
+    // Task is deleted and prep is NOT enqueued
+    expect(enqueueTaskMock).not.toHaveBeenCalled();
+    expect(removeTaskItemFromPagesMock).toHaveBeenCalledWith(task.id);
+
+    const reloaded = await prisma.task.findUnique({ where: { id: task.id } });
+    expect(reloaded).toBeNull();
+  });
+
+  it("buffer expiry: scratchpad task with a real title → starts prep, NOT deleted", async () => {
+    const task = await prisma.task.create({
+      data: {
+        workspaceId: TEST_WORKSPACE_ID,
+        userId: TEST_USER_ID,
+        title: "Buy oat milk",
+        status: "Todo",
+        source: "daily",
+        metadata: { phase: "prep" },
+        nextRunAt: new Date(Date.now() - 1000),
+        isActive: true,
+      },
+    });
+
+    await processScheduledTask({
+      taskId: task.id,
+      workspaceId: TEST_WORKSPACE_ID,
+      userId: TEST_USER_ID,
+      channel: "email",
+    });
+
+    expect(removeTaskItemFromPagesMock).not.toHaveBeenCalled();
+    expect(enqueueTaskMock).toHaveBeenCalledWith({
+      taskId: task.id,
+      workspaceId: TEST_WORKSPACE_ID,
+      userId: TEST_USER_ID,
+    });
+    const reloaded = await prisma.task.findUniqueOrThrow({
+      where: { id: task.id },
+    });
+    expect(reloaded.id).toBe(task.id);
+    expect(reloaded.nextRunAt).toBeNull();
+  });
+
+  it("buffer expiry: scratchpad task with description but Untitled title → starts prep, NOT deleted", async () => {
+    const page = await prisma.page.create({
+      data: {
+        workspaceId: TEST_WORKSPACE_ID,
+        userId: TEST_USER_ID,
+        type: "Task",
+      },
+    });
+    const task = await prisma.task.create({
+      data: {
+        workspaceId: TEST_WORKSPACE_ID,
+        userId: TEST_USER_ID,
+        title: "Untitled task",
+        status: "Todo",
+        source: "daily",
+        metadata: { phase: "prep" },
+        nextRunAt: new Date(Date.now() - 1000),
+        isActive: true,
+        pageId: page.id,
+      },
+    });
+    getPageContentAsHtmlMock.mockResolvedValueOnce(
+      "<p>some notes the user typed</p>",
+    );
+
+    await processScheduledTask({
+      taskId: task.id,
+      workspaceId: TEST_WORKSPACE_ID,
+      userId: TEST_USER_ID,
+      channel: "email",
+    });
+
+    expect(removeTaskItemFromPagesMock).not.toHaveBeenCalled();
+    expect(enqueueTaskMock).toHaveBeenCalledWith({
+      taskId: task.id,
+      workspaceId: TEST_WORKSPACE_ID,
+      userId: TEST_USER_ID,
+    });
+    const reloaded = await prisma.task.findUniqueOrThrow({
+      where: { id: task.id },
+    });
+    expect(reloaded.id).toBe(task.id);
+  });
+
+  it("buffer expiry: empty manual task (source=manual) is NOT auto-deleted", async () => {
+    const page = await prisma.page.create({
+      data: {
+        workspaceId: TEST_WORKSPACE_ID,
+        userId: TEST_USER_ID,
+        type: "Task",
+      },
+    });
+    const task = await prisma.task.create({
+      data: {
+        workspaceId: TEST_WORKSPACE_ID,
+        userId: TEST_USER_ID,
+        title: "Untitled task",
+        status: "Todo",
+        source: "manual",
+        metadata: { phase: "prep" },
+        nextRunAt: new Date(Date.now() - 1000),
+        isActive: true,
+        pageId: page.id,
+      },
+    });
+    getPageContentAsHtmlMock.mockResolvedValueOnce("<p></p>");
+
+    await processScheduledTask({
+      taskId: task.id,
+      workspaceId: TEST_WORKSPACE_ID,
+      userId: TEST_USER_ID,
+      channel: "email",
+    });
+
+    expect(removeTaskItemFromPagesMock).not.toHaveBeenCalled();
+    expect(enqueueTaskMock).toHaveBeenCalledWith({
+      taskId: task.id,
+      workspaceId: TEST_WORKSPACE_ID,
+      userId: TEST_USER_ID,
+    });
+    const reloaded = await prisma.task.findUnique({ where: { id: task.id } });
+    expect(reloaded).not.toBeNull();
   });
 
   it("normal fire (Ready) → execute via CASE pipeline", async () => {
