@@ -29,6 +29,7 @@ import { env } from "./env.server";
 import { getUser, getWorkspaceId } from "./services/session.server";
 import { getUserWorkspaces, getWorkspaceById } from "./models/workspace.server";
 import { usePostHog } from "./hooks/usePostHog";
+import { DictationOverlay } from "./hooks/use-dictation";
 import {
   AppContainer,
   MainCenteredContainer,
@@ -165,6 +166,7 @@ function App() {
             }}
           />
           <Outlet />
+          <DictationOverlay />
           <Toaster />
           <ScrollRestoration />
 

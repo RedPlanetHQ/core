@@ -10,6 +10,7 @@
 use std::io::{BufRead, BufReader, Write};
 use std::path::PathBuf;
 use std::process::{Child, Command, Stdio};
+use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::{Arc, Mutex};
 use std::thread;
 
@@ -17,10 +18,24 @@ use serde::Deserialize;
 use serde_json::json;
 use tauri::{AppHandle, Emitter, Manager, Runtime, State};
 
-#[derive(Default)]
 pub struct SpeechProcess {
     child: Option<Child>,
     stdin: Option<std::process::ChildStdin>,
+    /// When true, helper events are emitted as `dictation:*` instead of
+    /// `voice:*`. Set by the dictation commands so the in-app dictation
+    /// hook and the voice widget can subscribe to disjoint event names
+    /// even though they share one underlying recognizer.
+    dictation_mode: Arc<AtomicBool>,
+}
+
+impl Default for SpeechProcess {
+    fn default() -> Self {
+        Self {
+            child: None,
+            stdin: None,
+            dictation_mode: Arc::new(AtomicBool::new(false)),
+        }
+    }
 }
 
 pub type SharedSpeech = Arc<Mutex<SpeechProcess>>;
@@ -63,7 +78,10 @@ fn helper_path() -> Option<PathBuf> {
     candidates.into_iter().find(|p| p.exists())
 }
 
-fn spawn_helper<R: Runtime>(app: &AppHandle<R>) -> Result<(Child, std::process::ChildStdin), String> {
+fn spawn_helper<R: Runtime>(
+    app: &AppHandle<R>,
+    dictation_flag: Arc<AtomicBool>,
+) -> Result<(Child, std::process::ChildStdin), String> {
     let bin = helper_path()
         .ok_or_else(|| "core-voice helper binary not found — build with `swift build`".to_string())?;
 
@@ -125,7 +143,21 @@ fn spawn_helper<R: Runtime>(app: &AppHandle<R>) -> Result<(Child, std::process::
                 "speech": ev.speech,
                 "voices": ev.voices,
             });
-            let _ = app_handle.emit(&format!("voice:{}", ev.event), payload);
+            let prefix = if dictation_flag.load(Ordering::SeqCst) {
+                "dictation"
+            } else {
+                "voice"
+            };
+            let _ = app_handle.emit(&format!("{}:{}", prefix, ev.event), payload);
+
+            // Auto-clear the flag once the dictation session terminates,
+            // so subsequent voice_start_listening calls retag back to
+            // `voice:*` without needing an explicit reset.
+            if matches!(ev.event.as_str(), "final" | "error")
+                && dictation_flag.load(Ordering::SeqCst)
+            {
+                dictation_flag.store(false, Ordering::SeqCst);
+            }
         }
     });
 
@@ -164,7 +196,7 @@ fn ensure_running<R: Runtime>(
         }
     }
 
-    let (child, stdin) = spawn_helper(app)?;
+    let (child, stdin) = spawn_helper(app, proc.dictation_mode.clone())?;
     proc.child = Some(child);
     proc.stdin = Some(stdin);
 
@@ -281,6 +313,46 @@ pub fn voice_cancel_listening<R: Runtime>(
     state: State<SharedSpeech>,
 ) -> Result<(), String> {
     let mut proc = state.lock().unwrap();
+    send_command(&app, &mut proc, json!({"cmd": "cancel_listening"}))
+}
+
+// ── Dictation (in-app STT-into-input flow) ────────────────────────────────────
+//
+// Same Swift recognizer as `voice_start_listening`, but flips a flag so
+// the reader thread tags emitted events as `dictation:*`. The voice
+// widget subscribes to `voice:*` and is unaffected; the in-app dictation
+// hook subscribes to `dictation:*` and gets caret-paste behavior.
+
+#[tauri::command]
+pub fn voice_start_dictation<R: Runtime>(
+    app: AppHandle<R>,
+    state: State<SharedSpeech>,
+) -> Result<(), String> {
+    let mut proc = state.lock().unwrap();
+    proc.dictation_mode.store(true, Ordering::SeqCst);
+    send_command(&app, &mut proc, json!({"cmd": "start_listening"}))
+}
+
+#[tauri::command]
+pub fn voice_stop_dictation<R: Runtime>(
+    app: AppHandle<R>,
+    state: State<SharedSpeech>,
+) -> Result<(), String> {
+    let mut proc = state.lock().unwrap();
+    // Don't clear the flag here — the reader thread clears it when the
+    // final/error event arrives, so that final lands as `dictation:final`.
+    send_command(&app, &mut proc, json!({"cmd": "stop_listening"}))
+}
+
+#[tauri::command]
+pub fn voice_cancel_dictation<R: Runtime>(
+    app: AppHandle<R>,
+    state: State<SharedSpeech>,
+) -> Result<(), String> {
+    let mut proc = state.lock().unwrap();
+    // Cancel won't always emit a final; clear the flag here so a
+    // subsequent `voice_start_listening` doesn't get mis-tagged.
+    proc.dictation_mode.store(false, Ordering::SeqCst);
     send_command(&app, &mut proc, json!({"cmd": "cancel_listening"}))
 }
 

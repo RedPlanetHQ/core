@@ -11,9 +11,11 @@
 //! OR a foreign modifier joins) we emit `voice:hold-end`. The widget
 //! uses the two events to drive a hold-to-talk lifecycle.
 //!
-//! Limitation (v1): the global monitor does NOT fire while CORE itself
-//! is frontmost. Pressing the hotkey from inside the main CORE window
-//! won't open the widget.
+//! We install both a global monitor (events delivered to *other* apps)
+//! and a local monitor (events delivered to CORE itself), so the same
+//! chord works regardless of whether CORE is frontmost. The local
+//! monitor returns the event back to AppKit unchanged so it still
+//! dispatches normally.
 
 use std::os::raw::c_void;
 use std::sync::atomic::{AtomicBool, AtomicU64, Ordering};
@@ -106,6 +108,28 @@ pub fn install<R: Runtime>(app: AppHandle<R>) {
 
     // Block must outlive every event delivery — leak it.
     std::mem::forget(block);
+
+    // Local monitor — fires for events delivered to CORE itself, which
+    // the global monitor never sees. The block must return the event
+    // (or nil to swallow); we always pass it through so AppKit
+    // dispatches as normal.
+    let block_local = ConcreteBlock::new(move |event: *mut Object| -> *mut Object {
+        unsafe { handle_flags_changed_event::<R>(event, ctx) };
+        event
+    })
+    .copy();
+
+    let local_token: *mut Object = unsafe {
+        let cls = class!(NSEvent);
+        msg_send![
+            cls,
+            addLocalMonitorForEventsMatchingMask: NS_EVENT_MASK_FLAGS_CHANGED
+            handler: &*block_local
+        ]
+    };
+
+    log::info!("[voice_hotkey] local monitor token = {:?}", local_token);
+    std::mem::forget(block_local);
 }
 
 fn log_ax_status() {
