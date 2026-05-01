@@ -1,0 +1,295 @@
+---
+title: "Gateway Setup"
+description: "Step-by-step runbook to install, register, and connect a Gateway to CORE"
+---
+
+<Note>
+**For agents reading this page:** Execute every fenced bash block in order for the path the user picks (Native + Tailscale, Native + ngrok, Docker, or Railway). After Step 6, prompt the user to complete the browser-side paste in Step 7. Do not skip Step 7: nothing works until the gateway is linked in the CORE app.
+</Note>
+
+This is the linear runbook. For the conceptual overview of what the Gateway is and what it can do, see [Gateway Overview](/gateway/overview). For tunnel-only details (Tailscale, ngrok, custom URLs), see [Tunnels](/gateway/tunnels).
+
+---
+
+## Step 1. Install the CLI and log in
+
+Works on macOS, Linux, and WSL. Node 20+ required.
+
+```bash
+npm install -g @redplanethq/corebrain
+corebrain login
+```
+
+`corebrain login` opens your browser, authenticates against your CORE workspace, and stores a Personal Access Token in `~/.corebrain/preferences.json`. Every later command needs this token.
+
+---
+
+## Step 2. Pick where the gateway will run
+
+| Choice | Pick this when |
+| ------ | -------------- |
+| **Native** | The gateway should run on your laptop or workstation. Full local access to browsers, shells, and folders. Needs a tunnel (Tailscale or ngrok) so CORE's cloud can reach `127.0.0.1`. |
+| **Docker** | You have a server, VPS, or always-on Docker host. Public URL via Tailscale Funnel or your own reverse proxy. |
+| **Railway** | You want a managed cloud gateway with no infra. Railway provisions the URL and runs the container for you. |
+
+Once you've picked, jump to the matching path: [3A Native + Tailscale](#step-3a-native-tailscale), [3B Native + ngrok](#step-3b-native-ngrok), [3C Docker](#step-3c-docker), or [3D Railway](#step-3d-railway).
+
+---
+
+## Step 3A. Native + Tailscale
+
+Pick this if you want a stable URL tied to your tailnet (good for days/weeks of uptime).
+
+### Install Tailscale
+
+If you don't already have it, install from [https://tailscale.com/download](https://tailscale.com/download) or run:
+
+```bash
+# macOS
+brew install --cask tailscale
+
+# Linux
+curl -fsSL https://tailscale.com/install.sh | sh
+```
+
+Verify:
+
+```bash
+tailscale version
+```
+
+### Bring Tailscale up
+
+```bash
+sudo tailscale up
+```
+
+This authenticates the device with your tailnet. Confirm before moving on:
+
+```bash
+tailscale status
+```
+
+The current device should show as `active`.
+
+### Enable Funnel for this device
+
+Funnel is the Tailscale feature that exposes a tailnet device to the public internet over HTTPS. Open the [Tailscale admin console](https://login.tailscale.com/admin/acls), then:
+
+1. **DNS → HTTPS Certificates:** turn on.
+2. **Access Controls:** add a Funnel grant.
+
+```hujson
+"nodeAttrs": [
+  { "target": ["autogroup:member"], "attr": ["funnel"] }
+]
+```
+
+Reference: [Tailscale Funnel docs](https://tailscale.com/kb/1223/funnel).
+
+### Run gateway setup
+
+```bash
+corebrain gateway setup --kind native
+```
+
+The wizard installs the gateway as a launchd (macOS) or systemd (Linux) service, configures slots and folders, and stops short of registering. Now register with the tunnel:
+
+```bash
+corebrain gateway register --tunnel tailscale
+```
+
+This runs `tailscale funnel --bg 7787` in the background, captures the public URL (`https://<device>.<tailnet>.ts.net`), generates a security key, and prints both. Skip ahead to [Step 4](#step-4-copy-the-url-and-security-key).
+
+---
+
+## Step 3B. Native + ngrok
+
+Pick this if you want the fastest possible setup (one auth token, public URL in seconds). Free-tier URLs change on every restart, so this path is best for short-lived sessions or paid ngrok accounts.
+
+### Install ngrok
+
+```bash
+# macOS
+brew install ngrok
+
+# Linux / Windows: see https://ngrok.com/download
+```
+
+Verify:
+
+```bash
+ngrok version
+```
+
+### Add your auth token
+
+Sign in at [https://dashboard.ngrok.com](https://dashboard.ngrok.com), copy the auth token, then:
+
+```bash
+ngrok config add-authtoken <YOUR_TOKEN>
+```
+
+Without this step ngrok starts but the public URL fails the TLS handshake (`ERR_NGROK_4018`).
+
+### Run gateway setup
+
+```bash
+corebrain gateway setup --kind native
+corebrain gateway register --tunnel ngrok
+```
+
+This runs `ngrok http 7787` in the background, captures the public HTTPS URL, generates a security key, and prints both. Skip ahead to [Step 4](#step-4-copy-the-url-and-security-key).
+
+---
+
+## Step 3C. Docker
+
+Pick this for an always-on gateway on a server you control.
+
+```bash
+corebrain gateway setup --kind docker
+```
+
+The wizard:
+
+1. Drops `docker-compose.yaml` and `.env` into `~/.corebrain/gateways/<name>/`.
+2. Optionally prompts for `CLAUDE_CODE_OAUTH_TOKEN`, `OPENAI_API_KEY`, `GITHUB_TOKEN` so the coding and git slots work out of the box.
+3. Optionally exposes the host via Tailscale Funnel (re-uses any existing Tailscale install).
+4. Runs `docker compose up -d`.
+5. Prints the public URL and security key.
+
+If you'd rather use your own reverse proxy (Cloudflare, nginx, Caddy), pick "no tunnel" in the wizard and point your proxy at the host's port `7787`. Then jump to [Step 4](#step-4-copy-the-url-and-security-key).
+
+---
+
+## Step 3D. Railway
+
+Pick this for a fully managed cloud gateway.
+
+**Option 1: One-click deploy.** Click the button below. Railway prompts for env vars, provisions the service and a public domain, and the security key appears in the deploy logs on first boot.
+
+[![Deploy on Railway](https://railway.com/button.svg)](https://railway.com/deploy/core-gateway)
+
+### Railway env vars: what to fill in
+
+| Variable | What to fill in | How to get it |
+| -------- | --------------- | ------------- |
+| `COREBRAIN_API_URL` | URL of your CORE instance, e.g. `https://app.getcore.me`. | Use the hosted instance URL, or your self-hosted domain. No trailing slash. |
+| `COREBRAIN_API_KEY` | A Personal Access Token (PAT) for your CORE workspace. | In the CORE webapp: avatar → **Settings → API keys → New token**. Copy the value once; it's not shown again. |
+| `COREBRAIN_GATEWAY_NAME` | Display name for this gateway, e.g. `railway-prod`. | Pick anything. Shows up in **Sidebar → Gateways** so you can tell multiple gateways apart. |
+| `COREBRAIN_GATEWAY_SECURITY_KEY` | *Leave blank.* | The gateway auto-generates one on first boot and prints it to the Railway deploy logs (look for the banner `CoreBrain Gateway, security key generated`). If you'd rather pin your own, generate with `echo "gwk_$(openssl rand -base64 32 \| tr -d '=' \| tr '/+' '_-')"` and paste the same value here and into the CORE app later. |
+| `GITHUB_TOKEN` | A GitHub Personal Access Token. | Required by the Railway template, but only used if the gateway will clone private repos or commit on your behalf. Create at [github.com/settings/tokens](https://github.com/settings/tokens) → classic, scopes `repo` + `read:user`. Fine-grained PATs also work (`Contents: Read & write` on the repos you want, plus `Account → Profile: Read-only`). If you don't need private-repo access, paste any valid PAT; the gateway boots either way. |
+| `ANTHROPIC_API_KEY` *(optional)* | API key for Anthropic. | Lets `claude-code` skip the OAuth login flow. Get it at [console.anthropic.com](https://console.anthropic.com). Skip if you'll log Claude Code in manually later. |
+| `OPENAI_API_KEY` *(optional)* | API key for OpenAI. | Lets `codex-cli` skip OAuth. Get it at [platform.openai.com/api-keys](https://platform.openai.com/api-keys). |
+| `CLAUDE_CODE_OAUTH_TOKEN` *(optional)* | OAuth token for Claude Code. | Alternative to `ANTHROPIC_API_KEY` if you already have an OAuth token from a prior `claude` login. |
+
+### After Railway deploys
+
+1. Open the service in Railway → **Deployments → View logs**.
+2. Find the banner that starts with `CoreBrain Gateway, security key generated`. Copy the `gwk_...` value.
+3. Copy the public domain Railway provisioned (under **Settings → Networking → Public Networking**).
+4. Skip ahead to [Step 5](#step-5-open-the-core-app) and paste both into **Sidebar → Gateways → New gateway**.
+
+**Option 2: CLI-driven.**
+
+```bash
+corebrain gateway setup --kind railway
+```
+
+The wizard detects (or installs) the Railway CLI, runs `railway init` and `railway deploy -t core-gateway`, provisions a public domain, and prints the URL + security key. Continue to [Step 4](#step-4-copy-the-url-and-security-key).
+
+---
+
+## Step 4. Copy the URL and security key
+
+After registration finishes, the CLI prints something like:
+
+```
+name:        my-laptop
+baseUrl:     https://my-laptop.tail-scale.ts.net
+securityKey: gwk_aBcDeFg...           ← only shown ONCE
+
+Paste baseUrl + securityKey into CORE → Sidebar → Gateways.
+```
+
+**The raw security key is shown exactly once.** The CLI stores only a SHA256 hash on disk. Copy both values now. If you lose the key, run `corebrain gateway register` again to generate a new one.
+
+---
+
+## Step 5. Open the CORE app
+
+Go to [https://app.getcore.me](https://app.getcore.me) (or your self-hosted instance) and sign in.
+
+---
+
+## Step 6. Paste the URL and key into the Register Gateway dialog
+
+1. In the left sidebar, click **Gateways**.
+2. Click **+ New gateway**.
+3. Pick the same deploy kind you chose in Step 2 (Native, Docker, Railway).
+4. Paste the **Base URL** into the URL field.
+5. Paste the **Security key** (`gwk_...`) into the security key field.
+6. Click **Submit**.
+
+The gateway should appear in the Gateways list with status **Connected** within a few seconds. If it shows **Unreachable**, verify the tunnel is up (`tailscale status` or `ngrok` dashboard) and that you copied both values without trailing whitespace.
+
+---
+
+## Step 7. Verify
+
+From the gateway machine:
+
+```bash
+corebrain gateway status        # native gateway on this machine
+corebrain gateway list          # every gateway your workspace knows about
+```
+
+`status` should show the gateway as running and the tunnel as active. `list` should show the gateway you just registered with the same name.
+
+In the CORE app, open any conversation and ask: *"List my gateways."* CORE should respond with the gateway you just registered.
+
+---
+
+## Step 8. Register a folder (recommended)
+
+Until you register at least one folder, the gateway runs in permissive first-run mode. Once you register one, scope is enforced everywhere.
+
+```bash
+# Register the current directory with all three scopes
+corebrain folder add . --scopes files,coding,exec
+
+# Or pin scopes
+corebrain folder add /Users/me/repos/api --scopes coding,exec
+```
+
+| Scope | What it allows |
+| ----- | -------------- |
+| `files` | `files_read`, `files_write`, `files_edit`, `files_glob`, `files_grep` and the file browser in the webapp |
+| `coding` | `coding_ask` and interactive coding sessions targeting paths inside this folder |
+| `exec` | `exec_command` working directories |
+
+---
+
+## Troubleshooting
+
+**`tailscale not found on PATH`**: install via `brew install --cask tailscale` (macOS) or the official installer (Linux). The Homebrew formula `brew install tailscale` only installs the daemon helper, not the CLI binary.
+
+**`tailscale funnel started but no public URL appeared within 5s`**: Funnel isn't yet enabled for this device. Re-check the admin console (HTTPS certs + Funnel grant) and try `corebrain gateway register --tunnel tailscale` again.
+
+**`ngrok did not expose a public URL within 15s`**: usually a missing auth token. Run `ngrok config add-authtoken <token>` and retry.
+
+**Gateway shows as Unreachable in the webapp**: confirm the tunnel is alive (`tailscale status` or check the ngrok dashboard), and that the URL in the webapp matches what `corebrain gateway status` prints. Re-register if needed: `corebrain gateway stop && corebrain gateway register --tunnel <kind>`, then update the webapp with the new URL + key.
+
+**Lost the security key**: run `corebrain gateway register` to generate a new one, then update **Sidebar → Gateways → Edit** in the webapp.
+
+For a deeper troubleshooting matrix, see [Tunnels](/gateway/tunnels).
+
+---
+
+## Next steps
+
+- [Capabilities: Browser](/gateway/browser), [Coding](/gateway/coding), [Exec](/gateway/exec)
+- [Folders and scopes](/gateway/overview#folders-and-scopes)
+- [Tunnels reference](/gateway/tunnels)
+- [Gateway protocol README](https://github.com/RedPlanetHQ/core/blob/main/packages/gateway-protocol/README.md)

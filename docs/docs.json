@@ -287,7 +287,7 @@
         "groups": [
           {
             "group": "Overview",
-            "pages": ["gateway/overview"]
+            "pages": ["gateway/overview", "gateway/setup"]
           },
           {
             "group": "Capabilities",
