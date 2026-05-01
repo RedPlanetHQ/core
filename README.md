@@ -57,7 +57,7 @@
 > bottleneck. CORE's butler gathers the context, runs the agents, coordinates the work.
 > You stop babysitting. You start operating.
 
-[![CORE Demo](https://img.youtube.com/vi/PFk4RJvQg1Y/maxresdefault.jpg)](https://www.youtube.com/watch?v=PFk4RJvQg1Y)
+[![CORE Demo](https://img.youtube.com/vi/PFk4RJvQg1Y/maxresdefault.jpg)](https://www.youtube.com/watch?v=7y_kt_UTYQs)
 
 ---
 
