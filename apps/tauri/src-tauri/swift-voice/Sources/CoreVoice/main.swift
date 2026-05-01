@@ -69,6 +69,12 @@ final class VoiceController: NSObject, AVSpeechSynthesizerDelegate {
     private var hasEndAudioed: Bool = false
     private var hasDeliveredFinal: Bool = false
     private var fallbackFinalWorkItem: DispatchWorkItem?
+    /// Text accumulated across recognizer restarts within a single
+    /// listening session. Apple's SFSpeechRecognizer ends a task on
+    /// silence ("no speech" error) or by deciding the user is done
+    /// (`isFinal=true`); we preserve what was already recognized and
+    /// keep the mic alive until the caller explicitly stops.
+    private var preservedPrefix: String = ""
 
     // Target format for SFSpeechRecognizer — mono 16kHz Float32. Apple's
     // recognizer tolerates the device's native format on most Macs, but
@@ -135,8 +141,8 @@ final class VoiceController: NSObject, AVSpeechSynthesizerDelegate {
 
     // -------- listening --------
 
-    func startListening() {
-        stderrLog("startListening called")
+    func startListening(internalRestart: Bool = false) {
+        stderrLog("startListening called (internalRestart=\(internalRestart))")
         guard let recognizer else {
             emitError("speech recognizer init failed (locale?)")
             return
@@ -242,16 +248,34 @@ final class VoiceController: NSObject, AVSpeechSynthesizerDelegate {
         latestPartialText = ""
         hasEndAudioed = false
         hasDeliveredFinal = false
-        stderrLog("creating recognition task")
+        if !internalRestart {
+            preservedPrefix = ""
+        }
+        stderrLog("creating recognition task (preservedPrefix=\(preservedPrefix.count) chars)")
         task = recognizer.recognitionTask(with: req) { [weak self] result, error in
             guard let self else { return }
             if let result {
-                let text = result.bestTranscription.formattedString
-                self.latestPartialText = text
+                let raw = result.bestTranscription.formattedString
+                let combined = self.combineWithPrefix(raw)
+                self.latestPartialText = combined
                 if result.isFinal {
-                    self.deliverFinalIfNeeded(text)
+                    if self.hasEndAudioed {
+                        // User released keys → commit.
+                        self.deliverFinalIfNeeded(combined)
+                    } else {
+                        // Recognizer decided we're done mid-hold (e.g.
+                        // long pause). User is still holding keys, so
+                        // preserve what we have and start a fresh task
+                        // so they can keep talking.
+                        DispatchQueue.main.async {
+                            stderrLog("recognizer isFinal mid-session — preserving \(combined.count) chars and restarting")
+                            self.cancelListening()
+                            self.preservedPrefix = combined
+                            self.startListening(internalRestart: true)
+                        }
+                    }
                 } else {
-                    emit(["event": "partial", "text": text, "isFinal": false])
+                    emit(["event": "partial", "text": combined, "isFinal": false])
                 }
             }
             if let error = error as NSError? {
@@ -269,25 +293,38 @@ final class VoiceController: NSObject, AVSpeechSynthesizerDelegate {
                 if self.hasEndAudioed {
                     self.deliverFinalIfNeeded(self.latestPartialText)
                 } else if isNoSpeech && !self.hasDeliveredFinal {
-                    // Mic was open but no audio yet — quietly restart so
-                    // the mic stays alive for the next attempt.
+                    // Apple's recognizer ends the task on extended
+                    // silence even mid-hold. Preserve everything we've
+                    // recognized so far and restart so the user can
+                    // pause and keep talking without losing text.
                     //
                     // `hasDeliveredFinal` is also flipped true by
                     // `cancelListening`, which is how we tell apart
-                    // "recognizer hit a benign empty-buffer error mid
+                    // "recognizer hit a benign silence error mid
                     // session" (restart) from "user dismissed the panel
                     // and we explicitly tore down the engine" (don't
                     // restart — that's what was leaving the orange mic
                     // indicator stuck after the panel hid).
                     DispatchQueue.main.async {
+                        let saved = self.latestPartialText
+                        stderrLog("recognizer no-speech mid-session — preserving \(saved.count) chars and restarting")
                         self.cancelListening()
-                        self.startListening()
+                        self.preservedPrefix = saved
+                        self.startListening(internalRestart: true)
                     }
                 } else if !isNoSpeech {
                     emitError("recognition: \(error.localizedDescription)")
                 }
             }
         }
+    }
+
+    /// Join a new task's raw transcript onto whatever we preserved from
+    /// earlier tasks in the same listening session.
+    private func combineWithPrefix(_ raw: String) -> String {
+        if preservedPrefix.isEmpty { return raw }
+        if raw.isEmpty { return preservedPrefix }
+        return preservedPrefix + " " + raw
     }
 
     /// Emit the final transcript at most once per session.
