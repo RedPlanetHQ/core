@@ -31,7 +31,19 @@ Either way, traffic is HTTPS-terminated by the tunnel and the gateway still requ
 
 <Steps>
   <Step title="Install the Tailscale CLI">
-    Follow the install guide at <a href="https://tailscale.com/download">tailscale.com/download</a>. Verify with:
+    If you don't already have Tailscale, install from [tailscale.com/download](https://tailscale.com/download) or run:
+
+    ```bash
+    # macOS
+    brew install --cask tailscale
+
+    # Linux
+    curl -fsSL https://tailscale.com/install.sh | sh
+    ```
+
+    On macOS, `brew install tailscale` (no `--cask`) only installs the daemon helper. Use `--cask` or the App Store / `.pkg` build to get the CLI binary on `PATH`.
+
+    Verify:
 
     ```bash
     tailscale version
@@ -43,7 +55,13 @@ Either way, traffic is HTTPS-terminated by the tunnel and the gateway still requ
     sudo tailscale up
     ```
 
-    Funnel is a per-tailnet feature — your account needs to be the owner, or an admin must have enabled it for you.
+    Funnel is a per-tailnet feature; your account needs to be the owner, or an admin must have enabled it for you. Confirm the device is connected before moving on:
+
+    ```bash
+    tailscale status
+    ```
+
+    The current device should appear as `active`.
   </Step>
 
   <Step title="Enable Funnel for this device">
@@ -119,7 +137,7 @@ The CLI runs `ngrok http <port>` in the background and queries ngrok's local API
 
 ### Stable URLs
 
-Free-tier ngrok URLs change every restart, which means re-pasting the URL in **Settings → Gateways** every time you reboot. To avoid that:
+Free-tier ngrok URLs change every restart, which means re-pasting the URL in **Sidebar → Gateways** every time you reboot. To avoid that:
 
 - **Reserved domain (paid):** create one in the ngrok dashboard, then run ngrok manually with `ngrok http --domain=<your>.ngrok.app <port>` and register with `--tunnel none --baseUrl https://<your>.ngrok.app`.
 - **Static TCP / edge:** also supported via `--tunnel none` — anything that gives you a fixed `https://...` URL works.
@@ -144,6 +162,26 @@ No subprocess is started; the CLI just records the URL and prints the security k
 
 ---
 
+## After register: link the gateway in the CORE app
+
+Whichever tunnel you pick, the last step is the same. The CLI prints something like:
+
+```
+name:        my-laptop
+baseUrl:     https://my-laptop.tail-scale.ts.net
+securityKey: gwk_aBcDeFg...           ← only shown ONCE
+
+Paste baseUrl + securityKey into CORE → Sidebar → Gateways.
+```
+
+Open [https://app.getcore.me](https://app.getcore.me) (or your self-hosted instance), go to **Sidebar → Gateways → + New gateway**, and paste both values. The gateway should show **Connected** within a few seconds.
+
+If you ever rotate the tunnel or run `corebrain gateway register` again, the security key changes; update **Sidebar → Gateways → Edit** in the webapp with the new pair.
+
+For the full end-to-end runbook (CLI install, login, register, paste, verify, register folders), see [Gateway Setup](/gateway/setup).
+
+---
+
 ## Inspecting and stopping a tunnel
 
 ```bash
@@ -152,7 +190,7 @@ corebrain gateway stop        # stops the gateway and the tunnel
 corebrain gateway register    # re-run to swap to a different tunnel
 ```
 
-If you need to swap tunnels mid-session — say from ngrok to Tailscale — run `corebrain gateway stop`, then `corebrain gateway register --tunnel <new>`. The CLI generates a fresh security key on every register; paste the new pair into **Settings → Gateways → Edit** in the webapp.
+If you need to swap tunnels mid-session — say from ngrok to Tailscale — run `corebrain gateway stop`, then `corebrain gateway register --tunnel <new>`. The CLI generates a fresh security key on every register; paste the new pair into **Sidebar → Gateways → Edit** in the webapp.
 
 ---
 

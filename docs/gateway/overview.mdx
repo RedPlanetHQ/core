@@ -5,49 +5,69 @@ description: "Run a local agent on your machine that connects CORE to your devel
 
 ## What is the Gateway?
 
-The Gateway is a local service that runs on your machine — or on a Docker host you control — and exposes your browser, coding agents, shell, and a registered set of folders to CORE over an authenticated HTTP + WebSocket API. CORE never touches your machine directly; it always goes through this gateway.
+The Gateway is a local Fastify HTTP server (default port `7787`) bundled into the `@redplanethq/corebrain` CLI. It runs on your laptop, on a Docker host you control, or on Railway, and exposes your **browser**, **coding agents**, **shell**, and a registered set of **folders** to CORE over an authenticated HTTP + WebSocket API.
 
-Think of it as the bridge between CORE's cloud intelligence and your local environment.
+CORE never touches your machine directly. Every action CORE takes on your environment, opening a tab, running a test, editing a file, spawning Claude Code, goes through this gateway. It's the bridge between CORE's cloud intelligence and your local environment.
+
+> **Looking for the runbook?** See [Gateway Setup](/gateway/setup) for a linear, copy-pasteable guide. This page is the conceptual overview.
 
 ---
 
-## Why Use It?
+## Why connect a Gateway?
 
-<CardGroup cols={3}>
-  <Card title="Browser Automation" icon="browser">
-    Drive Playwright Chromium with persistent profiles for authenticated automation
+Without a gateway, CORE is a memory and reasoning layer in the cloud. With one, CORE can act on your actual machine and accounts. Concrete examples:
+
+<CardGroup cols={2}>
+  <Card title="Remote coding from your phone" icon="mobile">
+    Message CORE on WhatsApp, "Fix the auth timeout in the API." CORE spawns Claude Code on your gateway, pulls context from memory, and works on the bug while you're on the train.
   </Card>
 
-  <Card title="Coding Agents" icon="code">
-    Spawn and resume Claude Code or Codex CLI sessions from anywhere
+  <Card title="Authenticated browser automation" icon="browser">
+    Log in to LinkedIn once on your `personal` Playwright profile. CORE can research leads, scrape your dashboards, or drive a checkout flow without you re-authenticating.
   </Card>
 
-  <Card title="Shell + Files" icon="terminal">
-    Run commands and read/write files inside scoped folders, with allow/deny patterns
+  <Card title="Live terminal in the webapp" icon="terminal">
+    Watch a coding session stream into the webapp's terminal pane in real time, attach, type, and resize, with a Chrome DevTools-style live view of the browser running alongside.
+  </Card>
+
+  <Card title="Scheduled local actions" icon="clock">
+    "Every morning at 9am, run the test suite and summarize failures." A reminder fires `exec_command` against your repo and posts the result back to your channel of choice.
   </Card>
 </CardGroup>
 
+The gateway is what turns CORE from "an LLM that remembers" into "an assistant that gets things done on your stack."
+
 ---
 
-## How It Works
+## What does it expose?
 
-The gateway is a Fastify HTTP server (default port `7787`) bundled into the `@redplanethq/corebrain` CLI. It boots from on-disk preferences (`~/.corebrain`) and serves:
+The gateway advertises a **manifest** of capability slots. Each slot can be turned off in `corebrain gateway config`; disabled slots aren't just hidden, their HTTP routes are not registered.
 
-- `GET /manifest` — full capability manifest the webapp reads on every poll.
-- `POST /api/<group>/<tool>` — one route per advertised tool.
-- `WS /api/coding/coding_xterm_session` — terminal stream for coding sessions and the per-gateway shell.
-- `WS /api/browser/cdp/:session` — Chrome DevTools Protocol proxy for the live browser viewer.
-- `/api/folders`, `/api/shell` — folder management and a general-purpose PTY.
+| Slot | Tools exposed | Use this for |
+| ---- | ------------- | ------------ |
+| **Browser** | `browser_navigate`, `browser_snapshot`, `browser_click`, `browser_fill`, `browser_type`, `browser_press_key`, `browser_select_option`, `browser_screenshot`, `browser_scroll`, `browser_go_back`, `browser_go_forward`, `browser_wait_for`, `browser_evaluate`, `browser_create_session`, `browser_list_sessions`, `browser_delete_session`, `browser_close_session`, `browser_close_all` | Authenticated scraping, form automation, dashboard reads, live browser viewing in the webapp |
+| **Coding** | `coding_ask`, `coding_read_session`, `coding_list_sessions`, `coding_search_sessions`, `coding_list_agents`, `coding_close_session`, `coding_close_all` | Spawn or resume Claude Code / Codex sessions remotely; isolated git worktrees for autonomous work |
+| **Exec** | `exec_command` | Shell commands gated by allow/deny patterns and folder scopes |
+| **Files** | `files_read`, `files_write`, `files_edit`, `files_glob`, `files_grep` | File reads, edits, glob, ripgrep, all scoped to registered folders |
+| **Utils** (always on) | `sleep` | Pause between polling tool calls |
 
-Every request requires `Authorization: Bearer gwk_<key>`. There is no localhost bypass — the same flow applies whether the gateway is on `127.0.0.1`, behind a tunnel, or on a public Docker host.
+In addition the gateway exposes a few HTTP routes the webapp uses directly:
+
+- `GET /manifest`: full capability manifest the webapp reads on every poll.
+- `WS /api/coding/coding_xterm_session`: terminal stream for coding sessions and the per-gateway shell.
+- `WS /api/browser/cdp/:session`: Chrome DevTools Protocol proxy for the live browser viewer.
+- `POST /api/folders/local`, `POST /api/folders/git`, `DELETE /api/folders/:idOrName`: folder management.
+- `POST /api/shell/spawn`: general-purpose PTY for the shell tab.
+
+Every request requires `Authorization: Bearer gwk_<key>`. There is no localhost bypass, the same flow applies whether the gateway is on `127.0.0.1`, behind a tunnel, or on a public Docker host.
 
 For the protocol details and a route-by-route reference, see [`packages/gateway-protocol/README.md`](https://github.com/RedPlanetHQ/core/blob/main/packages/gateway-protocol/README.md).
 
 ---
 
-## Install
+## Install (quick path)
 
-`corebrain gateway setup` is the unified entry point — pick where the gateway should run and the wizard handles the rest (config, security key, public URL via Tailscale or Railway, registration with CORE).
+For the full step-by-step including Tailscale / ngrok install, see [Gateway Setup](/gateway/setup).
 
 <Steps>
   <Step title="Install the CLI">
@@ -57,18 +77,41 @@ For the protocol details and a route-by-route reference, see [`packages/gateway-
     ```
   </Step>
 
-  <Step title="Run setup">
+  <Step title="Run the wizard">
     ```bash
     corebrain gateway setup
     ```
 
-    The wizard asks where the gateway should run:
+    Pick where the gateway should run:
 
-    - **Native** — this machine. Installs a launchd (macOS) / systemd (Linux) service, generates a security key, and registers with CORE. Full access to local browser, shells, and folders.
-    - **Docker** — local or remote Docker host. Drops `docker-compose.yaml` + `.env` into `~/.corebrain/gateways/<name>/` (templates fetched from `main` so they stay in sync), runs `docker compose up -d`, optionally exposes via [Tailscale funnel](/gateway/tunnels), and registers with CORE.
-    - **Railway** — managed cloud. Detects (or installs) the Railway CLI, runs `railway init` + `railway deploy -t core-gateway`, provisions a public domain, and registers with CORE.
+    - **Native**: this machine. Installs a launchd (macOS) / systemd (Linux) service and gives full access to local browser, shells, and folders. Native gateways listen on `127.0.0.1` and need a tunnel (Tailscale or ngrok) before CORE's cloud can reach them. See [Tunnels](/gateway/tunnels) or the [Setup runbook](/gateway/setup) for the tunnel install steps you must run first.
+    - **Docker**: local or remote Docker host. Drops `docker-compose.yaml` + `.env` into `~/.corebrain/gateways/<name>/` (templates fetched from `main` so they stay in sync), runs `docker compose up -d`, and optionally exposes via [Tailscale Funnel](/gateway/tunnels).
+    - **Railway**: managed cloud. Detects (or installs) the Railway CLI, runs `railway init` + `railway deploy -t core-gateway`, and provisions a public domain.
 
     For docker / railway the wizard also prompts (optional) for `CLAUDE_CODE_OAUTH_TOKEN`, `OPENAI_API_KEY`, and `GITHUB_TOKEN` so the coding + git slots work out of the box.
+  </Step>
+
+  <Step title="Register the gateway with a tunnel">
+    Native installs need a tunnel before the cloud can reach them:
+
+    ```bash
+    corebrain gateway register --tunnel tailscale
+    # or
+    corebrain gateway register --tunnel ngrok
+    # or, bring your own URL:
+    corebrain gateway register --tunnel none --baseUrl https://gateway.example.com
+    ```
+
+    The CLI prints a `baseUrl` and a `securityKey` (`gwk_...`). **The raw key is shown exactly once.**
+  </Step>
+
+  <Step title="Paste URL + key into the CORE app">
+    This is the step that links the gateway to your workspace. Without it, the gateway is reachable but CORE doesn't know it exists.
+
+    1. Open [https://app.getcore.me](https://app.getcore.me) (or your self-hosted instance).
+    2. **Sidebar → Gateways → + New gateway**.
+    3. Paste the **Base URL** and the **Security key** from the CLI output.
+    4. Click **Submit**. The gateway should show **Connected** within a few seconds.
   </Step>
 
   <Step title="Verify">
@@ -86,70 +129,89 @@ For the protocol details and a route-by-route reference, see [`packages/gateway-
 
 ### One-click Railway deploy
 
-Prefer to skip the CLI entirely for a Railway gateway? Click below — Railway prompts for the env vars, provisions the service + public domain, and you paste the URL + security key into the webapp's **Register gateway** dialog.
-
 [![Deploy on Railway](https://railway.com/button.svg)](https://railway.com/deploy/core-gateway)
 
-The required env vars are:
+Railway prompts for the env vars, provisions the service + public domain, and the security key appears in the deploy logs on first boot. You still need to paste the URL + key into **Sidebar → Gateways** in the CORE app (Step 4 above).
 
-- `COREBRAIN_API_URL` — your CORE instance URL (e.g. `https://app.getcore.me`)
-- `COREBRAIN_API_KEY` — a Personal Access Token from the webapp
-- `COREBRAIN_GATEWAY_NAME` — name shown in the webapp
-- `COREBRAIN_GATEWAY_SECURITY_KEY` — *(optional)* leave empty and Railway will auto-generate one (find it in the deploy logs on first boot)
+The required env vars:
+
+- `COREBRAIN_API_URL`: your CORE instance URL (e.g. `https://app.getcore.me`)
+- `COREBRAIN_API_KEY`: a Personal Access Token from the webapp
+- `COREBRAIN_GATEWAY_NAME`: name shown in the webapp
+- `COREBRAIN_GATEWAY_SECURITY_KEY`: *(optional)* leave empty and Railway will auto-generate one
 
 ---
 
 ## Gateway Commands
 
-| Command                                | Description                                                              |
-| -------------------------------------- | ------------------------------------------------------------------------ |
-| `corebrain gateway setup`              | Wizard: pick native / docker / railway, configure, and register with CORE |
-| `corebrain gateway list`               | List every gateway registered with your CORE workspace                   |
-| `corebrain gateway status [id]`        | Show local-native status (no id), or any gateway's manifest (with id)    |
-| `corebrain gateway config`             | Reconfigure the native gateway on this machine (slots, folders, exec patterns) |
-| `corebrain gateway start`              | Install + start the native gateway as a system service                   |
-| `corebrain gateway start --foreground` | Run attached to the current terminal (Docker / ad-hoc)                   |
-| `corebrain gateway stop`               | Stop and uninstall the native service                                    |
-| `corebrain gateway restart`            | Restart the native service                                               |
-| `corebrain gateway register`           | Generate / rotate the security key for the native gateway                |
+### Top-level (work on any gateway)
 
-The `folder`, `browser`, `coding`, and `exec` command groups configure the native gateway's slots and only run when one is set up on this machine — they print a redirect to `corebrain gateway setup` otherwise.
+| Command | Use this when |
+| ------- | ------------- |
+| `corebrain login` | First-time setup, or after rotating your Personal Access Token. |
+| `corebrain gateway setup` | Spinning up a new gateway from scratch (interactive wizard). |
+| `corebrain gateway setup --kind native\|docker\|railway` | Headless install / CI / scripted setup. |
+| `corebrain gateway list` | Checking which gateways your CORE workspace knows about, across all your machines. |
+| `corebrain gateway status` | Quick health check of the native gateway running on this machine. |
+| `corebrain gateway status <id>` | Inspecting any gateway's manifest, slot config, and tunnel state by id. |
 
-| Command                       | Description                                            |
-| ----------------------------- | ------------------------------------------------------ |
-| `corebrain folder add <path>` | Register a path with `files,coding,exec` scopes        |
-| `corebrain folder list`       | List registered folders                                |
-| `corebrain browser status`    | Inspect the gateway's browser config + sessions        |
-| `corebrain coding setup`      | Configure a coding agent (claude-code, codex)          |
-| `corebrain exec config`       | Set the exec slot's allow / deny patterns              |
+### Native gateway lifecycle (this machine only)
+
+| Command | Use this when |
+| ------- | ------------- |
+| `corebrain gateway register` | After `setup`, to generate the URL + security key and (optionally) start a tunnel. Also used to **rotate** the key if it leaks or is lost. |
+| `corebrain gateway register --tunnel tailscale\|ngrok\|none` | Picking how the gateway is exposed. `none` means you supply your own URL. |
+| `corebrain gateway start` | Installing the gateway as a system service so it boots with the machine. |
+| `corebrain gateway start --foreground` | Debugging the gateway attached to your terminal (Docker / ad-hoc). |
+| `corebrain gateway stop` | Shutting the service down and tearing down the managed tunnel. |
+| `corebrain gateway restart` | Picking up a config change or recovering from a hung process. |
+| `corebrain gateway config` | Toggling slots (browser / coding / exec / files), changing exec patterns, registering folders. |
+
+The `folder`, `browser`, `coding`, and `exec` command groups configure the native gateway's slots and only run when one is set up on this machine. They print a redirect to `corebrain gateway setup` otherwise.
+
+### Folders and scopes
+
+| Command | Use this when |
+| ------- | ------------- |
+| `corebrain folder add <path>` | Granting the gateway access to a directory. Scopes default to `files,coding,exec`. |
+| `corebrain folder add <path> --scopes coding,exec` | Pinning narrower scopes (e.g. read-only, or coding-only). |
+| `corebrain folder list` | Auditing what the gateway is allowed to touch. |
+
+### Browser (Playwright)
+
+| Command | Use this when |
+| ------- | ------------- |
+| `corebrain browser install` | First-time install of the Playwright Chromium binary (or refreshing it). |
+| `corebrain browser create-profile <name>` | Creating a new persistent identity (cookies, localStorage). Max 5 profiles. |
+| `corebrain browser create-session <name> --profile <profile>` | Binding a named task (e.g. `linkedin`) to a profile. Max 10 sessions. |
+| `corebrain browser open <session> --headed` | Logging in manually so the profile captures auth state. |
+| `corebrain browser set-browser brave\|chrome\|default\|custom` | Switching the executable used by Playwright. |
+| `corebrain browser status` | Inspecting session list and current browser binary. |
+
+See [Browser](/gateway/browser) for the full reference.
+
+### Coding (Claude Code, Codex)
+
+| Command | Use this when |
+| ------- | ------------- |
+| `corebrain coding setup` | Adding a coding agent (claude-code or codex-cli) and logging it in. |
+| `corebrain coding setup --default claude-code` | Setting which agent runs when callers don't specify one. |
+
+See [Coding](/gateway/coding) for the full reference and the `coding_ask` payload shape.
+
+### Exec (shell)
+
+| Command | Use this when |
+| ------- | ------------- |
+| `corebrain exec config` | Editing the allow / deny pattern list (e.g. `Bash(git *)`, `Bash(npm run *)`). |
+
+See [Exec](/gateway/exec) for the security model.
 
 ---
 
-## Capabilities
+## Folders and scopes
 
-The manifest advertises a set of tools grouped by capability slot. Slots can be turned off in `corebrain gateway config` — a disabled slot hides both its tools and its routes.
-
-<CardGroup cols={3}>
-  <Card title="Browser" icon="browser" href="/gateway/browser">
-    Headless / headed Playwright with profile-backed sessions
-  </Card>
-
-  <Card title="Coding" icon="code" href="/gateway/coding">
-    Spawn, read, search, and resume coding agent sessions
-  </Card>
-
-  <Card title="Exec" icon="terminal" href="/gateway/exec">
-    Run shell commands with allow/deny patterns and folder scopes
-  </Card>
-</CardGroup>
-
-The `files` slot exposes `files_read`, `files_write`, `files_edit`, `files_glob`, and `files_grep` — also gated by registered folders. The always-on `utils` slot exposes a `sleep` tool useful between polling calls.
-
----
-
-## Folders & Scopes
-
-Folders are registered paths the gateway is allowed to touch. Each folder carries one or more **scopes**:
+Folders are registered paths the gateway is allowed to touch. Each folder carries one or more scopes:
 
 | Scope    | Allows                                                              |
 | -------- | ------------------------------------------------------------------- |
@@ -174,25 +236,16 @@ curl -X POST $GATEWAY/api/folders/git \
 
 ---
 
-## Use Cases
-
-**Remote development:** You're on your phone, a bug comes in. Message CORE on WhatsApp: "Fix the auth timeout issue in the API." CORE spawns Claude Code on your gateway, pulls context from memory, and starts working.
-
-**Authenticated browsing:** CORE opens your `linkedin` profile-backed browser session, runs lead research, returns highlights — without you re-authenticating.
-
-**Daily workflows:** "Every morning at 9am, check my GitHub notifications and summarize what needs attention." The reminder fires `exec_command` against your repos folder.
-
----
-
 ## Security
 
 - **Bearer-only auth.** The gateway stores `sha256(securityKey)` on disk; the webapp encrypts the raw key at rest. Constant-time comparison; no localhost bypass.
-- **Slot toggles.** Disabled slots are not just hidden — their HTTP routes are not registered, so a leaked key still cannot hit them.
+- **Slot toggles.** Disabled slots are not just hidden, their HTTP routes are not registered, so a leaked key still cannot hit them.
 - **Folder scopes.** Coding / exec / files tools are pinned to registered folders with the matching scope.
 - **Exec patterns.** `exec_command` validates each command against allow / deny globs (`Bash(<glob>)`) plus a built-in deny list for unsafe primitives.
 - **Browser profiles.** Stored locally; auth state never leaves your machine.
+- **Tunnels for native gateways.** Native installs always need HTTPS to be reachable from CORE's cloud. Use Tailscale Funnel, ngrok, or your own reverse proxy. See [Tunnels](/gateway/tunnels).
 
-All traffic between CORE and the gateway is authenticated; use HTTPS or a tunnel (Tailscale / ngrok / Cloudflare) for non-loopback deployments. See [Tunnels](/gateway/tunnels) for the Tailscale Funnel and ngrok setup walkthroughs.
+All traffic between CORE and the gateway is authenticated; use HTTPS or a tunnel for non-loopback deployments.
 
 ---
 
@@ -209,9 +262,18 @@ When running without an interactive `corebrain login` flow, the gateway reads:
 | `COREBRAIN_GATEWAY_SECURITY_KEY`  | Bearer key. Auto-generated and printed once if absent.               |
 | `COREBRAIN_GATEWAY_HTTP_PORT`     | Port to listen on (default `7787`)                                   |
 | `COREBRAIN_DEFAULT_WORKSPACE`     | Auto-registered as a folder with `files,coding,exec` scopes          |
-| `COREBRAIN_DEPLOY_MODE`           | `native` or `docker` — surfaces in the manifest for UI gating        |
+| `COREBRAIN_DEPLOY_MODE`           | `native` or `docker`, surfaces in the manifest for UI gating         |
 | `ANTHROPIC_API_KEY`               | Lets `claude-code` skip OAuth                                        |
 | `OPENAI_API_KEY`                  | Lets `codex-cli` skip OAuth                                          |
 | `GITHUB_TOKEN`                    | Used by `POST /api/folders/git` to clone private repos               |
 
-Bootstrap is idempotent — values you set manually inside the container are never overwritten.
+Bootstrap is idempotent. Values you set manually inside the container are never overwritten.
+
+---
+
+## Where next?
+
+- [Gateway Setup runbook](/gateway/setup): linear copy-paste guide from zero to connected.
+- [Tunnels](/gateway/tunnels): Tailscale Funnel and ngrok deep-dive.
+- [Browser](/gateway/browser), [Coding](/gateway/coding), [Exec](/gateway/exec): per-capability references.
+- [Gateway protocol README](https://github.com/RedPlanetHQ/core/blob/main/packages/gateway-protocol/README.md): full HTTP / WebSocket reference.
