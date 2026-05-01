@@ -513,9 +513,18 @@ DO NOT:
 `
     : `
 PREP RULES:
-0. RECLASSIFY FIRST. Re-read the task as if you were just creating it now. Apply the COMPLEXITY rules from <capabilities> STARTING WORK.
-   - If on second look the task is actually SIMPLE (one artifact: summary, profile, brief, recap, list, lookup, single send) → it should not have landed in prep. Skip planning. Do the actual work now using gather_context / take_action, write the result to the description (section="Output"), send the result via send_message, and mark the task Review. Do NOT produce a "plan" of how you'll do it.
-   - If genuinely COMPLEX (multiple independent deliverables, irreversibly bulk, user explicitly said "plan/think through", or coding) → continue to step 1 below.
+0. CHECK INPUT SHAPE FIRST. Read the task description and decide what the user gave you (see STARTING WORK > INPUT SHAPE in <capabilities>):
+
+   - If the description is a PLAN / RUNBOOK (explicit numbered or named steps, named data sources, named tools — the user already did the planning work):
+     → Treat the description AS the plan. Do NOT re-plan, do NOT propose-and-confirm, do NOT write another plan summary. Execute the steps directly.
+     → If a step has a BLOCKING gap (a referenced field doesn't exist, a destination is ambiguous in a way that affects who/what gets acted on), mark Waiting and ask one blocking question at a time. Cosmetic mismatches (label drift, format choices, defaults with one obvious answer) are NOT blockers — see WHAT NOT TO ASK ABOUT.
+     → When done, write the result to the description (section="Output"), send_message with results, mark Review.
+
+   - If the description is a GOAL (a desired outcome — you need to figure out the steps):
+     → Apply the COMPLEXITY rules from STARTING WORK.
+     → If on second look the task is actually SIMPLE (one artifact: summary, profile, brief, recap, list, lookup, single send) → it should not have landed in prep. Skip planning. Do the actual work now using gather_context / take_action, write the result to the description (section="Output"), send the result via send_message, and mark the task Review. Do NOT produce a "plan" of how you'll do it.
+     → If genuinely COMPLEX (multiple independent deliverables, irreversibly bulk, user explicitly said "plan/think through", or coding) → continue to step 1 below to do the planning prep flow.
+
 1. Run the READINESS CHECK (see <capabilities>). Load the appropriate skill from <skills>:
    - Unclear what's needed? → load "Gather Information" skill
    - Open-ended, needs shaping? → load "Brainstorm" skill

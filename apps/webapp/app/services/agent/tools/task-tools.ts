@@ -89,10 +89,11 @@ export function getTaskTools(
           );
 
   return {
-    ...(!isBackgroundExecution && {
-      create_task: tool({
-        description: `Create a new CORE internal task. Tasks can be immediate (work items) or scheduled (reminders, recurring checks).
+    create_task: tool({
+      description: `Create a new CORE internal task. Tasks can be immediate (work items) or scheduled (reminders, recurring checks).
 NOTE: This is for CORE's own task system. If the user asks to create a task in an external tool (Todoist, Asana, Linear, Jira, etc.), do NOT use this — delegate to the orchestrator via take_action instead.
+
+BACKGROUND CONTEXT RULE: when called from inside a running task (prep or execute, i.e. <task_prep> or <task_execution> is in your system prompt), parentTaskId is MANDATORY — pass the current task's ID. You can only create SUBTASKS in background, never top-level tasks. Top-level task creation is reserved for the foreground chat agent. This prevents background runs from spawning unrelated work.
 
 BEFORE CREATING: Always call search_tasks first. If a matching task already exists in Todo/Working, reuse it instead of creating a duplicate.
 
@@ -191,6 +192,14 @@ FOLLOW-UP: Set isFollowUp=true and parentTaskId to reschedule an existing task.`
           skillName,
         }) => {
           try {
+            // BACKGROUND CONTEXT GUARD: when invoked from inside a running task,
+            // only subtask creation is allowed. Top-level task creation in
+            // background would let prep/execute runs spawn unrelated work — a
+            // common foot-gun. Foreground chat is unaffected.
+            if (isBackgroundExecution && !parentTaskId) {
+              return "create_task in background context requires parentTaskId — only subtask creation is permitted from inside a running task. If you need a top-level task, the user must create it from the foreground chat.";
+            }
+
             // Follow-up: reschedule the parent task
             if (isFollowUp && parentTaskId) {
               const parentTask = await getTaskById(parentTaskId);
@@ -337,7 +346,6 @@ FOLLOW-UP: Set isFollowUp=true and parentTaskId to reschedule an existing task.`
             return `Failed to create task: ${error instanceof Error ? error.message : "Unknown error"}`;
           }
         },
-      }),
     }),
 
     get_task: tool({
