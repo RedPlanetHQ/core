@@ -161,6 +161,19 @@ describe("canTransition", () => {
   it("allows system Review -> Ready (recurring advance)", () => {
     expect(canTransition("Review", "Ready", "execute", "system")).toBe(true);
   });
+
+  // Auto-loop guard: agent cannot promote a task back to Ready once it has
+  // entered execute. Only system (scheduled fire) or user (UI) may do so.
+  it("rejects agent -> Ready when phase is execute (auto-loop guard)", () => {
+    expect(canTransition("Working", "Ready", "execute", "agent")).toBe(false);
+    expect(canTransition("Waiting", "Ready", "execute", "agent")).toBe(false);
+    expect(canTransition("Review", "Ready", "execute", "agent")).toBe(false);
+  });
+
+  it("allows system or user -> Ready in execute (escape hatch from auto-loop guard)", () => {
+    expect(canTransition("Working", "Ready", "execute", "system")).toBe(true);
+    expect(canTransition("Review", "Ready", "execute", "user")).toBe(true);
+  });
 });
 
 // ─── inferNewPhase ──────────────────────────────────────────────────
@@ -197,3 +210,4 @@ describe("inferNewPhase", () => {
     expect(inferNewPhase("Review", "Ready", "execute")).toBe("execute");
   });
 });
+

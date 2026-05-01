@@ -73,3 +73,6 @@ maintenance/
 # Dolt database files (added by bd init)
 .dolt/
 *.db
+
+swift-voice/
+binaries/

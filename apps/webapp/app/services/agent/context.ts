@@ -461,8 +461,17 @@ export async function buildAgentContext({
   // Task context (when conversation was created from a task)
   if (linkedTask) {
     const phase = getTaskPhase(linkedTask);
-    const isPrepPhase = phase === "prep";
-    const isExecuting = phase === "execute";
+    const taskMetadataForGuard =
+      (linkedTask.metadata as Record<string, unknown> | null) ?? {};
+    const prepDecided = taskMetadataForGuard.prepDecided === true;
+
+    // Belt-and-suspenders: if the agent already decided prep for this task
+    // (skipped to Ready or asked one question and went Waiting), do not render
+    // <task_prep> again. Treat as execute. The phase guard in canTransition is
+    // the primary protection against auto-loops; this prevents stale prep
+    // re-renders if a job was enqueued before the buffer expired.
+    const isPrepPhase = phase === "prep" && !prepDecided;
+    const isExecuting = phase === "execute" || prepDecided;
 
     const isSubtask = !!linkedTask.parentTaskId;
     const taskMeta = (linkedTask.metadata as Record<string, unknown>) ?? {};
@@ -504,6 +513,9 @@ DO NOT:
 `
     : `
 PREP RULES:
+0. RECLASSIFY FIRST. Re-read the task as if you were just creating it now. Apply the COMPLEXITY rules from <capabilities> STARTING WORK.
+   - If on second look the task is actually SIMPLE (one artifact: summary, profile, brief, recap, list, lookup, single send) → it should not have landed in prep. Skip planning. Do the actual work now using gather_context / take_action, write the result to the description (section="Output"), send the result via send_message, and mark the task Review. Do NOT produce a "plan" of how you'll do it.
+   - If genuinely COMPLEX (multiple independent deliverables, irreversibly bulk, user explicitly said "plan/think through", or coding) → continue to step 1 below.
 1. Run the READINESS CHECK (see <capabilities>). Load the appropriate skill from <skills>:
    - Unclear what's needed? → load "Gather Information" skill
    - Open-ended, needs shaping? → load "Brainstorm" skill
