@@ -110,6 +110,12 @@ export async function processScheduledTask(
     const isBufferExpiry =
       task.status === "Todo" && phase === "prep" && !task.schedule;
 
+    // Agent-created Ready tasks sit in a 2-min buffer (status=Ready, phase=prep,
+    // no schedule). At expiry, skip prep entirely — the agent already classified
+    // the task as simple+clear and set metadata.prepDecided.
+    const isReadyBufferExpiry =
+      task.status === "Ready" && phase === "prep" && !task.schedule;
+
     const isScheduledFireDuringPrep =
       (task.status === "Todo" || task.status === "Waiting") &&
       phase === "prep" &&
@@ -131,6 +137,9 @@ export async function processScheduledTask(
 
     if (isBufferExpiry) {
       return await startPrepFromBuffer(task);
+    }
+    if (isReadyBufferExpiry) {
+      return await startExecutionFromReadyBuffer(task);
     }
     if (isScheduledFireDuringPrep) {
       return await executeFireOverride(data, task);
@@ -180,6 +189,9 @@ export async function processScheduledTask(
  * it and pull its node out of any pages that still reference it instead of
  * starting prep — these are the abandoned `[ ]` lines users typed and
  * walked away from.
+ *
+ * Sibling: `startExecutionFromReadyBuffer` handles the agent-created Ready
+ * buffer expiry — same 2-min window, but skips prep entirely.
  */
 async function startPrepFromBuffer(
   task: Task,
@@ -224,6 +236,48 @@ async function isTaskEmpty(task: Task): Promise<boolean> {
   // strip tags+whitespace and treat that as no content.
   const stripped = html.replace(/<[^>]*>/g, "").trim();
   return stripped === "";
+}
+
+/**
+ * Ready-buffer expiry branch: the 2-minute Ready window is up for an
+ * agent-created Ready task. Clear nextRunAt, flip phase to execute, and
+ * enqueue for execution. The agent already classified this task as
+ * simple+clear (metadata.prepDecided=true), so we skip prep entirely.
+ *
+ * We bypass changeTaskStatus because status stays "Ready" — only phase
+ * changes. Writing directly avoids re-triggering Ready-side enqueue logic
+ * (which would double-enqueue).
+ *
+ * Mirrors the empty-task auto-delete in startPrepFromBuffer for
+ * scratchpad-source tasks.
+ */
+async function startExecutionFromReadyBuffer(
+  task: Task,
+): Promise<ScheduledTaskProcessResult> {
+  if (task.source === "daily" && (await isTaskEmpty(task))) {
+    logger.info(
+      `Auto-deleting empty scratchpad task ${task.id} at Ready-buffer expiry`,
+    );
+    await removeTaskItemFromPages(task.id);
+    await deleteTask(task.id, task.workspaceId);
+    return { success: true };
+  }
+
+  await prisma.task.update({
+    where: { id: task.id },
+    data: {
+      nextRunAt: null,
+      metadata: setTaskPhaseInMetadata(task.metadata, "execute"),
+    },
+  });
+
+  await enqueueTask({
+    taskId: task.id,
+    workspaceId: task.workspaceId,
+    userId: task.userId,
+  });
+
+  return { success: true };
 }
 
 /**

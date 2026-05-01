@@ -192,7 +192,7 @@ describe("createTask — buffer wake-up", () => {
     expect(scheduledAt.getTime()).toBe(nextRunMs);
   });
 
-  it("skips buffer when task is created with status != Todo (reserved for recurring)", async () => {
+  it("skips buffer when status=Ready is set without actor (user/system path)", async () => {
     const task = await createTask(
       TEST_WORKSPACE_ID,
       TEST_USER_ID,
@@ -200,10 +200,76 @@ describe("createTask — buffer wake-up", () => {
       undefined,
       { status: "Ready" },
     );
-    // status forwarding path — no buffer
+    // No actor → user/dashboard path → no buffer, immediate Ready execute phase
     expect(task.status).toBe("Ready");
     expect(task.nextRunAt).toBeNull();
     expect(enqueueScheduledTaskMock).not.toHaveBeenCalled();
+    const meta = (task.metadata ?? {}) as Record<string, unknown>;
+    expect(meta.phase).toBe("execute");
+    expect(meta.prepDecided).toBeUndefined();
+  });
+
+  it("agent-created Ready (no schedule) gets a 2-min buffer + prepDecided=true", async () => {
+    const before = Date.now();
+    const task = await createTask(
+      TEST_WORKSPACE_ID,
+      TEST_USER_ID,
+      "Agent ready buffer",
+      undefined,
+      { actor: "agent", status: "Ready" },
+    );
+    const after = Date.now();
+
+    expect(task.status).toBe("Ready");
+    expect(task.nextRunAt).toBeTruthy();
+    const nextRunMs = task.nextRunAt!.getTime();
+    expect(nextRunMs).toBeGreaterThanOrEqual(before + 2 * 60 * 1000 - 1000);
+    expect(nextRunMs).toBeLessThanOrEqual(after + 2 * 60 * 1000 + 1000);
+
+    const meta = (task.metadata ?? {}) as Record<string, unknown>;
+    // Phase stays prep until the buffer fires (handled in scheduled-task.logic.ts)
+    expect(meta.phase).toBe("prep");
+    expect(meta.prepDecided).toBe(true);
+
+    // Same buffer mechanism as Todo: scheduled wake-up, NO immediate enqueue
+    expect(enqueueTaskMock).not.toHaveBeenCalled();
+    expect(enqueueScheduledTaskMock).toHaveBeenCalledTimes(1);
+    const [payload, scheduledAt] = enqueueScheduledTaskMock.mock.calls[0];
+    expect(payload.taskId).toBe(task.id);
+    expect(scheduledAt.getTime()).toBe(nextRunMs);
+  });
+
+  it("agent-created Waiting does NOT get a buffer (Waiting is its own gate)", async () => {
+    const task = await createTask(
+      TEST_WORKSPACE_ID,
+      TEST_USER_ID,
+      "Agent waiting",
+      undefined,
+      { actor: "agent", status: "Waiting" },
+    );
+    expect(task.status).toBe("Waiting");
+    expect(task.nextRunAt).toBeNull();
+    expect(enqueueScheduledTaskMock).not.toHaveBeenCalled();
+    const meta = (task.metadata ?? {}) as Record<string, unknown>;
+    expect(meta.phase).toBe("prep");
+    // Waiting is gated by user reply, not by a buffer — prepDecided not set yet
+    expect(meta.prepDecided).toBeUndefined();
+  });
+
+  it("agent-created Todo path is unchanged (still gets buffer, no prepDecided)", async () => {
+    const task = await createTask(
+      TEST_WORKSPACE_ID,
+      TEST_USER_ID,
+      "Agent todo",
+      undefined,
+      { actor: "agent" }, // no status → Todo
+    );
+    expect(task.status).toBe("Todo");
+    expect(task.nextRunAt).toBeTruthy();
+    expect(enqueueScheduledTaskMock).toHaveBeenCalledTimes(1);
+    const meta = (task.metadata ?? {}) as Record<string, unknown>;
+    expect(meta.phase).toBe("prep");
+    expect(meta.prepDecided).toBeUndefined();
   });
 });
 
@@ -399,6 +465,45 @@ describe("processScheduledTask — wake-up branching", () => {
     });
     const reloaded = await prisma.task.findUnique({ where: { id: task.id } });
     expect(reloaded).not.toBeNull();
+  });
+
+  it("ready-buffer expiry (Ready + prep, no schedule) → flip to execute and enqueue", async () => {
+    const task = await prisma.task.create({
+      data: {
+        workspaceId: TEST_WORKSPACE_ID,
+        userId: TEST_USER_ID,
+        title: "Agent-ready task at buffer expiry",
+        status: "Ready",
+        metadata: { phase: "prep", prepDecided: true },
+        nextRunAt: new Date(Date.now() - 1000),
+        isActive: true,
+      },
+    });
+
+    await processScheduledTask({
+      taskId: task.id,
+      workspaceId: TEST_WORKSPACE_ID,
+      userId: TEST_USER_ID,
+      channel: "email",
+    });
+
+    // Should NOT have started prep (no runCASEPipeline call from a prep flow,
+    // no fire-override) — should have enqueued for normal execution.
+    expect(runCASEPipelineMock).not.toHaveBeenCalled();
+    expect(enqueueTaskMock).toHaveBeenCalledTimes(1);
+    const [payload] = enqueueTaskMock.mock.calls[0];
+    expect(payload.taskId).toBe(task.id);
+
+    // Status stays Ready; phase flips to execute; nextRunAt cleared
+    const reloaded = await prisma.task.findUniqueOrThrow({
+      where: { id: task.id },
+    });
+    expect(reloaded.status).toBe("Ready");
+    expect(reloaded.nextRunAt).toBeNull();
+    const meta = (reloaded.metadata ?? {}) as Record<string, unknown>;
+    expect(meta.phase).toBe("execute");
+    // prepDecided is preserved (it's still informative)
+    expect(meta.prepDecided).toBe(true);
   });
 
   it("normal fire (Ready) → execute via CASE pipeline", async () => {

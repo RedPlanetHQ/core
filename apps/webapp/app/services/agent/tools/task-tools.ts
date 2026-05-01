@@ -163,7 +163,7 @@ FOLLOW-UP: Set isFollowUp=true and parentTaskId to reschedule an existing task.`
             .enum(["Todo", "Waiting", "Ready"])
             .optional()
             .describe(
-              "Initial status. Todo=default, enters 2-min prep buffer so user can edit before butler starts. Waiting=needs user approval before execution. Ready=skip prep entirely, execute immediately (use only when the request is unambiguous and you've already gathered everything you need).",
+              "Initial status, classified by the rules in <capabilities> STARTING WORK. Todo = COMPLEX work (multi-step, decomposable, irreversible bulk). 2-min prep buffer applies. Ready = SIMPLE + CLEAR (single action, well-scoped). 2-min buffer still applies (gives the user a window to add context); execution starts after expiry. Waiting = SIMPLE + UNCLEAR (need one question answered) OR needs explicit user approval. Send_message the question/plan, then unblock_task when answered.",
             ),
           skillId: z
             .string()
@@ -291,16 +291,25 @@ FOLLOW-UP: Set isFollowUp=true and parentTaskId to reschedule an existing task.`
             const effectiveStatus =
               parentTaskId && !initialStatus ? "Waiting" : undefined;
 
+            // Pass the resolved status directly to createTask. createTask
+            // applies the 2-min buffer for Todo (anyone) and for Ready+agent
+            // (skip-prep path); Waiting (subtask default or agent-requested
+            // approval) lands without a buffer. The old post-create
+            // changeTaskStatus flip is no longer needed for non-subtask
+            // flows.
+            const resolvedStatus = (effectiveStatus ??
+              initialStatus ??
+              "Todo") as TaskStatus;
+
             const task = await createTask(
               workspaceId,
               userId,
               title,
               undefined,
               {
+                actor: "agent",
+                status: resolvedStatus,
                 ...(parentTaskId && { parentTaskId }),
-                ...(effectiveStatus && {
-                  status: effectiveStatus as TaskStatus,
-                }),
               },
             );
             if (description) {
@@ -311,24 +320,8 @@ FOLLOW-UP: Set isFollowUp=true and parentTaskId to reschedule an existing task.`
               );
               await setPageContentFromHtml(page.id, description);
             }
-            // Move to target status — Ready triggers auto-execution, Waiting gates on approval
-            // Skip if we already set effectiveStatus (subtask created in Waiting)
-            if (initialStatus && initialStatus !== "Todo" && !effectiveStatus) {
-              try {
-                await changeTaskStatus(
-                  task.id,
-                  initialStatus as TaskStatus,
-                  workspaceId,
-                  userId,
-                  "agent",
-                );
-              } catch (err) {
-                const msg = err instanceof Error ? err.message : String(err);
-                return `Task created but initial status rejected: ${msg}. Task remains in Todo.`;
-              }
-            }
             const label = parentTaskId ? "subtask" : "task";
-            const targetStatus = effectiveStatus ?? initialStatus ?? "Todo";
+            const targetStatus = resolvedStatus;
             const statusNote =
               targetStatus === "Waiting"
                 ? parentTaskId

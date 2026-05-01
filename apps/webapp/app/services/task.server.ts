@@ -66,7 +66,12 @@ export async function createTask(
   userId: string,
   title: string,
   description?: string,
-  options?: { source?: string; status?: TaskStatus; parentTaskId?: string },
+  options?: {
+    source?: string;
+    status?: TaskStatus;
+    parentTaskId?: string;
+    actor?: TransitionActor;
+  },
 ): Promise<Task> {
   // Enforce max depth: epic → task → sub-task (no further nesting).
   // A sub-task's displayId has 2 dots (e.g. tk-zshue.1.1), so if the parent
@@ -86,11 +91,21 @@ export async function createTask(
   }
 
   const effectiveStatus = options?.status ?? "Todo";
+  // Agent-created Ready tasks (no schedule) are special: the agent already
+  // classified them as simple+clear and skipped prep, but we still want a
+  // 2-min buffer so the user can edit before execution. During the buffer
+  // the task sits in Ready with phase=prep; the wake-up handler flips
+  // phase to execute when it fires.
+  const isAgentCreatedReady =
+    effectiveStatus === "Ready" && options?.actor === "agent";
   // Initial phase: Todo or Waiting → prep (task needs planning),
+  // agent-created Ready → prep (buffer hasn't fired yet),
   // everything else → execute (e.g., recurring tasks created in Ready
   // via createScheduledTask skip prep entirely).
   const initialPhase =
-    effectiveStatus === "Todo" || effectiveStatus === "Waiting"
+    effectiveStatus === "Todo" ||
+    effectiveStatus === "Waiting" ||
+    isAgentCreatedReady
       ? "prep"
       : "execute";
 
@@ -111,15 +126,39 @@ export async function createTask(
     await setPageContentFromHtml(page.id, description);
   }
 
-  // Buffer wake-up: freshly-created Todo tasks sit for 2 minutes so the user
+  // Buffer wake-up: freshly-created tasks sit for 2 minutes so the user
   // can edit freely. At expiry, the scheduled-task wake-up handler starts
-  // prep. (Scheduled/recurring tasks use the different createScheduledTask
-  // entry and skip this buffer.)
-  if (effectiveStatus === "Todo") {
+  // prep (Todo path) or directly enqueues execution (agent-created Ready
+  // path, see scheduled-task.logic.ts isReadyBufferExpiry branch).
+  // Two cases get the buffer:
+  //   1. Anyone creates a Todo task (existing behavior — prep starts at expiry)
+  //   2. Agent creates a Ready task with no schedule (new — execution starts
+  //      at expiry; the agent already classified it as simple+clear and we
+  //      record that decision via metadata.prepDecided=true so the prep
+  //      invoker never re-enters prep for this task)
+  // Scheduled/recurring tasks use createScheduledTask and skip this buffer.
+  const needsBuffer = effectiveStatus === "Todo" || isAgentCreatedReady;
+
+  if (needsBuffer) {
     const nextRunAt = new Date(Date.now() + 2 * 60 * 1000);
     await prisma.task.update({
       where: { id: task.id },
-      data: { nextRunAt },
+      data: {
+        nextRunAt,
+        // For agent-created Ready, mark prep decided. Phase stays "prep" —
+        // the wake-up handler in scheduled-task.logic.ts will flip it to
+        // "execute" when the buffer expires. The prepDecided flag is what
+        // the prep invoker reads to short-circuit (Task 6).
+        ...(isAgentCreatedReady && {
+          metadata: setTaskPhaseInMetadata(
+            {
+              ...((task.metadata as Record<string, unknown>) ?? {}),
+              prepDecided: true,
+            },
+            "prep",
+          ),
+        }),
+      },
     });
     try {
       await enqueueScheduledTask(
@@ -132,9 +171,10 @@ export async function createTask(
         nextRunAt,
       );
     } catch (err) {
-      logger.warn("Failed to enqueue buffer wake-up for new Todo task", {
+      logger.warn("Failed to enqueue buffer wake-up for new task", {
         err,
         taskId: task.id,
+        status: effectiveStatus,
       });
     }
   }

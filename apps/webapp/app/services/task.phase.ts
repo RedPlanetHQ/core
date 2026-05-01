@@ -77,7 +77,7 @@ export function setTaskPhaseInMetadata(
 export function canTransition(
   from: TaskStatus,
   to: TaskStatus,
-  _phase: TaskPhase,
+  phase: TaskPhase,
   actor: TransitionActor,
 ): boolean {
   if (from === to) return true;
@@ -85,13 +85,23 @@ export function canTransition(
   // Deny-list: only block transitions that are genuinely dangerous.
   // Everything else is allowed — the system and prompts guide correct usage.
 
-  // Ready, Working, Done, Todo — only user or system (code), not agent.
-  // Agent should not directly set these; the system manages them
-  // (enqueue → Ready, runtime → Working when execution starts, user → Done).
+  // Working, Done, Todo — never agent-driven. The system manages these
+  // (runtime → Working when execution starts, user → Done, parking → Todo).
   if (
-    (to === "Ready" || to === "Working" || to === "Done" || to === "Todo") &&
+    (to === "Working" || to === "Done" || to === "Todo") &&
     actor === "agent"
   ) {
+    return false;
+  }
+
+  // Ready — agent may set Ready ONLY during prep. This covers two cases:
+  // (1) butler skips the prep gate for simple+clear tasks (Todo -> Ready),
+  // (2) butler unblocks itself after a Waiting answer (Waiting -> Ready).
+  // Once we've crossed into execute, only system or user can flip back to
+  // Ready (e.g., user approves from Review). This guard is what prevents
+  // an auto-loop: once the agent moves a task to execute, it cannot
+  // promote it back to Ready from execute context.
+  if (to === "Ready" && actor === "agent" && phase !== "prep") {
     return false;
   }
 
