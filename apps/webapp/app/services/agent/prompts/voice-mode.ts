@@ -10,8 +10,8 @@
 
 export interface ScreenContext {
   app: string;
-  title?: string;
-  text?: string;
+  title?: string | null;
+  text?: string | null;
 }
 
 const escapeXml = (s: string): string =>

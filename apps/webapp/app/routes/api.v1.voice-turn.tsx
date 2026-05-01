@@ -45,8 +45,8 @@ import { getOrCreateQuickChat } from "~/services/voice-conversation.server";
 
 const ScreenContextSchema = z.object({
   app: z.string(),
-  title: z.string().optional(),
-  text: z.string().optional(),
+  title: z.string().nullish(),
+  text: z.string().nullish(),
 });
 
 const VoiceTurnRequestSchema = z.object({
