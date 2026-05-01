@@ -4,7 +4,7 @@ description: "Step-by-step runbook to install, register, and connect a Gateway t
 ---
 
 <Note>
-**For agents reading this page:** Execute every fenced bash block in order for the path the user picks (Native + Tailscale, Native + ngrok, Docker, or Railway). After Step 6, prompt the user to complete the browser-side paste in Step 7. Do not skip Step 7: nothing works until the gateway is linked in the CORE app.
+**For agents reading this page:** Execute every fenced bash block in order for the path the user picks (Native + Tailscale, Native + ngrok, Docker, or Railway), through Step 4. Surface the URL and security key from Step 4 to the user, then hand off and prompt them to complete Steps 5 and 6 in their browser. Do not claim success until the user confirms Step 6 is done: nothing works until the gateway is linked in the CORE app. After that, you can resume with Step 7 (Verify) and Step 8 (Register a folder).
 </Note>
 
 This is the linear runbook. For the conceptual overview of what the Gateway is and what it can do, see [Gateway Overview](/gateway/overview). For tunnel-only details (Tailscale, ngrok, custom URLs), see [Tunnels](/gateway/tunnels).
