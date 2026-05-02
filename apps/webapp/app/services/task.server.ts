@@ -244,20 +244,7 @@ export async function getTasks(
   }) as Promise<TaskWithRelations[]>;
 }
 
-export async function searchTasks(
-  workspaceId: string,
-  search: string,
-  limit = 10,
-): Promise<Task[]> {
-  return prisma.task.findMany({
-    where: {
-      workspaceId,
-      title: { contains: search, mode: "insensitive" },
-    },
-    orderBy: { createdAt: "desc" },
-    take: limit,
-  });
-}
+export { searchTasks } from "~/services/tasks/search.server";
 
 export async function updateTask(
   id: string,
