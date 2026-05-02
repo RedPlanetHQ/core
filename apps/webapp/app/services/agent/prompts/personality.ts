@@ -603,7 +603,7 @@ export const PERSONALITY = (
       ? `\nPreferred honorific: ${getHonorific(pronoun)}. Use naturally when addressing them directly — not in every sentence.\n`
       : "";
 
-  // Slot the chosen voice variant under a `# Tone and style` section so it
-  // sits in the same opencode-shaped flow as the rest of the prompt.
-  return `${BASE_CONTEXT(name, butlerName)}${honorificLine}\n\n# Tone and style\n\n${voice}`;
+  // Slot the chosen voice variant under a <tone_and_style> section so it
+  // sits in the same XML-anchored flow as the rest of the prompt body.
+  return `${BASE_CONTEXT(name, butlerName)}${honorificLine}\n\n<tone_and_style>\n${voice}\n</tone_and_style>`;
 };
