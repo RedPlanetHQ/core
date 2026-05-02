@@ -27,14 +27,14 @@ async function executeQuery(client: AxiosInstance, query: string, variables?: Re
 
     if (response.data.errors) {
       throw new Error(
-        `GraphQL errors: ${response.data.errors.map((e: any) => e.message).join(', ')}`
+        `GraphQL errors: ${response.data.errors.map((e: any) => e.message).join(', ')}`,
       );
     }
 
     return response.data.data;
   } catch (error: any) {
     throw new Error(
-      `Linear API error: ${error.response?.data?.errors?.[0]?.message || error.message}`
+      `Linear API error: ${error.response?.data?.errors?.[0]?.message || error.message}`,
     );
   }
 }
@@ -50,12 +50,17 @@ const CreateIssueSchema = z.object({
   teamId: z.string().describe('Team ID where the issue will be created'),
   assigneeId: z.string().optional().describe('User ID to assign the issue to'),
   projectId: z.string().optional().describe('Project ID to add the issue to'),
-  priority: z.number().min(0).max(4).optional().describe('Priority (0=None, 1=Urgent, 2=High, 3=Medium, 4=Low)'),
+  priority: z
+    .number()
+    .min(0)
+    .max(4)
+    .optional()
+    .describe('Priority (0=None, 1=Urgent, 2=High, 3=Medium, 4=Low)'),
   stateId: z.string().optional().describe('Workflow state ID'),
   labelIds: z.array(z.string()).optional().describe('Array of label IDs to apply'),
   estimate: z.number().optional().describe('Estimate points'),
   dueDate: z.string().optional().describe('Due date (YYYY-MM-DD format)'),
-  parentId: z.string().optional().describe('Parent issue ID (for sub-issues)'),
+  parentId: z.string().optional().describe('Parent issue ID (for sub-tasks)'),
   cycleId: z.string().optional().describe('Cycle ID to add the issue to'),
 });
 
@@ -115,7 +120,10 @@ const CreateProjectSchema = z.object({
   leadId: z.string().optional().describe('Project lead user ID'),
   startDate: z.string().optional().describe('Start date (YYYY-MM-DD)'),
   targetDate: z.string().optional().describe('Target date (YYYY-MM-DD)'),
-  state: z.enum(['planned', 'started', 'paused', 'completed', 'canceled']).optional().describe('Project state'),
+  state: z
+    .enum(['planned', 'started', 'paused', 'completed', 'canceled'])
+    .optional()
+    .describe('Project state'),
 });
 
 const UpdateProjectSchema = z.object({
@@ -125,7 +133,10 @@ const UpdateProjectSchema = z.object({
   leadId: z.string().optional().describe('New lead user ID'),
   startDate: z.string().optional().describe('New start date'),
   targetDate: z.string().optional().describe('New target date'),
-  state: z.enum(['planned', 'started', 'paused', 'completed', 'canceled']).optional().describe('New state'),
+  state: z
+    .enum(['planned', 'started', 'paused', 'completed', 'canceled'])
+    .optional()
+    .describe('New state'),
 });
 
 const ListProjectsSchema = z.object({
@@ -360,11 +371,7 @@ export async function getTools() {
 // TOOL IMPLEMENTATIONS
 // ============================================================================
 
-export async function callTool(
-  name: string,
-  args: Record<string, any>,
-  apiKey: string
-) {
+export async function callTool(name: string, args: Record<string, any>, apiKey: string) {
   const linearClient = createLinearClient(apiKey);
 
   try {
@@ -419,10 +426,12 @@ export async function callTool(
         const issue = data.issueCreate.issue;
 
         return {
-          content: [{
-            type: 'text',
-            text: `✓ Issue created: ${issue.identifier} - ${issue.title}\nURL: ${issue.url}\nID: ${issue.id}${issue.assignee ? `\nAssignee: ${issue.assignee.name}` : ''}${issue.state ? `\nState: ${issue.state.name}` : ''}`,
-          }],
+          content: [
+            {
+              type: 'text',
+              text: `✓ Issue created: ${issue.identifier} - ${issue.title}\nURL: ${issue.url}\nID: ${issue.id}${issue.assignee ? `\nAssignee: ${issue.assignee.name}` : ''}${issue.state ? `\nState: ${issue.state.name}` : ''}`,
+            },
+          ],
         };
       }
 
@@ -456,7 +465,8 @@ export async function callTool(
 
         if (validatedArgs.title) input.title = validatedArgs.title;
         if (validatedArgs.description !== undefined) input.description = validatedArgs.description;
-        if (validatedArgs.assigneeId !== undefined) input.assigneeId = validatedArgs.assigneeId === 'null' ? null : validatedArgs.assigneeId;
+        if (validatedArgs.assigneeId !== undefined)
+          input.assigneeId = validatedArgs.assigneeId === 'null' ? null : validatedArgs.assigneeId;
         if (validatedArgs.priority !== undefined) input.priority = validatedArgs.priority;
         if (validatedArgs.stateId) input.stateId = validatedArgs.stateId;
         if (validatedArgs.labelIds) input.labelIds = validatedArgs.labelIds;
@@ -465,14 +475,19 @@ export async function callTool(
         if (validatedArgs.projectId !== undefined) input.projectId = validatedArgs.projectId;
         if (validatedArgs.cycleId !== undefined) input.cycleId = validatedArgs.cycleId;
 
-        const data = await executeQuery(linearClient, mutation, { id: validatedArgs.issueId, input });
+        const data = await executeQuery(linearClient, mutation, {
+          id: validatedArgs.issueId,
+          input,
+        });
         const issue = data.issueUpdate.issue;
 
         return {
-          content: [{
-            type: 'text',
-            text: `✓ Issue updated: ${issue.identifier} - ${issue.title}\nURL: ${issue.url}`,
-          }],
+          content: [
+            {
+              type: 'text',
+              text: `✓ Issue updated: ${issue.identifier} - ${issue.title}\nURL: ${issue.url}`,
+            },
+          ],
         };
       }
 
@@ -609,10 +624,12 @@ export async function callTool(
         await executeQuery(linearClient, mutation, { id: validatedArgs.issueId });
 
         return {
-          content: [{
-            type: 'text',
-            text: `✓ Issue ${validatedArgs.issueId} deleted successfully`,
-          }],
+          content: [
+            {
+              type: 'text',
+              text: `✓ Issue ${validatedArgs.issueId} deleted successfully`,
+            },
+          ],
         };
       }
 
@@ -647,10 +664,12 @@ export async function callTool(
         const comment = data.commentCreate.comment;
 
         return {
-          content: [{
-            type: 'text',
-            text: `✓ Comment added to issue ${comment.issue.identifier}\nBy: ${comment.user.name}\nComment ID: ${comment.id}`,
-          }],
+          content: [
+            {
+              type: 'text',
+              text: `✓ Comment added to issue ${comment.issue.identifier}\nBy: ${comment.user.name}\nComment ID: ${comment.id}`,
+            },
+          ],
         };
       }
 
@@ -676,10 +695,12 @@ export async function callTool(
         });
 
         return {
-          content: [{
-            type: 'text',
-            text: `✓ Comment ${validatedArgs.commentId} updated successfully`,
-          }],
+          content: [
+            {
+              type: 'text',
+              text: `✓ Comment ${validatedArgs.commentId} updated successfully`,
+            },
+          ],
         };
       }
 
@@ -697,10 +718,12 @@ export async function callTool(
         await executeQuery(linearClient, mutation, { id: validatedArgs.commentId });
 
         return {
-          content: [{
-            type: 'text',
-            text: `✓ Comment ${validatedArgs.commentId} deleted successfully`,
-          }],
+          content: [
+            {
+              type: 'text',
+              text: `✓ Comment ${validatedArgs.commentId} deleted successfully`,
+            },
+          ],
         };
       }
 
@@ -744,10 +767,12 @@ export async function callTool(
         const project = data.projectCreate.project;
 
         return {
-          content: [{
-            type: 'text',
-            text: `✓ Project created: ${project.name}\nURL: ${project.url}\nID: ${project.id}`,
-          }],
+          content: [
+            {
+              type: 'text',
+              text: `✓ Project created: ${project.name}\nURL: ${project.url}\nID: ${project.id}`,
+            },
+          ],
         };
       }
 
@@ -778,14 +803,19 @@ export async function callTool(
         if (validatedArgs.targetDate) input.targetDate = validatedArgs.targetDate;
         if (validatedArgs.state) input.state = validatedArgs.state;
 
-        const data = await executeQuery(linearClient, mutation, { id: validatedArgs.projectId, input });
+        const data = await executeQuery(linearClient, mutation, {
+          id: validatedArgs.projectId,
+          input,
+        });
         const project = data.projectUpdate.project;
 
         return {
-          content: [{
-            type: 'text',
-            text: `✓ Project updated: ${project.name}\nURL: ${project.url}`,
-          }],
+          content: [
+            {
+              type: 'text',
+              text: `✓ Project updated: ${project.name}\nURL: ${project.url}`,
+            },
+          ],
         };
       }
 
@@ -1150,10 +1180,12 @@ export async function callTool(
         const label = data.issueLabelCreate.issueLabel;
 
         return {
-          content: [{
-            type: 'text',
-            text: `✓ Label created: ${label.name}\nTeam: ${label.team.name}\nID: ${label.id}`,
-          }],
+          content: [
+            {
+              type: 'text',
+              text: `✓ Label created: ${label.name}\nTeam: ${label.team.name}\nID: ${label.id}`,
+            },
+          ],
         };
       }
 
@@ -1242,10 +1274,12 @@ export async function callTool(
         const cycle = data.cycleCreate.cycle;
 
         return {
-          content: [{
-            type: 'text',
-            text: `✓ Cycle created: ${cycle.name}\nTeam: ${cycle.team.name}\nDuration: ${cycle.startsAt} to ${cycle.endsAt}\nID: ${cycle.id}`,
-          }],
+          content: [
+            {
+              type: 'text',
+              text: `✓ Cycle created: ${cycle.name}\nTeam: ${cycle.team.name}\nDuration: ${cycle.startsAt} to ${cycle.endsAt}\nID: ${cycle.id}`,
+            },
+          ],
         };
       }
 
@@ -1344,10 +1378,12 @@ export async function callTool(
     }
   } catch (error: any) {
     return {
-      content: [{
-        type: 'text',
-        text: `Error: ${error.message}`,
-      }],
+      content: [
+        {
+          type: 'text',
+          text: `Error: ${error.message}`,
+        },
+      ],
     };
   }
 }

@@ -105,7 +105,7 @@ function SubIssuesPopover({
           ))}
           {filtered.length === 0 && (
             <p className="text-muted-foreground px-3 py-2 text-xs">
-              No sub-issues found
+              No sub-tasks found
             </p>
           )}
         </div>
@@ -191,9 +191,7 @@ export function TaskDetailFull({
     }, 800);
   };
 
-  const doneSubtasks = task.subtasks.filter(
-    (s) => s.status === "Done",
-  ).length;
+  const doneSubtasks = task.subtasks.filter((s) => s.status === "Done").length;
   const totalSubtasks = task.subtasks.length;
   const isScheduled = task.isActive && (task.schedule || task.nextRunAt);
 
@@ -286,7 +284,7 @@ export function TaskDetailFull({
             />
           </div>
 
-          {/* Sub-issues section */}
+          {/* Sub-tasks section */}
           <div className="flex flex-col gap-2">
             <div className="flex items-center justify-between">
               <button
@@ -301,7 +299,7 @@ export function TaskDetailFull({
                   )}
                 />
                 <span className="text-xs font-medium uppercase tracking-wider">
-                  Sub-issues
+                  Sub-tasks
                 </span>
                 {totalSubtasks > 0 && (
                   <span className="text-muted-foreground text-xs">
