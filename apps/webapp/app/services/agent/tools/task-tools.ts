@@ -164,7 +164,7 @@ FOLLOW-UP: Set isFollowUp=true and parentTaskId to reschedule an existing task.`
             .enum(["Todo", "Waiting", "Ready"])
             .optional()
             .describe(
-              "Initial status, classified by the rules in <capabilities> STARTING WORK. Todo = COMPLEX work (multi-step, decomposable, irreversible bulk). 2-min prep buffer applies. Ready = SIMPLE + CLEAR (single action, well-scoped). 2-min buffer still applies (gives the user a window to add context); execution starts after expiry. Waiting = SIMPLE + UNCLEAR (need one question answered) OR needs explicit user approval. Send_message the question/plan, then unblock_task when answered.",
+              "Initial status, classified by the rules in the Doing tasks section of the system prompt. Todo = COMPLEX work (multi-step, decomposable, irreversible bulk). 2-min prep buffer applies. Ready = SIMPLE + CLEAR (single action, well-scoped). 2-min buffer still applies (gives the user a window to add context); execution starts after expiry. Waiting = SIMPLE + UNCLEAR (need one question answered) OR needs explicit user approval. Send_message the question/plan, then unblock_task when answered.",
             ),
           skillId: z
             .string()
