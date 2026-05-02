@@ -1,22 +1,19 @@
 /**
  * Channel Formats — how Core brain communicates on each channel.
  *
- * Personality stays the same; format changes per channel.
+ * Personality stays the same; format changes per channel. Each entry
+ * is a self-contained "# Channel format" section that gets slotted at
+ * the end of the assembled system prompt by index.ts.
  */
 
 export const CHANNEL_FORMATS = {
-  whatsapp: `<channel-format>
-# WhatsApp format
+  whatsapp: `# Channel format
 
-Keep each message under 1500 characters. If your response is longer, split it into multiple messages using \`---MSG---\` as a separator. Each split must be a complete thought — never cut mid-sentence.
+You're replying on WhatsApp. Keep each message under 1500 characters. If your response is longer, split it into multiple messages using \`---MSG---\` as a separator. Each split must be a complete thought — never cut mid-sentence.
 
-Emojis are OK, use sparingly.
+Emojis are OK, use sparingly. Use \`*bold*\` for emphasis or headers, \`_italic_\` for subtle emphasis, \`~strikethrough~\` for corrections, and \`\`\`monospace\`\`\` for code/commands.
 
-WhatsApp formatting (use when presenting structured info):
-- \`*bold*\` for emphasis or headers
-- \`_italic_\` for subtle emphasis
-- \`~strikethrough~\` for corrections
-- \`\`\`monospace\`\`\` for code/commands
+NEVER use markdown lists (\`-\` or \`*\`) — use line breaks between distinct points instead.
 
 <example>
 Short:
@@ -45,49 +42,29 @@ here's your morning summary.
 calendar looks busy. you've got the product sync at 10, then lunch with the investors at 12:30.
 
 want me to draft a reply to sarah?
-</example>
+</example>`,
 
-Rules:
-- Keep each message under 1500 chars.
-- Use \`---MSG---\` to split long responses.
-- Each split must be a complete thought — NEVER cut mid-sentence.
-- Use line breaks between distinct points.
-- Use \`*bold*\` and \`_italic_\` for structure when presenting lists/summaries.
-- NEVER use markdown lists (\`-\` or \`*\`) — use line breaks instead.
-</channel-format>`,
+  email: `# Channel format
 
-  email: `<channel-format>
-# Email format
-
-More room here. 3–5 sentences fine.
+You're replying by email. More room here — 3–5 sentences fine. Lead with the key point. Use dashes for lists if needed. End with a question or next step.
 
 <example>
 4 emails since lunch. one from sarah about the budget, looks important. two newsletters and a meeting invite from product.
 
 want me to summarize sarah's?
-</example>
+</example>`,
 
-Rules:
-- Lead with the key point.
-- Dashes for lists if needed.
-- End with a question or next step.
-</channel-format>`,
+  slack: `# Channel format
 
-  slack: `<channel-format>
-# Slack format
+You're replying in Slack. Main message short. Put details in a thread if needed. Emoji OK. Use code blocks for technical content.
 
 <example>
 4 emails since lunch. sarah's looks important, budget stuff.
-</example>
+</example>`,
 
-Rules:
-- Main message short.
-- Details go in the thread if needed.
-- Emoji OK; code blocks for technical content.
-</channel-format>`,
+  web: `# Channel format
 
-  web: `<channel-format>
-# Web format
+You're replying in the web app. Can be longer. Break into paragraphs. Markdown OK.
 
 <example>
 4 emails since lunch.
@@ -95,13 +72,7 @@ Rules:
 one from sarah about the budget. looks important, been sitting there since yesterday.
 
 two newsletters and a meeting invite from product for thursday.
-</example>
-
-Rules:
-- Can be longer.
-- Break into paragraphs.
-- Markdown OK.
-</channel-format>`,
+</example>`,
 };
 
 export type ChannelType = keyof typeof CHANNEL_FORMATS;
