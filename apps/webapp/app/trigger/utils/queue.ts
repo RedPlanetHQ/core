@@ -2,7 +2,7 @@ import { IngestionStatus } from "@prisma/client";
 import { type z } from "zod";
 import { type IngestBodyRequest } from "../ingest/ingest";
 
-import { hasCredits } from "./utils";
+import { hasCredits } from "./utils-v0";
 import { preprocessTask } from "../ingest/preprocess-episode";
 import { LabelService } from "~/services/label.server";
 import { prisma } from "~/db.server";
