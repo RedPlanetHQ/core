@@ -38,7 +38,15 @@ const ScratchpadTaskComponent = ({
     displayId: string | null;
     nextRunAt: string | null;
     isRecurring: boolean;
-  }>({ displayId: null, nextRunAt: null, isRecurring: false });
+    maxOccurrences: number | null;
+    occurrenceCount: number;
+  }>({
+    displayId: null,
+    nextRunAt: null,
+    isRecurring: false,
+    maxOccurrences: null,
+    occurrenceCount: 0,
+  });
   const creatingRef = useRef(false);
   const navigate = useNavigate();
 
@@ -48,6 +56,8 @@ const ScratchpadTaskComponent = ({
       displayId: data.displayId ?? null,
       nextRunAt: data.nextRunAt ?? null,
       isRecurring: !!data.schedule,
+      maxOccurrences: data.maxOccurrences ?? null,
+      occurrenceCount: data.occurrenceCount ?? 0,
     });
     if (data.id) {
       extension.options._taskCache[data.id] = {
@@ -160,6 +170,17 @@ const ScratchpadTaskComponent = ({
                 isRecurring={taskMeta.isRecurring}
               />
             )}
+            {taskMeta.isRecurring &&
+              taskMeta.maxOccurrences &&
+              taskMeta.maxOccurrences > 1 && (
+                <span className="text-muted-foreground text-xs">
+                  {Math.max(
+                    taskMeta.maxOccurrences - taskMeta.occurrenceCount,
+                    0,
+                  )}{" "}
+                  left
+                </span>
+              )}
             <TaskStatusDropdown
               value={status}
               onChange={handleStatusChange}

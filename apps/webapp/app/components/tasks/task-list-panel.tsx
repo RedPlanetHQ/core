@@ -140,10 +140,18 @@ function TaskRowItem({
               <div className="flex shrink-0 items-center gap-1.5">
                 {task.schedule &&
                   (!task.maxOccurrences || task.maxOccurrences > 1) && (
-                    <RefreshCw
-                      size={13}
-                      className="text-muted-foreground shrink-0"
-                    />
+                    <div className="text-muted-foreground flex shrink-0 items-center gap-1">
+                      <RefreshCw size={13} className="shrink-0" />
+                      {task.maxOccurrences && task.maxOccurrences > 1 && (
+                        <span className="text-xs">
+                          {Math.max(
+                            task.maxOccurrences - task.occurrenceCount,
+                            0,
+                          )}{" "}
+                          left
+                        </span>
+                      )}
+                    </div>
                   )}
                 {task.nextRunAt && (
                   <ButlerRunBadge

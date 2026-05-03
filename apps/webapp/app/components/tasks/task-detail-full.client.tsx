@@ -193,7 +193,6 @@ export function TaskDetailFull({
 
   const doneSubtasks = task.subtasks.filter((s) => s.status === "Done").length;
   const totalSubtasks = task.subtasks.length;
-  const isScheduled = task.isActive && (task.schedule || task.nextRunAt);
 
   return (
     <>
@@ -215,13 +214,12 @@ export function TaskDetailFull({
               </span>
             )}
 
-            {!isScheduled && (
-              <TaskStatusDropdown
-                value={task.status as TaskStatus}
-                onChange={onStatusChange}
-                variant={TaskStatusDropdownVariant.LINK}
-              />
-            )}
+            <TaskStatusDropdown
+              value={task.status as TaskStatus}
+              onChange={onStatusChange}
+              variant={TaskStatusDropdownVariant.LINK}
+            />
+
 
             {totalSubtasks > 0 && (
               <SubIssuesPopover
@@ -268,6 +266,19 @@ export function TaskDetailFull({
                   : task.isActive && task.nextRunAt
                     ? `Butler · ${formatRunTime(new Date(task.nextRunAt as unknown as string))}`
                     : "Schedule"}
+                {task.isActive &&
+                  task.schedule &&
+                  task.maxOccurrences &&
+                  task.maxOccurrences > 1 && (
+                    <span className="text-muted-foreground ml-1">
+                      ·{" "}
+                      {Math.max(
+                        task.maxOccurrences - task.occurrenceCount,
+                        0,
+                      )}{" "}
+                      left
+                    </span>
+                  )}
               </span>
             </Button>
           </div>
