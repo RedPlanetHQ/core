@@ -334,9 +334,9 @@ FOLLOW-UP: Set isFollowUp=true and parentTaskId to reschedule an existing task.`
             const statusNote =
               targetStatus === "Waiting"
                 ? parentTaskId
-                  ? "Waiting — will run when parent is approved."
-                  : "Waiting — send_message to user explaining what's needed."
-                : "Added to Todo (planning).";
+                  ? "Waiting — will run when parent is approved. The task executes in its own thread; do not do its work in the current conversation."
+                  : "Waiting — send_message to user explaining what's needed. Once unblocked, the task executes in its own thread; do not do its work in the current conversation."
+                : `Added to ${targetStatus} (planning). The task will be picked up and executed in its own thread — do NOT do its work in the current conversation; just acknowledge creation and stop.`;
             logger.info(
               `Task ${task.id} created (${targetStatus})${parentTaskId ? ` subtask of ${parentTaskId}` : ""}`,
             );

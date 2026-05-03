@@ -41,6 +41,8 @@ const loader = createHybridLoaderApiRoute(
       displayId: task.displayId,
       nextRunAt: task.nextRunAt,
       schedule: task.schedule,
+      maxOccurrences: task.maxOccurrences,
+      occurrenceCount: task.occurrenceCount,
       description,
       subtaskCount: task.subtasks?.length ?? 0,
     });
