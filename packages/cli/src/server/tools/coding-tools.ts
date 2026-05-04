@@ -331,7 +331,11 @@ async function submitPromptToLiveTui(
 
 // ============ Worktree Helpers ============
 
-const CB_WORKTREES_ROOT = resolve(homedir(), '.corebrain', 'worktrees');
+function resolvedHomedir(): string {
+	try { return realpathSync(homedir()); } catch { return homedir(); }
+}
+
+const CB_WORKTREES_ROOT = resolve(resolvedHomedir(), '.corebrain', 'worktrees');
 
 /**
  * Stable per-repo namespace under the corebrain home: `<basename>-<sha8>`.
@@ -766,8 +770,11 @@ async function handleReadSession(params: zod.infer<typeof ReadSessionSchema>) {
 	const {sessions: allSessions} = await scanAllSessions({});
 	const scanned = allSessions.find(s => s.sessionId === params.sessionId);
 
-	// Prefer worktreePath > scanned dir > stored dir
-	const sessionDir = stored?.worktreePath ?? scanned?.dir ?? stored?.dir;
+	// Prefer scanned dir (real cwd from JSONL) > stored worktreePath > stored dir.
+	// Scanned dir wins because Claude Code resolves symlinks when writing the cwd
+	// field, so it is always the canonical path — unlike stored.worktreePath which
+	// may have been computed from a symlinked homedir.
+	const sessionDir = scanned?.dir ?? stored?.worktreePath ?? stored?.dir;
 
 	if (!sessionDir) {
 		return {success: false, error: `Session "${params.sessionId}" not found`};
