@@ -7,6 +7,7 @@ import { setGlobalBasePath } from "../emails/components/BasePath";
 import WelcomeEmail, { WelcomeEmailSchema } from "../emails/welcome";
 import { constructMailTransport, MailTransport, MailTransportOptions } from "./transports";
 import MagicLinkEmail from "../emails/magic-link";
+import PaymentFailedEmail, { PaymentFailedEmailSchema } from "../emails/payment-failed";
 
 export { type MailTransportOptions };
 
@@ -17,6 +18,7 @@ export const DeliverEmailSchema = z
       magicLink: z.string().url(),
     }),
     WelcomeEmailSchema,
+    PaymentFailedEmailSchema,
   ])
   .and(z.object({ to: z.string() }));
 
@@ -81,6 +83,21 @@ export class EmailClient {
         return {
           subject: `Your CORE setup is ready ⚡`,
           component: <WelcomeEmail />,
+        };
+
+      case "payment_failed":
+        return {
+          subject: "Payment failed — action required",
+          component: (
+            <PaymentFailedEmail
+              userName={data.userName}
+              planName={data.planName}
+              amount={data.amount}
+              currency={data.currency}
+              nextRetryDate={data.nextRetryDate}
+              updatePaymentUrl={data.updatePaymentUrl}
+            />
+          ),
         };
     }
   }

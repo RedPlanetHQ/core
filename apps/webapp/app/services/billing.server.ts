@@ -25,7 +25,7 @@ const stripe = BILLING_CONFIG.stripe.secretKey
 /**
  * Get subscription amount from Stripe
  */
-async function getSubscriptionAmount(stripeSubscriptionId: string): Promise<number> {
+export async function getSubscriptionAmount(stripeSubscriptionId: string): Promise<number> {
   if (!stripe) {
     return 0;
   }
@@ -86,10 +86,8 @@ export async function resetMonthlyCredits(
       monthlyCreditsAllocated: subscription.monthlyCredits,
       creditsUsed: userUsage.usedCredits,
       overageCreditsUsed: userUsage.overageCredits,
-      // subscriptionAmount: 0, // TODO: Get from Stripe
-      subscriptionAmount: subscriptionAmount / 100, // Convert from cents to dollars
+      subscriptionAmount: subscriptionAmount / 100,
       usageAmount: subscription.overageAmount,
-      // totalAmount: subscription.overageAmount,
       totalAmount: (subscriptionAmount / 100) + subscription.overageAmount,
     },
   });
@@ -268,7 +266,7 @@ export async function getUsageSummary(workspaceId: string, userId: string) {
       end: subscription.currentPeriodEnd,
       daysRemaining: Math.ceil(
         (subscription.currentPeriodEnd.getTime() - Date.now()) /
-        (1000 * 60 * 60 * 24),
+          (1000 * 60 * 60 * 24),
       ),
     },
     overage: {

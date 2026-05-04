@@ -1,16 +1,20 @@
 import { Body, Container, Head, Html, Link, Preview, Text } from "@react-email/components";
+import { z } from "zod";
 import { Footer } from "./components/Footer";
 import { Image } from "./components/Image";
 import { anchor, container, h1, main, paragraphLight } from "./components/styles";
 
-interface PaymentFailedEmailProps {
-  userName?: string;
-  planName?: string;
-  amount?: number;
-  currency?: string;
-  nextRetryDate?: string;
-  updatePaymentUrl: string;
-}
+export const PaymentFailedEmailSchema = z.object({
+  email: z.literal("payment_failed"),
+  userName: z.string().optional(),
+  planName: z.string().optional(),
+  amount: z.number().optional(),
+  currency: z.string().optional(),
+  nextRetryDate: z.string().optional(),
+  updatePaymentUrl: z.string().url(),
+});
+
+type PaymentFailedEmailProps = Omit<z.infer<typeof PaymentFailedEmailSchema>, "email">;
 
 export default function PaymentFailedEmail({
   userName = "there",

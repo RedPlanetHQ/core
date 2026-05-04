@@ -372,11 +372,18 @@ async function handleInvoicePaymentFailed(invoice: Stripe.Invoice) {
         },
       });
 
-      // Send email notification to user about failed payment
+      // Send email notification to workspace owner about failed payment
       try {
-        const user = await prisma.user.findUnique({
-          where: { id: subscription.userId },
+        const userWorkspace = await prisma.userWorkspace.findFirst({
+          where: {
+            workspaceId: subscription.workspaceId,
+            isActive: true,
+          },
+          orderBy: { createdAt: "asc" },
+          include: { user: true },
         });
+
+        const user = userWorkspace?.user;
 
         if (user?.email) {
           const planConfig = getPlanConfig(subscription.planType as PlanType);
@@ -386,8 +393,8 @@ async function handleInvoicePaymentFailed(invoice: Stripe.Invoice) {
             planName: planConfig?.name,
             amount: invoice.amount_due,
             currency: invoice.currency,
-            nextRetryDate: invoice.next_retry_at
-              ? new Date(invoice.next_retry_at * 1000).toLocaleDateString()
+            nextRetryDate: invoice.next_payment_attempt
+              ? new Date(invoice.next_payment_attempt * 1000).toLocaleDateString()
               : undefined,
           });
 

@@ -8,12 +8,7 @@ import nodeCrypto from "node:crypto";
 import { customAlphabet } from "nanoid";
 import { prisma } from "~/db.server";
 import { BILLING_CONFIG, isBillingEnabled } from "~/config/billing.server";
-// import { logger } from "~/services/logger.service";
-import Stripe from "stripe";
-// import {
-//   createPersonalAccessToken as createPersonalAccessTokenService,
-//   type CreatedPersonalAccessToken
-// } from "~/services/personalAccessToken.server";
+import { getSubscriptionAmount } from "~/services/billing.server";
 
 // Token generation utilities
 const tokenValueLength = 40;
@@ -22,28 +17,6 @@ const tokenGenerator = customAlphabet(
   tokenValueLength,
 );
 const tokenPrefix = "rc_pat_";
-
-// Initialize Stripe
-const stripe = BILLING_CONFIG.stripe.secretKey
-  ? new Stripe(BILLING_CONFIG.stripe.secretKey)
-  : null;
-
-/**
- * Get subscription amount from Stripe
- */
-async function getSubscriptionAmount(stripeSubscriptionId: string): Promise<number> {
-  if (!stripe) {
-    return 0;
-  }
-
-  try {
-    const stripeSubscription = await stripe.subscriptions.retrieve(stripeSubscriptionId);
-    return stripeSubscription.items.data[0]?.price.unit_amount || 0;
-  } catch (error) {
-    console.error("Failed to get subscription amount from Stripe:", error);
-    return 0;
-  }
-}
 
 type CreatePersonalAccessTokenOptions = {
   name: string;
@@ -92,8 +65,6 @@ function hashToken(token: string): string {
   hash.update(token);
   return hash.digest("hex");
 }
-// Token management functions moved to personalAccessToken.server.ts
-// Import from there instead of duplicating here
 
 export async function getOrCreatePersonalAccessToken({
   name,
@@ -118,7 +89,6 @@ export async function getOrCreatePersonalAccessToken({
       // token is not returned
     };
   }
-
 
   // Create a new token
   const token = createToken();
@@ -527,10 +497,8 @@ export async function resetMonthlyCredits(
       monthlyCreditsAllocated: subscription.monthlyCredits,
       creditsUsed: userUsage.usedCredits,
       overageCreditsUsed: userUsage.overageCredits,
-      // subscriptionAmount: 0, // TODO: Get from Stripe
-      subscriptionAmount: subscriptionAmount / 100, // Convert from cents to dollars
+      subscriptionAmount: subscriptionAmount / 100,
       usageAmount: subscription.overageAmount,
-      // totalAmount: subscription.overageAmount,
       totalAmount: (subscriptionAmount / 100) + subscription.overageAmount,
     },
   });
