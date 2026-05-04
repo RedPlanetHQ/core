@@ -2,7 +2,7 @@ import {existsSync, statSync, readdirSync, createReadStream} from 'node:fs';
 import {join, basename} from 'node:path';
 import {homedir} from 'node:os';
 import {createInterface} from 'node:readline';
-import {BaseCodingAgentReader, type AgentReadResult, type AgentReadOptions, type AgentTurnsResult, type ConversationTurn, type ScannedSession, type ScanOptions, type SessionEntry} from './types';
+import {BaseCodingAgentReader, type AgentReadResult, type AgentReadOptions, type AgentTurnsResult, type ConversationTurn, type ScannedSession, type ScanOptions, type SessionEntry, type ContentBlock} from './types';
 
 const CLAUDE_PROJECTS_DIR = join(homedir(), '.claude', 'projects');
 
@@ -58,13 +58,19 @@ function getSessionPath(dir: string, sessionId: string): string {
 	return join(CLAUDE_PROJECTS_DIR, dirToProjectFolder(dir), `${sessionId}.jsonl`);
 }
 
-function extractText(content: string | Array<{type: string; text?: string}>): string {
-	if (typeof content === 'string') return content;
-	// Only grab 'text' parts — skip 'thinking', 'tool_use', 'tool_result', etc.
-	return content
-		.filter((p) => p.type === 'text' && p.text)
-		.map((p) => p.text!)
-		.join('');
+const TOOL_PRIMARY_KEYS = ['command', 'file_path', 'query', 'prompt', 'description', 'title', 'pattern'];
+
+function formatToolUse(block: ContentBlock): string {
+	const name = block.name ?? 'unknown';
+	const input = block.input ?? {};
+	for (const key of TOOL_PRIMARY_KEYS) {
+		const val = input[key];
+		if (typeof val === 'string' && val) {
+			const truncated = val.length > 100 ? val.slice(0, 97) + '...' : val;
+			return `[${name}] ${truncated}`;
+		}
+	}
+	return `[${name}]`;
 }
 
 export function claudeCodeEntriesToTurns(entries: SessionEntry[]): ConversationTurn[] {
@@ -73,8 +79,30 @@ export function claudeCodeEntriesToTurns(entries: SessionEntry[]): ConversationT
 		if ((entry.type !== 'user' && entry.type !== 'assistant') || !entry.message) continue;
 		const {role, content} = entry.message;
 		if (role !== 'user' && role !== 'assistant') continue;
-		const text = extractText(content).trim();
-		if (text) turns.push({role: role as 'user' | 'assistant', content: text});
+
+		const parts: string[] = [];
+
+		if (typeof content === 'string') {
+			const t = content.trim();
+			if (t) parts.push(t);
+		} else if (Array.isArray(content)) {
+			const textPart = content
+				.filter((p) => p.type === 'text' && p.text)
+				.map((p) => p.text!)
+				.join('')
+				.trim();
+			if (textPart) parts.push(textPart);
+
+			if (role === 'assistant') {
+				const toolLines = content
+					.filter((p) => p.type === 'tool_use')
+					.map((p) => formatToolUse(p));
+				if (toolLines.length > 0) parts.push(toolLines.join('\n'));
+			}
+		}
+
+		const combined = parts.join('\n');
+		if (combined) turns.push({role: role as 'user' | 'assistant', content: combined});
 	}
 	return turns;
 }

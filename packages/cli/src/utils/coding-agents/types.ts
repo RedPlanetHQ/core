@@ -1,8 +1,15 @@
+export interface ContentBlock {
+	type: string;
+	text?: string;
+	name?: string;
+	input?: Record<string, unknown>;
+}
+
 export interface SessionEntry {
 	type: string;
 	message?: {
 		role: string;
-		content: string | Array<{type: string; text?: string}>;
+		content: string | ContentBlock[];
 	};
 	timestamp?: string;
 	[key: string]: unknown;
