@@ -40,7 +40,6 @@ import { getWorkspaceChannelContext } from "~/services/channel.server";
 import { type MessageListInput } from "@mastra/core/agent/message-list";
 import { type ModelConfig } from "~/services/llm-provider.server";
 import { getPageContentAsHtml } from "~/services/hocuspocus/content.server";
-import { getLastCodingSession } from "~/services/coding/coding-session.server";
 import { DirectOrchestratorTools } from "./executors";
 import { getTaskPhase } from "~/services/task.phase";
 import { fetchManifest } from "~/services/gateway/transport.server";
@@ -91,47 +90,6 @@ interface AgentContext {
   gatewayAgents: Agent[];
   /** True when running as a background task — ask_user should not be registered */
   isBackgroundExecution: boolean;
-}
-
-type CodingSessionHint = Awaited<ReturnType<typeof getLastCodingSession>>;
-
-/**
- * Render the coding-session resume hint that gets injected into <task_prep>
- * and <task_execution> system prompts. CodingSession is the source of truth —
- * the agent should read sessionId/dir/agent/branch from this hint, not from
- * the task description.
- *
- * Three cases:
- * - No row at all → return "" (agent will create the first session naturally).
- * - Row with externalSessionId → "resume it" with full details.
- * - Row with null externalSessionId → "starting up, wait via reschedule_self".
- */
-function renderCodingSessionHint(
-  session: CodingSessionHint,
-  mode: "prep" | "execute",
-): string {
-  if (!session) return "";
-
-  const dir = session.worktreePath ?? session.dir;
-  const dirPart = dir ? `, dir: ${dir}` : "";
-  const branchPart = session.worktreeBranch
-    ? `, branch: ${session.worktreeBranch}`
-    : "";
-
-  if (session.externalSessionId) {
-    if (mode === "prep") {
-      return `\n   A coding session already exists — resume it:\n   sessionId: ${session.externalSessionId}, agent: ${session.agent}${dirPart}${branchPart}`;
-    }
-    return `\n- A coding session already exists for this task — resume it with intent "execute the plan" to trigger Phase 3 execution:\n  sessionId: ${session.externalSessionId}, agent: ${session.agent}${dirPart}${branchPart}`;
-  }
-
-  // Row exists but externalSessionId not yet assigned (race window between
-  // createCodingSession and updateCodingSessionExternalId). Tell the agent to
-  // wait rather than start a duplicate.
-  if (mode === "prep") {
-    return `\n   A coding session is starting up for this task (agent: ${session.agent}${dirPart}) but its sessionId hasn't been assigned yet. Call reschedule_self(minutesFromNow=2) and try again. Do NOT start a new session.`;
-  }
-  return `\n- A coding session is starting up for this task (agent: ${session.agent}${dirPart}) but its sessionId hasn't been assigned yet. Call reschedule_self(minutesFromNow=2) and try again. Do NOT start a new session.`;
 }
 
 export async function buildAgentContext({
@@ -229,10 +187,6 @@ export async function buildAgentContext({
 
   const linkedTask = linkedTaskRecord
     ? { ...linkedTaskRecord, description: linkedTaskDescription }
-    : null;
-
-  const lastCodingSession = linkedTaskRecord
-    ? await getLastCodingSession(linkedTaskRecord.id, workspaceId)
     : null;
 
   const metadata = user?.metadata as Record<string, unknown> | null;
@@ -499,7 +453,7 @@ ${
 SUBTASK PREP RULES:
 1. You are prepping ONE CHUNK of a larger task. Read the parent task description and any prior sibling outputs for context.
 2. Self-resolve questions using available context (parent description, gather_context, code reading). ONLY move to Waiting and ask the user if you genuinely cannot proceed without their input.
-3. For CODING tasks (when a gateway is connected): delegate brainstorming/planning to the gateway sub-agent.${lastCodingSession?.externalSessionId ? `\n   A coding session already exists — resume it:\n   sessionId: ${lastCodingSession.externalSessionId}, agent: ${lastCodingSession.agent}${(lastCodingSession.worktreePath ?? lastCodingSession.dir) ? `, dir: ${lastCodingSession.worktreePath ?? lastCodingSession.dir}` : ""}${lastCodingSession.worktreeBranch ? `, branch: ${lastCodingSession.worktreeBranch}` : ""}` : ""}
+3. For CODING tasks (when a gateway is connected): delegate brainstorming/planning to the gateway sub-agent. Before delegating, call get_task_coding_session — if it returns a session, resume that one (pass its sessionId, dir, and worktreeBranch to the gateway). If status is "starting", call reschedule_self(minutesFromNow=2) and do NOT start a new session.
 4. For NON-CODING tasks: do the prep yourself using gather_context, take_action, and the readiness skills.
 5. Write your plan into the task description using update_task.
 6. When prep is complete, move to Review: update_task(taskId: "${linkedTask.id}", status: "Review"). Do NOT wait for user approval — subtasks auto-transition from prep to execute.
@@ -529,7 +483,7 @@ PREP RULES:
    - Unclear what's needed? → load "Gather Information" skill
    - Open-ended, needs shaping? → load "Brainstorm" skill
    - Multi-step, needs decomposition? → load "Plan" skill
-2. For CODING tasks (when a gateway is connected): delegate brainstorming/planning to the gateway sub-agent. Pass the task title and description. The gateway will return questions or a plan — do NOT tell it to execute.${renderCodingSessionHint(lastCodingSession, "prep")}
+2. For CODING tasks (when a gateway is connected): delegate brainstorming/planning to the gateway sub-agent. Pass the task title and description. The gateway will return questions or a plan — do NOT tell it to execute. Before delegating, call get_task_coding_session — if it returns a session with status "ready", resume that session (pass sessionId, dir, worktreeBranch to the gateway); if status is "starting", call reschedule_self(minutesFromNow=2) and do NOT start a new session.
 3. For NON-CODING tasks: do the prep yourself using gather_context, take_action, and the readiness skills.
 4. Write your findings/plan into the task description using update_task.
 5. When prep is complete, move to Review: update_task(taskId: "${linkedTask.id}", status: "Review")
@@ -575,7 +529,7 @@ THIS TASK IS WAITING. The user's message in this conversation is the reply that 
 
 RULES:
 - For integration work (emails, calendar, github, etc.): delegate to the orchestrator via gather_context / take_action
-- For coding, browser, shell: use gateway tools directly (coding_*, browser_*, exec_*) if connected${renderCodingSessionHint(lastCodingSession, "execute")}
+- For coding, browser, shell: use gateway tools directly (coding_*, browser_*, exec_*) if connected. Before delegating coding work, call get_task_coding_session — if it returns a session with status "ready", resume it via the gateway with sessionId/dir/worktreeBranch and the intent "execute the plan"; if status is "starting", call reschedule_self(minutesFromNow=2) instead of starting a new session.
 - If the user sends a message, treat it as additional direction for this task${
         isSubtask
           ? `
@@ -609,7 +563,7 @@ When you delegate a coding task to the gateway, it will return one of:
 
 When the user answers a question, resume the coding session with the answer. Do NOT write the answer into the task description.
 
-On re-execution after reschedule: the system prompt above already shows the latest coding session (sessionId, agent, dir, branch) — resume that session, do NOT start a new one. Delegate to gateway with the sessionId, dir, and intent "execute the plan" so the gateway enters Phase 3 (execution) rather than re-doing planning. If the prompt says the session is starting up and sessionId hasn't been assigned yet, call reschedule_self(minutesFromNow=2) and try again. Only pass user answers if the user has replied since the last run.
+On re-execution after reschedule: call get_task_coding_session to resolve the latest coding session for this task — resume that session, do NOT start a new one. Delegate to gateway with the returned sessionId, dir, and intent "execute the plan" so the gateway enters Phase 3 (execution) rather than re-doing planning. If get_task_coding_session returns status "starting" (sessionId hasn't been assigned yet), call reschedule_self(minutesFromNow=2) and try again. Only pass user answers if the user has replied since the last run.
 
 Do NOT sleep, poll coding_read_session, or create scheduled tasks yourself — the gateway handles that.
 </task_execution>`;

@@ -304,7 +304,7 @@ The gateway will return either questions, a plan (feature), or a root cause + pr
 **Common (both tracks):**
 - When the gateway returns questions → post them to the user via send_message (include sessionId), mark task Waiting. Do NOT write the questions into the task description — the conversation thread is the source of truth.
 - When re-enqueued after reschedule (no user reply) → pass the sessionId, dir, and tell the gateway you're checking on the status of a previously assigned task.
-- When re-enqueued after user replies → pass the user's answers to the gateway along with the sessionId and dir from the coding-session details in the system prompt.
+- When re-enqueued after user replies → call get_task_coding_session to resolve the sessionId and dir, then pass the user's answers to the gateway along with that sessionId and dir.
 - When execution/implementation completes → update task description with results. Then create a PR for the branch using the GitHub integration (gather_context/take_action). Include the PR URL in the Output section. After PR is created, mark task Review. The user will verify and move to Done.
 - STOP after marking Waiting or Review. Do not proceed further.
 

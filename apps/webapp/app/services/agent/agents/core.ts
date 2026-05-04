@@ -12,7 +12,6 @@ import { type Tool, tool } from "ai";
 import { z } from "zod";
 import { Agent } from "@mastra/core/agent";
 import { createTool } from "@mastra/core/tools";
-import { createTool } from "@mastra/core/tools";
 
 import { type SkillRef } from "../types";
 import { type ModelConfig } from "~/services/llm-provider.server";
@@ -28,6 +27,7 @@ import {
 } from "../tools/skill-tools";
 import { getTaskTools } from "../tools/task-tools";
 import { getMessageTools } from "../tools/message-tools";
+import { getSessionTools } from "../tools/session-tools";
 import { getSleepTool } from "../tools/utils-tools";
 import { createOrchestratorAgent } from "./orchestrator";
 import { createGatewayAgents } from "./gateway";
@@ -198,7 +198,12 @@ export async function createCoreTools(
     tools["update_skill"] = updateSkillTool(workspaceId, userId);
   }
 
-  return { ...tools, ...taskTools, ...messageTools };
+  // Session lookup tools — replace the previous prompt-injection of last
+  // coding/browser session details. Available in every context (interactive
+  // chat too, for asking "what was the session for that task?").
+  const sessionTools = getSessionTools({ workspaceId, currentTaskId });
+
+  return { ...tools, ...taskTools, ...messageTools, ...sessionTools };
 }
 
 // ---------------------------------------------------------------------------
