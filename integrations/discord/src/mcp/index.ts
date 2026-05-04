@@ -3,48 +3,13 @@ import { z } from 'zod';
 import { zodToJsonSchema } from 'zod-to-json-schema';
 
 /**
- * Create Discord client with OAuth credentials
+ * Create a Discord REST client authenticated with a bot token.
  */
-async function createDiscordClient(
-  client_id: string,
-  client_secret: string,
-  callback: string,
-  credentials: Record<string, string>
-): Promise<AxiosInstance> {
-  // Try to refresh token if refresh_token exists
-  if (credentials.refresh_token) {
-    try {
-      const tokenResponse = await axios.post(
-        'https://discord.com/api/oauth2/token',
-        new URLSearchParams({
-          grant_type: 'refresh_token',
-          client_id: client_id,
-          client_secret: client_secret,
-          refresh_token: credentials.refresh_token,
-        }),
-        {
-          headers: {
-            'Content-Type': 'application/x-www-form-urlencoded',
-          },
-        }
-      );
-
-      credentials.access_token = tokenResponse.data.access_token;
-      if (tokenResponse.data.refresh_token) {
-        credentials.refresh_token = tokenResponse.data.refresh_token;
-      }
-    } catch (error) {
-      console.error('Failed to refresh token:', error);
-    }
-  }
-
-  // Use bot token if available (for bot operations)
-  const botToken = credentials.bot_token || null;
-
+function createDiscordClient(botToken: string): AxiosInstance {
   return axios.create({
     baseURL: 'https://discord.com/api/v10',
     headers: {
-      Authorization: botToken ? `Bot ${botToken}` : `Bearer ${credentials.access_token}`,
+      Authorization: `Bot ${botToken}`,
       'Content-Type': 'application/json',
     },
   });
@@ -540,12 +505,9 @@ export async function getTools() {
 export async function callTool(
   name: string,
   args: Record<string, any>,
-  client_id: string,
-  client_secret: string,
-  callback: string,
-  credentials: Record<string, string>
+  botToken: string
 ) {
-  const discordClient = await createDiscordClient(client_id, client_secret, callback, credentials);
+  const discordClient = createDiscordClient(botToken);
 
   try {
     switch (name) {

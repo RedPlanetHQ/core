@@ -26,21 +26,14 @@ export async function run(eventPayload: IntegrationEventPayload) {
         return null;
       }
 
-      const config = eventPayload.config as any;
+      const config = eventPayload.config as { bot_token?: string };
       const { name, arguments: args } = eventPayload.eventBody;
 
-      const result = await callTool(
-        name,
-        args,
-        integrationDefinition.config.clientId,
-        integrationDefinition.config.clientSecret,
-        config?.redirect_uri,
-        {
-          ...config,
-          bot_token: integrationDefinition.config.botToken,
-        }
-      );
+      if (!config?.bot_token) {
+        return { error: 'Discord bot token is missing from account config.' };
+      }
 
+      const result = await callTool(name, args, config.bot_token);
       return result;
     }
 
