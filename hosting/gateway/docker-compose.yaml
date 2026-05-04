@@ -24,7 +24,7 @@
 services:
   corebrain-gateway:
     container_name: corebrain-gateway
-    image: redplanethq/core-gateway:0.6.2
+    image: redplanethq/core-gateway:0.6.3
     # Image is published amd64-only today. Apple Silicon hosts run it under
     # Rosetta emulation; remove this line once we publish a multi-arch image.
     platform: linux/amd64
