@@ -1,5 +1,6 @@
 import { Client, Events, GatewayIntentBits, Message, GuildMember } from 'discord.js';
 
+import type { RelayEvent } from './events';
 import { serializeGuildMemberAdd, serializeMessageCreate } from './events';
 import type { Forwarder } from './forwarder';
 
@@ -60,7 +61,7 @@ export class GatewayClient {
     await this.client.destroy();
   }
 
-  private async dispatch(event: ReturnType<typeof serializeMessageCreate>): Promise<void> {
+  private async dispatch(event: RelayEvent): Promise<void> {
     try {
       await this.options.forwarder.forward(event);
     } catch (err) {

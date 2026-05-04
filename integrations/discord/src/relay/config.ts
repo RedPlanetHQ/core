@@ -5,7 +5,6 @@ const ConfigSchema = z.object({
   CORE_WEBHOOK_URL: z.string().url('CORE_WEBHOOK_URL must be a valid URL'),
   CORE_WORKSPACE_TOKEN: z.string().min(1, 'CORE_WORKSPACE_TOKEN is required'),
   CORE_RELAY_ID: z.string().optional(),
-  LOG_LEVEL: z.enum(['debug', 'info', 'warn', 'error']).default('info'),
 });
 
 export type RelayConfig = z.infer<typeof ConfigSchema>;

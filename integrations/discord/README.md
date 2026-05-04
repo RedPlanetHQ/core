@@ -2,6 +2,8 @@
 
 Discord integration for Core. Authenticates with a bot token (no OAuth flow). Includes a Gateway WebSocket relay you can self-host to forward Discord events into Core.
 
+> **Breaking change:** Earlier versions of this integration used Discord OAuth2. Existing connected accounts created via OAuth must be disconnected and re-connected with a bot token after upgrading.
+
 ## Setup
 
 1. Create a Discord application at https://discord.com/developers/applications.
@@ -33,7 +35,6 @@ The relay opens a long-lived Discord Gateway WebSocket using your bot token and 
 | Variable | Default | Description |
 | --- | --- | --- |
 | `CORE_RELAY_ID` | _(none)_ | Identifier sent in `X-Core-Relay-Id` header so multiple relays per workspace can be distinguished. |
-| `LOG_LEVEL` | `info` | One of `debug`, `info`, `warn`, `error`. |
 
 ### Running with Docker
 
