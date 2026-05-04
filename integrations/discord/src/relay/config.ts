@@ -3,7 +3,9 @@ import { z } from 'zod';
 const ConfigSchema = z.object({
   DISCORD_BOT_TOKEN: z.string().min(1, 'DISCORD_BOT_TOKEN is required'),
   CORE_WEBHOOK_URL: z.string().url('CORE_WEBHOOK_URL must be a valid URL'),
-  CORE_WORKSPACE_TOKEN: z.string().min(1, 'CORE_WORKSPACE_TOKEN is required'),
+  CORE_INTEGRATION_ACCOUNT_ID: z
+    .string()
+    .min(1, 'CORE_INTEGRATION_ACCOUNT_ID is required'),
   CORE_RELAY_ID: z.string().optional(),
 });
 

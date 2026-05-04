@@ -28,7 +28,7 @@ The relay opens a long-lived Discord Gateway WebSocket using your bot token and 
 | --- | --- |
 | `DISCORD_BOT_TOKEN` | Bot token from the Discord Developer Portal. |
 | `CORE_WEBHOOK_URL` | Full URL of Core's Discord webhook endpoint, e.g. `https://core.example.com/webhook/discord`. |
-| `CORE_WORKSPACE_TOKEN` | Workspace bearer token issued by Core when the integration was connected. |
+| `CORE_INTEGRATION_ACCOUNT_ID` | UUID of the Discord IntegrationAccount in Core. Shown on the Discord integration settings page after the bot token is connected. |
 
 ### Optional environment variables
 
@@ -42,7 +42,7 @@ The relay opens a long-lived Discord Gateway WebSocket using your bot token and 
 docker run -d --restart=always \
   -e DISCORD_BOT_TOKEN=... \
   -e CORE_WEBHOOK_URL=https://core.example.com/webhook/discord \
-  -e CORE_WORKSPACE_TOKEN=... \
+  -e CORE_INTEGRATION_ACCOUNT_ID=... \
   core-discord-relay:latest
 ```
 
@@ -53,7 +53,7 @@ pnpm install
 pnpm build:relay
 DISCORD_BOT_TOKEN=... \
 CORE_WEBHOOK_URL=... \
-CORE_WORKSPACE_TOKEN=... \
+CORE_INTEGRATION_ACCOUNT_ID=... \
 node dist/relay/index.js
 ```
 
@@ -74,8 +74,8 @@ In the Developer Portal under **Bot**, enable:
 
 The relay POSTs to `CORE_WEBHOOK_URL` with:
 
+- URL: `${CORE_WEBHOOK_URL}?integrationAccountId=<CORE_INTEGRATION_ACCOUNT_ID>` — `integrationAccountId` is appended as a query param so Core's webhook router can locate the IntegrationAccount.
 - Headers:
-  - `Authorization: Bearer <CORE_WORKSPACE_TOKEN>`
   - `X-Idempotency-Key: <event_id>`
   - `X-Core-Relay-Id: <CORE_RELAY_ID>` (if set)
 - JSON body shaped like:

@@ -9,7 +9,7 @@ async function main(): Promise<void> {
 
   const forwarder = new Forwarder({
     webhookUrl: config.CORE_WEBHOOK_URL,
-    workspaceToken: config.CORE_WORKSPACE_TOKEN,
+    integrationAccountId: config.CORE_INTEGRATION_ACCOUNT_ID,
     relayId: config.CORE_RELAY_ID,
   });
 

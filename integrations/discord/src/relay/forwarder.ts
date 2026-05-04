@@ -4,7 +4,7 @@ import type { RelayEvent } from './events';
 
 export interface ForwarderOptions {
   webhookUrl: string;
-  workspaceToken: string;
+  integrationAccountId: string;
   relayId?: string;
   maxAttempts?: number;
   initialBackoffMs?: number;
@@ -19,19 +19,20 @@ export class Forwarder {
   private client: AxiosInstance;
   private maxAttempts: number;
   private initialBackoffMs: number;
+  private integrationAccountId: string;
 
   constructor(private options: ForwarderOptions) {
     this.maxAttempts = options.maxAttempts ?? DEFAULT_MAX_ATTEMPTS;
     this.initialBackoffMs = options.initialBackoffMs ?? DEFAULT_INITIAL_BACKOFF_MS;
+    this.integrationAccountId = options.integrationAccountId;
     this.client = axios.create({
       baseURL: options.webhookUrl,
       timeout: options.timeoutMs ?? DEFAULT_TIMEOUT_MS,
       headers: {
-        Authorization: `Bearer ${options.workspaceToken}`,
         'Content-Type': 'application/json',
         ...(options.relayId ? { 'X-Core-Relay-Id': options.relayId } : {}),
       },
-      validateStatus: () => true, // we inspect status manually
+      validateStatus: () => true,
     });
   }
 
@@ -45,12 +46,12 @@ export class Forwarder {
       let response;
       try {
         response = await this.client.post('', event, {
+          params: { integrationAccountId: this.integrationAccountId },
           headers: {
             'X-Idempotency-Key': event.event_id,
           },
         });
       } catch (networkError) {
-        // No response — true network failure (DNS, connection refused, timeout). Retry.
         lastError = networkError;
         if (attempt < this.maxAttempts) {
           await sleep(this.initialBackoffMs * 2 ** (attempt - 1));
@@ -62,11 +63,10 @@ export class Forwarder {
         return;
       }
 
-      // 4xx — bail immediately without retry.
       if (response.status >= 400 && response.status < 500) {
         if (response.status === 401 || response.status === 403) {
           throw new Error(
-            `Forwarder auth rejected (${response.status}): check CORE_WORKSPACE_TOKEN`,
+            `Forwarder rejected (${response.status}): verify CORE_INTEGRATION_ACCOUNT_ID matches a connected Discord account`,
           );
         }
         throw new Error(
@@ -74,7 +74,6 @@ export class Forwarder {
         );
       }
 
-      // 5xx or other — retryable.
       lastError = new Error(`Forwarder ${response.status}: ${JSON.stringify(response.data)}`);
       if (attempt < this.maxAttempts) {
         await sleep(this.initialBackoffMs * 2 ** (attempt - 1));
