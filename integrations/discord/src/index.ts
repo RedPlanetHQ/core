@@ -30,7 +30,11 @@ export async function run(eventPayload: IntegrationEventPayload) {
       const { name, arguments: args } = eventPayload.eventBody;
 
       if (!config?.bot_token) {
-        return { error: 'Discord bot token is missing from account config.' };
+        return {
+          content: [
+            { type: 'text', text: 'Error: Discord bot token is missing from account config.' },
+          ],
+        };
       }
 
       const result = await callTool(name, args, config.bot_token);
