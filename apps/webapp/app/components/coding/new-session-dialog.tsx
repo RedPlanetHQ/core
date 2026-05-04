@@ -16,6 +16,9 @@ import {
   SelectValue,
 } from "~/components/ui/select";
 import { cn } from "~/lib/utils";
+import { Checkbox } from "~/components/ui/checkbox";
+import { Textarea } from "~/components/ui/textarea";
+import { Label } from "~/components/ui/label";
 
 interface GatewayListItem {
   id: string;
@@ -43,12 +46,15 @@ interface Props {
   open: boolean;
   onOpenChange: (v: boolean) => void;
   taskId: string;
+  taskTitle?: string;
+  taskDescription?: string | null;
   onCreated: (args: {
     id: string;
     agent: string;
     dir: string;
     gatewayId: string;
     externalSessionId: string | null;
+    prompt: string | null;
   }) => void;
 }
 
@@ -56,6 +62,8 @@ export function NewSessionDialog({
   open,
   onOpenChange,
   taskId,
+  taskTitle,
+  taskDescription,
   onCreated,
 }: Props) {
   const [gateways, setGateways] = useState<GatewayListItem[] | null>(null);
@@ -72,6 +80,9 @@ export function NewSessionDialog({
   const [submitting, setSubmitting] = useState(false);
   const [submitError, setSubmitError] = useState<string | null>(null);
 
+  const [sendInitialPrompt, setSendInitialPrompt] = useState(false);
+  const [initialPrompt, setInitialPrompt] = useState("");
+
   // Reset when the dialog opens; load gateways.
   useEffect(() => {
     if (!open) return;
@@ -83,6 +94,8 @@ export function NewSessionDialog({
     setSubmitError(null);
     setGateways(null);
     setGatewaysError(null);
+    setSendInitialPrompt(false);
+    setInitialPrompt("");
 
     (async () => {
       try {
@@ -149,10 +162,20 @@ export function NewSessionDialog({
     Boolean(selectedAgent) &&
     Boolean(dirToSubmit);
 
+  const handleSendInitialPromptChange = (checked: boolean) => {
+    setSendInitialPrompt(checked);
+    if (checked && !initialPrompt) {
+      const parts = [taskTitle, taskDescription].filter(Boolean);
+      setInitialPrompt(parts.join("\n\n"));
+    }
+  };
+
   const handleSubmit = async () => {
     if (!canSubmit) return;
     setSubmitting(true);
     setSubmitError(null);
+    const prompt =
+      sendInitialPrompt && initialPrompt.trim() ? initialPrompt.trim() : null;
     try {
       const res = await fetch(`/api/v1/tasks/${taskId}/coding-sessions`, {
         method: "POST",
@@ -161,6 +184,7 @@ export function NewSessionDialog({
           agent: selectedAgent,
           dir: dirToSubmit,
           gatewayId: selectedGatewayId,
+          ...(prompt ? { prompt } : {}),
         }),
       });
       if (!res.ok) {
@@ -181,6 +205,7 @@ export function NewSessionDialog({
         dir: dirToSubmit,
         gatewayId: selectedGatewayId,
         externalSessionId: data.externalSessionId ?? null,
+        prompt,
       });
       onOpenChange(false);
     } catch (err) {
@@ -326,6 +351,34 @@ export function NewSessionDialog({
                 ))}
               </SelectContent>
             </Select>
+          </div>
+
+          {/* Initial prompt */}
+          <div className="flex flex-col gap-2">
+            <div className="flex items-center gap-2">
+              <Checkbox
+                id="send-initial-prompt"
+                checked={sendInitialPrompt}
+                onCheckedChange={(checked) =>
+                  handleSendInitialPromptChange(checked === true)
+                }
+              />
+              <Label
+                htmlFor="send-initial-prompt"
+                className="cursor-pointer text-sm font-medium"
+              >
+                Send initial prompt
+              </Label>
+            </div>
+            {sendInitialPrompt && (
+              <Textarea
+                placeholder="Enter a prompt to send when the session starts…"
+                value={initialPrompt}
+                onChange={(e) => setInitialPrompt(e.target.value)}
+                rows={3}
+                className="resize-none text-sm"
+              />
+            )}
           </div>
 
           {submitError ? (

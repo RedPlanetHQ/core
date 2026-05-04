@@ -11,6 +11,8 @@ interface Props {
    *  externalSessionId and proxies the WS. */
   codingSessionId: string;
   onNewSession?: () => void;
+  /** If set, this text is typed into the terminal once on first connect. */
+  initialPrompt?: string;
 }
 
 function useHtmlTheme(): "dark" | "light" {
@@ -41,7 +43,7 @@ function buildXtermUrl(codingSessionId: string): string {
   )}/xterm`;
 }
 
-export function GatewayTerminal({ codingSessionId, onNewSession }: Props) {
+export function GatewayTerminal({ codingSessionId, onNewSession, initialPrompt }: Props) {
   const theme = useHtmlTheme();
   const containerRef = useRef<HTMLDivElement>(null);
   const termRef = useRef<import("@xterm/xterm").Terminal | null>(null);
@@ -139,6 +141,17 @@ export function GatewayTerminal({ codingSessionId, onNewSession }: Props) {
             rows: term.rows,
           }),
         );
+        // Auto-type the initial prompt once per session (guarded by localStorage).
+        if (initialPrompt) {
+          const sentKey = `coding-session-prompt-sent-${codingSessionId}`;
+          if (!localStorage.getItem(sentKey)) {
+            localStorage.setItem(sentKey, "1");
+            setTimeout(() => {
+              if (!mounted || ws.readyState !== WebSocket.OPEN) return;
+              ws.send(JSON.stringify({ kind: "input", data: initialPrompt + "\r" }));
+            }, 1000);
+          }
+        }
       };
 
       ws.onmessage = (ev) => {

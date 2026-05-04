@@ -10,6 +10,7 @@ const CreateSchema = z.object({
   agent: z.string().min(1),
   dir: z.string().min(1),
   gatewayId: z.string().optional(),
+  prompt: z.string().optional(),
 });
 
 export async function action({ request, params }: ActionFunctionArgs) {
@@ -70,6 +71,7 @@ export async function action({ request, params }: ActionFunctionArgs) {
     dir: parsed.data.dir,
     gatewayId: parsed.data.gatewayId,
     externalSessionId,
+    prompt: parsed.data.prompt,
   });
 
   return json(

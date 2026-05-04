@@ -237,6 +237,7 @@ export default function CodingSessionRoute() {
         key={session.id}
         codingSessionId={session.id}
         onNewSession={openNewSession}
+        initialPrompt={session.prompt ?? undefined}
       />
     );
   }

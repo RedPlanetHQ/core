@@ -19,6 +19,7 @@ import { useTauri } from "~/hooks/use-tauri";
 import { NewSessionDialog } from "~/components/coding/new-session-dialog";
 import { useSetCodingActions } from "~/components/coding/coding-actions-context";
 import { useSidebar } from "~/components/ui/sidebar";
+import { prisma } from "~/db.server";
 
 export type CodingOutletContext = {
   sessions: CodingSessionListItem[];
@@ -38,12 +39,27 @@ export async function loader({ request, params }: LoaderFunctionArgs) {
   const { taskId } = params;
   if (!taskId) return redirect("/home/tasks");
 
-  const sessions = await getCodingSessionsForTask(taskId, workspaceId);
-  return typedjson({ sessions });
+  const [sessions, task] = await Promise.all([
+    getCodingSessionsForTask(taskId, workspaceId),
+    prisma.task.findUnique({
+      where: { id: taskId, workspaceId },
+      select: { title: true, description: true },
+    }),
+  ]);
+
+  return typedjson({
+    sessions,
+    taskTitle: task?.title ?? "",
+    taskDescription: task?.description ?? null,
+  });
 }
 
 function CodingLayout() {
-  const { sessions: initialSessions } = useTypedLoaderData<typeof loader>();
+  const {
+    sessions: initialSessions,
+    taskTitle,
+    taskDescription,
+  } = useTypedLoaderData<typeof loader>();
   const { taskId, sessionId } = useParams<{
     taskId: string;
     sessionId?: string;
@@ -89,6 +105,7 @@ function CodingLayout() {
     dir: string;
     gatewayId: string;
     externalSessionId: string | null;
+    prompt: string | null;
   }) => {
     // Optimistic insert so the new session is in the popover immediately and
     // the session route doesn't bounce back (it looks up by id in this list).
@@ -100,7 +117,7 @@ function CodingLayout() {
       dir: args.dir,
       createdAt: new Date(),
       updatedAt: new Date(),
-      prompt: null,
+      prompt: args.prompt,
       externalSessionId: args.externalSessionId,
       conversationId: null,
       gatewayId: args.gatewayId,
@@ -182,6 +199,8 @@ function CodingLayout() {
           open={newSessionOpen}
           onOpenChange={setNewSessionOpen}
           taskId={taskId!}
+          taskTitle={taskTitle}
+          taskDescription={taskDescription}
           onCreated={handleNewSessionCreated}
         />
       </>
@@ -205,6 +224,8 @@ function CodingLayout() {
         open={newSessionOpen}
         onOpenChange={setNewSessionOpen}
         taskId={taskId!}
+        taskTitle={taskTitle}
+        taskDescription={taskDescription}
         onCreated={handleNewSessionCreated}
       />
     </>
