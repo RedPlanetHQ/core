@@ -10,10 +10,12 @@
     "bin"
   ],
   "bin": {
-    "discord": "./bin/index.js"
+    "discord": "./bin/index.js",
+    "discord-relay": "./dist/relay/index.js"
   },
   "scripts": {
     "build": "rimraf dist && bun build src/index.ts --outfile dist/index.js --target node --minify",
+    "build:relay": "rimraf dist/relay && bun build src/relay/index.ts --outfile dist/relay/index.js --target node",
     "lint": "eslint --ext js,ts,tsx src/ --fix",
     "prettier": "prettier --config .prettierrc --write ."
   },
