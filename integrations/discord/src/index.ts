@@ -64,32 +64,22 @@ class DiscordCLI extends IntegrationCLI {
       name: 'Discord extension',
       key: 'discord',
       description:
-        'Connect your workspace to Discord. Send messages, manage channels, track server activity, and engage with your community',
+        'Connect your Discord bot to send messages, manage channels, and react to events. Requires a bot token from the Discord Developer Portal.',
       icon: 'discord',
+      mcp: {
+        type: 'cli',
+      },
       auth: {
-        OAuth2: {
-          token_url: 'https://discord.com/api/oauth2/token',
-          authorization_url: 'https://discord.com/api/oauth2/authorize',
-          scopes: [
-            'identify',
-            'email',
-            'guilds',
-            'guilds.members.read',
-            'guilds.channels.read',
-            'bot',
-            'messages.read',
-            'webhook.incoming',
-            'dm_channels.read',
-            'dm_channels.messages.read',
+        api_key: {
+          fields: [
+            {
+              name: 'bot_token',
+              label: 'Bot Token',
+              placeholder: 'Bot token from Discord Developer Portal',
+              description:
+                'Discord Developer Portal → Your App → Bot → Reset Token. Enable Message Content Intent and Server Members Intent on the same screen.',
+            },
           ],
-          scope_identifier: 'scope',
-          scope_separator: ' ',
-          token_params: {
-            grant_type: 'authorization_code',
-          },
-          authorization_params: {
-            permissions: '8',
-          },
         },
       },
     };
