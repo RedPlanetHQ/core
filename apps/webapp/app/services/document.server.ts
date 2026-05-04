@@ -267,6 +267,49 @@ export const getPersonaDocumentForUser = async (workspaceId: string) => {
   return personaSkill?.content ?? null;
 };
 
+/**
+ * Like {@link getPersonaDocumentForUser} but also returns the timestamps
+ * needed to detect user edits since the last system generation. Used by the
+ * incremental persona job so it can degrade to add-only mode when the user
+ * has hand-edited the document.
+ */
+export const getPersonaDocumentRecordForUser = async (
+  workspaceId: string,
+): Promise<{
+  content: string;
+  updatedAt: Date;
+  generatedAt: Date | null;
+} | null> => {
+  const personaSkill = await prisma.document.findFirst({
+    where: {
+      workspaceId,
+      type: "skill",
+      title: "Persona",
+      deleted: null,
+    },
+    select: {
+      content: true,
+      updatedAt: true,
+      metadata: true,
+    },
+  });
+
+  if (!personaSkill) return null;
+
+  const metadata = personaSkill.metadata as
+    | { generatedAt?: string }
+    | null
+    | undefined;
+  const generatedAtStr = metadata?.generatedAt;
+  const generatedAt = generatedAtStr ? new Date(generatedAtStr) : null;
+
+  return {
+    content: personaSkill.content,
+    updatedAt: personaSkill.updatedAt,
+    generatedAt,
+  };
+};
+
 export const updateDocumentContent = async (
   document: Document,
   content: string,

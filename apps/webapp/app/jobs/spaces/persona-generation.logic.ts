@@ -11,7 +11,12 @@ import {
   generateIncrementalPersona,
 } from "./aspect-persona-generation";
 import { savePersonaDocument } from "./utils";
-import { getPersonaDocumentForUser } from "~/services/document.server";
+import { getPersonaDocumentRecordForUser } from "~/services/document.server";
+
+// User-edit detection tolerance: writes from the same `savePersonaDocument`
+// call land `updatedAt` and `metadata.generatedAt` a few ms apart. Anything
+// beyond this window is treated as a real human edit rather than DB jitter.
+const USER_EDIT_DETECTION_TOLERANCE_MS = 5_000;
 
 // Payload for BullMQ worker
 export interface PersonaGenerationPayload {
@@ -152,9 +157,9 @@ export async function processPersonaGeneration(
       summary = await generateAspectBasedPersona(userId);
     } else {
       // Incremental: existing persona + episode with persona-relevant statements
-      const existingPersona = await getPersonaDocumentForUser(workspaceId);
+      const existingRecord = await getPersonaDocumentRecordForUser(workspaceId);
 
-      if (!existingPersona) {
+      if (!existingRecord) {
         // Fallback to full if no existing doc found
         logger.info(
           "No existing persona doc found, falling back to full generation",
@@ -162,14 +167,30 @@ export async function processPersonaGeneration(
         );
         summary = await generateAspectBasedPersona(userId);
       } else {
+        // The user has manually edited the persona iff its `updatedAt` is
+        // measurably newer than the last system-write timestamp we stamped
+        // into `metadata.generatedAt`. If `generatedAt` is missing (legacy
+        // doc), conservatively assume the user has touched it — letting
+        // accidental data loss is the worse failure mode here.
+        const hasUserEdits = existingRecord.generatedAt
+          ? existingRecord.updatedAt.getTime() >
+            existingRecord.generatedAt.getTime() +
+              USER_EDIT_DETECTION_TOLERANCE_MS
+          : true;
+
         logger.info("Running incremental persona generation", {
           userId,
           episodeUuid,
+          hasUserEdits,
+          updatedAt: existingRecord.updatedAt.toISOString(),
+          generatedAt: existingRecord.generatedAt?.toISOString() ?? null,
         });
+
         summary = await generateIncrementalPersona(
           userId,
           episodeUuid,
-          existingPersona,
+          existingRecord.content,
+          hasUserEdits,
         );
       }
     }

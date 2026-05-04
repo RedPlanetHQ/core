@@ -167,6 +167,10 @@ export function mergeSectionIntoMarkdown(
  * Strip structural markdown headings (# and ##) from LLM output.
  * Prevents the LLM from injecting duplicate document/section headers.
  * Preserves ### sub-headers which are valid within section content.
+ *
+ * Only run this on LLM-produced text, not on the user-visible existing body —
+ * collapsing blank lines and stripping headings on user-edited content is a
+ * silent edit-loss path.
  */
 function sanitizeSectionContent(content: string): string {
   return content
@@ -174,6 +178,16 @@ function sanitizeSectionContent(content: string): string {
     .replace(/<!-- section:\w+ -->/g, "") // strip legacy markers
     .replace(/\n{3,}/g, "\n\n") // collapse excessive blank lines
     .trim();
+}
+
+/**
+ * Lighter sanitizer for existing section bodies fed back into the LLM prompt
+ * or into `applyDelta`. Only strips legacy `<!-- section:X -->` round-trip
+ * markers — never touches headings or blank lines, since the user may have
+ * added structure inside the section.
+ */
+function stripLegacySectionMarkers(content: string): string {
+  return content.replace(/<!-- section:\w+ -->/g, "").trim();
 }
 
 /**
@@ -1219,6 +1233,7 @@ function buildDeltaPrompt(
   existingSectionContent: string,
   newStatements: StatementNode[],
   userContext: UserContext,
+  hasUserEdits: boolean,
 ): MessageListInput {
   const sectionInfo = ASPECT_SECTION_MAP[aspect];
   const isPreferencesSection = aspect === "Preference";
@@ -1227,8 +1242,13 @@ function buildDeltaPrompt(
     .map((s, i) => `${i + 1}. ${s.fact}`)
     .join("\n");
 
+  const userEditsBanner = hasUserEdits
+    ? `\n## ⚠ User has manually edited this section\n\nThe existing content below contains the user's own wording. Treat every existing line as authoritative. **Output an empty \`replace\` array** — never modify or reword existing bullets. New facts must go in \`add\` only; if a new fact appears to conflict with an existing line, still ADD it as a separate bullet and let the user reconcile.\n`
+    : "";
+
   const content = `
 You are updating the **${sectionInfo.title}** section of a persona document. A few new facts were learned. Your job is to produce a JSON delta describing ONLY what to add or replace — you must NOT rewrite the section.
+${userEditsBanner}
 
 ## Existing Section Content (READ-ONLY — do not reproduce this)
 
@@ -1288,35 +1308,53 @@ function normalizeBullet(text: string): string {
  *    If no match found, log warning and skip (no corruption).
  * 2. Additions second: insert at end of named group (sub-header) if `group` specified,
  *    otherwise insert before the [Confidence: ...] line or at end.
+ *
+ * `skipReplacements`: drop the entire replace pass. Use when the persona has
+ * been edited by the user since the last system generation — the LLM cannot
+ * tell user-edited bullets from previously system-generated ones, so any
+ * `replace` it emits risks silently overwriting user intent. Adds still apply,
+ * letting new facts accumulate as additional bullets the user can curate.
  */
+export interface ApplyDeltaOptions {
+  skipReplacements?: boolean;
+}
+
 export function applyDelta(
   existingSection: string,
   delta: IncrementalDelta,
+  opts: ApplyDeltaOptions = {},
 ): string {
   const lines = existingSection.split("\n");
 
   // --- Replacements ---
-  for (const rep of delta.replace) {
-    const normalizedOld = normalizeBullet(rep.old);
-    if (!normalizedOld) continue;
+  if (!opts.skipReplacements) {
+    for (const rep of delta.replace) {
+      const normalizedOld = normalizeBullet(rep.old);
+      if (!normalizedOld) continue;
 
-    let matched = false;
-    for (let i = 0; i < lines.length; i++) {
-      const normalizedLine = normalizeBullet(lines[i]);
-      if (normalizedLine && normalizedLine === normalizedOld) {
-        // Preserve the original bullet prefix (e.g., "- ", "* ")
-        const prefixMatch = lines[i].match(/^([\s]*[-*•]\s*)/);
-        const prefix = prefixMatch ? prefixMatch[1] : "- ";
-        lines[i] = `${prefix}${rep.new}`;
-        matched = true;
-        break;
+      let matched = false;
+      for (let i = 0; i < lines.length; i++) {
+        const normalizedLine = normalizeBullet(lines[i]);
+        if (normalizedLine && normalizedLine === normalizedOld) {
+          // Preserve the original bullet prefix (e.g., "- ", "* ")
+          const prefixMatch = lines[i].match(/^([\s]*[-*•]\s*)/);
+          const prefix = prefixMatch ? prefixMatch[1] : "- ";
+          lines[i] = `${prefix}${rep.new}`;
+          matched = true;
+          break;
+        }
+      }
+      if (!matched) {
+        logger.warn("applyDelta: replacement old text not found, skipping", {
+          old: rep.old,
+        });
       }
     }
-    if (!matched) {
-      logger.warn("applyDelta: replacement old text not found, skipping", {
-        old: rep.old,
-      });
-    }
+  } else if (delta.replace.length > 0) {
+    logger.info(
+      "applyDelta: skipping replace ops because persona has user edits",
+      { skippedReplacements: delta.replace.length },
+    );
   }
 
   // --- Additions ---
@@ -1375,10 +1413,12 @@ export async function generateIncrementalPersona(
   userId: string,
   episodeUuid: string,
   existingPersonaContent: string,
+  hasUserEdits: boolean = false,
 ): Promise<string> {
   logger.info("Starting incremental persona generation", {
     userId,
     episodeUuid,
+    hasUserEdits,
   });
 
   // Step 1: Get user context
@@ -1442,9 +1482,10 @@ export async function generateIncrementalPersona(
       (s) => s.heading?.toUpperCase() === sectionTitle,
     );
 
-    // Extract just the body (content after the ## heading line)
+    // Extract just the body (content after the ## heading line). Only strip
+    // legacy round-trip markers — keep user-added headings/whitespace intact.
     const existingBody = existingSection
-      ? sanitizeSectionContent(getSectionBody(existingSection.content))
+      ? stripLegacySectionMarkers(getSectionBody(existingSection.content))
       : "";
 
     // Check for pinned sections
@@ -1462,6 +1503,7 @@ export async function generateIncrementalPersona(
       existingBody || `(No existing content)`,
       data.statements,
       userContext,
+      hasUserEdits,
     );
 
     sectionUpdates.push({ aspect, sectionTitle, prompt, existingBody });
@@ -1487,7 +1529,9 @@ export async function generateIncrementalPersona(
         const parsedJson = JSON.parse(rawResponse);
         const delta = IncrementalDeltaSchema.parse(parsedJson);
 
-        const mergedBody = applyDelta(existingBody, delta);
+        const mergedBody = applyDelta(existingBody, delta, {
+          skipReplacements: hasUserEdits,
+        });
 
         // Jaccard check: reject if merged section diverges too much from existing.
         if (existingBody.trim().length > 0) {
