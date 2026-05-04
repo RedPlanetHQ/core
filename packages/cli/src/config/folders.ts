@@ -20,8 +20,16 @@ const COREBRAIN_HOME_FOLDER: StoredFolder = {
 	gitRepo: false,
 };
 
+// Compare against realpath too — Railway's entrypoint symlinks
+// /home/corebrain → /mnt/volume/corebrain-home, so the realpath'd input from
+// `resolveFolderForPath` lives under the volume path while COREBRAIN_HOME is
+// still the symlinked form. Same trick as the stored-folder loop below.
 function isUnderCorebrainHome(abs: string): boolean {
-	return abs === COREBRAIN_HOME || abs.startsWith(COREBRAIN_HOME + '/');
+	if (abs === COREBRAIN_HOME || abs.startsWith(COREBRAIN_HOME + '/')) {
+		return true;
+	}
+	const real = realpathSafe(COREBRAIN_HOME);
+	return abs === real || abs.startsWith(real + '/');
 }
 
 // Best-effort realpath. Used only for security in `resolveFolderForPath` —
