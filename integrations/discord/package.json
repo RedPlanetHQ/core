@@ -35,6 +35,7 @@
   "dependencies": {
     "axios": "^1.7.9",
     "commander": "^12.0.0",
+    "discord.js": "^14.16.3",
     "@redplanethq/sdk": "0.1.9"
   },
   "devDependencies": {
