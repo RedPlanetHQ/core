@@ -68,6 +68,10 @@ ${userPersona}
   }
 
   const personalityType = (userInfo?.personality as PersonalityType) || "tars";
+  // Linear opencode-shaped assembly: opener → # Tone and style (voice) →
+  // CAPABILITIES section body → # Channel format → time/user/persona footer.
+  // The opener and voice are produced by PERSONALITY(); CAPABILITIES carries
+  // the # Behavior through # Daily scratchpad sections.
   return `${PERSONALITY(userInfo?.name ?? "User", personalityType, userInfo?.pronoun, butlerName, userInfo?.customPersonality, mode)}\n\n${CAPABILITIES}\n\n${channelFormat}\n\n${currentTime}${userContext}${personaSection}`;
 }
 
