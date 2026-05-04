@@ -42,6 +42,7 @@ import {
 } from "~/services/tasks/recurrence.server";
 import { getIntegrationAccounts } from "~/services/integrationAccount.server";
 import { hasCodingSessions } from "~/services/coding/coding-session.server";
+import { getChannels } from "~/services/channel.server";
 import {
   getWidgetOptions,
   getOrCreateWidgetPat,
@@ -87,6 +88,7 @@ export async function loader({ request, params }: LoaderFunctionArgs) {
 
     widgetOptions,
     widgetPat,
+    channels,
   ] = await Promise.all([
     getTaskFull(taskId, workspaceId),
     getIntegrationAccounts(user.id, workspaceId),
@@ -95,6 +97,7 @@ export async function loader({ request, params }: LoaderFunctionArgs) {
 
     getWidgetOptions(user.id, workspaceId),
     getOrCreateWidgetPat(workspaceId, user.id),
+    getChannels(workspaceId),
   ]);
 
   if (!task) return redirect("/home/tasks");
@@ -113,6 +116,9 @@ export async function loader({ request, params }: LoaderFunctionArgs) {
     }
   }
 
+  const defaultChannel =
+    channels.find((c) => c.isDefault) ?? channels[0] ?? null;
+
   return typedjson({
     task,
     integrationAccountMap,
@@ -125,6 +131,13 @@ export async function loader({ request, params }: LoaderFunctionArgs) {
     widgetOptions,
     widgetPat,
     baseUrl: new URL(request.url).origin,
+    channels: channels.map((c) => ({
+      id: c.id,
+      name: c.name,
+      type: c.type,
+      isDefault: c.isDefault,
+    })),
+    defaultChannelName: defaultChannel?.name ?? null,
   });
 }
 
@@ -133,8 +146,9 @@ export async function loader({ request, params }: LoaderFunctionArgs) {
 const ActionSchema = z.discriminatedUnion("intent", [
   z.object({
     intent: z.literal("update"),
-    title: z.string().min(1),
+    title: z.string().min(1).optional(),
     description: z.string().optional(),
+    channelId: z.string().optional(),
   }),
   z.object({
     intent: z.literal("update-status"),
@@ -199,18 +213,54 @@ export async function action({ request, params }: ActionFunctionArgs) {
     text: formData.get("text") ?? undefined,
     startTime: formData.get("startTime") ?? undefined,
     currentTime: formData.get("currentTime") ?? undefined,
+    channelId: formData.get("channelId") ?? undefined,
   });
 
   if (!parsed.success) return json({ error: "Invalid input" }, { status: 400 });
 
   if (parsed.data.intent === "update") {
+    let resolvedChannel: { channel: string | null; channelId: string | null } | undefined;
+    if (parsed.data.channelId !== undefined) {
+      if (parsed.data.channelId === "") {
+        resolvedChannel = { channel: null, channelId: null };
+      } else {
+        const channel = await prisma.channel.findFirst({
+          where: { id: parsed.data.channelId, workspaceId, isActive: true },
+        });
+        if (!channel) {
+          return json({ error: "Channel not found" }, { status: 404 });
+        }
+        resolvedChannel = { channel: channel.type, channelId: channel.id };
+      }
+    }
+
     const task = await updateTask(taskId, {
-      title: parsed.data.title,
+      ...(parsed.data.title !== undefined && { title: parsed.data.title }),
       ...(parsed.data.description !== undefined && {
         description: parsed.data.description,
       }),
+      ...(resolvedChannel !== undefined && {
+        channel: resolvedChannel.channel,
+        channelId: resolvedChannel.channelId,
+      }),
     });
-    detectAndApplyRecurrence(taskId, workspaceId, user.id, parsed.data.title);
+
+    if (resolvedChannel !== undefined && task.isActive && task.nextRunAt) {
+      await removeScheduledTask(taskId);
+      await enqueueScheduledTask(
+        {
+          taskId,
+          workspaceId,
+          userId: user.id,
+          channel: task.channel ?? "email",
+        },
+        task.nextRunAt,
+      );
+    }
+
+    if (parsed.data.title) {
+      detectAndApplyRecurrence(taskId, workspaceId, user.id, parsed.data.title);
+    }
     return json({ task });
   }
 

@@ -22,6 +22,8 @@ function TaskDetailInner() {
     widgetOptions,
     widgetPat,
     baseUrl,
+    channels,
+    defaultChannelName,
   } = data;
 
   const handleSave = (title: string) => {
@@ -59,6 +61,13 @@ function TaskDetailInner() {
     );
   };
 
+  const handleChannelChange = (channelId: string | null) => {
+    fetcher.submit(
+      { intent: "update", channelId: channelId ?? "" },
+      { method: "POST", action: `/home/tasks/${task.id}` },
+    );
+  };
+
   const widgetCtxValue = useMemo(
     () =>
       widgetPat && baseUrl
@@ -76,12 +85,15 @@ function TaskDetailInner() {
       taskPageId={taskPageId}
       collabToken={collabToken}
       isSubmitting={fetcher.state !== "idle"}
+      channels={channels}
+      defaultChannelName={defaultChannelName}
       onSave={handleSave}
       onStatusChange={handleStatusChange}
       onCreateSubtask={handleCreateSubtask}
       onSubtaskStatusChange={handleSubtaskStatusChange}
       onSubtaskDelete={handleSubtaskDelete}
       onSubtaskClick={(id) => navigate(`/home/tasks/${id}`)}
+      onChannelChange={handleChannelChange}
     />
   );
 

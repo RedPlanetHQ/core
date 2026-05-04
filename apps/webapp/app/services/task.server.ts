@@ -252,6 +252,8 @@ export async function updateTask(
     status?: TaskStatus;
     title?: string;
     description?: string;
+    channel?: string | null;
+    channelId?: string | null;
     /** Page the change originated from — excluded from title propagation. */
     sourcePageId?: string;
   },

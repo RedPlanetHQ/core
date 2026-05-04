@@ -21,6 +21,10 @@ import {
   TaskStatusDropdownVariant,
 } from "~/components/tasks/task-status-dropdown";
 import { TaskInlineForm } from "~/components/tasks/task-inline-form.client";
+import {
+  TaskChannelPicker,
+  type ChannelOption,
+} from "~/components/tasks/task-channel-picker";
 import type { TaskFull } from "~/services/task.server";
 import { cn } from "~/lib/utils";
 import type { TaskStatus } from "@core/database";
@@ -33,12 +37,15 @@ interface TaskDetailFullProps {
   taskPageId: string;
   collabToken: string;
   isSubmitting: boolean;
+  channels?: ChannelOption[];
+  defaultChannelName?: string | null;
   onSave: (title: string) => void;
   onStatusChange: (status: string) => void;
   onCreateSubtask: (title: string, status: string) => void;
   onSubtaskStatusChange: (subtaskId: string, status: string) => void;
   onSubtaskDelete: (subtaskId: string) => void;
   onSubtaskClick: (id: string) => void;
+  onChannelChange?: (channelId: string | null) => void;
 }
 
 function SubIssuesPopover({
@@ -155,12 +162,15 @@ export function TaskDetailFull({
   taskPageId,
   collabToken,
   isSubmitting,
+  channels = [],
+  defaultChannelName = null,
   onSave,
   onStatusChange,
   onCreateSubtask,
   onSubtaskStatusChange,
   onSubtaskDelete,
   onSubtaskClick,
+  onChannelChange,
 }: TaskDetailFullProps) {
   const [title, setTitle] = React.useState(task.title);
 
@@ -281,6 +291,15 @@ export function TaskDetailFull({
                   )}
               </span>
             </Button>
+
+            {onChannelChange && channels.length > 0 && (
+              <TaskChannelPicker
+                channels={channels}
+                selectedChannelId={task.channelId ?? null}
+                defaultChannelName={defaultChannelName}
+                onChange={onChannelChange}
+              />
+            )}
           </div>
 
           <div className="flex flex-col gap-1">
