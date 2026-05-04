@@ -1,4 +1,4 @@
-import axios, { AxiosError, AxiosInstance } from 'axios';
+import axios, { AxiosInstance } from 'axios';
 
 import type { RelayEvent } from './events';
 
@@ -41,43 +41,43 @@ export class Forwarder {
 
     while (attempt < this.maxAttempts) {
       attempt += 1;
+
+      let response;
       try {
-        const response = await this.client.post('', event, {
+        response = await this.client.post('', event, {
           headers: {
             'X-Idempotency-Key': event.event_id,
           },
         });
-
-        if (response.status >= 200 && response.status < 300) {
-          return;
+      } catch (networkError) {
+        // No response — true network failure (DNS, connection refused, timeout). Retry.
+        lastError = networkError;
+        if (attempt < this.maxAttempts) {
+          await sleep(this.initialBackoffMs * 2 ** (attempt - 1));
         }
+        continue;
+      }
 
-        // Auth or client errors — don't retry.
+      if (response.status >= 200 && response.status < 300) {
+        return;
+      }
+
+      // 4xx — bail immediately without retry.
+      if (response.status >= 400 && response.status < 500) {
         if (response.status === 401 || response.status === 403) {
           throw new Error(
             `Forwarder auth rejected (${response.status}): check CORE_WORKSPACE_TOKEN`,
           );
         }
-
-        if (response.status >= 400 && response.status < 500) {
-          throw new Error(
-            `Forwarder rejected with ${response.status}: ${JSON.stringify(response.data)}`,
-          );
-        }
-
-        lastError = new Error(`Forwarder ${response.status}: ${JSON.stringify(response.data)}`);
-      } catch (error) {
-        lastError = error;
-        const ax = error as AxiosError;
-        // For network errors (no response), retry. For thrown 4xx errors (above), bail.
-        if (ax?.response && ax.response.status >= 400 && ax.response.status < 500) {
-          throw error;
-        }
+        throw new Error(
+          `Forwarder rejected with ${response.status}: ${JSON.stringify(response.data)}`,
+        );
       }
 
+      // 5xx or other — retryable.
+      lastError = new Error(`Forwarder ${response.status}: ${JSON.stringify(response.data)}`);
       if (attempt < this.maxAttempts) {
-        const backoff = this.initialBackoffMs * 2 ** (attempt - 1);
-        await sleep(backoff);
+        await sleep(this.initialBackoffMs * 2 ** (attempt - 1));
       }
     }
 
