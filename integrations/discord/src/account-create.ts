@@ -1,80 +1,78 @@
 import axios from 'axios';
 
-export async function integrationCreate(
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  data: any
-) {
-  const { oauthResponse, oauthParams } = data;
+interface DiscordBotUser {
+  id: string;
+  username: string;
+  discriminator?: string;
+  avatar?: string | null;
+  bot?: boolean;
+}
 
-  // Fetch user information using the access token
-  let username = null;
-  let userId = null;
-  let discriminator = null;
-  let avatar = null;
-  let email = null;
+interface DiscordGuild {
+  id: string;
+  name: string;
+  icon?: string | null;
+}
 
-  try {
-    // Get user info from Discord API
-    const userResponse = await axios.get('https://discord.com/api/v10/users/@me', {
-      headers: {
-        Authorization: `Bearer ${oauthResponse.access_token}`,
-      },
-    });
+export async function integrationCreate(data: Record<string, string>) {
+  const { bot_token } = data;
 
-    userId = userResponse.data.id;
-    username = userResponse.data.username;
-    discriminator = userResponse.data.discriminator;
-    avatar = userResponse.data.avatar;
-    email = userResponse.data.email;
-  } catch (error) {
-    console.error('Error fetching user info:', error);
+  if (!bot_token || typeof bot_token !== 'string' || bot_token.trim().length === 0) {
+    throw new Error('bot_token is required');
   }
 
-  // Get guilds (servers) the user is in
-  let guilds = [];
-  try {
-    const guildsResponse = await axios.get('https://discord.com/api/v10/users/@me/guilds', {
-      headers: {
-        Authorization: `Bearer ${oauthResponse.access_token}`,
-      },
-    });
+  const token = bot_token.trim();
 
-    guilds = guildsResponse.data;
-  } catch (error) {
-    console.error('Error fetching guilds:', error);
+  const client = axios.create({
+    baseURL: 'https://discord.com/api/v10',
+    headers: {
+      Authorization: `Bot ${token}`,
+      'Content-Type': 'application/json',
+    },
+  });
+
+  let bot: DiscordBotUser;
+  try {
+    const response = await client.get<DiscordBotUser>('/users/@me');
+    bot = response.data;
+  } catch (error: any) {
+    const status = error?.response?.status;
+    if (status === 401) {
+      throw new Error('Invalid bot token. Verify the token in Discord Developer Portal → Bot → Reset Token.');
+    }
+    throw new Error(`Failed to validate bot token: ${error?.message || 'unknown error'}`);
   }
 
-  // For Discord OAuth2, we need to store the tokens and user info
-  const integrationConfiguration = {
-    access_token: oauthResponse.access_token,
-    refresh_token: oauthResponse.refresh_token,
-    client_id: oauthResponse.client_id,
-    client_secret: oauthResponse.client_secret,
-    token_type: oauthResponse.token_type,
-    expires_in: oauthResponse.expires_in,
-    expires_at: oauthResponse.expires_at,
-    scope: oauthResponse.scope,
-    username: username,
-    userId: userId,
-    discriminator: discriminator,
-    avatar: avatar,
-    email: email,
-    guilds: guilds,
-    guildId: oauthResponse.guild?.id || null,
-    guildName: oauthResponse.guild?.name || null,
-    redirect_uri: oauthParams.redirect_uri || null,
-  };
+  if (!bot?.id) {
+    throw new Error('Discord did not return a bot user. Token may be malformed.');
+  }
 
-  const payload = {
-    settings: {},
-    accountId: integrationConfiguration.userId || integrationConfiguration.username,
-    config: integrationConfiguration,
-  };
+  let guilds: DiscordGuild[] = [];
+  try {
+    const guildsResponse = await client.get<DiscordGuild[]>('/users/@me/guilds');
+    guilds = guildsResponse.data ?? [];
+  } catch (error) {
+    // Non-fatal — bot may simply not be in any guild yet.
+    guilds = [];
+  }
 
   return [
     {
       type: 'account',
-      data: payload,
+      data: {
+        settings: {
+          bot_username: bot.username,
+          bot_id: bot.id,
+        },
+        accountId: bot.id,
+        config: {
+          bot_token: token,
+          bot_id: bot.id,
+          bot_username: bot.username,
+          bot_avatar: bot.avatar ?? null,
+          guilds: guilds.map((g) => ({ id: g.id, name: g.name, icon: g.icon ?? null })),
+        },
+      },
     },
   ];
 }
