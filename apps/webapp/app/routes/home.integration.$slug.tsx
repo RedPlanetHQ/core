@@ -23,6 +23,7 @@ import { prisma } from "~/db.server";
 import { scheduler, unschedule } from "~/services/oauth/scheduler";
 import { Plus } from "lucide-react";
 import { isBillingEnabled, isPaidPlan } from "~/config/billing.server";
+import { logger } from "~/services/logger.service";
 
 export const meta: MetaFunction<typeof loader> = ({ data }) => {
   const name = data?.integration?.name;
@@ -89,11 +90,60 @@ export async function action({ request }: ActionFunctionArgs) {
       );
     }
 
-    if (value) {
-      await scheduler({ integrationAccountId, admin: user.admin });
-    } else {
-      await unschedule({ integrationAccountId });
+    const integrationAccount = await prisma.integrationAccount.findUnique({
+      where: { id: integrationAccountId, deleted: null },
+      include: {
+        integrationDefinition: true,
+        workspace: { include: { Subscription: true } },
+      },
+    });
+
+    if (!integrationAccount) {
+      return json({ error: "Integration account not found" }, { status: 404 });
     }
+
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    const spec = integrationAccount.integrationDefinition.spec as any;
+    const hasSchedule = !!spec?.schedule?.frequency;
+
+    if (hasSchedule) {
+      if (value) {
+        await scheduler({ integrationAccountId, admin: user.admin });
+      } else {
+        await unschedule({ integrationAccountId });
+      }
+
+      return json({ success: true });
+    }
+
+    // Webhook-based integration: no scheduler to manage. Persist the
+    // toggle directly so downstream consumers (e.g. webhook handlers)
+    // can honor the user's auto-read preference.
+    if (value && isBillingEnabled() && !user.admin) {
+      const planType =
+        integrationAccount.workspace?.Subscription?.planType || "FREE";
+      if (!isPaidPlan(planType)) {
+        logger.warn("Auto-read requires a paid plan", {
+          workspaceId: integrationAccount.workspace?.id,
+          planType,
+        });
+        return json(
+          { error: "Auto-read requires a Pro or Max plan" },
+          { status: 403 },
+        );
+      }
+    }
+
+    await prisma.integrationAccount.update({
+      where: { id: integrationAccountId },
+      data: {
+        settings: {
+          // eslint-disable-next-line @typescript-eslint/no-explicit-any
+          ...((integrationAccount.settings as any) || {}),
+          autoActivityRead: value,
+        },
+      },
+    });
 
     return json({ success: true });
   }
@@ -142,7 +192,7 @@ export function IntegrationDetail({
     Array.isArray(specData?.widgets) && specData.widgets.length > 0;
   const isWidgetOnly =
     !hasApiKey && !hasOAuth2 && !hasMcpOAuth && !hasMCPAuth && hasWidgets;
-  const hasAutoActivity = !!specData?.schedule && !!specData?.enableAutoRead;
+  const hasAutoActivity = !!specData?.enableAutoRead;
   const Component = getIcon(integration.icon as IconType);
 
   const installFetcher = useFetcher<{ success?: boolean; error?: string }>();
@@ -191,7 +241,7 @@ export function IntegrationDetail({
           },
         ]}
       />
-      <div className="flex h-[calc(100vh)] flex-col items-center overflow-y-auto p-4 px-5 md:h-page">
+      <div className="md:h-page flex h-[calc(100vh)] flex-col items-center overflow-y-auto p-4 px-5">
         <div className="w-full md:max-w-5xl">
           <Section
             title={integration.name}

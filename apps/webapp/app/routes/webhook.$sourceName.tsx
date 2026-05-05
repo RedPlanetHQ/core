@@ -7,7 +7,10 @@ import { z } from "zod";
 import { webhookService } from "~/services/webhook.server";
 import { logger } from "~/services/logger.service";
 import { isTriggerDeployment } from "~/lib/queue-adapter.server";
-import { isSlackDMOrMention, parseSlackDMEvent } from "~/services/channels/slack/inbound";
+import {
+  isSlackDMOrMention,
+  parseSlackDMEvent,
+} from "~/services/channels/slack/inbound";
 import { handleChannelMessage } from "~/services/channels";
 
 const ParamsSchema = z.object({

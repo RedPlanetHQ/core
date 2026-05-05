@@ -6,6 +6,7 @@ import { prisma } from "~/db.server";
 import { logger } from "./logger.service";
 import { IntegrationRunner } from "~/services/integrations/integration-runner";
 import { webhookDeliveryTask } from "../trigger/webhooks/webhook-delivery";
+import { env } from "~/env.server";
 
 export type EventHeaders = Record<string, string | string[]>;
 export type EventBody = Record<string, any>;
@@ -135,16 +136,18 @@ export class WebhookService {
             integrationSlug: integrationAccount.integrationDefinition.slug,
           });
 
-          await webhookDeliveryTask.trigger(
-            {
-              workspaceId: integrationAccount.workspaceId,
-              raw: true,
-              rawBody: eventBody,
-            },
-            {
-              tags: [integrationAccount.workspaceId, sourceName],
-            },
-          );
+          if (env.QUEUE_PROVIDER === "trigger") {
+            await webhookDeliveryTask.trigger(
+              {
+                workspaceId: integrationAccount.workspaceId,
+                raw: true,
+                rawBody: eventBody,
+              },
+              {
+                tags: [integrationAccount.workspaceId, sourceName],
+              },
+            );
+          }
 
           const messages = await IntegrationRunner.process({
             eventData: {

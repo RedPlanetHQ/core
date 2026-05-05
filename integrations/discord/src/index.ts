@@ -1,4 +1,5 @@
 import { integrationCreate } from './account-create';
+import { createActivityEvent } from './create-activity';
 import {
   IntegrationCLI,
   IntegrationEventPayload,
@@ -12,6 +13,9 @@ export async function run(eventPayload: IntegrationEventPayload) {
   switch (eventPayload.event) {
     case IntegrationEventType.SETUP:
       return await integrationCreate(eventPayload.eventBody);
+
+    case IntegrationEventType.PROCESS:
+      return createActivityEvent(eventPayload.eventBody.eventData, eventPayload.config);
 
     case IntegrationEventType.GET_TOOLS: {
       const tools = await getTools();
@@ -42,7 +46,7 @@ export async function run(eventPayload: IntegrationEventPayload) {
     }
 
     default:
-      return { message: `The event payload type is ${eventPayload.event}` };
+      return [{ type: 'error', data: `The event payload type is ${eventPayload.event}` }];
   }
 }
 
@@ -66,6 +70,7 @@ class DiscordCLI extends IntegrationCLI {
       mcp: {
         type: 'cli',
       },
+      enableAutoRead: true,
       auth: {
         api_key: {
           fields: [

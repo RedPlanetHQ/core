@@ -47,7 +47,7 @@ export class GatewayClient {
     this.client.on(Events.MessageCreate, (message: Message) => {
       // Ignore bot's own messages to avoid loops.
       if (message.author.id === this.client.user?.id) return;
-      void this.dispatch(serializeMessageCreate(message));
+      void this.dispatch(serializeMessageCreate(message, this.client.user));
     });
 
     this.client.on(Events.GuildMemberAdd, (member: GuildMember) => {

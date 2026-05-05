@@ -13,6 +13,7 @@ import {
   type IntegrationEventPayload,
   type Message,
 } from "@core/types";
+import { createActivities } from "~/trigger/utils/message-utils";
 
 // Cache: slug -> { mod, version }
 const moduleCache = new Map<
@@ -229,6 +230,7 @@ export class IntegrationRunner {
     slug: string,
   ): Promise<Message[]> {
     const mod = await this.loadModule(slug);
+
     return await mod.run(payload);
   }
 
@@ -422,7 +424,16 @@ export class IntegrationRunner {
     }
 
     if (grouped["activity"]) {
-      result.activities = grouped["activity"].map((m) => m.data);
+      // Persist via the shared helper so the inline webhook path matches the
+      // trigger/bullmq paths: writes Activity rows, fans out to webhook
+      // subscribers, and enqueues the CASE pipeline when autoActivityRead
+      // is enabled. `userId` is unused by the helper — the integration
+      // account lookup carries the integratedById it actually needs.
+      result.activities = await createActivities({
+        integrationAccountId,
+        messages: grouped["activity"],
+        userId: "",
+      });
     }
 
     return result;

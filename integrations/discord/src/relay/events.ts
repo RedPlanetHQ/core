@@ -1,4 +1,4 @@
-import type { Message, GuildMember } from 'discord.js';
+import type { Message, GuildMember, User } from 'discord.js';
 
 export type RelayEventType = 'message_create' | 'guild_member_add';
 
@@ -11,7 +11,23 @@ export interface RelayEvent {
   payload: unknown;
 }
 
-export function serializeMessageCreate(message: Message): RelayEvent {
+export function serializeMessageCreate(message: Message, botUser: User | null): RelayEvent {
+  // Use discord.js's `mentions.has` to cover user mentions, role mentions of
+  // any role the bot holds, and @everyone in one shot — replying to the bot
+  // shouldn't count as a mention.
+  const mentionsBot = botUser
+    ? message.mentions.has(botUser, { ignoreRepliedUser: true })
+    : false;
+
+  // DMChannel has no name; fall back to the recipient's username so the
+  // activity feed renders something readable instead of a bare snowflake.
+  const channelName =
+    'name' in message.channel && typeof message.channel.name === 'string'
+      ? message.channel.name
+      : message.channel.isDMBased()
+      ? `DM with ${message.author.username}`
+      : null;
+
   return {
     event_type: 'message_create',
     event_id: message.id,
@@ -27,7 +43,9 @@ export function serializeMessageCreate(message: Message): RelayEvent {
         bot: message.author.bot,
       },
       channel_id: message.channelId,
+      channel_name: channelName,
       guild_id: message.guildId,
+      guild_name: message.guild?.name ?? null,
       thread_id: message.channel.isThread() ? message.channelId : null,
       reference: message.reference
         ? {
@@ -48,6 +66,7 @@ export function serializeMessageCreate(message: Message): RelayEvent {
         roles: message.mentions.roles.map((r) => r.id),
         everyone: message.mentions.everyone,
       },
+      mentions_bot: mentionsBot,
       created_at: message.createdAt.toISOString(),
       edited_at: message.editedAt?.toISOString() ?? null,
     },

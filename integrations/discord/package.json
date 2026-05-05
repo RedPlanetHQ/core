@@ -1,6 +1,6 @@
 {
   "name": "@core/discord",
-  "version": "0.1.2",
+  "version": "0.1.4",
   "description": "Discord integration for Core",
   "main": "./bin/index.js",
   "module": "./bin/index.mjs",

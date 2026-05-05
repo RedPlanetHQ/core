@@ -15,6 +15,7 @@ const PERSONA_VOICE_ASPECTS: VoiceAspect[] = ["Preference", "Directive"];
 
 interface WorkspaceMetadata {
   lastPersonaGenerationAt?: string;
+  autoUpdatePersona?: boolean;
   [key: string]: any;
 }
 
@@ -39,6 +40,25 @@ export async function checkPersonaUpdateThreshold(
   reason?: string;
 }> {
   try {
+    const workspace = await prisma.workspace.findUnique({
+      where: { id: workspaceId },
+      select: { metadata: true },
+    });
+
+    if (!workspace) {
+      logger.warn(`Workspace not found: ${workspaceId}`);
+      return { shouldGenerate: false, reason: "workspace_not_found" };
+    }
+
+    const metadata = (workspace.metadata || {}) as WorkspaceMetadata;
+
+    if (metadata.autoUpdatePersona === false) {
+      return {
+        shouldGenerate: false,
+        reason: "auto_update_persona_disabled",
+      };
+    }
+
     const labelService = new LabelService();
 
     // Check if persona document exists
@@ -83,18 +103,6 @@ export async function checkPersonaUpdateThreshold(
       };
     }
 
-    // Get workspace metadata for last generation timestamp
-    const workspace = await prisma.workspace.findUnique({
-      where: { id: workspaceId },
-      select: { metadata: true },
-    });
-
-    if (!workspace) {
-      logger.warn(`Workspace not found: ${workspaceId}`);
-      return { shouldGenerate: false, reason: "workspace_not_found" };
-    }
-
-    const metadata = (workspace.metadata || {}) as WorkspaceMetadata;
     const lastPersonaGenerationAt = metadata.lastPersonaGenerationAt;
 
     if (!lastPersonaGenerationAt) {

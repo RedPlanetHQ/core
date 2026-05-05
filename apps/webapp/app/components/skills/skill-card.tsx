@@ -2,12 +2,28 @@ import { cn } from "~/lib/utils";
 import { Badge } from "../ui/badge";
 import { type SkillItem } from "~/hooks/use-skills";
 import { useNavigate } from "@remix-run/react";
-import { Library } from "lucide-react";
+import {
+  Eye,
+  Library,
+  Lightbulb,
+  ListChecks,
+  Search,
+  User,
+  type LucideIcon,
+} from "lucide-react";
 import { format, isThisYear } from "date-fns";
 
 interface SkillCardProps {
   skill: SkillItem;
 }
+
+const SYSTEM_SKILL_ICONS: Record<string, LucideIcon> = {
+  Persona: User,
+  Plan: ListChecks,
+  Brainstorm: Lightbulb,
+  "Gather Information": Search,
+  "Watch Rules": Eye,
+};
 
 export function SkillCard({ skill }: SkillCardProps) {
   const navigate = useNavigate();
@@ -53,7 +69,10 @@ export function SkillCard({ skill }: SkillCardProps) {
                     "text-foreground shrink-0 rounded !bg-transparent px-0 text-sm",
                   )}
                 >
-                  <Library size={16} className="text-primary" />
+                  {(() => {
+                    const Icon = SYSTEM_SKILL_ICONS[skill.title] ?? Library;
+                    return <Icon size={16} className="text-primary" />;
+                  })()}
                 </Badge>
 
                 <div className={cn("truncate text-left font-medium")}>
