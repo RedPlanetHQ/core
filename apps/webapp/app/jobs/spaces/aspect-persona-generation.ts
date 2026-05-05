@@ -12,7 +12,29 @@
 
 import { logger } from "~/services/logger.service";
 import { createBatch, getBatch } from "~/lib/batch.server";
+import { createAgent, resolveModelString } from "~/lib/model.server";
 import { z } from "zod";
+
+// Flag to bypass the OpenAI batch API and run full-refresh through direct
+// chat completions instead. Useful for local/dev iteration where waiting
+// minutes-to-hours for a batch is impractical. Defaults to batch in prod.
+//   PERSONA_USE_BATCH=false  → direct mode (sync calls per request)
+//   PERSONA_USE_BATCH unset/true → batch mode (existing behaviour)
+const USE_BATCH = false;
+
+async function directLLMCall(message: ModelMessage): Promise<string | null> {
+  try {
+    const modelId = await resolveModelString("chat", "medium");
+    const agent = createAgent(modelId);
+    const result = await agent.generate(message);
+    return result.text ?? null;
+  } catch (err) {
+    logger.error("directLLMCall failed", {
+      error: err instanceof Error ? err.message : String(err),
+    });
+    return null;
+  }
+}
 import {
   getUserContext,
   type UserContext,
@@ -26,35 +48,7 @@ import {
 import { ProviderFactory } from "@core/providers";
 import { getActiveVoiceAspects } from "~/services/aspectStore.server";
 
-import { createAgent, resolveModelString } from "~/lib/model.server";
 import { type ModelMessage } from "ai";
-import { type MessageListInput } from "@mastra/core/agent/message-list";
-
-/**
- * Direct LLM call helper — replaces batch for single/few requests.
- * Returns the text content from a single prompt.
- */
-async function directLLMCall(
-  prompt: MessageListInput,
-  label?: string,
-): Promise<string | null> {
-  try {
-    const modelId = await resolveModelString("chat", "medium");
-    const agent = createAgent(modelId);
-    const result = await agent.generate(prompt);
-    const text = result.text;
-    logger.info(`Direct LLM call completed${label ? ` [${label}]` : ""}`, {
-      responseLength: text.length,
-      preview: text.slice(0, 100),
-    });
-    return text;
-  } catch (error) {
-    logger.error(`Direct LLM call failed${label ? ` [${label}]` : ""}`, {
-      error,
-    });
-    return null;
-  }
-}
 
 // Minimum statements required to generate a section
 // Set to 1 so even a single fact gets included.
@@ -181,42 +175,13 @@ function sanitizeSectionContent(content: string): string {
 }
 
 /**
- * Lighter sanitizer for existing section bodies fed back into the LLM prompt
- * or into `applyDelta`. Only strips legacy `<!-- section:X -->` round-trip
- * markers — never touches headings or blank lines, since the user may have
- * added structure inside the section.
+ * Lighter sanitizer for existing section bodies fed back into the LLM prompt.
+ * Only strips legacy `<!-- section:X -->` round-trip markers — never touches
+ * headings or blank lines, since the user may have added structure inside
+ * the section.
  */
 function stripLegacySectionMarkers(content: string): string {
   return content.replace(/<!-- section:\w+ -->/g, "").trim();
-}
-
-/**
- * Minimum Jaccard similarity required between an existing section and the
- * post-delta merged section. Below this threshold the delta is rejected and
- * the existing section is kept verbatim — guards against the LLM rewriting
- * the whole section instead of applying a small patch.
- *
- * 0.5 means at least half the word-tokens must overlap. Tune if needed.
- */
-const INCREMENTAL_JACCARD_THRESHOLD = 0.5;
-
-/**
- * Word-level Jaccard similarity between two strings.
- * Returns 1.0 if both are empty, 0.0 if one is empty and the other isn't.
- */
-function jaccardSimilarity(a: string, b: string): number {
-  const tokenize = (s: string) =>
-    new Set(s.toLowerCase().match(/\b\w+\b/g) ?? []);
-  const setA = tokenize(a);
-  const setB = tokenize(b);
-  if (setA.size === 0 && setB.size === 0) return 1.0;
-  if (setA.size === 0 || setB.size === 0) return 0.0;
-  let intersection = 0;
-  for (const token of setA) {
-    if (setB.has(token)) intersection++;
-  }
-  const union = setA.size + setB.size - intersection;
-  return intersection / union;
 }
 
 /**
@@ -244,8 +209,17 @@ export const ASPECT_SECTION_MAP: Record<
     description:
       "Who they are - name, role, affiliations, contact info, location",
     agentQuestion: "Who am I talking to?",
-    filterGuidance:
-      "Include: name, profession, role, affiliations, email, phone, location, timezone. Exclude: health metrics, body composition, detailed physical stats - those belong in memory, not persona.",
+    filterGuidance: `Rule: a fact belongs in IDENTITY if and only if an agent needs it on EVERY task to act on the user's behalf — to introduce, address, contact, or attribute correctly — regardless of what the task is about.
+
+Apply this test:
+  > "If the user just asked something completely unrelated, would I still need this fact loaded?"
+  > If yes → keep. If no → drop; memory will retrieve it when the task is specifically about that thing.
+
+Anchors:
+  Keep — "primary email manoj@poozle.dev", "employer Polarize Labs LLP", "GitHub handle saimanoj"
+  Drop — "31% body fat", "card ending 7108", "subscribed to Birkenstock", "owns RedPlanetHQ/sol"
+
+When in doubt about a durable identifier (a secondary email, an affiliation, a public handle), keep it. The gate's drop rules still apply for everything else.`,
   },
   Knowledge: {
     title: "EXPERTISE",
@@ -265,8 +239,17 @@ export const ASPECT_SECTION_MAP: Record<
     title: "PREFERENCES",
     description: "How they want things done - style, format, approach, tools",
     agentQuestion: "How do they want things done?",
-    filterGuidance:
-      "Include: communication style, formatting preferences, tool choices, workflow preferences, tone preferences. These are 'I prefer X' statements. Exclude: hard rules (those are Directives), one-time requests, and project-specific preferences.",
+    filterGuidance: `Rule: a fact belongs in PREFERENCES if and only if an agent applies it on EVERY future task where the dimension is relevant — independent of which tool, feature, or project the task is about.
+
+Apply this test:
+  > "Would a future agent, working on something completely unrelated to where this preference came from, still apply it?"
+  > If no → drop.
+
+Anchors:
+  Keep — "direct, founder tone in all writing", "drafts important messages for approval"
+  Drop — "Linear widget shows assigned issues", "v1 ships with column-by-column filter", "Email N stops sequence"
+
+Hard non-negotiable rules belong in DIRECTIVES, not here.`,
   },
   Habit: {
     title: "HABITS",
@@ -287,8 +270,19 @@ export const ASPECT_SECTION_MAP: Record<
     description:
       "Standing rules and active decisions - always do X, never do Y, use Z for W",
     agentQuestion: "What rules must I follow? What's already decided?",
-    filterGuidance:
-      "Include: all standing instructions, hard constraints, automation rules, and active decisions that should not be re-litigated. These are non-negotiable. Format as actionable rules: 'Always...', 'Never...', 'Use X for Y'.",
+    filterGuidance: `Rule: a fact belongs in DIRECTIVES if and only if violating it would be a defect on ANY future task — not just on the feature, schedule, or workflow it came from.
+
+Apply this test:
+  > "If an agent on a totally unrelated task ignored this rule, would that be a bug?"
+  > If yes → keep. If no → drop; that's feature config, not a persona directive.
+
+The "always/never" wording is a trap — any feature config can be phrased as "always X" and sound directive-shaped. The test is about scope of authority, not wording.
+
+Anchors:
+  Keep — "never auto-send messages", "draft before sending anything", "read-only SQL", "use IST as default timezone"
+  Drop — "Email N empty stops sequence", "Plan My Day runs at 5:15 PM IST", "modify decision-agent.ts", "schema.prisma sync in CI"
+
+Format kept rules as actionable: "Always …", "Never …", "Use X for Y".`,
   },
   Decision: {
     title: "DECISIONS",
@@ -332,24 +326,6 @@ export const ASPECT_SECTION_MAP: Record<
 const SectionContentSchema = z.object({
   content: z.string(),
 });
-
-// Zod schema for incremental delta output — LLM returns only what to add/replace
-const IncrementalDeltaSchema = z.object({
-  add: z.array(
-    z.object({
-      bullet: z.string(),
-      group: z.string().optional(),
-    }),
-  ),
-  replace: z.array(
-    z.object({
-      old: z.string(),
-      new: z.string(),
-    }),
-  ),
-});
-
-export type IncrementalDelta = z.infer<typeof IncrementalDeltaSchema>;
 
 export interface AspectData {
   aspect: StatementAspect;
@@ -498,6 +474,74 @@ export async function getStatementsByAspectWithEpisodes(
   return aspectDataMap;
 }
 
+// Shared persona-worthiness gate. Mirrors the per-fact gate in
+// persona-llm-placement.ts. Goal: even when an upstream classifier has
+// labelled facts as Identity/Preference/Directive, MOST of them should
+// still be skipped — the label is necessary, not sufficient. The gate
+// is repeated in every full-mode prompt so chunk summaries, merge, and
+// single-section calls all apply the same filter.
+const PERSONA_WORTHINESS_GATE = `
+=========================================================
+PERSONA-WORTHINESS GATE — apply BEFORE writing anything
+=========================================================
+
+The persona is a small, durable operating manual for OTHER AGENTS —
+agents that have no knowledge of the conversation that produced these
+facts, working on UNRELATED future tasks. The label upstream is
+NECESSARY but NOT SUFFICIENT — most labelled facts will still fail
+this gate. Default is drop.
+
+----------- THE UNIFIED RULE -----------
+
+A fact is persona-worthy if and only if an agent would apply it on
+EVERY future task where its dimension is relevant — independent of the
+specific tool, feature, project, schedule, or episode the fact came
+from.
+
+Apply this single test to every fact:
+
+  > "Would a fresh agent, working on something completely unrelated
+  > to where this fact came from, still need this fact to act
+  > correctly?"
+  > If no → drop.
+
+Aspect-specific reading of the rule:
+  - IDENTITY  → keep if an agent needs it on every task to act on the
+                user's behalf (introduce, address, contact, attribute).
+                Drop possessions, biometrics, account/policy numbers,
+                workload counts — those are about the user but only
+                relevant when the task is specifically about that
+                thing; memory will retrieve them when needed.
+  - PREFERENCE → keep if it shapes agent behaviour across many tools,
+                features, and tasks. Drop preferences scoped to one
+                tool/feature/episode.
+  - DIRECTIVE → keep if its violation would be a defect on ANY future
+                task. Drop rules whose authority is scoped to one
+                feature/file/job — that's feature config, not persona.
+
+Anchors (apply to all aspects):
+  Keep — "primary email manoj@poozle.dev", "founder tone in writing",
+         "never auto-send messages", "use IST as default timezone"
+  Drop — "31% body fat", "Linear widget shows assigned issues",
+         "Email N column stops sequence", "Plan My Day at 5:15 PM IST",
+         "modify decision-agent.ts", "subscribed to Birkenstock"
+
+----------- WORKING HEURISTIC -----------
+
+If a fact mentions a NAMED artifact — a specific tool, widget, file,
+function, repo, ticket, column, schedule, job, workflow, gateway,
+pipeline stage — that's a strong signal it's feature config, not
+persona. Drop unless the rule it expresses clearly applies far beyond
+that one artifact.
+
+If you'd name a subsection after a feature, workflow, or schedule
+("Email sequence", "Linear widget", "Gmail monitor", "Plan mode",
+"Recurring runs", "Sheet status", etc.), the cluster itself is
+feature config. Drop every fact in it.
+
+When in doubt, drop. The persona stays useful by staying small.
+`.trim();
+
 /**
  * Build prompt for generating a single aspect section
  */
@@ -521,17 +565,16 @@ function buildAspectSectionPrompt(
     })
     .join("\n\n---\n\n");
 
-  // Preferences section can be more detailed; others should be ultra-concise
-  const isPreferencesSection = aspect === "Preference";
-
   const content = `
 You are generating the **${sectionInfo.title}** section of a persona document.
+
+${PERSONA_WORTHINESS_GATE}
 
 ## What is a Persona Document?
 
 A persona is NOT a summary of everything known about a person. It is an **operating manual** for AI agents to interact with this person effectively.
 
-**Core principle:** Every line must change how an agent behaves. If removing a line wouldn't change agent behavior, delete it.
+**Core principle:** Every line must change how an agent behaves across many UNRELATED future interactions. If removing a line wouldn't change agent behaviour in some other, unrelated future task, drop the line.
 
 Think of it as a quick reference card, not a biography or database dump.
 
@@ -547,59 +590,89 @@ ${userContext.role ? `- Role: ${userContext.role}` : ""}
 ${userContext.goal ? `- Goal: ${userContext.goal}` : ""}
 
 ## Raw Facts (${statements.length} statements)
+
+You will see the raw facts below. APPLY THE GATE TO EACH FACT. Most labelled facts will fail the gate. The output should reflect that — sections that look thin are FINE, sections that look complete-but-noisy are NOT fine.
+
 ${factsText}
 
 ## Source Episodes (for context)
 ${episodesText}
 
-## Filtering Rules
+## Aspect-specific filter
 
 ${sectionInfo.filterGuidance}
 
 ## Output Requirements
 
-${
-  isPreferencesSection
-    ? `
-**PREFERENCES can be detailed** - Style rules, communication preferences, and formatting requirements need specificity to be useful.
+The output is a structured section body with these elements (in order):
 
-- Include specific style preferences (e.g., "prefers lowercase month abbreviations: jan, feb, mar")
-- Group related preferences under sub-headers
-- Be precise - vague preferences are useless
-- Max 20 words per bullet point
-- These are "I prefer" / "I like" statements, NOT hard rules (those go in DIRECTIVES)
-`
-    : `
-**BE ULTRA-CONCISE** - This is not the Preferences section.
+1. (Optional) Loose-fact bullets at the very top — facts that don't cluster
+   into a clear topic with at least one sibling. Format: \`- \${sentence}\`.
 
-- Maximum 10 words per bullet point
-- Maximum 5-7 bullet points total for the section
-- Merge related facts aggressively
-- No explanatory text - just the rule/fact
-- If you can say it in fewer words, do it
-`
-}
+2. (Required, when there are clusterable topics) Zero or more \`### Subsection\` blocks. Each subsection is a
+   topic cluster — group facts that share a coherent theme (e.g. "Email
+   writing", "Code style"). Each subsection has:
+   - A 1-3 sentence prose paragraph capturing contextual nuance, conditional
+     behaviour, and relationships between the clustered facts.
+   - A blank line.
+   - One bullet per fact, format \`- \${sentence}\`.
+   - One blank line between bullets and the next subsection.
+
+3. The line \`[Confidence: HIGH|MEDIUM|LOW]\` at the very end of the section.
+
+## Subsection naming
+
+- 1-3 words, topic-shaped (e.g., "Email writing", "Code style", "Onboarding")
+- No special characters except "-" or "/"
+- Avoid duplicating subsection names within a section
+
+## When to cluster
+
+A topic with only ONE fact stays as a loose bullet at the top — do not create
+a subsection for a single-fact topic. A cluster needs ≥ 2 related facts that
+ALL pass the gate.
+
+NEVER create a subsection whose name is the name of a feature, integration,
+workflow, or job. If the only way to name the cluster is by feature ("Linear
+widgets", "Email sequence", "Skill pipeline", "Gmail monitor", "Recurring
+runs", "Sheet status", "Plan mode", "Outbound email"), the cluster itself
+is feature config — DROP every fact in it.
+
+Saturation: if you find yourself with ≥ 8 subsections in this section, stop
+adding new ones. Drop further facts that don't unambiguously belong to one
+of the existing subsections.
 
 ## What to Include vs Exclude
 
-✅ INCLUDE:
-- Facts that change how an agent should behave in EVERY interaction
-- Ongoing/current state (not historical)
-- General principles (not one-time or project-specific)
+✅ INCLUDE only if all of these are true:
+- Applies across MANY future, unrelated interactions
+- No named feature/widget/file/repo/issue/schedule
+- Describes BEHAVIOUR an agent should follow, not an OBSERVATION about the user
+- Not already covered by another fact in the section
 
-❌ EXCLUDE:
+❌ EXCLUDE — drop without exception:
+- Body composition, biometrics, physical stats
+- Possessions, hardware, subscriptions, account/policy/order/card numbers
+- Project work, repo/issue/PR/ticket mentions, file or function references
+- Per-job schedules and cron times (e.g. "runs at 5:30 PM IST")
+- Per-feature setup ("widget shows X", "column N triggers Y", "step Z")
+- Implementation guidance for one specific kind of task
 - Anything an agent can get from memory search at runtime
-- Completed/past items
-- Project-specific or temporary context
-- Detailed health data, specific events, relationship details
-- Skills/expertise (agent doesn't need to know what you know)
 
-## Format
+## Identity-specific guidance
 
-- Markdown bullet points
-- Sub-headers only if genuinely needed for grouping
-- End with [Confidence: HIGH|MEDIUM|LOW]
-- Even if there is only 1 fact, generate the section — do NOT return "INSUFFICIENT_DATA"
+For Identity specifically: if no clear sub-topics exist, emit a single
+unnamed prose paragraph (1-3 sentences, biographical) at the top of the
+section, above all bullets and any \`### subsection\` blocks. Then end with
+\`[Confidence: …]\`.
+
+## Bullet length
+
+- Bullets are single sentences, ≤ 20 words for Preferences, ≤ 10 words for other aspects
+- Active voice, no leading dash in your output (the dash is added by the format)
+- No "I prefer" / "User does" prefixes — just the rule or fact
+
+Even if there is only 1 fact, generate the section — do NOT return "INSUFFICIENT_DATA".
 
 Generate ONLY the section content, no title header.
   `.trim();
@@ -639,10 +712,19 @@ You are summarizing a chunk of data for the **${sectionInfo.title}** section of 
 
 ${recencyNote}
 
+${PERSONA_WORTHINESS_GATE}
+
 ## Section Purpose
 ${sectionInfo.agentQuestion}
 
+## Aspect-specific filter
+${sectionInfo.filterGuidance}
+
 ## Facts in this chunk (${chunk.statements.length} statements)
+
+APPLY THE GATE TO EACH FACT. Most facts here will fail the gate — that is
+correct. Drop them silently; do NOT carry them through.
+
 ${factsText}
 
 ## Source Episodes (for context)
@@ -650,15 +732,27 @@ ${episodesText}
 
 ## Instructions
 
-Summarize the key patterns from this chunk that would help an AI agent understand this person.
+After applying the gate, cluster the SURVIVING facts by topic (1-3 word
+topic names). For each cluster of ≥ 2 SURVIVING facts that share a STANDING
+topic (not a feature/widget/workflow), output a small block:
 
-- Extract only patterns that change how an agent should behave
-- Be concise: max 10 words per bullet point
-- Focus on facts, not descriptions
-- Return bullet points only, no headers
-- If no meaningful patterns exist, return "NO_PATTERNS"
+  TOPIC: <name>
+  PROSE: <1-3 sentences capturing contextual nuance>
+  BULLETS:
+  - fact one
+  - fact two
 
-Output bullet points only.
+NEVER name a TOPIC after a feature, integration, workflow, schedule, file,
+or repo. If the natural cluster name is feature-shaped, the cluster is
+feature config — drop it entirely.
+
+For solo SURVIVING facts that don't cluster, emit:
+
+  LOOSE: <fact>
+
+Return one such block per topic cluster or solo fact. The merge step will
+combine these into the final structured section. If after applying the gate
+NO facts survive, return "NO_PATTERNS".
   `.trim();
 
   return { role: "user", content };
@@ -673,7 +767,6 @@ function buildMergePrompt(
   userContext: UserContext,
 ): ModelMessage {
   const sectionInfo = ASPECT_SECTION_MAP[aspect];
-  const isPreferencesSection = aspect === "Preference";
 
   // Format summaries with recency labels
   const summariesText = chunkSummaries
@@ -687,41 +780,58 @@ function buildMergePrompt(
   const content = `
 You are merging chunk summaries into the final **${sectionInfo.title}** section of a persona document.
 
+${PERSONA_WORTHINESS_GATE}
+
 ## What is a Persona Document?
 
-A persona is an **operating manual** for AI agents. Every line must change how an agent behaves.
+A persona is an **operating manual** for AI agents. Every line must change how an agent behaves across many UNRELATED future tasks.
 
 ## Section Purpose
 The **${sectionInfo.title}** section answers: "${sectionInfo.agentQuestion}"
 
+## Aspect-specific filter
+${sectionInfo.filterGuidance}
+
 ## Chunk Summaries (ordered by recency)
+
+The chunks below have already been filtered, but the filter may have let
+some feature-config / observation facts through. Apply the gate AGAIN as
+you merge — drop any TOPIC whose name is feature/widget/workflow shaped,
+drop any LOOSE entry that fails the gate. Do NOT promote feature-shaped
+TOPICs into ### subsections.
 
 ${summariesText}
 
-## Merge Rules
+## Output Format
 
-1. **Recent info takes precedence** - If there's a conflict, the most recent chunk wins
-2. **Deduplicate** - Remove redundant information across chunks
-3. **Preserve important older info** - Older patterns are still valid unless contradicted
-4. **Be concise** - The final output should be shorter than the sum of chunks
+The merged output uses the same structured format as a fresh section body:
 
-${
-  isPreferencesSection
-    ? `
-## Output Format (PREFERENCES)
-- Detailed rules are OK (max 20 words per bullet)
-- Group related preferences under sub-headers
-- Be specific - vague preferences are useless
-`
-    : `
-## Output Format (NON-PREFERENCES)
-- Maximum 10 words per bullet point
-- Maximum 5-7 bullet points total
-- No sub-headers unless absolutely necessary
-`
-}
+1. (Optional) Loose-fact bullets at the very top — combine all LOOSE entries
+   from chunks. Format: \`- \${sentence}\`.
 
-End with [Confidence: HIGH|MEDIUM|LOW]
+2. Zero or more \`### Subsection\` blocks built by combining matching TOPICs
+   across chunks:
+   - If the same topic appears in multiple chunks, merge their BULLETS lists
+     (deduplicating identical or near-identical facts, recent chunk wins).
+   - For PROSE: prefer the most recent chunk's prose when available; otherwise
+     synthesise a 1-3 sentence summary covering all the merged facts.
+   - Each subsection is: \`### Topic Name\`, blank line, prose paragraph,
+     blank line, one bullet per fact (format \`- \${sentence}\`), blank line.
+
+3. End with \`[Confidence: HIGH|MEDIUM|LOW]\`.
+
+## Bullet length
+
+- Bullets are single sentences, ≤ 20 words for Preferences, ≤ 10 words for other aspects
+- Active voice, no "I prefer" / "User does" prefixes
+- Subsection names: 1-3 words, topic-shaped, no duplicates
+
+## Merge rules
+
+1. Recent info takes precedence — if there's a conflict, the most recent chunk wins.
+2. Deduplicate identical bullets across chunks.
+3. Preserve important older info — older facts stay unless contradicted.
+4. The final output should be shorter than the sum of chunks.
 
 Generate ONLY the section content, no title header.
   `.trim();
@@ -809,39 +919,51 @@ async function generateSectionWithChunking(
   // Split into chunks
   const chunks = chunkAspectData(aspectData);
 
-  // Generate summary for each chunk via batch
-  const chunkRequests = chunks.map((chunk) => ({
-    customId: `chunk-${aspect}-${chunk.chunkIndex}-${Date.now()}`,
-    messages: [buildChunkSummaryPrompt(aspect, chunk, userContext)],
-    systemPrompt: "",
-  }));
-
-  const { batchId: chunkBatchId } = await createBatch({
-    requests: chunkRequests,
-    outputSchema: SectionContentSchema,
-    maxRetries: 3,
-    timeoutMs: 1200000,
-  });
-
-  const chunkBatch = await pollBatchCompletion(chunkBatchId, 1200000);
-
-  if (!chunkBatch.results || chunkBatch.results.length === 0) {
-    logger.warn(`No chunk results for ${aspect}`);
-    return null;
-  }
-
-  // Collect chunk summaries
+  // Generate summary for each chunk — batch or direct based on flag.
   const chunkSummaries: string[] = [];
-  for (const result of chunkBatch.results) {
-    if (result.error || !result.response) continue;
 
-    const content =
-      typeof result.response === "string"
-        ? result.response
-        : result.response.content || "";
+  if (USE_BATCH) {
+    const chunkRequests = chunks.map((chunk) => ({
+      customId: `chunk-${aspect}-${chunk.chunkIndex}-${Date.now()}`,
+      messages: [buildChunkSummaryPrompt(aspect, chunk, userContext)],
+      systemPrompt: "",
+    }));
 
-    if (!content.includes("NO_PATTERNS")) {
-      chunkSummaries.push(content);
+    const { batchId: chunkBatchId } = await createBatch({
+      requests: chunkRequests,
+      outputSchema: SectionContentSchema,
+      maxRetries: 3,
+      timeoutMs: 1200000,
+    });
+
+    const chunkBatch = await pollBatchCompletion(chunkBatchId, 1200000);
+
+    if (!chunkBatch.results || chunkBatch.results.length === 0) {
+      logger.warn(`No chunk results for ${aspect}`);
+      return null;
+    }
+
+    for (const result of chunkBatch.results) {
+      if (result.error || !result.response) continue;
+      const content =
+        typeof result.response === "string"
+          ? result.response
+          : result.response.content || "";
+      if (!content.includes("NO_PATTERNS")) {
+        chunkSummaries.push(content);
+      }
+    }
+  } else {
+    // Direct mode: fan out chunk summaries in parallel via plain LLM calls.
+    const directResults = await Promise.all(
+      chunks.map((chunk) =>
+        directLLMCall(buildChunkSummaryPrompt(aspect, chunk, userContext)),
+      ),
+    );
+    for (const content of directResults) {
+      if (content && !content.includes("NO_PATTERNS")) {
+        chunkSummaries.push(content);
+      }
     }
   }
 
@@ -855,35 +977,42 @@ async function generateSectionWithChunking(
     return chunkSummaries[0];
   }
 
-  // Merge chunk summaries via batch
-  const mergeRequest = {
-    customId: `merge-${aspect}-${Date.now()}`,
-    messages: [buildMergePrompt(aspect, chunkSummaries, userContext)],
-    systemPrompt: "",
-  };
+  // Merge chunk summaries — batch or direct.
+  if (USE_BATCH) {
+    const mergeRequest = {
+      customId: `merge-${aspect}-${Date.now()}`,
+      messages: [buildMergePrompt(aspect, chunkSummaries, userContext)],
+      systemPrompt: "",
+    };
 
-  const { batchId: mergeBatchId } = await createBatch({
-    requests: [mergeRequest],
-    outputSchema: SectionContentSchema,
-    maxRetries: 3,
-    timeoutMs: 1200000,
-  });
+    const { batchId: mergeBatchId } = await createBatch({
+      requests: [mergeRequest],
+      outputSchema: SectionContentSchema,
+      maxRetries: 3,
+      timeoutMs: 1200000,
+    });
 
-  const mergeBatch = await pollBatchCompletion(mergeBatchId, 1200000);
+    const mergeBatch = await pollBatchCompletion(mergeBatchId, 1200000);
 
-  if (!mergeBatch.results || mergeBatch.results.length === 0) {
-    logger.warn(`No merge result for ${aspect}`);
-    return chunkSummaries[0]; // Fallback to first chunk
+    if (!mergeBatch.results || mergeBatch.results.length === 0) {
+      logger.warn(`No merge result for ${aspect}`);
+      return chunkSummaries[0];
+    }
+
+    const mergeResult = mergeBatch.results[0];
+    if (mergeResult.error || !mergeResult.response) {
+      return chunkSummaries[0];
+    }
+
+    return typeof mergeResult.response === "string"
+      ? mergeResult.response
+      : mergeResult.response.content || chunkSummaries[0];
   }
 
-  const mergeResult = mergeBatch.results[0];
-  if (mergeResult.error || !mergeResult.response) {
-    return chunkSummaries[0]; // Fallback
-  }
-
-  return typeof mergeResult.response === "string"
-    ? mergeResult.response
-    : mergeResult.response.content || chunkSummaries[0];
+  const merged = await directLLMCall(
+    buildMergePrompt(aspect, chunkSummaries, userContext),
+  );
+  return merged ?? chunkSummaries[0];
 }
 
 /**
@@ -977,57 +1106,94 @@ async function generateAllAspectSections(
           ),
         }));
 
-        const batchRequests = sortedSmallAspects.map((aspectData) => {
-          const prompt = buildAspectSectionPrompt(aspectData, userContext);
-          return {
-            customId: `persona-section-${aspectData.aspect}-${Date.now()}`,
-            messages: [prompt],
-            systemPrompt: "",
-          };
-        });
-
-        logger.info(
-          `Generating ${batchRequests.length} small persona sections in batch`,
-          {
-            aspects: sortedSmallAspects.map((a) => a.aspect),
-          },
-        );
-
-        const { batchId } = await createBatch({
-          requests: batchRequests,
-          outputSchema: SectionContentSchema,
-          maxRetries: 3,
-          timeoutMs: 1200000,
-        });
-
-        const batch = await pollBatchCompletion(batchId, 1200000);
         const results: PersonaSectionResult[] = [];
 
-        if (batch.results && batch.results.length > 0) {
-          for (let i = 0; i < batch.results.length; i++) {
-            const result = batch.results[i];
+        if (USE_BATCH) {
+          const batchRequests = sortedSmallAspects.map((aspectData) => {
+            const prompt = buildAspectSectionPrompt(aspectData, userContext);
+            return {
+              customId: `persona-section-${aspectData.aspect}-${Date.now()}`,
+              messages: [prompt],
+              systemPrompt: "",
+            };
+          });
+
+          logger.info(
+            `Generating ${batchRequests.length} small persona sections in batch`,
+            {
+              aspects: sortedSmallAspects.map((a) => a.aspect),
+            },
+          );
+
+          const { batchId } = await createBatch({
+            requests: batchRequests,
+            outputSchema: SectionContentSchema,
+            maxRetries: 3,
+            timeoutMs: 1200000,
+          });
+
+          const batch = await pollBatchCompletion(batchId, 1200000);
+
+          if (batch.results && batch.results.length > 0) {
+            for (let i = 0; i < batch.results.length; i++) {
+              const result = batch.results[i];
+              const aspectData = sortedSmallAspects[i];
+              const sectionInfo = ASPECT_SECTION_MAP[aspectData.aspect];
+
+              if (result.error || !result.response) {
+                logger.warn(`Error generating ${aspectData.aspect} section`, {
+                  error: result.error,
+                });
+                continue;
+              }
+
+              const content =
+                typeof result.response === "string"
+                  ? result.response
+                  : result.response.content || "";
+
+              if (content.includes("INSUFFICIENT_DATA")) {
+                logger.info(
+                  `${aspectData.aspect} section returned INSUFFICIENT_DATA`,
+                );
+                continue;
+              }
+
+              results.push({
+                aspect: aspectData.aspect,
+                title: sectionInfo.title,
+                content,
+                statementCount: aspectData.statements.length,
+                episodeCount: aspectData.episodes.length,
+              });
+            }
+          }
+        } else {
+          logger.info(
+            `Generating ${sortedSmallAspects.length} small persona sections directly`,
+            { aspects: sortedSmallAspects.map((a) => a.aspect) },
+          );
+
+          const directResults = await Promise.all(
+            sortedSmallAspects.map((aspectData) =>
+              directLLMCall(buildAspectSectionPrompt(aspectData, userContext)),
+            ),
+          );
+
+          for (let i = 0; i < directResults.length; i++) {
+            const content = directResults[i];
             const aspectData = sortedSmallAspects[i];
             const sectionInfo = ASPECT_SECTION_MAP[aspectData.aspect];
-
-            if (result.error || !result.response) {
-              logger.warn(`Error generating ${aspectData.aspect} section`, {
-                error: result.error,
-              });
+            if (!content) {
+              logger.warn(`Empty result generating ${aspectData.aspect} section`);
               continue;
             }
-
-            const content =
-              typeof result.response === "string"
-                ? result.response
-                : result.response.content || "";
-
             if (content.includes("INSUFFICIENT_DATA")) {
               logger.info(
                 `${aspectData.aspect} section returned INSUFFICIENT_DATA`,
               );
               continue;
             }
-
             results.push({
               aspect: aspectData.aspect,
               title: sectionInfo.title,
@@ -1115,484 +1281,6 @@ async function pollBatchCompletion(batchId: string, maxPollingTime: number) {
   }
 
   return batch;
-}
-
-/**
- * Fetch statements for a specific episode, grouped by aspect
- * Used for incremental persona generation — only gets statements from one episode.
- * Also fetches voice aspects linked to this episode from the Aspects Store.
- */
-export async function getStatementsForEpisodeByAspect(
-  userId: string,
-  episodeUuid: string,
-): Promise<Map<StatementAspect, AspectData>> {
-  const graphProvider = ProviderFactory.getGraphProvider();
-
-  const query = `
-    MATCH (e:Episode {uuid: $episodeUuid})-[:HAS_PROVENANCE]->(s:Statement {userId: $userId})
-    WHERE s.invalidAt IS NULL
-      AND s.aspect IS NOT NULL
-      AND s.aspect IN $personaAspects
-    RETURN s.aspect AS aspect,
-           collect(DISTINCT {
-             uuid: s.uuid,
-             fact: s.fact,
-             createdAt: s.createdAt,
-             validAt: s.validAt,
-             attributes: s.attributes,
-             aspect: s.aspect
-           }) AS statements
-    ORDER BY aspect
-  `;
-
-  const voiceAspectSet = new Set<string>(VOICE_ASPECTS);
-
-  // Fetch graph statements and episode's voice aspects in parallel
-  const [results, episodeVoiceAspects] = await Promise.all([
-    graphProvider.runQuery(query, {
-      userId,
-      episodeUuid,
-      personaAspects: ["Identity", "Preference", "Directive"],
-    }),
-    // getVoiceAspectsForEpisode returns voice aspects linked to this episode
-    import("~/services/aspectStore.server").then((m) =>
-      m.getVoiceAspectsForEpisode(episodeUuid, userId),
-    ),
-  ]);
-
-  const aspectDataMap = new Map<StatementAspect, AspectData>();
-
-  for (const record of results) {
-    const aspect = record.get("aspect") as StatementAspect;
-    const rawStatements = record.get("statements") as any[];
-
-    const statements: StatementNode[] = rawStatements.map((s) => ({
-      uuid: s.uuid,
-      fact: s.fact,
-      factEmbedding: [],
-      createdAt: new Date(s.createdAt),
-      validAt: new Date(s.validAt),
-      invalidAt: null,
-      attributes:
-        typeof s.attributes === "string"
-          ? JSON.parse(s.attributes)
-          : s.attributes || {},
-      userId,
-      aspect: s.aspect,
-    }));
-
-    // Episodes not needed for incremental — we already have the existing persona doc
-    aspectDataMap.set(aspect, { aspect, statements, episodes: [] });
-  }
-
-  // Merge voice aspects from this episode into persona-relevant aspects
-  for (const va of episodeVoiceAspects) {
-    if (!voiceAspectSet.has(va.aspect)) continue;
-
-    // Only merge Preference and Directive (persona-relevant voice aspects)
-    const aspect = va.aspect as StatementAspect;
-    if (aspect !== "Preference" && aspect !== "Directive") continue;
-
-    const syntheticStatement: StatementNode = {
-      uuid: va.uuid,
-      fact: va.fact,
-      factEmbedding: [],
-      createdAt: va.createdAt,
-      validAt: va.validAt,
-      invalidAt: null,
-      attributes: {},
-      userId,
-      aspect,
-    };
-
-    const existing = aspectDataMap.get(aspect);
-    if (existing) {
-      const factExists = existing.statements.some((s) => s.fact === va.fact);
-      if (!factExists) {
-        existing.statements.push(syntheticStatement);
-      }
-    } else {
-      aspectDataMap.set(aspect, {
-        aspect,
-        statements: [syntheticStatement],
-        episodes: [],
-      });
-    }
-  }
-
-  return aspectDataMap;
-}
-
-/**
- * Build prompt for incremental delta update of a SINGLE section.
- * The LLM returns a JSON delta ({ add: [...], replace: [...] }) — NOT a rewritten section.
- * Code applies the delta to the existing section text via applyDelta().
- */
-function buildDeltaPrompt(
-  aspect: StatementAspect,
-  existingSectionContent: string,
-  newStatements: StatementNode[],
-  userContext: UserContext,
-  hasUserEdits: boolean,
-): MessageListInput {
-  const sectionInfo = ASPECT_SECTION_MAP[aspect];
-  const isPreferencesSection = aspect === "Preference";
-
-  const factsText = newStatements
-    .map((s, i) => `${i + 1}. ${s.fact}`)
-    .join("\n");
-
-  const userEditsBanner = hasUserEdits
-    ? `\n## ⚠ User has manually edited this section\n\nThe existing content below contains the user's own wording. Treat every existing line as authoritative. **Output an empty \`replace\` array** — never modify or reword existing bullets. New facts must go in \`add\` only; if a new fact appears to conflict with an existing line, still ADD it as a separate bullet and let the user reconcile.\n`
-    : "";
-
-  const content = `
-You are updating the **${sectionInfo.title}** section of a persona document. A few new facts were learned. Your job is to produce a JSON delta describing ONLY what to add or replace — you must NOT rewrite the section.
-${userEditsBanner}
-
-## Existing Section Content (READ-ONLY — do not reproduce this)
-
-${existingSectionContent}
-
-## New Facts to Incorporate
-
-${factsText}
-
-## Section Rules
-
-${sectionInfo.filterGuidance}
-
-## Instructions
-
-Analyze the new facts against the existing section content and produce a JSON object with two arrays:
-
-1. **add** — New bullets to insert. Each entry: \`{ "bullet": "text", "group": "Sub-Header Name" }\`.
-   - \`group\` is optional. ${isPreferencesSection ? 'For the Preferences section, set `group` to the name of the sub-header (e.g., "Communication Style") where this bullet belongs. If no matching sub-header exists, omit `group` and it will be appended at the end.' : "Omit `group` for this section."}
-   - Do NOT include the leading "- " in the bullet text — it will be added automatically.
-
-2. **replace** — Bullets that directly contradict an existing entry. Each entry: \`{ "old": "existing bullet text", "new": "replacement text" }\`.
-   - \`old\` should match the existing bullet text (without the leading "- ").
-   - \`new\` is the replacement text (without the leading "- ").
-   - **Be conservative**: only replace when a new fact DIRECTLY contradicts an existing entry with HIGH confidence (e.g., role changed, location changed). When uncertain, ADD as a new bullet instead.
-
-## CRITICAL Rules
-
-- Output ONLY a JSON object: \`{ "add": [...], "replace": [...] }\`
-- Both arrays may be empty if no changes are needed
-- NEVER rephrase, reorder, or summarize existing bullets
-- NEVER include bullets that already exist in the section
-- When in doubt, ADD rather than REPLACE
-- Do NOT wrap in markdown code fences — output raw JSON only
-
-## Example Output
-
-{ "add": [{ "bullet": "Prefers dark mode in all applications" }], "replace": [{ "old": "Works as a frontend developer", "new": "Works as a senior frontend developer" }] }
-  `.trim();
-
-  return { role: "user", content };
-}
-
-/**
- * Normalize a bullet string for fuzzy matching:
- * strip leading bullet markers (- , * , • ), trim whitespace.
- */
-function normalizeBullet(text: string): string {
-  return text.replace(/^[\s]*[-*•]\s*/, "").trim();
-}
-
-/**
- * Apply a validated delta to existing section text.
- * Pure function — no IO, highly testable.
- *
- * 1. Replacements first: find matching bullet via fuzzy match, swap in-place.
- *    If no match found, log warning and skip (no corruption).
- * 2. Additions second: insert at end of named group (sub-header) if `group` specified,
- *    otherwise insert before the [Confidence: ...] line or at end.
- *
- * `skipReplacements`: drop the entire replace pass. Use when the persona has
- * been edited by the user since the last system generation — the LLM cannot
- * tell user-edited bullets from previously system-generated ones, so any
- * `replace` it emits risks silently overwriting user intent. Adds still apply,
- * letting new facts accumulate as additional bullets the user can curate.
- */
-export interface ApplyDeltaOptions {
-  skipReplacements?: boolean;
-}
-
-export function applyDelta(
-  existingSection: string,
-  delta: IncrementalDelta,
-  opts: ApplyDeltaOptions = {},
-): string {
-  const lines = existingSection.split("\n");
-
-  // --- Replacements ---
-  if (!opts.skipReplacements) {
-    for (const rep of delta.replace) {
-      const normalizedOld = normalizeBullet(rep.old);
-      if (!normalizedOld) continue;
-
-      let matched = false;
-      for (let i = 0; i < lines.length; i++) {
-        const normalizedLine = normalizeBullet(lines[i]);
-        if (normalizedLine && normalizedLine === normalizedOld) {
-          // Preserve the original bullet prefix (e.g., "- ", "* ")
-          const prefixMatch = lines[i].match(/^([\s]*[-*•]\s*)/);
-          const prefix = prefixMatch ? prefixMatch[1] : "- ";
-          lines[i] = `${prefix}${rep.new}`;
-          matched = true;
-          break;
-        }
-      }
-      if (!matched) {
-        logger.warn("applyDelta: replacement old text not found, skipping", {
-          old: rep.old,
-        });
-      }
-    }
-  } else if (delta.replace.length > 0) {
-    logger.info(
-      "applyDelta: skipping replace ops because persona has user edits",
-      { skippedReplacements: delta.replace.length },
-    );
-  }
-
-  // --- Additions ---
-  for (const add of delta.add) {
-    const bulletLine = `- ${add.bullet}`;
-
-    if (add.group) {
-      // Find the sub-header matching the group name
-      const groupHeaderIdx = lines.findIndex((line) => {
-        const trimmed = line.trim();
-        return (
-          trimmed.startsWith("### ") &&
-          trimmed.slice(4).trim().toLowerCase() === add.group!.toLowerCase()
-        );
-      });
-
-      if (groupHeaderIdx !== -1) {
-        // Find the last bullet under this group (before next header or end)
-        let insertIdx = groupHeaderIdx + 1;
-        for (let i = groupHeaderIdx + 1; i < lines.length; i++) {
-          const trimmed = lines[i].trim();
-          if (trimmed.startsWith("## ") || trimmed.startsWith("### ")) break;
-          if (trimmed.startsWith("[Confidence:")) break;
-          if (trimmed.startsWith("- ") || trimmed.startsWith("* ")) {
-            insertIdx = i + 1;
-          }
-        }
-        lines.splice(insertIdx, 0, bulletLine);
-        continue;
-      }
-      // Group not found — fall through to default insertion
-    }
-
-    // Default: insert before [Confidence: ...] line, or at end
-    const confidenceIdx = lines.findIndex((line) =>
-      line.trim().startsWith("[Confidence:"),
-    );
-    if (confidenceIdx !== -1) {
-      lines.splice(confidenceIdx, 0, bulletLine);
-    } else {
-      lines.push(bulletLine);
-    }
-  }
-
-  return lines.join("\n");
-}
-
-/**
- * Generate an incremental persona update using section-level merging.
- *
- * Uses the same pattern as task pages: split by ## headings, update only
- * affected sections, preserve everything else verbatim. Unknown sections
- * and user-added content are never dropped.
- */
-export async function generateIncrementalPersona(
-  userId: string,
-  episodeUuid: string,
-  existingPersonaContent: string,
-  hasUserEdits: boolean = false,
-): Promise<string> {
-  logger.info("Starting incremental persona generation", {
-    userId,
-    episodeUuid,
-    hasUserEdits,
-  });
-
-  // Step 1: Get user context
-  const userContext = await getUserContext(userId);
-
-  // Step 2: Get this episode's persona-relevant statements
-  const episodeStatements = await getStatementsForEpisodeByAspect(
-    userId,
-    episodeUuid,
-  );
-
-  if (episodeStatements.size === 0) {
-    logger.info(
-      "No persona-relevant statements in episode, returning existing persona",
-      {
-        userId,
-        episodeUuid,
-      },
-    );
-    return existingPersonaContent;
-  }
-
-  const totalStatements = Array.from(episodeStatements.values()).reduce(
-    (sum, d) => sum + d.statements.length,
-    0,
-  );
-
-  const affectedAspects = Array.from(episodeStatements.keys());
-
-  logger.info("Episode persona statements fetched", {
-    userId,
-    episodeUuid,
-    aspects: affectedAspects,
-    totalStatements,
-  });
-
-  // Step 3: Split existing document into sections by ## headings
-  const existingSections = splitByH2Markdown(existingPersonaContent);
-
-  logger.info("Split existing persona document", {
-    userId,
-    sectionCount: existingSections.length,
-    headings: existingSections.map((s) => s.heading),
-    existingDocLength: existingPersonaContent.length,
-  });
-
-  // Step 4: For each affected aspect, build delta prompt and apply
-  // Each section is updated independently — other sections untouched.
-  const sectionUpdates: {
-    aspect: StatementAspect;
-    sectionTitle: string;
-    prompt: MessageListInput;
-    existingBody: string;
-  }[] = [];
-
-  for (const [aspect, data] of episodeStatements) {
-    const sectionTitle = ASPECT_SECTION_MAP[aspect].title;
-
-    // Find existing section by heading (case-insensitive)
-    const existingSection = existingSections.find(
-      (s) => s.heading?.toUpperCase() === sectionTitle,
-    );
-
-    // Extract just the body (content after the ## heading line). Only strip
-    // legacy round-trip markers — keep user-added headings/whitespace intact.
-    const existingBody = existingSection
-      ? stripLegacySectionMarkers(getSectionBody(existingSection.content))
-      : "";
-
-    // Check for pinned sections
-    if (existingSection?.content.includes("<!-- pinned -->")) {
-      logger.info(`Skipping pinned section during incremental generation`, {
-        userId,
-        episodeUuid,
-        aspect,
-      });
-      continue;
-    }
-
-    const prompt = buildDeltaPrompt(
-      aspect,
-      existingBody || `(No existing content)`,
-      data.statements,
-      userContext,
-      hasUserEdits,
-    );
-
-    sectionUpdates.push({ aspect, sectionTitle, prompt, existingBody });
-  }
-
-  // Step 5: Direct LLM calls in parallel, parse JSON delta, apply to section
-  const updateResults = await Promise.all(
-    sectionUpdates.map(async ({ aspect, sectionTitle, prompt, existingBody }) => {
-      const rawResponse = await directLLMCall(
-        prompt,
-        `incremental-delta-${aspect}`,
-      );
-
-      if (!rawResponse) {
-        logger.warn(
-          `LLM call failed for ${aspect} delta, keeping existing section`,
-        );
-        return { sectionTitle, newBody: null };
-      }
-
-      // Parse JSON and validate with Zod
-      try {
-        const parsedJson = JSON.parse(rawResponse);
-        const delta = IncrementalDeltaSchema.parse(parsedJson);
-
-        const mergedBody = applyDelta(existingBody, delta, {
-          skipReplacements: hasUserEdits,
-        });
-
-        // Jaccard check: reject if merged section diverges too much from existing.
-        if (existingBody.trim().length > 0) {
-          const similarity = jaccardSimilarity(existingBody, mergedBody);
-          if (similarity < INCREMENTAL_JACCARD_THRESHOLD) {
-            logger.warn(
-              `Jaccard similarity too low for ${aspect} — rejecting delta, keeping existing section`,
-              {
-                similarity,
-                threshold: INCREMENTAL_JACCARD_THRESHOLD,
-                adds: delta.add.length,
-                replacements: delta.replace.length,
-              },
-            );
-            return { sectionTitle, newBody: null };
-          }
-        }
-
-        logger.info(`Delta applied for ${aspect}`, {
-          adds: delta.add.length,
-          replacements: delta.replace.length,
-        });
-
-        return { sectionTitle, newBody: sanitizeSectionContent(mergedBody) };
-      } catch (error) {
-        logger.warn(
-          `Failed to parse/validate delta for ${aspect}, keeping existing section`,
-          {
-            error:
-              error instanceof Error ? error.message : String(error),
-            rawResponsePreview: rawResponse.slice(0, 200),
-          },
-        );
-        return { sectionTitle, newBody: null };
-      }
-    }),
-  );
-
-  // Step 6: Merge each updated section into the document — one at a time.
-  // mergeSectionIntoMarkdown preserves all other sections verbatim.
-  let updatedPersona = existingPersonaContent;
-
-  for (const { sectionTitle, newBody } of updateResults) {
-    if (newBody !== null) {
-      updatedPersona = mergeSectionIntoMarkdown(
-        updatedPersona,
-        sectionTitle,
-        newBody,
-      );
-    }
-  }
-
-  logger.info("Incremental persona generation completed", {
-    userId,
-    episodeUuid,
-    affectedSections: affectedAspects,
-    originalLength: existingPersonaContent.length,
-    updatedLength: updatedPersona.length,
-  });
-
-  return updatedPersona;
 }
 
 /**

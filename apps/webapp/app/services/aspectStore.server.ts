@@ -210,6 +210,26 @@ export async function getVoiceAspectsForEpisode(
 }
 
 /**
+ * Get voice aspects that were invalidated BY a given episode (across the
+ * specified aspect set). Used by the persona orchestrator to fold
+ * tombstones into the per-episode pass.
+ */
+export async function getInvalidatedVoiceAspectsForEpisode(
+  episodeUuid: string,
+  userId: string,
+  aspects: VoiceAspect[],
+): Promise<VoiceAspectNode[]> {
+  const records = await prisma.voiceAspect.findMany({
+    where: {
+      invalidatedBy: episodeUuid,
+      userId,
+      aspect: { in: aspects },
+    },
+  });
+  return records.map(toNode);
+}
+
+/**
  * Search voice aspects by vector similarity (for Search V2)
  */
 export async function searchVoiceAspects(params: {

@@ -18,24 +18,19 @@ export const DEFAULT_SKILL_DEFINITIONS: DefaultSkillDef[] = [
     sessionIdPrefix: "persona-v2",
     shortDescription:
       "Use when composing messages, making decisions, or responding on the user's behalf.",
-    content: `<!-- Fill in your personal context below. The butler uses this whenever it writes on your behalf or makes decisions for you. -->
+    content: `
+## IDENTITY
 
-## Who I Am
+_Your name, role, location, affiliations, and anything else that defines who you are. The butler uses this when introducing or representing you._
 
-<!-- Your name, role, and what you do -->
+## PREFERENCES
 
-## Communication Style
+_How you like things done — communication style, tools, formatting, defaults. The butler uses this when making decisions on your behalf._
+_Example: "Direct and brief. No fluff. Skip 'I hope this email finds you well.' Sign off with just my first name."_
 
-<!-- How you write: tone, formality, vocabulary, things to avoid -->
-<!-- Example: Direct and brief. No fluff. Skip "I hope this email finds you well." Sign off with just my first name. -->
+## DIRECTIVES
 
-## Preferences & Defaults
-
-<!-- How you like things done: response times, cc rules, meeting preferences, etc. -->
-
-## Goals & Priorities
-
-<!-- What matters to you right now — work goals, personal priorities, things to protect -->`,
+_Standing rules and active decisions — always do X, never do Y, use Z for W. The butler treats these as non-negotiable._`,
   },
   {
     title: "Watch Rules",

@@ -361,3 +361,36 @@ export async function getStatementsForEpisodeByAspects(
     return rest;
   });
 }
+
+/**
+ * Get persona-relevant statements that were invalidated BY a given episode.
+ * Used by the persona orchestrator to fold tombstones into the per-episode
+ * pass. Mirrors `getStatementsForEpisodeByAspects` but reads `invalidatedBy`
+ * instead of `HAS_PROVENANCE`.
+ *
+ * Note: returns the statement's pre-invalidation `fact` and `aspect`, NOT
+ * the invalidating event metadata. The orchestrator uses `fact` as the
+ * tombstone payload text.
+ */
+export async function getInvalidatedStatementsForEpisode(
+  episodeUuid: string,
+  userId: string,
+  aspects: StatementAspect[],
+): Promise<Array<{ fact: string; aspect: StatementAspect }>> {
+  const query = `
+    MATCH (s:Statement)
+    WHERE s.invalidatedBy = $episodeUuid
+      AND s.userId = $userId
+      AND s.aspect IN $aspects
+    RETURN s.fact AS fact, s.aspect AS aspect
+  `;
+  const results = await getGraphProvider().runQuery(query, {
+    episodeUuid,
+    userId,
+    aspects,
+  });
+  return results.map((record) => ({
+    fact: record.get("fact") as string,
+    aspect: record.get("aspect") as StatementAspect,
+  }));
+}
