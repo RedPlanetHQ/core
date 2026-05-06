@@ -1,6 +1,6 @@
 import { prisma } from "~/db.server";
 import { getOrCreatePersonalAccessToken } from "~/services/personalAccessToken.server";
-import type { WidgetMeta } from "@redplanethq/types";
+import type { WidgetMeta } from "@core/types";
 import type { WidgetOption } from "~/components/overview/types";
 
 /**

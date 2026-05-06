@@ -320,6 +320,7 @@ model IntegrationAccount {
   Activity                Activity[]
   oauthIntegrationGrants  OAuthIntegrationGrant[]
   IntegrationCallLog      IntegrationCallLog[]
+  widgets                 Widget[]
 
   @@unique([accountId, integrationDefinitionId, workspaceId])
 }
@@ -915,6 +916,7 @@ model User {
   Gateway                   Gateway[]
   VoiceAspect               VoiceAspect[]
   VoiceAspectEmbedding      VoiceAspectEmbedding[]
+  widgets                   Widget[]
 }
 
 model UserUsage {
@@ -1060,6 +1062,7 @@ model Workspace {
   llmProviders            LLMProvider[]
   codingSessions          CodingSession[]
   browserSessions         BrowserSession[]
+  widgets                 Widget[]
 
   taskRootCounter Int @default(0)
 }
@@ -1346,4 +1349,80 @@ model BrowserSession {
   @@index([workspaceId])
   @@index([gatewayId, sessionName])
   @@index([gatewayId, profileName])
+}
+
+enum WidgetKind {
+  /// Seeded template — read-only reference, agent can clone into a USER widget.
+  DEFAULT
+  /// Per-user instance — owned by a workspace+user, rendered in dashboard/chat.
+  USER
+}
+
+enum WidgetEngine {
+  /// Zod-validated IR (`spec`) interpreted at runtime. Authored by the agent or user.
+  DECLARATIVE
+  /// Reference to a bundled-integration widget (github/spotify/metabase/etc.).
+  /// Render path: load `IntegrationDefinitionV2.frontendUrl` bundle, find widget
+  /// by `bundledWidgetSlug`, run with `configValues` and the user's account.
+  BUNDLED
+}
+
+/// Unified widget row — declarative IR widgets and bundled-integration widget
+/// references live in the same table, discriminated by `engine`. The chat
+/// embed (`<core-widget slug="..." />`) and the per-user dashboard both
+/// resolve through this table.
+model Widget {
+  id        String    @id @default(uuid())
+  createdAt DateTime  @default(now())
+  updatedAt DateTime  @updatedAt
+  deleted   DateTime?
+
+  /// Slug identifier — agent-friendly. Unique per (workspaceId, userId) for USER;
+  /// globally unique (workspaceId/userId NULL) for DEFAULT seeds.
+  slug String
+
+  name        String
+  description String?
+  icon        String?
+
+  kind   WidgetKind   @default(USER)
+  engine WidgetEngine @default(DECLARATIVE)
+
+  // ─── DECLARATIVE engine fields ─────────────────────────────────────────
+  /// WidgetIR JSON (matches the @core/types Zod schema). Required when engine=DECLARATIVE.
+  spec Json?
+
+  /// IR top-level `version` field, mirrored for indexing and migrations.
+  version Int @default(1)
+
+  /// Per-instance reactive state (persisted state fields). Empty for DEFAULT.
+  state Json?
+
+  /// Optional source slug — tracks the DEFAULT this USER widget was cloned from.
+  sourceSlug String?
+
+  // ─── BUNDLED engine fields ─────────────────────────────────────────────
+  /// Connected integration account this bundled widget runs against.
+  /// Required when engine=BUNDLED.
+  integrationAccount   IntegrationAccount? @relation(fields: [integrationAccountId], references: [id], onDelete: Cascade)
+  integrationAccountId String?
+
+  /// Slug of the widget *within* the integration's `spec.widgets[]` array
+  /// (e.g. "assigned-prs" for github). Required when engine=BUNDLED.
+  bundledWidgetSlug String?
+
+  /// User-set config values keyed by `WidgetConfigField.key`. Driven by the
+  /// integration's `configSchema` form. Required when engine=BUNDLED.
+  configValues Json?
+
+  user        User?      @relation(fields: [userId], references: [id], onDelete: Cascade)
+  userId      String?
+  workspace   Workspace? @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+  workspaceId String?
+
+  @@unique([workspaceId, userId, slug])
+  @@index([kind])
+  @@index([engine])
+  @@index([workspaceId, userId])
+  @@index([integrationAccountId])
 }

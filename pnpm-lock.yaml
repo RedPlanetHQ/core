@@ -1047,6 +1047,9 @@ importers:
       class-validator:
         specifier: 0.14.1
         version: 0.14.1
+      zod:
+        specifier: 4.3.6
+        version: 4.3.6
     devDependencies:
       esbuild:
         specifier: ^0.25.5

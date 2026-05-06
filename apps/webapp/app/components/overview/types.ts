@@ -1,4 +1,4 @@
-import type { WidgetConfigField } from "@redplanethq/types";
+import type { WidgetConfigField } from "@core/types";
 
 export interface OverviewCell {
   id: string;

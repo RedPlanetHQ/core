@@ -88,6 +88,8 @@ interface AgentContext {
   takeActionAgent: Agent;
   thinkAgent?: Agent;
   gatewayAgents: Agent[];
+  widgetBuilderAgent: Agent;
+  skillBuilderAgent: Agent;
   /** True when running as a background task — ask_user should not be registered */
   isBackgroundExecution: boolean;
 }
@@ -201,7 +203,14 @@ export async function buildAgentContext({
   // Build tools and agents in parallel (no dependency between them)
   const [
     tools,
-    { gatherContextAgent, takeActionAgent, thinkAgent, gatewayAgents },
+    {
+      gatherContextAgent,
+      takeActionAgent,
+      thinkAgent,
+      gatewayAgents,
+      widgetBuilderAgent,
+      skillBuilderAgent,
+    },
   ] = await Promise.all([
     createCoreTools({
       userId,
@@ -658,6 +667,8 @@ Keep your response concise — this shows up on a scratchpad, not a chat convers
     takeActionAgent,
     thinkAgent,
     gatewayAgents,
+    widgetBuilderAgent,
+    skillBuilderAgent,
     isBackgroundExecution,
   };
 }

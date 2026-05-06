@@ -14,6 +14,7 @@ import { all, createLowlight } from "lowlight";
 import { mergeAttributes } from "@tiptap/core";
 import { type Extension } from "@tiptap/react";
 import { Markdown } from "tiptap-markdown";
+import { CoreWidgetNode } from "~/components/widgets/core-widget-node";
 
 // create a lowlight instance with all languages loaded
 export const lowlight = createLowlight(all);
@@ -149,4 +150,5 @@ export const extensionsForConversation = [
     lowlight,
   }),
   Markdown,
+  CoreWidgetNode,
 ];

@@ -374,6 +374,23 @@ export class IntegrationRunner {
       }
     }
 
+    // Auto-seed BUNDLED Widget rows so the user can immediately embed any
+    // webapp-supported widgets the integration ships. Idempotent — safe to
+    // call on every setup, including reconnects.
+    if (result.account?.id) {
+      try {
+        const { seedBundledWidgetsForAccount } = await import(
+          "~/services/widgets/widget.server"
+        );
+        await seedBundledWidgetsForAccount(result.account.id);
+      } catch (err) {
+        logger.warn("Failed to seed bundled widgets after setup", {
+          integrationAccountId: result.account.id,
+          error: err,
+        });
+      }
+    }
+
     return result;
   }
 

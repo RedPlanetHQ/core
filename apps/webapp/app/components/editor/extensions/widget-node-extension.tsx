@@ -10,7 +10,7 @@ import { Node } from "@tiptap/core";
 import { ReactNodeViewRenderer, NodeViewWrapper } from "@tiptap/react";
 import type { NodeViewProps } from "@tiptap/react";
 import { Settings, X, Loader2 } from "lucide-react";
-import type { WidgetConfigField } from "@redplanethq/types";
+import type { WidgetConfigField } from "@core/types";
 import { loadWidgetBundle } from "~/utils/widget-loader.client";
 import type { WidgetOption } from "~/components/overview/types";
 

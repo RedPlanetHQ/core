@@ -123,7 +123,7 @@ async function createGoogleIntegrationAccount({
     redirect_uri: `${env.APP_ORIGIN}/api/v1/oauth/callback`,
   };
 
-  return prisma.integrationAccount.upsert({
+  const account = await prisma.integrationAccount.upsert({
     where: {
       accountId_integrationDefinitionId_workspaceId: {
         accountId: userInfo.email,
@@ -146,6 +146,22 @@ async function createGoogleIntegrationAccount({
       workspaceId,
     },
   });
+
+  // Auto-seed BUNDLED Widget rows for webapp-supported widgets exposed by
+  // this integration. Idempotent — safe across re-auth / token refresh.
+  try {
+    const { seedBundledWidgetsForAccount } = await import(
+      "~/services/widgets/widget.server"
+    );
+    await seedBundledWidgetsForAccount(account.id);
+  } catch (err) {
+    logger.warn("Failed to seed bundled widgets after OAuth", {
+      integrationAccountId: account.id,
+      error: err,
+    });
+  }
+
+  return account;
 }
 
 async function autoCreateIntegrations({
