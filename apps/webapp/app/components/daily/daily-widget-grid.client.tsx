@@ -17,6 +17,7 @@ import {
   DialogTitle,
 } from "~/components/ui/dialog";
 import { NeedsAttentionWidget } from "./needs-attention-widget.client";
+import { CalendarWidget } from "./calendar-widget.client";
 import { getIcon, type IconType } from "~/components/icon-utils";
 
 interface NativeWidget {
@@ -30,6 +31,11 @@ const NATIVE_WIDGETS: NativeWidget[] = [
     widgetSlug: "needs-attention",
     widgetName: "Needs Attention",
     widgetDescription: "Waiting tasks that need your attention",
+  },
+  {
+    widgetSlug: "calendar",
+    widgetName: "Today's Events",
+    widgetDescription: "Google Calendar events for today",
   },
 ];
 
@@ -307,6 +313,8 @@ export function DailyWidgetGrid({
             <div className="w-full">
               {isNative && cell.widgetSlug === "needs-attention" ? (
                 <NeedsAttentionWidget />
+              ) : isNative && cell.widgetSlug === "calendar" ? (
+                <CalendarWidget />
               ) : integrationOption && widgetPat ? (
                 <WidgetCell
                   widgetSlug={integrationOption.widgetSlug}
