@@ -1,11 +1,17 @@
 /**
- * CoreWidgetView — unified chat-side renderer for the Widget table.
+ * Unified Widget renderer for the Widget table.
  *
- * Fetches by slug or uuid, then dispatches based on `engine`:
+ * Two exports:
+ *   - <CoreWidgetView/>     — fetches + renders WITH chrome (border, header,
+ *                              engine badge). Used by the chat embed
+ *                              (<core-widget slug="..." />).
+ *   - <CoreWidgetContent/>  — fetches + renders WITHOUT chrome. Used by the
+ *                              dashboard pin grid which has its own chrome
+ *                              (drag handle + remove button).
+ *
+ * Both fetch `/api/v1/widgets/:id` and dispatch by `engine`:
  *   DECLARATIVE → <WidgetRuntime ir={spec} />
  *   BUNDLED     → <BundledWidgetRenderer ... />
- *
- * One tag (`<core-widget slug="..." />`), one entry point, one fetch.
  */
 
 import { useEffect, useState } from "react";
@@ -60,21 +66,24 @@ interface FetchState {
   error?: string;
 }
 
-export function CoreWidgetView({
-  widgetRef,
-  configOverride,
-}: {
+interface CommonProps {
   widgetRef: string;
   /**
-   * Inline config from the embed tag — overrides per-key on top of the
-   * row's stored config (BUNDLED) or the IR's config[].default (DECLARATIVE).
+   * Inline config overrides — for DECLARATIVE widgets, takes priority over
+   * IR config[].default; for BUNDLED widgets, merged on top of stored
+   * configValues (override wins per key).
    */
   configOverride?: Record<string, unknown>;
-}) {
+}
+
+// ─── Hook: fetch the widget envelope ────────────────────────────────────────
+
+function useWidgetFetch(widgetRef: string): FetchState {
   const [fetchState, setFetchState] = useState<FetchState>({ status: "loading" });
 
   useEffect(() => {
     let cancelled = false;
+    setFetchState({ status: "loading" });
     (async () => {
       try {
         const res = await fetch(
@@ -112,6 +121,14 @@ export function CoreWidgetView({
     };
   }, [widgetRef]);
 
+  return fetchState;
+}
+
+// ─── CoreWidgetView (with chrome) ───────────────────────────────────────────
+
+export function CoreWidgetView({ widgetRef, configOverride }: CommonProps) {
+  const fetchState = useWidgetFetch(widgetRef);
+
   if (fetchState.status === "loading") {
     return (
       <div className="my-2 flex h-24 items-center justify-center rounded-lg border border-border bg-grayAlpha-50">
@@ -134,13 +151,39 @@ export function CoreWidgetView({
     );
   }
 
-  return (
-    <WidgetFrame
-      widget={fetchState.widget}
-      configOverride={configOverride}
-    />
-  );
+  return <WidgetFrame widget={fetchState.widget} configOverride={configOverride} />;
 }
+
+// ─── CoreWidgetContent (no chrome) ──────────────────────────────────────────
+
+/**
+ * Fetches and renders a widget WITHOUT the outer frame. Use this when the
+ * surface (e.g. dashboard pin grid) provides its own chrome.
+ */
+export function CoreWidgetContent({ widgetRef, configOverride }: CommonProps) {
+  const fetchState = useWidgetFetch(widgetRef);
+
+  if (fetchState.status === "loading") {
+    return (
+      <div className="flex h-24 items-center justify-center">
+        <Loader2 className="h-4 w-4 animate-spin text-muted-foreground" />
+      </div>
+    );
+  }
+
+  if (fetchState.status === "error" || !fetchState.widget) {
+    return (
+      <div className="flex items-start gap-2 p-3 text-xs text-destructive">
+        <AlertCircle className="mt-0.5 h-3.5 w-3.5 shrink-0" />
+        <span>{fetchState.error ?? "Widget unavailable"}</span>
+      </div>
+    );
+  }
+
+  return <WidgetBody widget={fetchState.widget} configOverride={configOverride} />;
+}
+
+// ─── Frame chrome ───────────────────────────────────────────────────────────
 
 function WidgetFrame({
   widget,
@@ -157,11 +200,6 @@ function WidgetFrame({
           <span className="font-medium text-foreground">{widget.name}</span>
           <span className="opacity-60">·</span>
           <span className="opacity-60">{widget.slug}</span>
-          {widget.kind === "DEFAULT" && (
-            <span className="ml-1 rounded bg-blue-500/10 px-1.5 py-0.5 text-[10px] font-medium uppercase tracking-wide text-blue-600">
-              default
-            </span>
-          )}
           <span
             className={`ml-1 rounded px-1.5 py-0.5 text-[10px] font-medium uppercase tracking-wide ${
               widget.engine === "BUNDLED"
@@ -182,6 +220,8 @@ function WidgetFrame({
   );
 }
 
+// ─── Engine dispatch (the actual content) ───────────────────────────────────
+
 function WidgetBody({
   widget,
   configOverride,
@@ -197,22 +237,32 @@ function WidgetBody({
         </p>
       );
     }
-    const onStatePersist =
-      widget.kind === "USER"
-        ? (state: Record<string, unknown>) => {
-            void fetch(`/api/v1/widgets/${encodeURIComponent(widget.id)}/state`, {
-              method: "POST",
-              credentials: "include",
-              headers: { "Content-Type": "application/json" },
-              body: JSON.stringify({ state }),
-            });
-          }
-        : undefined;
+    const onStatePersist = (state: Record<string, unknown>) => {
+      // Diagnostic — turn on to verify saves are firing.
+      if (typeof console !== "undefined") {
+        console.debug(
+          `[widget-runtime] persisting state for "${widget.slug}":`,
+          state,
+        );
+      }
+      void fetch(`/api/v1/widgets/${encodeURIComponent(widget.id)}/state`, {
+        method: "POST",
+        credentials: "include",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ state }),
+      }).then((res) => {
+        if (!res.ok && typeof console !== "undefined") {
+          console.warn(
+            `[widget-runtime] persist failed for "${widget.slug}" — HTTP ${res.status}`,
+          );
+        }
+      });
+    };
 
-    // Inline config overrides take precedence over IR config[].default.
     return (
       <WidgetRuntime
         ir={widget.spec}
+        widgetUuid={widget.id}
         initialState={widget.state ?? undefined}
         initialConfig={configOverride}
         onStatePersist={onStatePersist}
@@ -237,10 +287,6 @@ function WidgetBody({
     );
   }
 
-  // Merge: stored row config + per-embed override (override wins per key).
-  // Bundled widgets' configSchema is string-typed (input | select), so we
-  // coerce override values to strings here. Declarative widgets keep richer
-  // types via WidgetRuntime.initialConfig.
   const mergedConfig: Record<string, string> = {
     ...(widget.configValues ?? {}),
   };

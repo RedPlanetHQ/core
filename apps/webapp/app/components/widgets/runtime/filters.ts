@@ -91,6 +91,100 @@ const filters: Record<string, FilterFn> = {
     if (typeof value === "string") return value.length;
     return 0;
   },
+
+  // ─── Math ────────────────────────────────────────────────────────────────
+  // All math filters coerce both sides via toNum (NaN → 0). Args may be
+  // literals (`add:1000`) or scope paths (`add:$state.duration`).
+
+  add: (value, args, scope) => toNum(value) + toNum(resolveArg(args[0], scope)),
+  sub: (value, args, scope) => toNum(value) - toNum(resolveArg(args[0], scope)),
+  mul: (value, args, scope) => toNum(value) * toNum(resolveArg(args[0], scope)),
+  div: (value, args, scope) => {
+    const d = toNum(resolveArg(args[0], scope));
+    return d === 0 ? 0 : toNum(value) / d;
+  },
+  mod: (value, args, scope) => {
+    const d = toNum(resolveArg(args[0], scope));
+    return d === 0 ? 0 : toNum(value) % d;
+  },
+  floor: (value) => Math.floor(toNum(value)),
+  ceil: (value) => Math.ceil(toNum(value)),
+  round: (value) => Math.round(toNum(value)),
+  min: (value, args, scope) => Math.min(toNum(value), toNum(resolveArg(args[0], scope))),
+  max: (value, args, scope) => Math.max(toNum(value), toNum(resolveArg(args[0], scope))),
+  clamp: (value, args, scope) => {
+    const lo = toNum(resolveArg(args[0], scope));
+    const hi = toNum(resolveArg(args[1], scope));
+    const n = toNum(value);
+    return Math.min(hi, Math.max(lo, n));
+  },
+  abs: (value) => Math.abs(toNum(value)),
+
+  // ─── Comparison (return booleans) ────────────────────────────────────────
+  // Sidesteps adding `<`/`>`/`>=`/`<=` to the grammar — chain into block
+  // `disabled` / `Modal.open` / `match` / `!` etc.
+
+  gt: (value, args, scope) => toNum(value) > toNum(resolveArg(args[0], scope)),
+  lt: (value, args, scope) => toNum(value) < toNum(resolveArg(args[0], scope)),
+  gte: (value, args, scope) => toNum(value) >= toNum(resolveArg(args[0], scope)),
+  lte: (value, args, scope) => toNum(value) <= toNum(resolveArg(args[0], scope)),
+
+  // ─── Time / format ───────────────────────────────────────────────────────
+
+  /** ms → "MM:SS" (negatives clamp to 0). Used by countdown timers. */
+  mmss: (value) => {
+    const ms = Math.max(0, toNum(value));
+    const totalSec = Math.floor(ms / 1000);
+    const m = Math.floor(totalSec / 60);
+    const s = totalSec % 60;
+    return `${pad2(m)}:${pad2(s)}`;
+  },
+
+  /** ms → "HH:MM:SS" (negatives clamp to 0). */
+  hhmmss: (value) => {
+    const ms = Math.max(0, toNum(value));
+    const totalSec = Math.floor(ms / 1000);
+    const h = Math.floor(totalSec / 3600);
+    const m = Math.floor((totalSec % 3600) / 60);
+    const s = totalSec % 60;
+    return `${pad2(h)}:${pad2(m)}:${pad2(s)}`;
+  },
+
+  /**
+   * Pad a value (left) to `len` chars with `char` (default "0"). Useful when
+   * mmss / hhmmss don't fit (e.g. zero-padding a number).
+   */
+  pad: (value, args) => {
+    const len = parseInt(args[0] ?? "2", 10);
+    const ch = (args[1] ?? "0").slice(0, 1);
+    const s = String(value ?? "");
+    return s.length >= len ? s : ch.repeat(len - s.length) + s;
+  },
+
+  /**
+   * ms → human duration. `formatDuration:short` → "5m 12s", "1h 3m".
+   * `formatDuration:long` → "5 minutes 12 seconds". Default: short.
+   */
+  formatDuration: (value, args) => {
+    const ms = Math.max(0, toNum(value));
+    const totalSec = Math.floor(ms / 1000);
+    const fmt = args[0] ?? "short";
+    const h = Math.floor(totalSec / 3600);
+    const m = Math.floor((totalSec % 3600) / 60);
+    const s = totalSec % 60;
+    const parts: string[] = [];
+    if (fmt === "long") {
+      if (h > 0) parts.push(`${h} hour${h === 1 ? "" : "s"}`);
+      if (m > 0) parts.push(`${m} minute${m === 1 ? "" : "s"}`);
+      if (s > 0 || parts.length === 0)
+        parts.push(`${s} second${s === 1 ? "" : "s"}`);
+    } else {
+      if (h > 0) parts.push(`${h}h`);
+      if (m > 0) parts.push(`${m}m`);
+      if (s > 0 || parts.length === 0) parts.push(`${s}s`);
+    }
+    return parts.join(" ");
+  },
 };
 
 /**
@@ -104,10 +198,19 @@ export function applyFilter(
   args: string[],
   scope: Scope,
 ): unknown {
-  const fn = filters[name];
+  // Strip whitespace + surrounding quotes — the agent sometimes emits
+  // `{{ x | 'foo' }}` (quoted filter name) or `{{ x | }}` (empty pipe).
+  const normalized = stripQuotes(name.trim());
+  if (normalized.length === 0) {
+    // Empty pipe segment — silent passthrough, no warning.
+    return value;
+  }
+  const fn = filters[normalized];
   if (!fn) {
     if (typeof console !== "undefined") {
-      console.warn(`[widget-runtime] unknown filter "${name}" — passing through`);
+      console.warn(
+        `[widget-runtime] unknown filter "${normalized}" — passing through`,
+      );
     }
     return value;
   }
@@ -115,10 +218,21 @@ export function applyFilter(
     return fn(value, args, scope);
   } catch (err) {
     if (typeof console !== "undefined") {
-      console.warn(`[widget-runtime] filter "${name}" threw`, err);
+      console.warn(`[widget-runtime] filter "${normalized}" threw`, err);
     }
     return value;
   }
+}
+
+function stripQuotes(s: string): string {
+  if (s.length >= 2) {
+    const first = s[0];
+    const last = s[s.length - 1];
+    if ((first === '"' && last === '"') || (first === "'" && last === "'")) {
+      return s.slice(1, -1).trim();
+    }
+  }
+  return s;
 }
 
 // ─── Helpers ─────────────────────────────────────────────────────────────────
@@ -190,6 +304,21 @@ function formatDate(d: Date, fmt: string): string {
 function truthy(v: unknown): boolean {
   if (Array.isArray(v)) return v.length > 0;
   return Boolean(v);
+}
+
+/** Coerce to number — strings parse, NaN becomes 0 (silent fail is intentional). */
+function toNum(v: unknown): number {
+  if (typeof v === "number") return Number.isFinite(v) ? v : 0;
+  if (typeof v === "string" && v.length > 0) {
+    const n = Number(v);
+    return Number.isFinite(n) ? n : 0;
+  }
+  if (typeof v === "boolean") return v ? 1 : 0;
+  return 0;
+}
+
+function pad2(n: number): string {
+  return n < 10 ? `0${n}` : String(n);
 }
 
 function looseEquals(a: unknown, b: unknown): boolean {

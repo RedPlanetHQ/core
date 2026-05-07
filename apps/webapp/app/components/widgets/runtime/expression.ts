@@ -68,6 +68,51 @@ export function evaluateValue(value: unknown, scope: Scope): unknown {
   return value;
 }
 
+// ─── IR scanning (ticker auto-detection) ───────────────────────────────────
+
+/**
+ * Returns the recommended tick interval (ms) for this IR, or `null` when no
+ * tick is needed.
+ *
+ *   null   — IR doesn't reference `{{now}}` / `{{nowIso}}` → no interval set
+ *   1000   — second-precision needed (countdown timer, mmss, comparisons)
+ *   60000  — minute-precision is enough (timeAgo, formatDate, formatDuration)
+ *
+ * Heuristic: scan for `{{ … now … }}` / `{{ … nowIso … }}` regions. For
+ * each, check which filter (if any) it pipes through. If ALL `now` regions
+ * use a minute-precision filter, tick at 60s — otherwise 1s. Saves
+ * unnecessary re-renders for "5 minutes ago" widgets that don't need a
+ * per-second redraw.
+ *
+ * False-positive cost: a stray `now` inside a quoted string literal inside
+ * `{{ }}` causes a 1Hz tick. Cheap (one React commit/sec) and rare.
+ */
+export function getTickIntervalMs(ir: unknown): number | null {
+  let json: string;
+  try {
+    json = JSON.stringify(ir);
+  } catch {
+    return null;
+  }
+  const regions = json.match(/\{\{[\s\S]*?\}\}/g);
+  if (!regions) return null;
+  const tokenRe = /\bnow(?:Iso)?\b/;
+  const minuteOnlyFilters = /\|\s*(timeAgo|formatDate|formatDuration)\b/;
+
+  let saw = false;
+  let allMinuteOnly = true;
+  for (const r of regions) {
+    if (!tokenRe.test(r)) continue;
+    saw = true;
+    if (!minuteOnlyFilters.test(r)) {
+      allMinuteOnly = false;
+      break;
+    }
+  }
+  if (!saw) return null;
+  return allMinuteOnly ? 60_000 : 1_000;
+}
+
 // ─── Scope ──────────────────────────────────────────────────────────────────
 
 /**

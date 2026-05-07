@@ -18,8 +18,11 @@ import {
   deleteWidget,
   getWidgetById,
   getWidgetBySlug,
+  installTemplate,
+  listTemplates,
   listWidgets,
 } from "~/services/widgets/widget.server";
+import { DEFAULT_WIDGETS } from "~/services/widgets/defaults";
 import {
   validateWidget,
   formatIssues,
@@ -38,7 +41,7 @@ export function getWidgetTools(
   return {
     list_widgets: tool({
       description:
-        "List the declarative widgets available to the current user. Returns USER widgets the user owns plus DEFAULT seed templates the agent can clone or learn from. Use this before creating a new widget to avoid duplicating an existing one.",
+        "List the widgets the user has installed. Use this before creating a new widget to avoid duplicating an existing one. To browse installable templates, use `list_templates` instead.",
       inputSchema: z.object({}),
       execute: async () => {
         const widgets = await listWidgets(workspaceId, userId);
@@ -48,7 +51,6 @@ export function getWidgetTools(
             slug: w.slug,
             name: w.name,
             description: w.description,
-            kind: w.kind,
             engine: w.engine,
             // Don't dump the full spec — agent should fetch via get_widget.
             blocks: w.spec ? (w.spec.blocks ?? []).length : 0,
@@ -56,17 +58,68 @@ export function getWidgetTools(
             // Bundled metadata (null for declarative)
             integration: w.bundled?.integrationSlug ?? null,
             bundledWidgetSlug: w.bundledWidgetSlug,
+            sourceSlug: w.sourceSlug,
           })),
+        };
+      },
+    }),
+
+    list_templates: tool({
+      description:
+        "List the curated widget templates available for installation. Templates are reference IRs the user can install with one click (or you can install/fork via `install_template` / read via `get_template`). Use this when the user asks 'what widgets are there' or you want to see if a built-in template covers their request before authoring something fresh.",
+      inputSchema: z.object({}),
+      execute: async () => {
+        const templates = await listTemplates(workspaceId, userId);
+        return { templates };
+      },
+    }),
+
+    get_template: tool({
+      description:
+        "Read a template's full IR by slug. Use this to inspect a template before cloning into a custom widget — read its IR with `get_template`, modify, then call `create_widget` (set `sourceSlug` so the widget remembers its origin).",
+      inputSchema: z.object({
+        slug: z.string().describe("Template slug (e.g. \"daily-quote\")"),
+      }),
+      execute: async ({ slug }) => {
+        const tpl = DEFAULT_WIDGETS.find((d) => d.ir.id === slug);
+        if (!tpl) return { error: `template "${slug}" not found` };
+        return {
+          slug: tpl.ir.id,
+          name: tpl.ir.title,
+          description: tpl.ir.description ?? null,
+          spec: tpl.ir,
+        };
+      },
+    }),
+
+    install_template: tool({
+      description:
+        "Install a curated template as a new user widget — creates a USER copy the user can then edit/configure. Use this when the user asks for one of the curated widgets verbatim and you don't need to customize the IR. To customize, read the template via `get_template` and call `create_widget` with the modified spec instead.",
+      inputSchema: z.object({
+        slug: z
+          .string()
+          .describe("Template slug to install (see list_templates output)"),
+      }),
+      execute: async ({ slug }) => {
+        const result = await installTemplate(slug, workspaceId, userId);
+        if (!result.ok) return { ok: false, error: result.error };
+        return {
+          ok: true,
+          widget: {
+            id: result.widget.id,
+            slug: result.widget.slug,
+            name: result.widget.name,
+          },
         };
       },
     }),
 
     get_widget: tool({
       description:
-        "Read a widget's full IR by id or slug. Use this to inspect a DEFAULT before cloning, debug a USER widget the user is asking about, or read state from a persisted widget. Pass either `id` (exact uuid) or `slug` (looks up USER copy first, falls back to DEFAULT).",
+        "Read a widget's full IR by id or slug. Use this to debug a USER widget the user is asking about, or read state from a persisted widget. To inspect a curated TEMPLATE before cloning, use `get_template` instead.",
       inputSchema: z.object({
         id: z.string().optional().describe("Widget uuid"),
-        slug: z.string().optional().describe("Widget slug — preferred for defaults"),
+        slug: z.string().optional().describe("Widget slug"),
       }),
       execute: async ({ id, slug }) => {
         if (!id && !slug) {
@@ -81,7 +134,6 @@ export function getWidgetTools(
           slug: widget.slug,
           name: widget.name,
           description: widget.description,
-          kind: widget.kind,
           version: widget.version,
           spec: widget.spec,
           state: widget.state,
@@ -95,9 +147,10 @@ export function getWidgetTools(
 
 The IR is a JSON object validated against the WidgetIR schema (top-level: version, id, title, blocks, optional state/requests/derived/actions/config). The agent should:
 
-  1. Call list_widgets first to check whether a similar widget already exists.
-  2. If a DEFAULT covers the use case, prefer cloning it (set sourceSlug to the default's slug, override IR fields as needed). Use get_widget to read the default's IR first.
-  3. Otherwise compose a fresh IR. Keep blocks within the closed primitive set: Container, Text, Heading, Markdown, Badge, Card, Button, Tabs, List, Table, Form, Modal, EmptyState.
+  1. Call list_widgets to see what's already installed; list_templates to see what curated templates exist.
+  2. If a template covers the use case verbatim, call install_template (one tool call, no spec authoring).
+  3. If a template is close but needs tweaks, read it via get_template, modify the spec, and call create_widget with sourceSlug set to the template's slug (the widget remembers its origin).
+  4. Otherwise compose a fresh IR. Keep blocks within the closed primitive set: Container, Text, Heading, Markdown, Badge, Card, Button, Tabs, List, Table, Form, Modal, EmptyState.
 
 If validation fails, the tool returns the list of issues so you can self-correct and call again. Slugs must be unique per user — re-calling with the same slug REPLACES the existing widget while preserving its persisted state.
 

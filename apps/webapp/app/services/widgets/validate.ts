@@ -241,8 +241,15 @@ function checkBlockRefs(
     });
   }
 
-  // Form: `bind` must be a declared (object) state id.
-  if (type === "Form" && typeof b.bind === "string" && !refs.stateIds.has(b.bind)) {
+  // Form: `bind` is optional. When provided, must reference a declared
+  // state id. When omitted, the form uses local state and dispatches values
+  // via the onSubmit action's args/event.
+  if (
+    type === "Form" &&
+    typeof b.bind === "string" &&
+    b.bind.length > 0 &&
+    !refs.stateIds.has(b.bind)
+  ) {
     out.push({
       path: `${path}.bind`,
       message: `Form.bind references unknown state "${b.bind}"`,

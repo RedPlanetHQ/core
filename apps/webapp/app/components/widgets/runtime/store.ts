@@ -117,7 +117,17 @@ export class WidgetStore {
   // ─── Mutators (action ops call these) ──────────────────────────────────
 
   setState(id: string, value: unknown): void {
-    if (!this.hasState(id)) return;
+    if (!this.hasState(id)) {
+      // Silent no-op was masking real bugs (Form.bind referencing undeclared
+      // state, agent typo, etc.). Warn loudly so the symptom — input typed
+      // into but value never updates — is debuggable from the console.
+      if (typeof console !== "undefined") {
+        console.warn(
+          `[widget-runtime] setState("${id}", ...) — state id not declared in IR.state[]. Add { id: "${id}", type: "...", default: ... } to the widget IR.`,
+        );
+      }
+      return;
+    }
     this.commit({
       ...this.snap,
       state: { ...this.snap.state, [id]: value },
@@ -129,7 +139,14 @@ export class WidgetStore {
     op: "append" | "prepend" | "remove_where" | "patch_where" | "set",
     payload: { value?: unknown; where?: (item: unknown, index: number) => boolean },
   ): void {
-    if (!this.hasState(id)) return;
+    if (!this.hasState(id)) {
+      if (typeof console !== "undefined") {
+        console.warn(
+          `[widget-runtime] mutateState("${id}", "${op}") — state id not declared in IR.state[].`,
+        );
+      }
+      return;
+    }
     const cur = this.snap.state[id];
 
     if (op === "set") {
@@ -170,9 +187,15 @@ export class WidgetStore {
   }
 
   setModalOpen(blockId: string, open: boolean): void {
-    // When closing, also clear any state field bound to the modal's `open`
-    // so the dual-source open check (truthy state OR explicit flag) doesn't
-    // leave the modal stuck open. Symmetric with the X-button close path.
+    // When closing, also clear any *flag-shaped* state bound to the modal's
+    // `open` field. Two flag patterns are recognized:
+    //   - string id (the "editingId" pattern: "" = closed, non-empty = open)
+    //   - boolean   (true = open, false = closed)
+    //
+    // Object/array/number state is NEVER cleared on close — that's user
+    // data (form values, settings) and clearing it on modal close would
+    // wipe what the user just typed. The agent should bind Modal.open to
+    // a separate flag state, distinct from any Form.bind state.
     let nextState = this.snap.state;
     if (!open) {
       const block = this.findBlockById(blockId);
@@ -180,10 +203,12 @@ export class WidgetStore {
         const boundId = block.open;
         if (boundId in nextState) {
           const cur = nextState[boundId];
-          // Only clear truthy values — leaves intentional defaults alone.
-          if (cur != null && cur !== "" && cur !== false) {
-            nextState = { ...nextState, [boundId]: typeof cur === "string" ? "" : null };
+          if (typeof cur === "string" && cur !== "") {
+            nextState = { ...nextState, [boundId]: "" };
+          } else if (cur === true) {
+            nextState = { ...nextState, [boundId]: false };
           }
+          // Object/array/number/null/undefined: leave alone — user data.
         }
       }
     }
@@ -215,6 +240,16 @@ export class WidgetStore {
       ...this.snap,
       requests: { ...this.snap.requests, [id]: value },
     });
+  }
+
+  /**
+   * Force a re-render without changing data — used by the `now` ticker so
+   * derived values (and any expression referencing `{{now}}`) re-evaluate at
+   * the tick cadence. Produces a fresh snapshot reference so
+   * `useSyncExternalStore`'s identity check fires.
+   */
+  tick(): void {
+    this.commit({ ...this.snap });
   }
 
   // ─── Internals ─────────────────────────────────────────────────────────

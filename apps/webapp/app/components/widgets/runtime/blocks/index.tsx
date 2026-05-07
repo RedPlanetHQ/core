@@ -74,17 +74,48 @@ interface ContainerSpec {
   type: "Container";
   layout?: "row" | "column";
   gap?: number;
+  align?: Align;
   children?: unknown[];
 }
+
+type Align = "left" | "center" | "right";
+
+/** Cross-axis alignment for layout containers — flex justify map. */
+const JUSTIFY: Record<Align, string> = {
+  left: "justify-start",
+  center: "justify-center",
+  right: "justify-end",
+};
+
+const ITEMS: Record<Align, string> = {
+  left: "items-start",
+  center: "items-center",
+  right: "items-end",
+};
+
+/** text-align map for prose blocks. */
+const TEXT_ALIGN: Record<Align, string> = {
+  left: "text-left",
+  center: "text-center",
+  right: "text-right",
+};
 
 function ContainerBlock({ block }: { block: ContainerSpec }) {
   const layout = block.layout ?? "column";
   const gap = block.gap ?? 8;
+  const alignCls = block.align
+    ? layout === "row"
+      ? JUSTIFY[block.align]
+      : ITEMS[block.align]
+    : layout === "row"
+      ? "items-center"
+      : "";
   return (
     <div
       className={cn(
         "flex",
-        layout === "row" ? "flex-row items-center" : "flex-col",
+        layout === "row" ? "flex-row" : "flex-col",
+        alignCls,
       )}
       style={{ gap }}
     >
@@ -102,17 +133,33 @@ interface TextSpec {
   type: "Text";
   text: string;
   variant?: "default" | "muted" | "danger";
+  align?: Align;
+  italic?: boolean;
 }
 
 function TextBlock({ block }: { block: TextSpec }) {
-  const text = useEvaluate(block.text) as string;
+  const text = useEvaluate(block.text);
   const cls =
     block.variant === "muted"
       ? "text-muted-foreground"
       : block.variant === "danger"
         ? "text-destructive"
         : "text-foreground";
-  return <p className={cn("text-sm", cls)}>{String(text ?? "")}</p>;
+  if (isPending(text)) {
+    return <SkeletonLine align={block.align} />;
+  }
+  return (
+    <p
+      className={cn(
+        "text-sm",
+        cls,
+        block.align && TEXT_ALIGN[block.align],
+        block.italic && "italic",
+      )}
+    >
+      {String(text ?? "")}
+    </p>
+  );
 }
 
 interface HeadingSpec {
@@ -120,10 +167,11 @@ interface HeadingSpec {
   type: "Heading";
   text: string;
   level?: 1 | 2 | 3 | 4;
+  align?: Align;
 }
 
 function HeadingBlock({ block }: { block: HeadingSpec }) {
-  const text = useEvaluate(block.text) as string;
+  const text = useEvaluate(block.text);
   const level = block.level ?? 2;
   const sizes = {
     1: "text-2xl",
@@ -132,19 +180,43 @@ function HeadingBlock({ block }: { block: HeadingSpec }) {
     4: "text-base",
   };
   const Tag = (`h${level}`) as "h1" | "h2" | "h3" | "h4";
-  return <Tag className={cn("font-medium", sizes[level])}>{String(text ?? "")}</Tag>;
+  if (isPending(text)) {
+    return <SkeletonLine align={block.align} className={sizes[level]} />;
+  }
+  return (
+    <Tag
+      className={cn(
+        "font-medium",
+        sizes[level],
+        block.align && TEXT_ALIGN[block.align],
+      )}
+    >
+      {String(text ?? "")}
+    </Tag>
+  );
 }
 
 interface MarkdownSpec {
   id: string;
   type: "Markdown";
   source: string;
+  align?: Align;
+  italic?: boolean;
 }
 
 function MarkdownBlock({ block }: { block: MarkdownSpec }) {
-  const source = useEvaluate(block.source) as string;
+  const source = useEvaluate(block.source);
+  if (isPending(source)) {
+    return <SkeletonProse align={block.align} />;
+  }
   return (
-    <div className="prose prose-sm max-w-none text-sm dark:prose-invert">
+    <div
+      className={cn(
+        "prose prose-sm max-w-none text-sm dark:prose-invert",
+        block.align && TEXT_ALIGN[block.align],
+        block.italic && "[&_p]:italic",
+      )}
+    >
       <ReactMarkdown>{String(source ?? "")}</ReactMarkdown>
     </div>
   );
@@ -190,13 +262,22 @@ interface CardSpec {
   id: string;
   type: "Card";
   title?: string;
+  variant?: "default" | "muted" | "outline" | "ghost";
   children?: unknown[];
 }
 
+const CARD_VARIANTS: Record<NonNullable<CardSpec["variant"]>, string> = {
+  default: "rounded-lg border border-border bg-background p-3",
+  muted: "rounded-lg bg-grayAlpha-100 p-3",
+  outline: "rounded-lg border border-border p-3",
+  ghost: "p-3",
+};
+
 function CardBlock({ block }: { block: CardSpec }) {
   const title = useEvaluate(block.title) as string | undefined;
+  const variant = block.variant ?? "default";
   return (
-    <div className="rounded-lg border border-border bg-background p-3">
+    <div className={CARD_VARIANTS[variant]}>
       {title && (
         <div className="mb-2 text-xs font-medium text-muted-foreground">
           {String(title ?? "")}
@@ -311,6 +392,14 @@ interface ListSpec {
 function ListBlock({ block }: { block: ListSpec }) {
   const data = useEvaluate(block.data);
   const empty = useEvaluate(block.emptyText) as string | undefined;
+
+  // Pending takes priority over empty — without this, a List bound to an
+  // unresolved `ai.*` request renders the emptyText during initial fetch
+  // and looks like "no results" instead of "loading".
+  if (isPending(data)) {
+    return <SkeletonRows count={3} />;
+  }
+
   const items = Array.isArray(data) ? data : [];
 
   if (items.length === 0) {
@@ -324,12 +413,32 @@ function ListBlock({ block }: { block: ListSpec }) {
   return (
     <ul className="divide-y divide-border rounded border border-border">
       {items.map((item, idx) => (
-        <ScopeProvider key={idx} extra={{ item, index: idx }}>
+        <ScopeProvider key={idx} extra={buildItemScope(item, idx)}>
           <ListRow itemSpec={block.item} />
         </ScopeProvider>
       ))}
     </ul>
   );
+}
+
+/**
+ * List item scope: bare field access (`{{title}}`) AND namespaced access
+ * (`{{item.title}}`) both resolve. Bare access is the documented pattern in
+ * the widget-builder prompt and the seeded `tasks` default; without
+ * spreading the item fields here, `useEvaluate("{{title}}")` would walk
+ * `scope.title` and find nothing.
+ *
+ * Built-in identifiers (`item`, `index`) are written last so an item field
+ * named `item` or `index` can't shadow them.
+ */
+function buildItemScope(
+  item: unknown,
+  index: number,
+): Record<string, unknown> {
+  if (item && typeof item === "object" && !Array.isArray(item)) {
+    return { ...(item as Record<string, unknown>), item, index };
+  }
+  return { item, index };
 }
 
 function ListRow({ itemSpec }: { itemSpec: ListSpec["item"] }) {
@@ -400,6 +509,11 @@ interface TableSpec {
 function TableBlock({ block }: { block: TableSpec }) {
   const data = useEvaluate(block.data);
   const empty = useEvaluate(block.emptyText) as string | undefined;
+
+  if (isPending(data)) {
+    return <SkeletonRows count={3} />;
+  }
+
   const rows = Array.isArray(data) ? data : [];
 
   if (rows.length === 0) {
@@ -475,7 +589,8 @@ function formatCell(
 interface FormSpec {
   id: string;
   type: "Form";
-  bind: string;
+  /** Optional — state id where values are bound. When absent, local React state. */
+  bind?: string;
   fields: Array<{
     id: string;
     type: "text" | "textarea" | "number" | "boolean" | "select" | "date";
@@ -483,6 +598,8 @@ interface FormSpec {
     placeholder?: string;
     required?: boolean;
     options?: Array<{ label: string; value: string }>;
+    /** Templated initial value, e.g. "{{$state.focusMinutes}}". */
+    defaultValue?: unknown;
   }>;
   submitLabel?: string;
   onSubmit?: string;
@@ -490,34 +607,87 @@ interface FormSpec {
 }
 
 function FormBlock({ block }: { block: FormSpec }) {
-  const { store } = useRuntime();
+  const { store, ir } = useRuntime();
   const snap = useSnapshot();
   const dispatch = useDispatch();
-  const bound = (snap.state[block.bind] as Record<string, unknown>) ?? {};
+
+  // `block.bind` is optional. Two paths:
+  //   - bind set + declared in ir.state[] → write through to store state
+  //   - bind missing or referencing undeclared state → use local React state
+  //
+  // The undeclared-state case used to silently no-op (controlled inputs
+  // showed empty forever even as the user typed). Now we fall back so the
+  // form is always usable. The onSubmit action receives values via args+event
+  // either way.
+  const bindKey = block.bind;
+  const stateDeclared = bindKey
+    ? (ir.state ?? []).some((s) => s.id === bindKey)
+    : false;
+  const [localBound, setLocalBound] = useState<Record<string, unknown>>(() => {
+    // Priority: existing bound state > field defaultValue evaluation > empty.
+    const raw = bindKey ? snap.state[bindKey] : undefined;
+    if (raw && typeof raw === "object" && !Array.isArray(raw)) {
+      return raw as Record<string, unknown>;
+    }
+    const initial: Record<string, unknown> = {};
+    for (const field of block.fields) {
+      if (field.defaultValue !== undefined) {
+        const evaluated = store.evaluate(field.defaultValue);
+        if (evaluated !== undefined && evaluated !== "") {
+          initial[field.id] = evaluated;
+        }
+      }
+    }
+    return initial;
+  });
+
+  const bound: Record<string, unknown> = stateDeclared && bindKey
+    ? ((snap.state[bindKey] as Record<string, unknown> | null | undefined) ?? {})
+    : localBound;
 
   const updateField = (fieldId: string, value: unknown) => {
     const next = { ...bound, [fieldId]: value };
-    store.setState(block.bind, next);
+    if (stateDeclared && bindKey) {
+      store.setState(bindKey, next);
+    } else {
+      setLocalBound(next);
+    }
   };
 
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
-    dispatch(block.onSubmit, { event: { values: bound, ...bound } });
+    // Pass form values via both `args` (agent's preferred pattern: {{args.field}})
+    // AND `event` (legacy: {{event.values.field}} or {{event.field}}). This
+    // forgiveness saves a class of bugs where the IR's onSubmit action
+    // expects one or the other.
+    dispatch(block.onSubmit, {
+      args: bound,
+      event: { values: bound, ...bound },
+    });
   };
 
   return (
     <form onSubmit={handleSubmit} className="space-y-2">
-      {block.fields.map((field) => (
-        <div key={field.id} className="flex flex-col gap-1">
-          <label className="text-xs font-medium text-muted-foreground">
-            {field.label}
-            {field.required && (
-              <span className="ml-0.5 text-destructive">*</span>
-            )}
-          </label>
-          {renderField(field, bound[field.id], (v) => updateField(field.id, v))}
-        </div>
-      ))}
+      {block.fields.map((field) => {
+        // Fall back to evaluated defaultValue when bound state doesn't yet
+        // have a value for this field. Lets the agent pre-populate inputs
+        // from current state without requiring explicit bind+initial state.
+        let value: unknown = bound[field.id];
+        if (value === undefined && field.defaultValue !== undefined) {
+          value = store.evaluate(field.defaultValue);
+        }
+        return (
+          <div key={field.id} className="flex flex-col gap-1">
+            <label className="text-xs font-medium text-muted-foreground">
+              {field.label}
+              {field.required && (
+                <span className="ml-0.5 text-destructive">*</span>
+              )}
+            </label>
+            {renderField(field, value, (v) => updateField(field.id, v))}
+          </div>
+        );
+      })}
       <div className="flex justify-end gap-2 pt-1">
         {block.onCancel && (
           <CancelButton actionId={block.onCancel} />
@@ -706,5 +876,66 @@ function EmptyStateBlock({ block }: { block: EmptyStateSpec }) {
         </p>
       )}
     </div>
+  );
+}
+
+// ─── Loading state ──────────────────────────────────────────────────────────
+//
+// Non-static requests (`ai.*`, `integration_action`, `internal`) start as
+// `{ __pending: true, type: "<request type>" }` in the store. Block
+// renderers that consume request results check `isPending(value)` and show
+// a skeleton instead of evaluating the placeholder as if it were real data
+// (which previously produced "[object Object]" or fell through to empty
+// text on lists).
+
+function isPending(value: unknown): boolean {
+  return (
+    !!value &&
+    typeof value === "object" &&
+    (value as { __pending?: unknown }).__pending === true
+  );
+}
+
+function SkeletonLine({
+  align,
+  className,
+}: {
+  align?: Align;
+  className?: string;
+}) {
+  const justify = align ? JUSTIFY[align] : "justify-start";
+  return (
+    <div className={cn("flex w-full", justify)}>
+      <div
+        className={cn(
+          "h-4 w-2/3 max-w-xs animate-pulse rounded bg-grayAlpha-100",
+          className,
+        )}
+      />
+    </div>
+  );
+}
+
+function SkeletonProse({ align }: { align?: Align }) {
+  const justify = align ? ITEMS[align] : "items-start";
+  return (
+    <div className={cn("flex w-full flex-col gap-2", justify)}>
+      <div className="h-3 w-3/4 animate-pulse rounded bg-grayAlpha-100" />
+      <div className="h-3 w-2/3 animate-pulse rounded bg-grayAlpha-100" />
+      <div className="h-3 w-1/2 animate-pulse rounded bg-grayAlpha-100" />
+    </div>
+  );
+}
+
+function SkeletonRows({ count = 3 }: { count?: number }) {
+  return (
+    <ul className="divide-y divide-border rounded border border-border">
+      {Array.from({ length: count }).map((_, i) => (
+        <li key={i} className="px-3 py-2.5">
+          <div className="h-3 w-3/4 animate-pulse rounded bg-grayAlpha-100" />
+          <div className="mt-2 h-2.5 w-1/2 animate-pulse rounded bg-grayAlpha-100" />
+        </li>
+      ))}
+    </ul>
   );
 }

@@ -25,6 +25,18 @@ interface RuntimeValue {
   ir: WidgetIR;
   /** Widget id (slug) — handy for keying persistence calls. */
   widgetId: string;
+  /**
+   * Optional async refresher. With requestId: per-request mutation pattern
+   * (force-execute that one request, bypass cache). Without: refresh the
+   * whole graph honoring cache. Called by the action dispatcher's
+   * `runRequest` op. `extra` carries the dispatcher's args/event so request
+   * `params` templated against `{{args.*}}` / `{{event.*}}` resolve
+   * server-side.
+   */
+  runRequests?: (
+    requestId?: string,
+    extra?: { args?: Record<string, unknown>; event?: Record<string, unknown> },
+  ) => Promise<void>;
 }
 
 const RuntimeCtx = createContext<RuntimeValue | null>(null);
@@ -34,14 +46,22 @@ export function RuntimeProvider({
   store,
   ir,
   widgetId,
+  runRequests,
   children,
 }: {
   store: WidgetStore;
   ir: WidgetIR;
   widgetId: string;
+  runRequests?: (
+    requestId?: string,
+    extra?: { args?: Record<string, unknown>; event?: Record<string, unknown> },
+  ) => Promise<void>;
   children: ReactNode;
 }) {
-  const value = useMemo(() => ({ store, ir, widgetId }), [store, ir, widgetId]);
+  const value = useMemo(
+    () => ({ store, ir, widgetId, runRequests }),
+    [store, ir, widgetId, runRequests],
+  );
   return <RuntimeCtx.Provider value={value}>{children}</RuntimeCtx.Provider>;
 }
 
@@ -99,7 +119,7 @@ export function useEvaluate(expr: unknown, extra: Scope = {}): unknown {
  * them against the merged store + local scope before forwarding.
  */
 export function useDispatch() {
-  const { store, ir } = useRuntime();
+  const { store, ir, runRequests } = useRuntime();
   const localScope = useScope();
 
   return useCallback(
@@ -122,8 +142,9 @@ export function useDispatch() {
         ir,
         args: evaluatedArgs,
         event: payload?.event,
+        runRequests,
       });
     },
-    [store, ir, localScope],
+    [store, ir, localScope, runRequests],
   );
 }

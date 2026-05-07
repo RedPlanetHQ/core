@@ -20,7 +20,10 @@ import {
   getWidgetOptions,
   getOrCreateWidgetPat,
 } from "~/services/widgets.server";
+import { listWidgets } from "~/services/widgets/widget.server";
 import { WidgetContext } from "~/components/editor/extensions/widget-node-extension";
+import type { WidgetOption } from "~/components/overview/types";
+import type { WidgetIR, WidgetConfigField } from "@core/types";
 import { useLocalCommonState } from "~/hooks/use-local-state";
 import { prisma } from "~/db.server";
 import type { OverviewCell } from "~/components/overview/types";
@@ -49,11 +52,73 @@ export const loader = async ({ request }: LoaderFunctionArgs) => {
   const dailyWidgetCells = (workspaceMeta.dailyWidgetLayout ??
     []) as OverviewCell[];
 
-  const [todayPage, widgetOptions, widgetPat] = await Promise.all([
+  // Picker source: unified Widget table. legacyOptions is still loaded so
+  // that backward-compat rendering works for cells stored in the old shape
+  // (widgetSlug + integrationAccountId, no widgetId). Page-editor `/widget`
+  // slash-command also still consumes the legacy options via WidgetContext.
+  const [todayPage, legacyOptions, tableWidgets, widgetPat] = await Promise.all([
     findOrCreateDailyPage(workspaceId, user.id, todayUTC),
     getWidgetOptions(user.id, workspaceId),
+    listWidgets(workspaceId, user.id),
     getOrCreateWidgetPat(workspaceId, user.id),
   ]);
+
+  // Transform Widget rows into WidgetOption shape so the existing picker UI
+  // can display them. Both engines surface here:
+  //   BUNDLED — uses integration icon/name + bundle frontendUrl
+  //   DECLARATIVE — uses widget's own icon, no integration metadata
+  const widgetOptions: WidgetOption[] = tableWidgets
+    .filter((w) => {
+      if (w.engine === "BUNDLED") return Boolean(w.bundled?.frontendUrl);
+      if (w.engine === "DECLARATIVE") return Boolean(w.spec);
+      return false;
+    })
+    .map((w): WidgetOption => {
+      if (w.engine === "BUNDLED") {
+        return {
+          widgetSlug: w.bundledWidgetSlug ?? w.slug,
+          widgetName: w.name,
+          widgetDescription: w.description ?? "",
+          integrationSlug: w.bundled!.integrationSlug,
+          integrationName: w.bundled!.integrationName,
+          integrationIcon: w.bundled!.integrationIcon,
+          frontendUrl: w.bundled!.frontendUrl!,
+          integrationAccountId: w.integrationAccountId ?? "",
+          configSchema: w.bundled!.configSchema,
+          widgetId: w.id,
+        };
+      }
+      // DECLARATIVE
+      const ir = w.spec as WidgetIR;
+      const configSchema: WidgetConfigField[] = (ir.config ?? []).map((c) => ({
+        key: c.id,
+        label: c.label,
+        type: c.type === "select" ? "select" : "input",
+        placeholder: c.placeholder,
+        required: c.required,
+        options: c.options,
+        default:
+          typeof c.default === "string"
+            ? c.default
+            : c.default != null
+              ? String(c.default)
+              : undefined,
+      }));
+      return {
+        widgetSlug: w.slug,
+        widgetName: w.name,
+        widgetDescription: w.description ?? "",
+        // Declarative widgets aren't backed by an integration — empty strings
+        // so the picker UI can detect and skip the "<integration> ·" prefix.
+        integrationSlug: "",
+        integrationName: "",
+        integrationIcon: w.icon,
+        frontendUrl: "",
+        integrationAccountId: "",
+        configSchema,
+        widgetId: w.id,
+      };
+    });
 
   return typedjson({
     butlerName: workspace?.name ?? "butler",
@@ -62,6 +127,8 @@ export const loader = async ({ request }: LoaderFunctionArgs) => {
     collabToken: generateCollabToken(workspaceId, user.id),
     todayPage: { id: todayPage.id, date: todayPage.date?.toISOString() ?? "" },
     widgetOptions,
+    /** Kept for the page editor's WidgetContext (slash-command embeds in tasks/daily docs). */
+    legacyWidgetOptions: legacyOptions,
     widgetPat,
     baseUrl: new URL(request.url).origin,
     dailyWidgetCells,
@@ -100,6 +167,7 @@ export default function DailyRoute() {
     collabToken,
     todayPage,
     widgetOptions,
+    legacyWidgetOptions,
     widgetPat,
     baseUrl,
     dailyWidgetCells,
@@ -123,13 +191,16 @@ export default function DailyRoute() {
     );
   };
 
+  // The page editor's WidgetContext (slash-command embed in tasks/daily docs)
+  // still consumes the legacy WidgetOption[] shape. The dashboard pin grid
+  // uses `widgetOptions` (sourced from the Widget table) separately.
   const widgetCtxValue = useMemo(
     () =>
       widgetPat && baseUrl
-        ? { pat: widgetPat, baseUrl, widgetOptions: widgetOptions ?? [] }
+        ? { pat: widgetPat, baseUrl, widgetOptions: legacyWidgetOptions ?? [] }
         : null,
     // eslint-disable-next-line react-hooks/exhaustive-deps
-    [widgetPat, baseUrl, JSON.stringify(widgetOptions)],
+    [widgetPat, baseUrl, JSON.stringify(legacyWidgetOptions)],
   );
 
   const page = (
@@ -192,8 +263,6 @@ export default function DailyRoute() {
                   initialCells={dailyWidgetCells}
                   widgetOptions={widgetOptions ?? []}
                   onSave={handleSaveWidgets}
-                  widgetPat={widgetPat}
-                  baseUrl={baseUrl}
                 />
               )}
             </ClientOnly>

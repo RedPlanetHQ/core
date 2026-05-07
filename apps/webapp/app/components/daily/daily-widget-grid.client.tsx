@@ -1,6 +1,6 @@
 import { useRef, useState } from "react";
 import type { OverviewCell, WidgetOption } from "~/components/overview/types";
-import { WidgetCell } from "~/components/overview/widget-cell.client";
+import { CoreWidgetContent } from "~/components/widgets/CoreWidgetView";
 import { Button } from "~/components/ui";
 import {
   AlertCircle,
@@ -48,15 +48,15 @@ const DEFAULT_CELLS: OverviewCell[] = [
     integrationSlug: null,
     integrationAccountId: null,
     config: null,
+    widgetId: null,
   },
 ];
 
 interface Props {
   initialCells: OverviewCell[];
+  /** Picker source — sourced from the unified Widget table by the loader. */
   widgetOptions: WidgetOption[];
   onSave: (cells: OverviewCell[]) => void;
-  widgetPat: string | null;
-  baseUrl: string;
 }
 
 type PickerSelection = WidgetOption | NativeWidget;
@@ -98,7 +98,7 @@ function DailyWidgetPicker({
             </button>
           ))}
 
-          {/* Integration widgets */}
+          {/* Widgets sourced from the Widget table */}
           {widgetOptions.length > 0 && (
             <>
               {NATIVE_WIDGETS.length > 0 && (
@@ -108,9 +108,14 @@ function DailyWidgetPicker({
                 const Icon = option.integrationIcon
                   ? getIcon(option.integrationIcon as IconType)
                   : null;
+                const isDeclarative = !option.integrationSlug;
+                const subtitle =
+                  option.integrationName && option.widgetDescription
+                    ? `${option.integrationName} · ${option.widgetDescription}`
+                    : option.integrationName || option.widgetDescription || "";
                 return (
                   <button
-                    key={`${option.integrationAccountId}-${option.widgetSlug}`}
+                    key={option.widgetId ?? `${option.integrationAccountId}-${option.widgetSlug}`}
                     onClick={() => onSelect(option)}
                     className="hover:bg-grayAlpha-100 flex w-full items-center gap-3 rounded-md p-3 text-left transition-colors"
                   >
@@ -120,14 +125,16 @@ function DailyWidgetPicker({
                       </div>
                     ) : (
                       <div className="flex h-7 w-7 items-center justify-center rounded text-xs font-medium uppercase">
-                        {option.integrationName.slice(0, 2)}
+                        {(isDeclarative ? option.widgetName : option.integrationName).slice(0, 2)}
                       </div>
                     )}
                     <div>
                       <p className="text-sm font-medium">{option.widgetName}</p>
-                      <p className="text-muted-foreground text-xs">
-                        {option.integrationName} · {option.widgetDescription}
-                      </p>
+                      {subtitle && (
+                        <p className="text-muted-foreground text-xs">
+                          {subtitle}
+                        </p>
+                      )}
                     </div>
                   </button>
                 );
@@ -147,18 +154,119 @@ function DailyWidgetPicker({
   );
 }
 
+// ─── Config form (shown when a picked widget has required unfilled fields) ─
+
+function ConfigForm({
+  open,
+  schema,
+  initialValues,
+  onSubmit,
+  onCancel,
+}: {
+  open: boolean;
+  schema: WidgetOption["configSchema"];
+  initialValues: Record<string, string>;
+  onSubmit: (values: Record<string, string>) => void;
+  onCancel: () => void;
+}) {
+  const [values, setValues] = useState<Record<string, string>>(() =>
+    Object.fromEntries(
+      schema.map((f) => [f.key, initialValues[f.key] ?? f.default ?? ""]),
+    ),
+  );
+
+  const handleSubmit = (e: React.FormEvent) => {
+    e.preventDefault();
+    onSubmit(values);
+  };
+
+  return (
+    <Dialog open={open} onOpenChange={(v) => !v && onCancel()}>
+      <DialogContent className="max-w-sm">
+        <DialogHeader>
+          <DialogTitle>Configure widget</DialogTitle>
+        </DialogHeader>
+        <form onSubmit={handleSubmit} className="flex flex-col gap-3">
+          {schema.map((field) => (
+            <div key={field.key} className="flex flex-col gap-1">
+              <label className="text-xs font-medium">
+                {field.label}
+                {field.required && (
+                  <span className="ml-0.5 text-destructive">*</span>
+                )}
+              </label>
+              {field.type === "select" ? (
+                <select
+                  value={values[field.key] ?? ""}
+                  onChange={(e) =>
+                    setValues((v) => ({ ...v, [field.key]: e.target.value }))
+                  }
+                  required={field.required}
+                  className="rounded border border-border bg-background px-2 py-1.5 text-sm focus:outline-none focus:ring-1 focus:ring-ring"
+                >
+                  <option value="">Select…</option>
+                  {field.options?.map((opt) => (
+                    <option key={opt.value} value={opt.value}>
+                      {opt.label}
+                    </option>
+                  ))}
+                </select>
+              ) : (
+                <input
+                  type="text"
+                  value={values[field.key] ?? ""}
+                  onChange={(e) =>
+                    setValues((v) => ({ ...v, [field.key]: e.target.value }))
+                  }
+                  placeholder={field.placeholder}
+                  required={field.required}
+                  className="rounded border border-border bg-background px-2 py-1.5 text-sm focus:outline-none focus:ring-1 focus:ring-ring"
+                />
+              )}
+            </div>
+          ))}
+          <div className="flex justify-end gap-2 pt-2">
+            <Button type="button" variant="ghost" onClick={onCancel}>
+              Cancel
+            </Button>
+            <Button type="submit">Save</Button>
+          </div>
+        </form>
+      </DialogContent>
+    </Dialog>
+  );
+}
+
+/** True if the schema has at least one required field with no value (and no default). */
+function needsConfigInput(
+  schema: WidgetOption["configSchema"],
+  values: Record<string, string> | null,
+): boolean {
+  if (!schema || schema.length === 0) return false;
+  for (const field of schema) {
+    if (!field.required) continue;
+    const cur = values?.[field.key];
+    if (cur && cur.length > 0) continue;
+    if (field.default && field.default.length > 0) continue;
+    return true;
+  }
+  return false;
+}
+
 export function DailyWidgetGrid({
   initialCells,
   widgetOptions,
   onSave,
-  widgetPat,
-  baseUrl,
 }: Props) {
   const [cells, setCells] = useState<OverviewCell[]>(
     initialCells.length > 0 ? initialCells : DEFAULT_CELLS,
   );
   const [pickerOpen, setPickerOpen] = useState(false);
   const [selectedCellId, setSelectedCellId] = useState<string | null>(null);
+  const [configFormState, setConfigFormState] = useState<{
+    cellId: string;
+    option: WidgetOption;
+  } | null>(null);
   const dragIndex = useRef<number | null>(null);
 
   const handleAddCell = () => {
@@ -172,6 +280,7 @@ export function DailyWidgetGrid({
       integrationSlug: null,
       integrationAccountId: null,
       config: null,
+      widgetId: null,
     };
     const updated = [...cells, newCell];
     setCells(updated);
@@ -189,26 +298,71 @@ export function DailyWidgetGrid({
     setPickerOpen(true);
   };
 
-  const handlePickWidget = (option: PickerSelection) => {
-    if (!selectedCellId) return;
-    const isNative = !("integrationAccountId" in option);
+  /** Apply a final selection (widget + config) to the cell and save. */
+  const applySelection = (
+    cellId: string,
+    selection: PickerSelection,
+    config: Record<string, string> | null,
+  ) => {
+    const isNative = !("integrationAccountId" in selection);
+    const widgetOption = isNative ? null : (selection as WidgetOption);
     const updated = cells.map((c) =>
-      c.id === selectedCellId
+      c.id === cellId
         ? {
             ...c,
-            widgetSlug: option.widgetSlug,
-            integrationSlug: isNative
-              ? null
-              : (option as WidgetOption).integrationSlug,
-            integrationAccountId: isNative
-              ? null
-              : (option as WidgetOption).integrationAccountId,
+            widgetSlug: selection.widgetSlug,
+            // Empty integration fields = declarative widget; store as null.
+            integrationSlug: widgetOption?.integrationSlug || null,
+            integrationAccountId: widgetOption?.integrationAccountId || null,
+            widgetId: widgetOption?.widgetId ?? null,
+            config: isNative ? null : config,
           }
         : c,
     );
     setCells(updated);
     onSave(updated);
+  };
+
+  const handlePickWidget = (option: PickerSelection) => {
+    if (!selectedCellId) return;
     setPickerOpen(false);
+
+    const isNative = !("integrationAccountId" in option);
+    if (isNative) {
+      applySelection(selectedCellId, option, null);
+      setSelectedCellId(null);
+      return;
+    }
+
+    const widgetOption = option as WidgetOption;
+    if (needsConfigInput(widgetOption.configSchema, null)) {
+      // Defer save — show config form first.
+      setConfigFormState({ cellId: selectedCellId, option: widgetOption });
+      return;
+    }
+
+    // Auto-fill defaults; no form needed.
+    const defaults: Record<string, string> = {};
+    for (const f of widgetOption.configSchema ?? []) {
+      if (f.default) defaults[f.key] = f.default;
+    }
+    applySelection(
+      selectedCellId,
+      widgetOption,
+      Object.keys(defaults).length > 0 ? defaults : null,
+    );
+    setSelectedCellId(null);
+  };
+
+  const handleConfigSubmit = (values: Record<string, string>) => {
+    if (!configFormState) return;
+    applySelection(configFormState.cellId, configFormState.option, values);
+    setConfigFormState(null);
+    setSelectedCellId(null);
+  };
+
+  const handleConfigCancel = () => {
+    setConfigFormState(null);
     setSelectedCellId(null);
   };
 
@@ -260,20 +414,34 @@ export function DailyWidgetGrid({
         const nativeMeta = isNative
           ? NATIVE_WIDGET_MAP[cell.widgetSlug!]
           : null;
-        const integrationOption =
-          !isNative && cell.widgetSlug && cell.integrationAccountId
-            ? widgetOptions.find(
-                (o) =>
-                  o.widgetSlug === cell.widgetSlug &&
-                  o.integrationAccountId === cell.integrationAccountId,
-              )
-            : undefined;
+
+        // Resolve a widgetRef for the new render path: prefer cell.widgetId,
+        // else fall back to a lookup against widgetOptions by (slug, account).
+        let widgetRef: string | null = null;
+        let displayLabel: string | null = null;
+        if (!isNative) {
+          if (cell.widgetId) {
+            widgetRef = cell.widgetId;
+            const opt = widgetOptions.find((o) => o.widgetId === cell.widgetId);
+            displayLabel = opt
+              ? `${opt.integrationName} · ${opt.widgetName}`
+              : null;
+          } else if (cell.widgetSlug && cell.integrationAccountId) {
+            const opt = widgetOptions.find(
+              (o) =>
+                o.widgetSlug === cell.widgetSlug &&
+                o.integrationAccountId === cell.integrationAccountId,
+            );
+            if (opt) {
+              widgetRef = opt.widgetId ?? null;
+              displayLabel = `${opt.integrationName} · ${opt.widgetName}`;
+            }
+          }
+        }
 
         const label = nativeMeta
           ? nativeMeta.widgetName
-          : integrationOption
-            ? `${integrationOption.integrationName} · ${integrationOption.widgetName}`
-            : "Empty";
+          : (displayLabel ?? "Empty");
 
         return (
           <div
@@ -307,15 +475,10 @@ export function DailyWidgetGrid({
             <div className="w-full">
               {isNative && cell.widgetSlug === "needs-attention" ? (
                 <NeedsAttentionWidget />
-              ) : integrationOption && widgetPat ? (
-                <WidgetCell
-                  widgetSlug={integrationOption.widgetSlug}
-                  frontendUrl={integrationOption.frontendUrl}
-                  integrationAccountId={integrationOption.integrationAccountId}
-                  integrationSlug={integrationOption.integrationSlug}
-                  integrationName={integrationOption.integrationName}
-                  pat={widgetPat}
-                  baseUrl={baseUrl}
+              ) : widgetRef ? (
+                <CoreWidgetContent
+                  widgetRef={widgetRef}
+                  configOverride={cell.config ?? undefined}
                 />
               ) : (
                 <Button
@@ -348,6 +511,16 @@ export function DailyWidgetGrid({
         widgetOptions={widgetOptions}
         onSelect={handlePickWidget}
       />
+
+      {configFormState && (
+        <ConfigForm
+          open
+          schema={configFormState.option.configSchema}
+          initialValues={{}}
+          onSubmit={handleConfigSubmit}
+          onCancel={handleConfigCancel}
+        />
+      )}
     </div>
   );
 }

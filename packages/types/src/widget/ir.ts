@@ -125,7 +125,14 @@ export const requestIntegrationActionSchema = z.object({
   params: z.record(z.string(), valueSchema).optional(),
 });
 
-/** Calls the LLM and returns plain text. */
+/**
+ * Spawns the Butler (core agent) loop with the given prompt and returns the
+ * assistant's final text. Equivalent to messaging the Butler in chat — it has
+ * its full toolset and runs in always-approved mode (no user confirmations).
+ *
+ * Use for any read/synthesize/aggregate flow where the answer is shaped by
+ * runtime state (e.g. "today's important tasks", "summarize my open PRs").
+ */
 export const requestAiTextSchema = z.object({
   ...requestBase,
   type: z.literal("ai.text"),
@@ -136,7 +143,11 @@ export const requestAiTextSchema = z.object({
   maxTokens: z.number().int().positive().optional(),
 });
 
-/** Calls the LLM in JSON-schema mode and returns a validated typed value. */
+/**
+ * Same as `ai.text` (spawns the Butler loop) but instructs it to return JSON
+ * matching the given schema. The runtime parses the assistant's final text
+ * tolerantly (strips fences, extracts the largest balanced JSON span).
+ */
 export const requestAiStructuredSchema = z.object({
   ...requestBase,
   type: z.literal("ai.structured"),
@@ -147,11 +158,28 @@ export const requestAiStructuredSchema = z.object({
   maxTokens: z.number().int().positive().optional(),
 });
 
+/**
+ * Calls a CORE-internal mutation directly (no LLM, no agent loop). Reserved
+ * for fire-and-forget mutations the IR knows how to call by name. Reads and
+ * aggregates should go through `ai.text` / `ai.structured` instead — the
+ * Butler will pick the right list/search tool itself.
+ *
+ * Action surface is a closed allowlist (see enum). Adding an action here is
+ * an explicit decision — anything not on the list goes through the agent.
+ */
+export const requestInternalSchema = z.object({
+  ...requestBase,
+  type: z.literal("internal"),
+  action: z.enum(["create_task", "delete_task", "unblock_task"]),
+  params: z.record(z.string(), valueSchema).optional(),
+});
+
 export const requestSchema = z.discriminatedUnion("type", [
   requestStaticSchema,
   requestIntegrationActionSchema,
   requestAiTextSchema,
   requestAiStructuredSchema,
+  requestInternalSchema,
 ]);
 
 // ─── Derived ─────────────────────────────────────────────────────────────────
@@ -238,11 +266,24 @@ const blockBase = {
   id: idSchema,
 };
 
+/**
+ * Visual placement (v0). A small, opt-in vocabulary applied at block level:
+ *
+ *   align     — horizontal text alignment for prose-shaped blocks
+ *               (Text/Heading/Markdown). Ignored on layout containers.
+ *
+ * Card variants (`Card.variant`) govern the chrome around the card itself,
+ * not its children — see the `cardBlock` schema below.
+ */
+const alignSchema = z.enum(["left", "center", "right"]);
+
 const containerBlock = z.object({
   ...blockBase,
   type: z.literal("Container"),
   layout: z.enum(["row", "column"]).default("column"),
   gap: z.number().int().min(0).max(64).optional(),
+  /** Cross-axis alignment of children. */
+  align: alignSchema.optional(),
   children: z.array(z.unknown()).default([]),
 });
 
@@ -251,6 +292,9 @@ const textBlock = z.object({
   type: z.literal("Text"),
   text: exprStringSchema,
   variant: z.enum(["default", "muted", "danger"]).optional(),
+  align: alignSchema.optional(),
+  /** Italic — useful for quotes, captions. */
+  italic: z.boolean().optional(),
 });
 
 const headingBlock = z.object({
@@ -258,12 +302,16 @@ const headingBlock = z.object({
   type: z.literal("Heading"),
   text: exprStringSchema,
   level: z.union([z.literal(1), z.literal(2), z.literal(3), z.literal(4)]).default(2),
+  align: alignSchema.optional(),
 });
 
 const markdownBlock = z.object({
   ...blockBase,
   type: z.literal("Markdown"),
   source: exprStringSchema,
+  align: alignSchema.optional(),
+  /** Italic — useful for quotes, captions. */
+  italic: z.boolean().optional(),
 });
 
 const badgeBlock = z.object({
@@ -278,6 +326,15 @@ const cardBlock = z.object({
   ...blockBase,
   type: z.literal("Card"),
   title: exprStringSchema.optional(),
+  /**
+   * Chrome variant.
+   *   default  — neutral border + background (current behavior)
+   *   muted    — gray-tinted background, no border (subtle filler card)
+   *   outline  — border only, no fill (emphasis without weight)
+   *   ghost    — no border, no fill (visual grouping only — for centered
+   *              prose like a daily quote where chrome would clutter)
+   */
+  variant: z.enum(["default", "muted", "outline", "ghost"]).optional(),
   children: z.array(z.unknown()).default([]),
 });
 
@@ -340,8 +397,17 @@ const tableBlock = z.object({
 const formBlock = z.object({
   ...blockBase,
   type: z.literal("Form"),
-  /** State id (object) where field values are bound. */
-  bind: idSchema,
+  /**
+   * Optional state id (object-typed) where field values are written through
+   * on every change. When omitted, the renderer keeps form values in local
+   * React state and dispatches them to onSubmit via `args` and `event`.
+   *
+   * Bind is recommended when other parts of the widget need to read the
+   * draft values (e.g. a "Save" button that's disabled until valid). Skip
+   * when the form is submit-only and the action handler reads values from
+   * `{{args.fieldId}}`.
+   */
+  bind: idSchema.optional(),
   fields: z
     .array(
       z.object({
@@ -360,6 +426,13 @@ const formBlock = z.object({
         options: z
           .array(z.object({ label: z.string(), value: z.string() }))
           .optional(),
+        /**
+         * Optional initial value for the input. Evaluated when the form
+         * mounts (or a bind state is empty). Typically used to pre-populate
+         * with current state: `"{{$state.focusMinutes}}"`. Falls back to
+         * empty if the expression resolves to undefined.
+         */
+        defaultValue: valueSchema.optional(),
       }),
     )
     .min(1),

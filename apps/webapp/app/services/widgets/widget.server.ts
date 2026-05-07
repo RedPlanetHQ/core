@@ -146,67 +146,22 @@ const bundledInclude = {
 } as const;
 
 // ─── Reads ──────────────────────────────────────────────────────────────────
-
-/**
- * Lazy default-seed coordinator.
- *
- * The first call kicks off the seed if no DEFAULT rows exist; concurrent
- * callers await the same in-flight promise instead of racing. The shared
- * promise is cleared on failure so a future call can retry, and is left
- * resolved on success so subsequent calls short-circuit cheaply (the
- * COUNT query is the only work done after the first success).
- */
-let _defaultsSeedPromise: Promise<void> | null = null;
-
-async function ensureDefaultsSeeded(): Promise<void> {
-  if (_defaultsSeedPromise) return _defaultsSeedPromise;
-  _defaultsSeedPromise = (async () => {
-    try {
-      const count = await prisma.widget.count({
-        where: { kind: "DEFAULT", deleted: null },
-      });
-      if (count === 0) {
-        const { seedDefaultWidgets } = await import("./defaults");
-        await seedDefaultWidgets();
-      }
-    } catch (err) {
-      // Clear the lock so a future call can retry, but don't loop tightly:
-      // callers see one rejected promise, not a perpetual retry storm.
-      _defaultsSeedPromise = null;
-      throw err;
-    }
-  })();
-  // Swallow rejections at the await site — listWidgets shouldn't fail just
-  // because the seed didn't.
-  return _defaultsSeedPromise.catch(() => undefined);
-}
+//
+// DEFAULT rows are no longer persisted — templates live in `defaults.ts` as
+// the in-memory `DEFAULT_WIDGETS` catalog. Users browse the catalog and
+// install a template (see `installTemplate` below) which writes a USER row.
+// Until installed, a template doesn't render anywhere.
 
 export async function listWidgets(
   workspaceId: string,
   userId: string,
 ): Promise<WidgetRow[]> {
-  await ensureDefaultsSeeded();
-
-  const [userWidgets, defaultWidgets] = await Promise.all([
-    prisma.widget.findMany({
-      where: { workspaceId, userId, kind: "USER", deleted: null },
-      include: bundledInclude,
-      orderBy: { updatedAt: "desc" },
-    }),
-    prisma.widget.findMany({
-      where: { kind: "DEFAULT", deleted: null },
-      include: bundledInclude,
-      orderBy: { name: "asc" },
-    }),
-  ]);
-
-  const clonedSourceSlugs = new Set(
-    userWidgets.map((w) => w.sourceSlug).filter((s): s is string => !!s),
-  );
-  const defaults = defaultWidgets
-    .filter((w) => !clonedSourceSlugs.has(w.slug))
-    .map(rowToWidget);
-  return [...userWidgets.map(rowToWidget), ...defaults];
+  const userWidgets = await prisma.widget.findMany({
+    where: { workspaceId, userId, kind: "USER", deleted: null },
+    include: bundledInclude,
+    orderBy: { updatedAt: "desc" },
+  });
+  return userWidgets.map(rowToWidget);
 }
 
 export async function getWidgetById(
@@ -215,14 +170,7 @@ export async function getWidgetById(
   userId: string,
 ): Promise<WidgetRow | null> {
   const row = await prisma.widget.findFirst({
-    where: {
-      id,
-      deleted: null,
-      OR: [
-        { kind: "DEFAULT" },
-        { workspaceId, userId, kind: "USER" },
-      ],
-    },
+    where: { id, workspaceId, userId, kind: "USER", deleted: null },
     include: bundledInclude,
   });
   return row ? rowToWidget(row) : null;
@@ -233,18 +181,78 @@ export async function getWidgetBySlug(
   workspaceId: string,
   userId: string,
 ): Promise<WidgetRow | null> {
-  // USER copy wins over DEFAULT with the same slug.
-  const userRow = await prisma.widget.findFirst({
+  const row = await prisma.widget.findFirst({
     where: { slug, workspaceId, userId, kind: "USER", deleted: null },
     include: bundledInclude,
   });
-  if (userRow) return rowToWidget(userRow);
+  return row ? rowToWidget(row) : null;
+}
 
-  const defaultRow = await prisma.widget.findFirst({
-    where: { slug, kind: "DEFAULT", deleted: null },
-    include: bundledInclude,
+// ─── Template catalog & install ─────────────────────────────────────────────
+//
+// Templates are not persisted. They're literal IR objects in
+// `services/widgets/defaults.ts → DEFAULT_WIDGETS`. The settings page reads
+// this catalog and lets the user install a template, which writes a USER row.
+
+export interface TemplateSummary {
+  slug: string;
+  name: string;
+  description: string | null;
+  icon: string | null;
+  /** True when the user already has an installed widget cloned from this template. */
+  installed: boolean;
+}
+
+export async function listTemplates(
+  workspaceId: string,
+  userId: string,
+): Promise<TemplateSummary[]> {
+  const { DEFAULT_WIDGETS } = await import("./defaults");
+  const installed = await prisma.widget.findMany({
+    where: {
+      workspaceId,
+      userId,
+      kind: "USER",
+      deleted: null,
+      sourceSlug: { in: DEFAULT_WIDGETS.map((d) => d.ir.id) },
+    },
+    select: { sourceSlug: true },
   });
-  return defaultRow ? rowToWidget(defaultRow) : null;
+  const installedSlugs = new Set(
+    installed.map((w) => w.sourceSlug).filter((s): s is string => !!s),
+  );
+  return DEFAULT_WIDGETS.map(({ ir }) => ({
+    slug: ir.id,
+    name: ir.title,
+    description: ir.description ?? null,
+    icon: ir.icon ?? null,
+    installed: installedSlugs.has(ir.id),
+  }));
+}
+
+export type InstallTemplateResult =
+  | { ok: true; widget: WidgetRow }
+  | { ok: false; error: string };
+
+export async function installTemplate(
+  templateSlug: string,
+  workspaceId: string,
+  userId: string,
+): Promise<InstallTemplateResult> {
+  const { DEFAULT_WIDGETS } = await import("./defaults");
+  const tpl = DEFAULT_WIDGETS.find((d) => d.ir.id === templateSlug);
+  if (!tpl) return { ok: false, error: `Template "${templateSlug}" not found` };
+
+  const result = await createDeclarativeWidget({
+    spec: tpl.ir,
+    workspaceId,
+    userId,
+    sourceSlug: tpl.ir.id,
+  });
+  if (!result.ok) {
+    return { ok: false, error: result.error };
+  }
+  return { ok: true, widget: result.widget };
 }
 
 // ─── Declarative writes ─────────────────────────────────────────────────────
@@ -402,7 +410,13 @@ export async function seedBundledWidgetsForAccount(
     const bundledSlug = widgetMeta.slug as string | undefined;
     if (!bundledSlug) continue;
 
-    const slug = `${def.slug}-${bundledSlug}`;
+    // Include the account id (short form) in the slug so two connected
+    // accounts of the same integration each get their own widget row.
+    // Without this, the (workspaceId, userId, slug) unique key collides on
+    // the second seed and overwrites the first account's row, making its
+    // widgets disappear from the picker.
+    const accountSuffix = account.id.slice(0, 8);
+    const slug = `${def.slug}-${bundledSlug}-${accountSuffix}`;
 
     // Apply configSchema defaults (no required fields — user can edit later).
     const configSchema =
@@ -461,27 +475,6 @@ export async function seedBundledWidgetsForAccount(
   }
 
   return { created, skipped };
-}
-
-// ─── Default widget lookup (read-only) ──────────────────────────────────────
-
-export async function listDefaultWidgets(): Promise<WidgetRow[]> {
-  const rows = await prisma.widget.findMany({
-    where: { kind: "DEFAULT", deleted: null },
-    include: bundledInclude,
-    orderBy: { name: "asc" },
-  });
-  return rows.map(rowToWidget);
-}
-
-export async function getDefaultWidgetBySlug(
-  slug: string,
-): Promise<WidgetRow | null> {
-  const row = await prisma.widget.findFirst({
-    where: { slug, kind: "DEFAULT", deleted: null },
-    include: bundledInclude,
-  });
-  return row ? rowToWidget(row) : null;
 }
 
 // ─── Backwards compat alias ─────────────────────────────────────────────────

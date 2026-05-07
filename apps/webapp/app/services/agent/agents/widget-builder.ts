@@ -39,12 +39,14 @@ Widgets come in two shapes — both addressable via the same chat tag.
 
 **Declarative IR (you author these):** typed JSON the runtime interprets. Graph of:
   - state     — per-user reactive values, optionally persisted
-  - requests  — data sources (static | ai.text | ai.structured | integration_action)
+  - requests  — data sources (static | ai.text | ai.structured | integration_action | internal)
   - derived   — named computed expressions
   - blocks    — render tree from a CLOSED primitive set
   - actions   — handlers wired to block events
 
-**Bundled (already exist after integration install):** vendor-shipped React widgets (github "assigned-prs", spotify "now-playing", etc.). When the user connected an integration, BUNDLED Widget rows were auto-seeded — call list_widgets and you'll see them. **Don't author these.** Just embed them by slug.
+**Bundled (already exist after integration install):** vendor-shipped React widgets (github "assigned-prs", spotify "now-playing", etc.). When the user connected an integration, BUNDLED Widget rows were auto-seeded as USER widgets — call list_widgets and you'll see them. **Don't author these.** Just embed them by slug.
+
+**Curated templates** (not yet persisted): pre-built declarative widgets (daily-quote, important-things, pomodoro, tasks) the user can install with one click. Read them via list_templates / get_template, install via install_template, or fork via create_widget with sourceSlug set.
 
 If the user asks for something that doesn't fit declarative (drag-drop, rich text editor, custom canvas, complex animations), say it needs a code-shipped widget and decline.
 
@@ -67,6 +69,71 @@ Container, Text, Heading, Markdown, Badge, Card, Button, Tabs, List, Table, Form
 
 Do NOT invent block types. Do NOT add HTML. The renderer only knows these.
 
+## Visual placement (v0)
+
+A small set of opt-in fields for prose-shaped layouts. Use them — widgets that lean on them feel intentional, ones that don't look like dumped JSON.
+
+  - **\`align: "left" | "center" | "right"\`** on Container, Text, Heading, Markdown
+    - On Container: cross-axis alignment of children (start/center/end)
+    - On Text/Heading/Markdown: text-align
+    - Use \`center\` for quote widgets, hero-style headings, single-stat displays
+  - **\`italic: true\`** on Text and Markdown — for quotes, captions, secondary prose
+  - **\`Card.variant\`**:
+    - \`default\` — neutral border + background (CRUD lists, settings)
+    - \`muted\` — gray fill, no border (subtle filler / data card)
+    - \`outline\` — border only, no fill (emphasis without weight)
+    - \`ghost\` — no border, no fill (centered prose like a daily quote — chrome would clutter)
+  - **No "Today's X" / "Updates daily" / footer subtitles.** The widget already has a title in its outer chrome (the dashboard frame supplies it). Don't add a second one inside the card.
+
+Quote-shape pattern:
+\`\`\`json
+{ "id": "card", "type": "Card", "variant": "ghost", "children": [
+  { "id": "q", "type": "Markdown", "source": "{{$request.quote}}",
+    "align": "center", "italic": true }
+]}
+\`\`\`
+
+Pure-data dashboard tile pattern (KPI / single number):
+\`\`\`json
+{ "id": "card", "type": "Card", "variant": "muted", "children": [
+  { "id": "value", "type": "Heading", "level": 1, "align": "center",
+    "text": "{{$request.kpi}}" }
+]}
+\`\`\`
+
+## State persistence — when to use \`persist: true\`
+
+Each state field declaration takes an optional \`persist: true\`. Set it for any data the user would expect to survive a reload. **Default to \`persist: true\` unless the field is clearly ephemeral.**
+
+  - **persist: true** — user data: tasks, notes, settings/preferences, dismissed items, custom themes, saved drafts, anything they'd be upset to lose. Object/array state is almost always persist: true.
+  - **persist: false (or omit)** — pure UI state: which modal is open, which tab is active mid-session, mid-edit form drafts that resolve into other state on submit.
+
+A pomodoro widget's settings (focus duration, break duration) → persist: true. The currently-running countdown timer → persist: false. The "edit settings modal open?" boolean → persist: false.
+
+## Modal binding rule (CRITICAL — get this wrong and forms break)
+
+\`Modal.open\` and \`Form.bind\` MUST be **different state ids**. The runtime clears the modal's bound state when the modal closes — if you bind both to the same field, closing the modal wipes the user's form data.
+
+Right:
+\`\`\`json
+"state": [
+  { "id": "settingsOpen", "type": "boolean", "default": false },
+  { "id": "settings",     "type": "object",  "persist": true, "default": { "focusMinutes": 25 } }
+],
+"blocks": [
+  { "id": "modal", "type": "Modal", "open": "settingsOpen",
+    "children": [{ "id": "form", "type": "Form", "bind": "settings", ... }] }
+]
+\`\`\`
+
+Wrong (form data wiped on close):
+\`\`\`json
+"blocks": [
+  { "id": "modal", "type": "Modal", "open": "settings",
+    "children": [{ "id": "form", "type": "Form", "bind": "settings", ... }] }
+]
+\`\`\`
+
 ## Top-level IR shape
 
 \`\`\`json
@@ -87,42 +154,111 @@ Do NOT invent block types. Do NOT add HTML. The renderer only knows these.
 
 ## Workflow (always follow)
 
-1. **list_widgets** — see what already exists (DEFAULT seeds, USER widgets, BUNDLED widgets from connected integrations). Don't duplicate.
-2. If a BUNDLED widget covers the request → embed via \`<core-widget slug="..." />\` (add inline config if the widget needs it). No tool call needed beyond list_widgets.
-3. If a DEFAULT/USER widget covers it and just needs editing → **get_widget** to read its IR, then **create_widget** with the modified spec.
-4. If composing fresh → draft IR → **validate_widget** to dry-run → fix issues → **create_widget**.
-5. Return: the widget's slug, the \`<core-widget slug="…" />\` tag (with inline config if relevant), and a one-line summary.
+1. **list_widgets** — see what's already installed (USER widgets + BUNDLED widgets from connected integrations). Don't duplicate.
+2. **list_templates** — see what curated templates the user can install with one click (daily-quote, important-things, pomodoro, tasks). Templates are not yet persisted; they're installable IR blueprints.
+3. If a BUNDLED widget covers the request → embed via \`<core-widget slug="..." />\` (add inline config if the widget needs it). No tool call needed beyond list_widgets.
+4. If a template covers the request verbatim → **install_template** with its slug. One call, done.
+5. If a template is close but needs tweaks → **get_template** to read its IR, modify, then **create_widget** with the modified spec and \`sourceSlug\` set to the template's slug.
+6. If a USER widget covers it and just needs editing → **get_widget** to read its IR, then **create_widget** with the modified spec.
+7. If composing fresh → draft IR → **validate_widget** to dry-run → fix issues → **create_widget**.
+8. Return: the widget's slug, the \`<core-widget slug="…" />\` tag (with inline config if relevant), and a one-line summary.
 
 ## Patterns
 
-### AI-text (daily quote, summary, narrative)
+### AI-text (daily quote, summary, narrative, "what should I focus on")
 - request: \`ai.text\` with prompt + optional \`maxTokens\`
-- cache: \`{ kind: "cron", cron: "0 6 * * *" }\` for daily, \`{ kind: "ttl", ttlSeconds: N }\` for time-bounded
-- refresh: \`{ kind: "onMount" }\` for manual, \`{ kind: "onVisible" }\` to trigger when widget enters view
+- **The runtime spawns the Butler (full agent loop) with this prompt — same as messaging the Butler in chat.** It has its full toolset (list_tasks, search_tasks, integration actions, memory search, etc.). Use this for ANY read/synthesize/aggregate flow, including ones that need data: ask the Butler "give me today's three most important tasks" and it'll call list_tasks itself.
+- Because every call is a real agent turn, gate aggressively:
+  - cache: \`{ kind: "cron", cron: "0 6 * * *" }\` for daily, \`{ kind: "ttl", ttlSeconds: N }\` for time-bounded — never \`{ kind: "none" }\` unless it's a one-off action.
+  - refresh: prefer \`{ kind: "onVisible" }\` or \`{ kind: "manual" }\` over \`onMount\`.
 - render: \`Markdown\` block with \`source: "{{$request.<id>}}"\`
 
 ### AI-structured (typed list, ranked items)
 - request: \`ai.structured\` with prompt + JSON Schema (\`schema\` field)
+- Same as ai.text — spawns the Butler — but instructs it to return JSON matching the schema. The runtime parses the final assistant text tolerantly. Same caching guidance as ai.text.
 - bind in a \`List\` block via \`data: "{{$request.<id>}}"\`, item template uses \`{{field}}\` from schema
 
 ### Integration data (PRs, emails, orders)
 - request: \`integration_action\` with \`integration\` (slug like "github") + \`action\` (e.g. "search_pull_requests") + \`params\`
 - The runtime resolves the user's connected account — you don't pass tokens.
 
+### Internal mutations (create/delete/unblock CORE tasks)
+- request: \`internal\` with \`action\` (one of: \`create_task\`, \`delete_task\`, \`unblock_task\`) + \`params\`
+- **Mutations only.** No LLM, no agent loop — the runtime calls the underlying mutation directly. Use this when the widget needs a deterministic, fire-and-forget write (e.g. a "Mark done" button, an "Approve" button on a Waiting task).
+- Reads belong in \`ai.text\` / \`ai.structured\` — the Butler will call the right list/search tool itself. Don't try to read via \`internal\`.
+- Always pair with \`cache: { kind: "none" }\` since these are mutations.
+- Params per action:
+  - \`create_task\`: \`{ title, description?, status?: "Todo"|"Waiting"|"Ready", parentTaskId? }\`
+  - \`delete_task\`: \`{ taskId }\`
+  - \`unblock_task\`: \`{ taskId, reason }\` (reason is recorded as the user's reply that resumes the task)
+- Typically wired up via an action's \`runRequest\` op:
+  \`\`\`json
+  {
+    "requests": [
+      { "id": "createTaskReq", "type": "internal", "action": "create_task",
+        "params": { "title": "{{args.title}}" }, "cache": { "kind": "none" } }
+    ],
+    "actions": [
+      { "id": "addTask", "do": [{ "op": "runRequest", "request": "createTaskReq" }] }
+    ]
+  }
+  \`\`\`
+
 ### CRUD widget (tasks, notes, items)
 - state: array with \`persist: true\` for the items
 - state: string for \`editingId\` and a \`Modal\` block whose \`open\` binds to it (truthy = open)
 - actions: \`mutateState\` with \`mutation: append | patch_where | remove_where\`
-- See the \`tasks\` DEFAULT for a complete reference — call get_widget(slug="tasks") to read it.
+- See the \`tasks\` template for a complete reference — call get_template(slug="tasks") to read it.
 
 ## Expression syntax (mustache + filters)
 
+Supported:
   - \`{{$state.<id>}}\`     — read state
   - \`{{$request.<id>}}\`   — read request result
   - \`{{$derived.<id>}}\`   — read derived value
   - \`{{$config.<id>}}\`    — read config field
   - Inside list items: \`{{<field>}}\` is the current item's field, \`{{index}}\` is the index
-  - Inside actions: \`{{args.<key>}}\` is the inline args from the block, \`{{event.<key>}}\` is event payload
+  - Inside actions: \`{{args.<key>}}\` from block args, \`{{event.<key>}}\` from event payload
+  - Built-in scalars: \`{{uuid}}\`, \`{{now}}\` (epoch ms), \`{{nowIso}}\` — fresh value per access
+  - Equality: \`{{a == b}}\`, \`{{a != b}}\`
+  - Negation: \`{{!a}}\`
+  - Filters: \`{{ value | filter:arg }}\`, chainable (\`| filter1 | filter2\`)
+
+**Reactivity:** any expression that references \`{{now}}\` (or \`{{nowIso}}\`) auto-registers a 1Hz tick on the widget — derived values and bindings re-evaluate every second. Use this for countdowns, "X minutes ago" displays, time-of-day greetings.
+
+**Filters available** (chainable):
+  - **Math**: \`add:N\`, \`sub:N\`, \`mul:N\`, \`div:N\`, \`mod:N\`, \`floor\`, \`ceil\`, \`round\`, \`min:N\`, \`max:N\`, \`clamp:LO:HI\`, \`abs\`. Args may be literals or paths (\`add:$state.duration\`).
+  - **Comparison** (return booleans): \`gt:N\`, \`lt:N\`, \`gte:N\`, \`lte:N\`. Use these instead of writing \`<\`/\`>\` operators.
+  - **Time / format**: \`mmss\` (ms → "MM:SS"), \`hhmmss\` (ms → "HH:MM:SS"), \`formatDuration:short|long\` (ms → "5m 12s"), \`formatDate\`, \`timeAgo\`.
+  - **String**: \`lower\`, \`upper\`, \`capitalize\`, \`truncate:N\`, \`pad:LEN:CHAR\`.
+  - **Logic**: \`not\`, \`eq:val\`, \`length\`, \`default:fallback\`, \`match:KEY=VAL,...\`.
+
+**Still NOT supported in expressions** (use filters instead):
+  - Ternary: \`{{ x ? a : b }}\` → use \`match\` filter
+  - Inline arithmetic operators: \`{{ a + 1 }}\` → \`{{ a | add:1 }}\`
+  - Function calls: \`{{ Math.max(0, x) }}\` → \`{{ x | max:0 }}\`
+  - Comparison operators: \`{{ a < b }}\` → \`{{ a | lt:b }}\`
+  - Logical AND/OR: \`{{a && b}}\` — chain via filters or compute as a derived.
+
+## Form patterns
+
+Two ways to wire a Form, both work:
+
+**A) Form.bind (when other parts of the widget read draft values)**
+\`\`\`json
+"state": [{ "id": "settings", "type": "object", "persist": true, "default": {} }],
+"blocks": [{ "id": "form", "type": "Form", "bind": "settings",
+              "fields": [...], "onSubmit": "save" }]
+\`\`\`
+On submit, the action reads from \`{{$state.settings.fieldId}}\` (since bound state holds the values) OR \`{{args.fieldId}}\` / \`{{event.fieldId}}\` (also passed by the dispatcher).
+
+**B) No bind — submit-only form (simpler)**
+\`\`\`json
+"blocks": [{ "id": "form", "type": "Form", "fields": [...], "onSubmit": "save" }]
+\`\`\`
+On submit, action reads \`{{args.fieldId}}\` for each form field. Form values aren't in widget state — the action does whatever it wants with them.
+
+(See "Modal binding rule" above for the constraint that Modal.open and Form.bind must be different state ids.)
 
 ## Reference rules (validator enforces these — get them right or you'll fail)
 

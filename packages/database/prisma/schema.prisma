@@ -1415,6 +1415,19 @@ model Widget {
   /// integration's `configSchema` form. Required when engine=BUNDLED.
   configValues Json?
 
+  /// Per-widget request cache.
+  ///
+  /// Single JSON blob holding the last-fetched results and a paramHash so
+  /// changes to config/state invalidate the cache without explicit purge.
+  /// Shape:
+  ///   {
+  ///     "results":   { "<requestId>": <value> },   // request id → result
+  ///     "paramHash": "<sha256 of resolved inputs>",
+  ///     "lastPulled":"2026-05-06T12:00:00Z",
+  ///     "expiresAt": "2026-05-06T13:00:00Z"        // null = no auto-expire
+  ///   }
+  cache Json?
+
   user        User?      @relation(fields: [userId], references: [id], onDelete: Cascade)
   userId      String?
   workspace   Workspace? @relation(fields: [workspaceId], references: [id], onDelete: Cascade)

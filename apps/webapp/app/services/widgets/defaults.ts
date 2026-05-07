@@ -1,20 +1,17 @@
 /**
- * Default widget IRs — seeded as kind=DEFAULT rows.
+ * Default widget IRs — the in-memory template catalog.
  *
- * These serve two purposes:
- *  1. Working examples the agent can read via `get_widget` to understand the IR shape
- *     before authoring its own widget.
- *  2. Templates the user can install — the agent clones a DEFAULT into a USER
- *     widget when asked.
+ * Templates are NOT persisted as DB rows. They live here as literal IR
+ * objects. The settings page reads `DEFAULT_WIDGETS` to render the
+ * "Available templates" list; clicking [Install] runs `installTemplate`
+ * (in widget.server.ts) which validates the IR and writes a USER row.
  *
- * Each IR is validated at seed time so a malformed default fails loudly.
+ * Bumping `seedVersion` no longer auto-updates anyone's installed copy —
+ * once installed, a widget is the user's. (If we want template updates to
+ * propagate, that's a separate "upgrade" UX.)
  */
 
 import type { WidgetIR } from "@core/types";
-import { validateWidget } from "./validate";
-import { prisma } from "~/db.server";
-import { logger } from "~/services/logger.service";
-import type { Prisma } from "@prisma/client";
 
 // ─── Default 1: Daily quote (AI text) ───────────────────────────────────────
 
@@ -38,7 +35,7 @@ const dailyQuote: WidgetIR = {
       id: "quote",
       type: "ai.text",
       prompt:
-        "Give me one short quote (max 30 words) about {{$config.theme}}. No author attribution.",
+        "Give me one short quote (max 30 words) about {{$config.theme}}. No author attribution. Just the quote text — no quotation marks, no preamble.",
       maxTokens: 80,
       cache: { kind: "cron", cron: "0 6 * * *" },
       refresh: { kind: "onMount" },
@@ -48,62 +45,82 @@ const dailyQuote: WidgetIR = {
     {
       id: "card",
       type: "Card",
+      // Ghost variant — no border, no fill. The quote is the focal point;
+      // chrome here just clutters and competes with the dashboard's outer
+      // widget frame.
+      variant: "ghost",
       children: [
         {
           id: "text",
           type: "Markdown",
           source: "{{$request.quote}}",
+          align: "center",
+          italic: true,
         },
       ],
     },
   ],
 };
 
-// ─── Default 2: Important things (AI structured) ────────────────────────────
+// ─── Default 2: Important things (Butler-driven) ────────────────────────────
+//
+// `ai.structured` spawns the Butler loop — it has list_tasks/search_tasks/etc.
+// and picks the right tool. The prompt directs it to read the user's actual
+// task list and return the top items as JSON. No client-side filtering needed.
+//
+// Each item's `id` is a real task id, so the "Mark done" action wires straight
+// through to `internal: delete_task` for a deterministic mutation. After the
+// mutation, we force-refresh the list request so the row disappears.
 
 const importantThings: WidgetIR = {
   version: 1,
   id: "important-things",
   title: "Today's important things",
   description:
-    "AI-curated list of the most important things from your recent activity, ranked by priority.",
+    "Butler-curated list of the most important tasks for today, ranked by priority.",
   icon: "alert-triangle",
-  state: [
-    { id: "dismissed", type: "array", default: [], persist: true },
-  ],
   requests: [
     {
       id: "items",
       type: "ai.structured",
       prompt:
-        "From the user's recent activity, list today's most important items. Be terse. Max 5.",
+        "Use list_tasks to read the user's current tasks (focus on Todo and Working). Return the top 5 most important ones for today, ranked by priority. Use real task ids — they will be used to mutate the tasks. Skip tasks that are already Done or Review.",
       schema: {
         type: "array",
         items: {
           type: "object",
           required: ["id", "title", "priority", "why"],
           properties: {
-            id: { type: "string" },
+            id: { type: "string", description: "Real task id from list_tasks" },
             title: { type: "string" },
             priority: { type: "string", enum: ["P0", "P1", "P2", "P3"] },
             why: { type: "string", maxLength: 80 },
           },
         },
       },
-      cache: { kind: "ttl", ttlSeconds: 600 },
-      refresh: { kind: "onVisible" },
+      // 2-hour TTL aligned with the interval — a navigation back to the
+      // dashboard within the window serves the cached list; the interval
+      // ticks in-place and force-refreshes when the window expires. Butler
+      // calls are LLM-priced, so we keep the floor generous.
+      cache: { kind: "ttl", ttlSeconds: 7200 },
+      refresh: { kind: "interval", intervalMs: 7_200_000 },
+    },
+    {
+      id: "deleteTaskReq",
+      type: "internal",
+      action: "delete_task",
+      params: { taskId: "{{args.id}}" },
+      cache: { kind: "none" },
     },
   ],
   actions: [
     {
-      id: "dismiss",
+      id: "markDone",
+      confirm: "Delete this task?",
       do: [
-        {
-          op: "mutateState",
-          state: "dismissed",
-          mutation: "append",
-          value: "{{args.id}}",
-        },
+        { op: "runRequest", request: "deleteTaskReq" },
+        // Force-refresh the items list so the deleted row disappears.
+        { op: "runRequest", request: "items" },
       ],
     },
   ],
@@ -118,10 +135,140 @@ const importantThings: WidgetIR = {
         badge: "{{priority}}",
         badgeColor:
           "{{priority | match:P0=red,P1=orange,P2=yellow,P3=gray}}",
-        onClick: "dismiss",
+        onClick: "markDone",
         args: { id: "{{id}}" },
       },
       emptyText: "Nothing important right now — caught up!",
+    },
+  ],
+};
+
+// ─── Default 3: Pomodoro (countdown timer) ──────────────────────────────────
+//
+// Showcases the new expression features:
+//   - reactive `{{now}}` (auto 1Hz tick because mmss/gt filters need second
+//     precision)
+//   - math filters: mul, add, sub, max
+//   - format filter: mmss (ms → "MM:SS")
+//   - comparison filter: gt (boolean for "is running?")
+//
+// State is minimal: `endsAt` (ms epoch when current session ends, 0 = idle)
+// plus `mode` for the focus/break label. Persisted so a refresh mid-session
+// continues counting against the original target instead of resetting.
+
+const pomodoro: WidgetIR = {
+  version: 1,
+  id: "pomodoro",
+  title: "Pomodoro",
+  description:
+    "Focus timer with configurable focus/break lengths. Countdown updates every second.",
+  icon: "timer",
+  config: [
+    {
+      id: "focusMinutes",
+      type: "number",
+      label: "Focus minutes",
+      default: 25,
+    },
+    {
+      id: "breakMinutes",
+      type: "number",
+      label: "Break minutes",
+      default: 5,
+    },
+  ],
+  state: [
+    // 0 = idle. Otherwise: ms epoch the current session ends at.
+    { id: "endsAt", type: "number", default: 0, persist: true },
+    { id: "mode", type: "string", default: "focus", persist: true },
+  ],
+  derived: [
+    // Clamp at 0 so display shows "00:00" instead of negative time during
+    // the gap between session-end and the user clicking Stop.
+    { id: "remainingMs", expr: "{{ $state.endsAt | sub:now | max:0 }}" },
+    { id: "display", expr: "{{ $derived.remainingMs | mmss }}" },
+    // Running iff the session hasn't ended yet.
+    { id: "running", expr: "{{ $state.endsAt | gt:now }}" },
+    { id: "modeLabel", expr: "{{ $state.mode | match:focus=Focus,break=Break }}" },
+  ],
+  actions: [
+    {
+      id: "startFocus",
+      do: [
+        { op: "setState", state: "mode", value: "focus" },
+        {
+          op: "setState",
+          state: "endsAt",
+          value: "{{ $config.focusMinutes | mul:60000 | add:now }}",
+        },
+      ],
+    },
+    {
+      id: "startBreak",
+      do: [
+        { op: "setState", state: "mode", value: "break" },
+        {
+          op: "setState",
+          state: "endsAt",
+          value: "{{ $config.breakMinutes | mul:60000 | add:now }}",
+        },
+      ],
+    },
+    {
+      id: "stop",
+      do: [{ op: "setState", state: "endsAt", value: 0 }],
+    },
+  ],
+  blocks: [
+    {
+      id: "card",
+      type: "Card",
+      children: [
+        {
+          id: "modeBadge",
+          type: "Badge",
+          text: "{{$derived.modeLabel}}",
+          color: "{{$state.mode | match:focus=blue,break=green}}",
+        },
+        {
+          id: "display",
+          type: "Heading",
+          text: "{{$derived.display}}",
+          level: 1,
+        },
+        {
+          id: "controls",
+          type: "Container",
+          layout: "row",
+          gap: 8,
+          children: [
+            {
+              id: "focusBtn",
+              type: "Button",
+              label: "Start focus",
+              variant: "primary",
+              onClick: "startFocus",
+              disabled: "{{$derived.running}}",
+            },
+            {
+              id: "breakBtn",
+              type: "Button",
+              label: "Start break",
+              variant: "secondary",
+              onClick: "startBreak",
+              disabled: "{{$derived.running}}",
+            },
+            {
+              id: "stopBtn",
+              type: "Button",
+              label: "Stop",
+              variant: "ghost",
+              onClick: "stop",
+              disabled: "{{$derived.running | not}}",
+            },
+          ],
+        },
+      ],
     },
   ],
 };
@@ -262,97 +409,21 @@ const taskManager: WidgetIR = {
   ],
 };
 
-export const DEFAULT_WIDGETS: WidgetIR[] = [
-  dailyQuote,
-  importantThings,
-  taskManager,
-];
-
 /**
- * Idempotent seeder — upserts each DEFAULT_WIDGETS entry into the Widget
- * table with kind=DEFAULT, workspaceId/userId both NULL.
+ * In-memory template catalog. Each entry's IR is offered as an installable
+ * template on the settings page; clicking [Install] writes a USER row.
  *
- * Safe to call on every server boot. Use the `force` flag to overwrite the
- * spec/version when iterating on default authoring.
+ * Adding a template = appending an entry. Editing a template = changing the
+ * IR object; existing installs stay on whatever they had at install time
+ * (templates don't auto-upgrade — that would clobber user customizations).
  */
-export async function seedDefaultWidgets(
-  options: { force?: boolean } = {},
-): Promise<{ created: number; updated: number; skipped: number; invalid: number }> {
-  let created = 0;
-  let updated = 0;
-  let skipped = 0;
-  let invalid = 0;
-
-  for (const widget of DEFAULT_WIDGETS) {
-    // Validate inside the seeder so a malformed default doesn't crash module
-    // import. Skip-and-log is preferable to crashing the webapp at boot.
-    const validation = validateWidget(widget);
-    if (!validation.ok) {
-      invalid++;
-      logger.warn(`Default widget "${widget.id}" failed validation`, {
-        issues: validation.issues,
-      });
-      continue;
-    }
-
-    // DEFAULT rows have workspaceId=NULL, userId=NULL. Postgres treats NULLs as
-    // distinct in the (workspaceId, userId, slug) unique index — so concurrent
-    // seeders could both findFirst-miss and both create. The lazy-seed promise
-    // lock prevents this within a single process; the per-row try/catch below
-    // is the multi-process safety net (one wins, others skip on conflict).
-    const existing = await prisma.widget.findFirst({
-      where: { slug: widget.id, kind: "DEFAULT", deleted: null },
-    });
-
-    if (!existing) {
-      try {
-        await prisma.widget.create({
-          data: {
-            slug: widget.id,
-            name: widget.title,
-            description: widget.description ?? null,
-            icon: widget.icon ?? null,
-            kind: "DEFAULT",
-            spec: widget as unknown as Prisma.InputJsonValue,
-            version: widget.version,
-            userId: null,
-            workspaceId: null,
-          },
-        });
-        created++;
-      } catch (err) {
-        // P2002 = unique constraint violation. Another process beat us; skip.
-        if (
-          typeof err === "object" &&
-          err !== null &&
-          "code" in err &&
-          (err as { code?: string }).code === "P2002"
-        ) {
-          skipped++;
-        } else {
-          throw err;
-        }
-      }
-      continue;
-    }
-
-    if (options.force) {
-      await prisma.widget.update({
-        where: { id: existing.id },
-        data: {
-          name: widget.title,
-          description: widget.description ?? null,
-          icon: widget.icon ?? null,
-          spec: widget as unknown as Prisma.InputJsonValue,
-          version: widget.version,
-        },
-      });
-      updated++;
-    } else {
-      skipped++;
-    }
-  }
-
-  logger.info("seedDefaultWidgets", { created, updated, skipped, invalid });
-  return { created, updated, skipped, invalid };
+export interface DefaultWidgetSpec {
+  ir: WidgetIR;
 }
+
+export const DEFAULT_WIDGETS: DefaultWidgetSpec[] = [
+  { ir: dailyQuote },
+  { ir: importantThings },
+  { ir: pomodoro },
+  { ir: taskManager },
+];
