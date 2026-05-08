@@ -1,4 +1,4 @@
-import { useNavigate, useOutletContext, useParams } from "@remix-run/react";
+import { useNavigate, useNavigation, useOutletContext, useParams } from "@remix-run/react";
 import { useCallback, useEffect, useRef, useState } from "react";
 import { format } from "date-fns";
 import { Loader2, Copy, Check } from "lucide-react";
@@ -198,6 +198,7 @@ export default function CodingSessionRoute() {
     useOutletContext<CodingOutletContext>();
   const { sessionId } = useParams<{ sessionId: string }>();
   const navigate = useNavigate();
+  const navigation = useNavigation();
 
   const session = sessions.find((s) => s.id === sessionId) ?? null;
 
@@ -213,12 +214,14 @@ export default function CodingSessionRoute() {
   }, [sessionId, session, taskId]);
 
   // Stale URL (session deleted, or wrong taskId): bounce back to the index so
-  // it can pick a valid session.
+  // it can pick a valid session. Wait for any in-flight navigation to settle
+  // first — sessions may transiently lag the URL during a loading transition.
   useEffect(() => {
+    if (navigation.state !== "idle") return;
     if (sessionId && !session && sessions.length > 0) {
       navigate(`/home/tasks/${taskId}/coding`, { replace: true });
     }
-  }, [sessionId, session, sessions.length, navigate, taskId]);
+  }, [sessionId, session, sessions.length, navigate, taskId, navigation.state]);
 
   if (!session) {
     return (

@@ -1,5 +1,5 @@
 import { useNavigate, useOutletContext } from "@remix-run/react";
-import { useEffect } from "react";
+import { useEffect, useRef } from "react";
 import type { CodingOutletContext } from "./home.tasks.$taskId.coding";
 
 export function lastSessionStorageKey(taskId: string): string {
@@ -9,9 +9,13 @@ export function lastSessionStorageKey(taskId: string): string {
 export default function CodingIndex() {
   const { sessions, taskId } = useOutletContext<CodingOutletContext>();
   const navigate = useNavigate();
+  // Guard so we only navigate once per mount, even if sessions reference
+  // changes due to a loader revalidation while this index is still rendered.
+  const didNavigate = useRef(false);
 
   useEffect(() => {
-    if (sessions.length === 0) return;
+    if (didNavigate.current || sessions.length === 0) return;
+    didNavigate.current = true;
 
     const stored =
       typeof window !== "undefined"

@@ -6,6 +6,7 @@ import {
   useParams,
   useRevalidator,
 } from "@remix-run/react";
+import type { ShouldRevalidateFunctionArgs } from "@remix-run/react";
 import { typedjson, useTypedLoaderData } from "remix-typedjson";
 import { ClientOnly } from "remix-utils/client-only";
 import { useCallback, useEffect, useState } from "react";
@@ -27,6 +28,27 @@ export type CodingOutletContext = {
   updateSessionExternalId: (sessionDbId: string, externalId: string) => void;
   openNewSession: () => void;
 };
+
+// Skip revalidating when the user is just switching between sessions within
+// the same task — the session list hasn't changed. Forced revalidations via
+// useRevalidator (same currentUrl === nextUrl) still pass through.
+export function shouldRevalidate({
+  currentUrl,
+  nextUrl,
+}: ShouldRevalidateFunctionArgs) {
+  const re = /\/home\/tasks\/([^/]+)\/coding/;
+  const cur = currentUrl.pathname.match(re);
+  const nxt = nextUrl.pathname.match(re);
+  if (
+    cur &&
+    nxt &&
+    cur[1] === nxt[1] &&
+    currentUrl.pathname !== nextUrl.pathname
+  ) {
+    return false;
+  }
+  return true;
+}
 
 export async function loader({ request, params }: LoaderFunctionArgs) {
   const user = await requireUser(request);
@@ -82,10 +104,15 @@ function CodingLayout() {
     useState<CodingSessionListItem[]>(initialSessions);
   const [newSessionOpen, setNewSessionOpen] = useState(false);
 
-  // Keep local sessions state in sync when the loader revalidates (e.g. when
-  // navigating back into this route after creating sessions elsewhere).
+  // Keep local sessions state in sync when the loader revalidates. Preserve
+  // any optimistic inserts (e.g. a just-created session) that haven't yet
+  // appeared in the server response.
   useEffect(() => {
-    setSessions(initialSessions);
+    setSessions((prev) => {
+      const serverIds = new Set(initialSessions.map((s) => s.id));
+      const optimistic = prev.filter((s) => !serverIds.has(s.id));
+      return [...optimistic, ...initialSessions];
+    });
   }, [initialSessions]);
 
   const updateSessionExternalId = useCallback(
@@ -137,7 +164,9 @@ function CodingLayout() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
-  // Register actions in the PageHeader
+  // Register actions in the PageHeader. The cleanup is intentionally split
+  // into a separate effect so that updating sessions or sessionId doesn't
+  // null out the context and unmount the Sessions popover mid-interaction.
   useEffect(() => {
     setCodingActions({
       onNewSession: () => setNewSessionOpen(true),
@@ -151,9 +180,13 @@ function CodingLayout() {
       selectedId: sessionId ?? null,
       onSelectSession: (id) => navigate(`/home/tasks/${taskId}/coding/${id}`),
     });
-    return () => setCodingActions(null);
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [sessions, sessionId, taskId]);
+
+  // Clear context only when the coding layout fully unmounts.
+  useEffect(() => {
+    return () => setCodingActions(null);
+  }, []);
 
   if (isDesktop && corebrainError) {
     return (
