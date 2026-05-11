@@ -39,6 +39,18 @@ Product analytics, feature flags, insights, and user tracking.
 - Surveys and session recordings metadata
 - Scheduled sync of flag changes, new insights, and annotations
 
+### 📮 [Postman](./postman/README.md)
+
+Postman platform activity tracking and read-only MCP surface.
+
+**Features:**
+
+- Workspace, collection, and environment creation/updates
+- API definition changes and version history
+- Monitor run outcomes (assertions passed/failed)
+- Mock server discovery
+- Read-only MCP tools across all Postman resources
+
 ### 💬 [Slack](./slack/README.md)
 
 Workspace communication and activity tracking.
