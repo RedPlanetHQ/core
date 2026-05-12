@@ -1,58 +1,5 @@
 import { APIKeyParams, AuthType, McpAuthParams, OAuth2Params } from "./oauth";
-
-/** A single config field declared by a widget */
-export interface WidgetConfigField {
-  key: string;
-  label: string;
-  type: 'input' | 'select';
-  placeholder?: string;
-  required?: boolean;
-  /** Options for select fields only */
-  options?: Array<{ label: string; value: string }>;
-  default?: string;
-}
-
-export interface WidgetRenderContext {
-  placement: 'tui' | 'webapp';
-  pat: string;
-  accounts: Array<{ id: string; slug: string; name?: string }>;
-  baseUrl: string;
-  /** Config values supplied by the agent or by the user via the config form */
-  config?: Record<string, string>;
-  /** Call to trigger a TUI re-render after updating internal state (TUI only) */
-  requestRender?: () => void;
-}
-
-/** Metadata only — used in integration Spec (no render function) */
-export interface WidgetMeta {
-  name: string;
-  slug: string;
-  description: string;
-  support: Array<'tui' | 'webapp'>;
-  tuiPlacement?: 'overview' | 'below-input';
-  /** Declares config fields the widget accepts; drives the config form when agent omits them */
-  configSchema?: WidgetConfigField[];
-}
-
-/**
- * A zero-argument React function component (webapp placement).
- * Context (pat, accountId, baseUrl) is baked in via closure.
- */
-export type WebWidgetComponent = () => unknown;
-
-/**
- * A pi-tui Component instance (tui placement).
- * Returned by createPlayer / createList / etc. from @redplanethq/ui/tui.
- */
-export type TuiWidgetComponent = object;
-
-/** Union of the two surface-specific component types */
-export type WidgetComponent = WebWidgetComponent | TuiWidgetComponent;
-
-/** Full widget — used in widgets/index.ts (includes render) */
-export interface WidgetSpec extends WidgetMeta {
-  render(context: WidgetRenderContext): Promise<WidgetComponent>;
-}
+import type { WidgetMeta, WidgetSpec } from "./widget/bundled";
 
 // ─── Tool UI ──────────────────────────────────────────────────────────────────
 
@@ -88,7 +35,7 @@ export type ToolUIComponent = WebToolUIComponent | TuiToolUIComponent;
 
 /** Context passed to a ToolUI renderer */
 export interface ToolUIRenderContext {
-  placement: 'tui' | 'webapp';
+  placement: "tui" | "webapp";
   pat: string;
   accounts: Array<{ id: string; slug: string; name?: string }>;
   baseUrl: string;
@@ -225,3 +172,16 @@ export interface Message {
   type: MessageType;
   data: any;
 }
+
+// ─── Backwards compatibility ────────────────────────────────────────────────
+// Re-export bundled widget types from their new home so existing imports of
+// `WidgetSpec`, `WidgetMeta`, etc. from `@core/types` continue to work.
+export type {
+  WidgetConfigField,
+  WidgetRenderContext,
+  WidgetMeta,
+  WebWidgetComponent,
+  TuiWidgetComponent,
+  WidgetComponent,
+  WidgetSpec,
+} from "./widget/bundled";

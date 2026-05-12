@@ -20,15 +20,14 @@ import { type Trigger, type DecisionContext } from "../types/decision-agent";
 import { createThinkAgent } from "./decision";
 import { logger } from "../../logger.service";
 import { prisma } from "~/db.server";
-import {
-  getSkillTool,
-  createSkillTool,
-  updateSkillTool,
-} from "../tools/skill-tools";
+import { getSkillTool } from "../tools/skill-tools";
 import { getTaskTools } from "../tools/task-tools";
 import { getMessageTools } from "../tools/message-tools";
 import { getSessionTools } from "../tools/session-tools";
 import { getSleepTool } from "../tools/utils-tools";
+import { getWidgetTools } from "../tools/widget-tools";
+import { createWidgetBuilderAgent } from "./widget-builder";
+import { createSkillBuilderAgent } from "./skill-builder";
 import { createOrchestratorAgent } from "./orchestrator";
 import { createGatewayAgents } from "./gateway";
 import { getWorkspaceChannelContext } from "~/services/channel.server";
@@ -191,19 +190,33 @@ export async function createCoreTools(
         })
       : {};
 
-  // Skill tools
+  // Skill tools — main agent only gets read access. Authoring (create_skill,
+  // update_skill) is delegated to the `skill_builder` sub-agent so the parent
+  // doesn't carry the full skill-authoring surface.
   tools["get_skill"] = getSkillTool(workspaceId);
-  if (!readOnly && !isBackgroundExecution) {
-    tools["create_skill"] = createSkillTool(workspaceId, userId);
-    tools["update_skill"] = updateSkillTool(workspaceId, userId);
-  }
 
   // Session lookup tools — replace the previous prompt-injection of last
   // coding/browser session details. Available in every context (interactive
   // chat too, for asking "what was the session for that task?").
   const sessionTools = getSessionTools({ workspaceId, currentTaskId });
 
-  return { ...tools, ...taskTools, ...messageTools, ...sessionTools };
+  // Declarative widget tools — main agent only gets the READ surface.
+  // Authoring (create/delete/validate) is delegated to the `widget_builder`
+  // sub-agent. Reads stay here so the parent can answer "what widgets do I
+  // have?" without delegating.
+  const widgetTools = getWidgetTools({ workspaceId, userId });
+  const widgetReadTools = {
+    list_widgets: widgetTools.list_widgets,
+    get_widget: widgetTools.get_widget,
+  };
+
+  return {
+    ...tools,
+    ...taskTools,
+    ...messageTools,
+    ...sessionTools,
+    ...widgetReadTools,
+  };
 }
 
 // ---------------------------------------------------------------------------
@@ -335,6 +348,8 @@ export async function createCoreAgents(
   takeActionAgent: Agent;
   thinkAgent?: Agent;
   gatewayAgents: Agent[];
+  widgetBuilderAgent: Agent;
+  skillBuilderAgent: Agent;
 }> {
   const {
     userId,
@@ -362,7 +377,13 @@ export async function createCoreAgents(
         select: { id: true, name: true, status: true, description: true },
       });
 
-  const [reader, writer, { agentList: gatewayAgents }] = await Promise.all([
+  const [
+    reader,
+    writer,
+    { agentList: gatewayAgents },
+    widgetBuilderAgent,
+    skillBuilderAgent,
+  ] = await Promise.all([
     createOrchestratorAgent(
       userId,
       workspaceId,
@@ -393,6 +414,8 @@ export async function createCoreAgents(
       workspaceId,
       userId,
     }),
+    createWidgetBuilderAgent({ workspaceId, userId, modelConfig }),
+    createSkillBuilderAgent({ workspaceId, userId, modelConfig }),
   ]);
 
   // Think agent — only when triggered (reminders, webhooks, scheduled jobs)
@@ -423,5 +446,7 @@ export async function createCoreAgents(
     takeActionAgent: writer.agent,
     thinkAgent,
     gatewayAgents,
+    widgetBuilderAgent,
+    skillBuilderAgent,
   };
 }

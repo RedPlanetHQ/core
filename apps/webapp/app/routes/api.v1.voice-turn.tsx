@@ -106,6 +106,8 @@ const { loader, action } = createHybridActionApiRoute(
       gatherContextAgent,
       takeActionAgent,
       gatewayAgents,
+      widgetBuilderAgent,
+      skillBuilderAgent,
     } = await buildAgentContext({
       userId,
       workspaceId,
@@ -121,6 +123,8 @@ const { loader, action } = createHybridActionApiRoute(
     const subagents: Record<string, Agent> = {
       gather_context: gatherContextAgent,
       take_action: takeActionAgent,
+      widget_builder: widgetBuilderAgent,
+      skill_builder: skillBuilderAgent,
     };
     for (const gw of gatewayAgents) {
       subagents[gw.id] = gw;
@@ -136,6 +140,8 @@ const { loader, action } = createHybridActionApiRoute(
     agent.__registerMastra(mastra);
     gatherContextAgent.__registerMastra(mastra);
     takeActionAgent.__registerMastra(mastra);
+    (widgetBuilderAgent as any).__registerMastra(mastra);
+    (skillBuilderAgent as any).__registerMastra(mastra);
     for (const gw of gatewayAgents) {
       (gw as any).__registerMastra(mastra);
     }

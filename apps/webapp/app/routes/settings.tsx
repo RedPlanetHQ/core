@@ -13,6 +13,7 @@ import {
   MessageSquare,
   Cpu,
   Brain,
+  LayoutGrid,
 } from "lucide-react";
 
 import {
@@ -63,6 +64,7 @@ export default function Settings() {
       strict: true,
     },
     { name: "Labels", icon: Tag, path: "/settings/labels" },
+    { name: "Widgets", icon: LayoutGrid, path: "/settings/workspace/widgets" },
     { name: "Activity", icon: Activity, path: "/settings/activity" },
     { name: "Agent", icon: Bot, path: "/settings/workspace/agent" },
     { name: "Models", icon: Cpu, path: "/settings/workspace/models" },

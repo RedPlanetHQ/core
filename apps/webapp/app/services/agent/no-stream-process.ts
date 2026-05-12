@@ -172,6 +172,8 @@ export async function noStreamProcess(
     takeActionAgent,
     thinkAgent,
     gatewayAgents,
+    widgetBuilderAgent,
+    skillBuilderAgent,
   } = await buildAgentContext({
     userId,
     workspaceId,
@@ -191,6 +193,8 @@ export async function noStreamProcess(
   const subagents: Record<string, Agent> = {
     gather_context: gatherContextAgent,
     take_action: takeActionAgent,
+    widget_builder: widgetBuilderAgent,
+    skill_builder: skillBuilderAgent,
   };
 
   if (thinkAgent) subagents.think = thinkAgent;
@@ -211,6 +215,8 @@ export async function noStreamProcess(
   (agent as any).__registerMastra(mastra);
   (gatherContextAgent as any).__registerMastra(mastra);
   (takeActionAgent as any).__registerMastra(mastra);
+  (widgetBuilderAgent as any).__registerMastra(mastra);
+  (skillBuilderAgent as any).__registerMastra(mastra);
   if (thinkAgent) (thinkAgent as any).__registerMastra(mastra);
   for (const gw of gatewayAgents) {
     (gw as any).__registerMastra(mastra);

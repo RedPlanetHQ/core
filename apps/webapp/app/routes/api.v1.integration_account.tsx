@@ -136,6 +136,24 @@ const { action } = createHybridActionApiRoute(
           workspaceId,
         });
 
+        // Auto-seed BUNDLED Widget rows for each webapp-supported widget the
+        // integration exposes. Removal happens via FK CASCADE on disconnect.
+        try {
+          const { seedBundledWidgetsForAccount } = await import(
+            "~/services/widgets/widget.server"
+          );
+          const seed = await seedBundledWidgetsForAccount(account.id);
+          logger.info("Bundled widgets seeded for account", {
+            integrationAccountId: account.id,
+            ...seed,
+          });
+        } catch (err) {
+          logger.warn("Failed to seed bundled widgets", {
+            integrationAccountId: account.id,
+            error: err,
+          });
+        }
+
         return json({ success: true, setupResult: { account } });
       }
 
@@ -171,6 +189,24 @@ const { action } = createHybridActionApiRoute(
           { error: "Failed to setup integration with the provided API key" },
           { status: 400 },
         );
+      }
+
+      // Auto-seed BUNDLED Widget rows for any webapp widgets the integration
+      // exposes. Idempotent — safe to call on every successful install.
+      try {
+        const { seedBundledWidgetsForAccount } = await import(
+          "~/services/widgets/widget.server"
+        );
+        const seed = await seedBundledWidgetsForAccount(setupResult.account.id);
+        logger.info("Bundled widgets seeded for account", {
+          integrationAccountId: setupResult.account.id,
+          ...seed,
+        });
+      } catch (err) {
+        logger.warn("Failed to seed bundled widgets", {
+          integrationAccountId: setupResult.account.id,
+          error: err,
+        });
       }
 
       return json({ success: true, setupResult });
