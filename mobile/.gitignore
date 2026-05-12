@@ -1,0 +1,13 @@
+node_modules/
+.expo/
+dist/
+web-build/
+ios/
+android/
+*.log
+.DS_Store
+.env
+.env.local
+*.orig.*
+.idea/
+.vscode/

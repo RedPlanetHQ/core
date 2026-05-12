@@ -1,0 +1,47 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+/*
+ * Tokens mirror apps/webapp/app/tailwind.css.
+ * React Native doesn't parse oklch, so values are sRGB approximations.
+ */
+
+:root {
+  --background: #eeeeee;
+  --background-2: #f7f7f7;
+  --background-3: #ffffff;
+  --foreground: #2d2d2d;
+  --muted: rgba(0, 0, 0, 0.19);
+  --muted-foreground: #898989;
+  --accent: rgba(0, 0, 0, 0.09);
+  --accent-foreground: #353535;
+  --border: #e5e5e5;
+  --input: rgba(0, 0, 0, 0.06);
+  --primary: #1f88f5;
+  --primary-foreground: #ffffff;
+  --secondary: #f7f7f7;
+  --secondary-foreground: #2d2d2d;
+  --destructive: #d75056;
+  --destructive-foreground: #ffffff;
+  --ring: #1f88f5;
+}
+
+@media (prefers-color-scheme: dark) {
+  :root {
+    --background: #1b1b1b;
+    --background-2: #232323;
+    --background-3: #2a2a2a;
+    --foreground: #d6d6d6;
+    --muted: rgba(255, 255, 255, 0.13);
+    --muted-foreground: #b8b8b8;
+    --accent: rgba(255, 255, 255, 0.1);
+    --accent-foreground: #ececec;
+    --border: #2f2f2f;
+    --input: rgba(255, 255, 255, 0.1);
+    --primary: #1f88f5;
+    --primary-foreground: #ececec;
+    --secondary: #232323;
+    --secondary-foreground: #ececec;
+  }
+}

@@ -1,0 +1,45 @@
+/** @type {import('tailwindcss').Config} */
+module.exports = {
+  content: ["./App.tsx", "./src/**/*.{ts,tsx}"],
+  presets: [require("nativewind/preset")],
+  darkMode: "media",
+  theme: {
+    extend: {
+      colors: {
+        background: "var(--background)",
+        "background-2": "var(--background-2)",
+        "background-3": "var(--background-3)",
+        foreground: "var(--foreground)",
+        muted: "var(--muted)",
+        "muted-foreground": "var(--muted-foreground)",
+        accent: "var(--accent)",
+        "accent-foreground": "var(--accent-foreground)",
+        border: "var(--border)",
+        input: "var(--input)",
+        primary: "var(--primary)",
+        "primary-foreground": "var(--primary-foreground)",
+        secondary: "var(--secondary)",
+        "secondary-foreground": "var(--secondary-foreground)",
+        destructive: "var(--destructive)",
+        "destructive-foreground": "var(--destructive-foreground)",
+        ring: "var(--ring)",
+      },
+      borderRadius: {
+        DEFAULT: "8px",
+        md: "6px",
+        lg: "8px",
+        xl: "12px",
+      },
+      fontSize: {
+        xs: "13px",
+        sm: "14px",
+        base: "16px",
+        md: "17px",
+        lg: "19px",
+        xl: "24px",
+        "2xl": "28px",
+      },
+    },
+  },
+  plugins: [],
+};

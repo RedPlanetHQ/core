@@ -1,0 +1,45 @@
+{
+  "expo": {
+    "name": "CORE",
+    "slug": "core-mobile",
+    "scheme": "core",
+    "version": "0.1.0",
+    "orientation": "portrait",
+    "userInterfaceStyle": "automatic",
+    "newArchEnabled": true,
+    "icon": "./assets/icon.png",
+    "ios": {
+      "bundleIdentifier": "me.getcore.app.mobile",
+      "supportsTablet": false,
+      "icon": "./assets/icon.png",
+      "infoPlist": {
+        "NSMicrophoneUsageDescription": "CORE needs the microphone to hear your voice request.",
+        "NSSpeechRecognitionUsageDescription": "CORE transcribes your speech on-device to send the text to your assistant.",
+        "NSPhotoLibraryUsageDescription": "CORE does not access your photo library. This string is required by Apple because a bundled SDK references the photo library API.",
+        "ITSAppUsesNonExemptEncryption": false
+      }
+    },
+    "android": {
+      "package": "me.getcore.app.mobile",
+      "permissions": [
+        "android.permission.RECORD_AUDIO"
+      ]
+    },
+    "plugins": [
+      [
+        "expo-speech-recognition",
+        {
+          "microphonePermission": "CORE needs the microphone to hear your voice request.",
+          "speechRecognitionPermission": "CORE transcribes your speech on-device to send the text to your assistant."
+        }
+      ],
+      "./plugins/with-voice-intent.js"
+    ],
+    "extra": {
+      "eas": {
+        "projectId": "e2d37136-4765-4753-9e7a-de166408e10c"
+      }
+    },
+    "owner": "harshithmull"
+  }
+}
