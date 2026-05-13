@@ -26,6 +26,7 @@ import {
 } from "~/services/gateway/transport.server";
 import type { Folder } from "@redplanethq/gateway-protocol";
 import { getProgressUpdateTool } from "../tools/utils-tools";
+import { truncateToolResult } from "../tools/truncate-result";
 
 // Types for gateway tools (matches schema in database)
 interface GatewayTool {
@@ -220,7 +221,7 @@ function createGatewayTools(
             ];
           }
 
-          return JSON.stringify(result, null, 2);
+          return truncateToolResult(result, { label: gatewayTool.name });
         } catch (error: unknown) {
           const errorMessage =
             error instanceof Error ? error.message : String(error);
@@ -437,6 +438,9 @@ NON-BROWSER, NON-CODING TASKS (exec_* only):
 3. Execute with correct parameters.
 4. Chain tools if needed.
 5. Return stdout/stderr and exit code.
+
+OUTPUT SIZE LIMITS:
+Tool results are capped (stdout ~128 KB, total tool result ~128 KB). If you see \`truncated: true\`, a \`truncationNote\` field, or a \`[TRUNCATED …]\` banner in the output, the full payload was larger and the middle was dropped. On the next call, narrow the result yourself — use \`head\`, \`tail\`, \`grep\`, \`sed -n 'A,Bp'\`, or write to a file and read a slice. Do NOT just re-run the same command and expect the missing bytes.
 
 RESPONSE:
 After execution, provide a clear summary of:

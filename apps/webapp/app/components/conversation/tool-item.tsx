@@ -325,7 +325,7 @@ export const Tool = ({
     const msg = typeof input.message === "string" ? input.message : undefined;
     if (!msg) return null;
     return (
-      <div className="text-muted-foreground flex items-center gap-1.5 py-0.5 text-sm italic">
+      <div className="flex items-center gap-1.5 py-0.5">
         <span>{msg}</span>
       </div>
     );

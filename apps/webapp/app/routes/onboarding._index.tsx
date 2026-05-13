@@ -1,6 +1,6 @@
 import {
-  json,
   redirect,
+  type ActionFunctionArgs,
   type LoaderFunctionArgs,
 } from "@remix-run/node";
 import { useCallback } from "react";
@@ -9,7 +9,10 @@ import { useTypedLoaderData } from "remix-typedjson";
 
 import { getWorkspaceId, requireUser } from "~/services/session.server";
 import { prisma } from "~/db.server";
-import { getIntegrationAccountBySlugAndUser, getIntegrationAccounts } from "~/services/integrationAccount.server";
+import {
+  getIntegrationAccountBySlugAndUser,
+  getIntegrationAccounts,
+} from "~/services/integrationAccount.server";
 import { getOnboardingConversation } from "~/services/conversation.server";
 import { getAvailableModels } from "~/services/llm-provider.server";
 import { ConversationView } from "~/components/conversation";
@@ -99,12 +102,37 @@ export async function loader({ request }: LoaderFunctionArgs) {
     }
   }
 
-  return json({
+  return {
     conversation,
     integrationAccountMap,
     integrationFrontendMap,
     models,
-  });
+  };
+}
+
+/**
+ * Manual skip action — the persistent escape hatch in the onboarding
+ * header. Flips user.onboardingComplete = true (preserving the rest of
+ * the metadata blob) and drops the user at /home/daily. The agent's
+ * complete_onboarding tool does the same thing from the conversation;
+ * this is the safety net so a user can always get out of onboarding.
+ */
+export async function action({ request }: ActionFunctionArgs) {
+  const user = await requireUser(request);
+
+  if (!user.onboardingComplete) {
+    const existingMetadata =
+      (user.metadata as Record<string, unknown> | null) ?? {};
+    await prisma.user.update({
+      where: { id: user.id },
+      data: {
+        onboardingComplete: true,
+        metadata: existingMetadata,
+      },
+    });
+  }
+
+  return redirect("/home/daily");
 }
 
 export default function OnboardingChat() {
@@ -114,14 +142,16 @@ export default function OnboardingChat() {
   // After every streamed turn, re-run the loader. If the agent has
   // called complete_onboarding, the user.onboardingComplete flag will
   // now be true and the loader will redirect to /home/daily.
-  const handleStreamComplete = useCallback(() => {
-    revalidator.revalidate();
-  }, [revalidator]);
+  const handleStreamComplete = useCallback(() => {}, [revalidator]);
 
   if (typeof window === "undefined") return null;
 
-  const { conversation, integrationAccountMap, integrationFrontendMap, models } =
-    data;
+  const {
+    conversation,
+    integrationAccountMap,
+    integrationFrontendMap,
+    models,
+  } = data;
 
   return (
     <div className="flex flex-1 flex-col overflow-hidden">

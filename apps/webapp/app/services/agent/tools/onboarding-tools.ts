@@ -1,16 +1,23 @@
 /**
- * Onboarding-flow tools for the main agent.
+ * Integration + onboarding tools for the main agent. All three are
+ * registered globally — the agent's prompt and each tool's description
+ * tell it when calling makes sense. complete_onboarding is idempotent
+ * (no-ops if onboarding is already complete) so there's no need to
+ * conditionally register it.
  *
- * - suggest_integrations (global): renders inline integration connect
- *   cards in the chat. The UI catches the tool call, looks up each
- *   slug's OAuth URL client-side, and renders a Connect button per
- *   card. Can be used anytime — onboarding flow, or later when the
- *   agent notices the user could benefit from connecting something.
+ * - list_available_integrations: returns the catalog of integration
+ *   definitions the workspace can connect, with isConnected flags. The
+ *   agent calls this before suggest_integrations to know which slugs
+ *   are valid and to avoid suggesting things already connected.
  *
- * - complete_onboarding (onboarding-only): flips
- *   user.onboardingComplete = true and optionally stores the final
- *   profile summary into user.metadata.onboardingSummary. Other
- *   metadata fields (timezone, personality, etc.) are preserved.
+ * - suggest_integrations: renders inline integration connect cards in
+ *   the chat. The UI catches the tool call, looks up each slug's OAuth
+ *   URL client-side, and renders a Connect button per card.
+ *
+ * - complete_onboarding: flips user.onboardingComplete = true and
+ *   stores the final profile summary into user.metadata.onboardingSummary.
+ *   Other metadata fields (timezone, personality, etc.) are preserved.
+ *   Short-circuits with {already_complete: true} on re-calls.
  */
 
 import { tool, type Tool } from "ai";
@@ -18,10 +25,85 @@ import { z } from "zod";
 import { prisma } from "~/db.server";
 import { logger } from "~/services/logger.service";
 
+export function getListAvailableIntegrationsTool(
+  userId: string,
+  workspaceId: string,
+): Tool {
+  return tool({
+    description:
+      "Get the catalog of integrations the user's workspace can connect. Returns slug, name, description, and whether the user already has it connected. Call this before suggest_integrations whenever you need to verify which slugs are valid or to avoid recommending something already wired up. Pass an optional query string to filter by slug or name (case-insensitive substring).",
+    inputSchema: z.object({
+      query: z
+        .string()
+        .optional()
+        .describe(
+          "Optional filter — case-insensitive substring matched against slug and name. Omit to get the full catalog.",
+        ),
+    }),
+    execute: async ({ query }: { query?: string }) => {
+      const [defs, accounts] = await Promise.all([
+        prisma.integrationDefinitionV2.findMany({
+          where: {
+            deleted: null,
+            OR: [{ workspaceId: null }, { workspaceId }],
+          },
+          select: {
+            id: true,
+            slug: true,
+            name: true,
+            description: true,
+          },
+          orderBy: { name: "asc" },
+        }),
+        prisma.integrationAccount.findMany({
+          where: { integratedById: userId, workspaceId, isActive: true },
+          select: { integrationDefinitionId: true },
+        }),
+      ]);
+
+      const connectedDefIds = new Set(
+        accounts.map((a) => a.integrationDefinitionId),
+      );
+
+      const lowerQuery = query?.trim().toLowerCase();
+      const filtered = lowerQuery
+        ? defs.filter(
+            (d) =>
+              d.slug.toLowerCase().includes(lowerQuery) ||
+              d.name.toLowerCase().includes(lowerQuery),
+          )
+        : defs;
+
+      const integrations = filtered.map((d) => ({
+        slug: d.slug,
+        name: d.name,
+        description: d.description,
+        isConnected: connectedDefIds.has(d.id),
+      }));
+
+      logger.info(
+        `list_available_integrations: ${integrations.length} match${query ? ` (query="${query}")` : ""}`,
+      );
+
+      return {
+        content: [
+          {
+            type: "text",
+            text: JSON.stringify({
+              integrations,
+              count: integrations.length,
+            }),
+          },
+        ],
+      };
+    },
+  } as any);
+}
+
 export function getSuggestIntegrationsTool(): Tool {
   return tool({
     description:
-      "Render inline integration connect cards in the chat. Pick 1-3 integrations grounded in what you actually know about the user — never a generic list. Each card has a one-line reason. The UI handles OAuth on click. Skip if there's no clear reason to suggest.",
+      "Render inline integration connect cards in the chat. Pick 1-5 integrations grounded in what you actually know about the user — never a generic list. Each card has a one-line reason. The UI handles OAuth on click. Skip if there's no clear reason to suggest.",
     inputSchema: z.object({
       message: z
         .string()
@@ -45,9 +127,9 @@ export function getSuggestIntegrationsTool(): Tool {
           }),
         )
         .min(1)
-        .max(3)
+        .max(5)
         .describe(
-          "1-3 integration suggestions, ordered by relevance. The most compelling pick first.",
+          "1-5 integration suggestions, ordered by relevance. The most compelling pick first.",
         ),
     }),
     execute: async ({
@@ -63,7 +145,15 @@ export function getSuggestIntegrationsTool(): Tool {
 
       const definitions = await prisma.integrationDefinitionV2.findMany({
         where: { slug: { in: picks.map((p) => p.slug) } },
-        select: { id: true, slug: true, name: true, icon: true },
+        select: {
+          id: true,
+          slug: true,
+          name: true,
+          icon: true,
+          // spec is the JSON blob the connect modal inspects to pick
+          // between ApiKeyAuthSection / OAuthAuthSection / McpOAuthAuthSection.
+          spec: true,
+        },
       });
 
       const bySlug = new Map(definitions.map((d) => [d.slug, d]));
@@ -76,6 +166,8 @@ export function getSuggestIntegrationsTool(): Tool {
         icon: string | null;
         definitionId: string;
         reason: string;
+        // Raw spec for the connect modal to pick the right auth UI.
+        spec: unknown;
       }[] = [];
       const unknown: string[] = [];
       for (const pick of picks) {
@@ -90,6 +182,7 @@ export function getSuggestIntegrationsTool(): Tool {
           icon: def.icon,
           definitionId: def.id,
           reason: pick.reason,
+          spec: def.spec,
         });
       }
 

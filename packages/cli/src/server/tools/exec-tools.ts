@@ -11,6 +11,117 @@ import {folderScopeError} from './scope-error';
 // Default directory for exec commands - uses same directory as config
 const DEFAULT_EXEC_DIR = getConfigPath();
 
+// Defaults for stdout/stderr capture caps. Unbounded accumulation has caused
+// OOMs upstream when commands like `cat huge.log` or `sed -n '1,99999p'` ran
+// through the gateway — the captured strings flow into the agent's message
+// history and pin megabytes in the webapp heap for the rest of the session.
+const DEFAULT_MAX_STDOUT_BYTES = 128 * 1024; // 128 KB
+const DEFAULT_MAX_STDERR_BYTES = 16 * 1024; // 16 KB
+// Hard ceiling on bytes we will *read* off the child's pipes before killing
+// the process. Acts as a backstop against `yes`/runaway producers — we keep
+// `kill = max * KILL_MULTIPLIER` so legitimate spikes still finish.
+const KILL_MULTIPLIER = 8;
+
+function formatBytes(n: number): string {
+	if (n < 1024) return `${n} B`;
+	if (n < 1024 * 1024) return `${(n / 1024).toFixed(1)} KB`;
+	return `${(n / (1024 * 1024)).toFixed(1)} MB`;
+}
+
+/**
+ * Capture child-process stream output without retaining more than `maxBytes`.
+ * Keeps the head (~30%) and a sliding tail (~70%), dropping the middle. The
+ * tail bias matters: for shell commands the trailing bytes (exit error,
+ * final summary) are usually the most useful slice for the model.
+ */
+class StreamCapture {
+	private head: Buffer[] = [];
+	private headBytes = 0;
+	private tail: Buffer[] = [];
+	private tailBytes = 0;
+	totalBytes = 0;
+
+	private readonly headCap: number;
+	private readonly tailCap: number;
+
+	constructor(public readonly maxBytes: number) {
+		this.headCap = Math.floor(maxBytes * 0.3);
+		this.tailCap = maxBytes - this.headCap;
+	}
+
+	push(chunk: Buffer): void {
+		this.totalBytes += chunk.length;
+		if (this.headBytes < this.headCap) {
+			const room = this.headCap - this.headBytes;
+			if (chunk.length <= room) {
+				this.head.push(chunk);
+				this.headBytes += chunk.length;
+				return;
+			}
+			this.head.push(chunk.subarray(0, room));
+			this.headBytes += room;
+			this.pushTail(chunk.subarray(room));
+			return;
+		}
+		this.pushTail(chunk);
+	}
+
+	private pushTail(chunk: Buffer): void {
+		this.tail.push(chunk);
+		this.tailBytes += chunk.length;
+		while (this.tailBytes > this.tailCap && this.tail.length > 0) {
+			const first = this.tail[0]!;
+			const excess = this.tailBytes - this.tailCap;
+			if (excess >= first.length) {
+				this.tail.shift();
+				this.tailBytes -= first.length;
+			} else {
+				this.tail[0] = first.subarray(excess);
+				this.tailBytes -= excess;
+			}
+		}
+	}
+
+	finalize(label: string): {
+		content: string;
+		truncated: boolean;
+		totalBytes: number;
+		emittedBytes: number;
+	} {
+		const headStr = Buffer.concat(this.head).toString('utf8');
+		if (this.tail.length === 0) {
+			return {
+				content: headStr,
+				truncated: false,
+				totalBytes: this.totalBytes,
+				emittedBytes: this.headBytes,
+			};
+		}
+		const tailStr = Buffer.concat(this.tail).toString('utf8');
+		const emitted = this.headBytes + this.tailBytes;
+		const dropped = this.totalBytes - emitted;
+		if (dropped <= 0) {
+			// Filled head + tail exactly, nothing actually dropped yet.
+			return {
+				content: headStr + tailStr,
+				truncated: false,
+				totalBytes: this.totalBytes,
+				emittedBytes: emitted,
+			};
+		}
+		const marker =
+			`\n... [${label} truncated: ${formatBytes(dropped)} omitted, ` +
+			`${formatBytes(this.totalBytes)} total. Re-run with head/tail/grep/sed -n 'A,Bp' ` +
+			`or redirect to a file and read a slice — the full output exceeds the ${formatBytes(this.maxBytes)} cap.] ...\n`;
+		return {
+			content: headStr + marker + tailStr,
+			truncated: true,
+			totalBytes: this.totalBytes,
+			emittedBytes: emitted,
+		};
+	}
+}
+
 // Warn once per process about the folders-empty fallback
 let warnedFoldersEmpty = false;
 
@@ -189,14 +300,31 @@ function isCommandAllowed(command: string): {allowed: boolean; reason?: string} 
 	return {allowed: true};
 }
 
+interface ExecuteResult {
+	stdout: string;
+	stderr: string;
+	code: number;
+	stdoutTruncated: boolean;
+	stderrTruncated: boolean;
+	stdoutTotalBytes: number;
+	stderrTotalBytes: number;
+	killedForOversize: boolean;
+}
+
 /**
- * Execute a command and return output
+ * Execute a command and return output, capping captured stdout/stderr so we
+ * never accumulate arbitrary amounts of data in memory. If a stream blows
+ * past `KILL_MULTIPLIER × cap` while we're already discarding bytes, we kill
+ * the process — at that point we're throwing the data away anyway and the
+ * producer is just keeping the pipe pressurized.
  */
 async function executeCommand(
 	command: string,
 	dir: string,
 	timeout: number,
-): Promise<{stdout: string; stderr: string; code: number}> {
+	maxStdoutBytes: number,
+	maxStderrBytes: number,
+): Promise<ExecuteResult> {
 	return new Promise((resolve) => {
 		const proc = spawn(command, {
 			cwd: dir,
@@ -204,9 +332,12 @@ async function executeCommand(
 			stdio: ['pipe', 'pipe', 'pipe'],
 		});
 
-		let stdout = '';
-		let stderr = '';
+		const stdoutCap = new StreamCapture(maxStdoutBytes);
+		const stderrCap = new StreamCapture(maxStderrBytes);
 		let killed = false;
+		let killedForOversize = false;
+		const stdoutKillAt = maxStdoutBytes * KILL_MULTIPLIER;
+		const stderrKillAt = maxStderrBytes * KILL_MULTIPLIER;
 
 		// Set timeout
 		const timer = setTimeout(() => {
@@ -214,26 +345,65 @@ async function executeCommand(
 			proc.kill('SIGTERM');
 		}, timeout);
 
-		proc.stdout?.on('data', (data) => {
-			stdout += data.toString();
+		proc.stdout?.on('data', (data: Buffer) => {
+			stdoutCap.push(data);
+			if (!killed && stdoutCap.totalBytes > stdoutKillAt) {
+				killed = true;
+				killedForOversize = true;
+				proc.kill('SIGTERM');
+			}
 		});
 
-		proc.stderr?.on('data', (data) => {
-			stderr += data.toString();
+		proc.stderr?.on('data', (data: Buffer) => {
+			stderrCap.push(data);
+			if (!killed && stderrCap.totalBytes > stderrKillAt) {
+				killed = true;
+				killedForOversize = true;
+				proc.kill('SIGTERM');
+			}
 		});
+
+		const finish = (code: number, errMessage?: string) => {
+			clearTimeout(timer);
+			const stdoutFinal = stdoutCap.finalize('stdout');
+			const stderrFinal = stderrCap.finalize('stderr');
+			let stderr = stderrFinal.content;
+			if (errMessage) {
+				stderr = stderr ? `${stderr}\n${errMessage}` : errMessage;
+			}
+			if (killedForOversize) {
+				const note =
+					`\nCommand was terminated because its output exceeded ` +
+					`${formatBytes(stdoutKillAt)} (stdout) / ${formatBytes(stderrKillAt)} (stderr). ` +
+					`Re-run with a narrower selection (head/tail/grep/sed).`;
+				stderr = stderr ? `${stderr}${note}` : note.trimStart();
+			} else if (killed) {
+				stderr = stderr ? `${stderr}\nCommand timed out` : 'Command timed out';
+			}
+			resolve({
+				stdout: stdoutFinal.content,
+				stderr,
+				code,
+				stdoutTruncated: stdoutFinal.truncated,
+				stderrTruncated: stderrFinal.truncated,
+				stdoutTotalBytes: stdoutFinal.totalBytes,
+				stderrTotalBytes: stderrFinal.totalBytes,
+				killedForOversize,
+			});
+		};
 
 		proc.on('close', (code) => {
-			clearTimeout(timer);
-			if (killed) {
-				resolve({stdout, stderr: stderr + '\nCommand timed out', code: 124});
+			if (killedForOversize) {
+				finish(137);
+			} else if (killed) {
+				finish(124);
 			} else {
-				resolve({stdout, stderr, code: code || 0});
+				finish(code ?? 0);
 			}
 		});
 
 		proc.on('error', (err) => {
-			clearTimeout(timer);
-			resolve({stdout, stderr: err.message, code: 1});
+			finish(1, err.message);
 		});
 	});
 }
@@ -290,18 +460,94 @@ async function handleExecCommand(params: zod.infer<typeof ExecCommandSchema>) {
 
 	// Execute command
 	const timeout = params.timeout || 30000;
-	const result = await executeCommand(params.command, dir, timeout);
+	const maxStdoutBytes = readByteCap(
+		config.maxStdoutBytes,
+		'COREBRAIN_EXEC_MAX_STDOUT_BYTES',
+		DEFAULT_MAX_STDOUT_BYTES,
+	);
+	const maxStderrBytes = readByteCap(
+		config.maxStderrBytes,
+		'COREBRAIN_EXEC_MAX_STDERR_BYTES',
+		DEFAULT_MAX_STDERR_BYTES,
+	);
+	const result = await executeCommand(
+		params.command,
+		dir,
+		timeout,
+		maxStdoutBytes,
+		maxStderrBytes,
+	);
 
+	const truncationNote = buildTruncationNote(result, maxStdoutBytes, maxStderrBytes);
+
+	// success: true always — the tool itself executed. A non-zero exit
+	// code is a user-land outcome, not a tool failure, and we want the
+	// caller to see stdout/stderr/exitCode so the agent can interpret
+	// what happened. Marking success: false drops the entire result
+	// payload at the tool-group dispatch layer, leaving the caller with
+	// only `TOOL_ERROR: unknown` and no way to diagnose.
 	return {
-		success: result.code === 0,
+		success: true,
 		result: {
 			command: params.command,
 			dir,
 			exitCode: result.code,
 			stdout: result.stdout,
 			stderr: result.stderr || undefined,
+			...(result.stdoutTruncated && {
+				stdoutTruncated: true,
+				stdoutTotalBytes: result.stdoutTotalBytes,
+			}),
+			...(result.stderrTruncated && {
+				stderrTruncated: true,
+				stderrTotalBytes: result.stderrTotalBytes,
+			}),
+			...(result.killedForOversize && {killedForOversize: true}),
+			...(truncationNote && {truncationNote}),
 		},
 	};
+}
+
+function readByteCap(
+	configured: number | undefined,
+	envVar: string,
+	fallback: number,
+): number {
+	if (typeof configured === 'number' && configured > 0) return configured;
+	const fromEnv = process.env[envVar];
+	if (fromEnv) {
+		const parsed = Number(fromEnv);
+		if (Number.isFinite(parsed) && parsed > 0) return parsed;
+	}
+	return fallback;
+}
+
+function buildTruncationNote(
+	r: ExecuteResult,
+	stdoutCap: number,
+	stderrCap: number,
+): string | undefined {
+	if (!r.stdoutTruncated && !r.stderrTruncated && !r.killedForOversize) {
+		return undefined;
+	}
+	const parts: string[] = [];
+	if (r.stdoutTruncated) {
+		parts.push(
+			`stdout exceeded ${formatBytes(stdoutCap)} cap (${formatBytes(r.stdoutTotalBytes)} total)`,
+		);
+	}
+	if (r.stderrTruncated) {
+		parts.push(
+			`stderr exceeded ${formatBytes(stderrCap)} cap (${formatBytes(r.stderrTotalBytes)} total)`,
+		);
+	}
+	if (r.killedForOversize) {
+		parts.push('command was killed for runaway output');
+	}
+	return (
+		parts.join('; ') +
+		'. Use head/tail/grep/sed -n to narrow the next call, or redirect to a file and read a slice.'
+	);
 }
 
 // ============ Tool Execution ============

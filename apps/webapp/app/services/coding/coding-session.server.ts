@@ -13,6 +13,31 @@ export async function createCodingSession(params: {
   worktreePath?: string;
   worktreeBranch?: string;
 }) {
+  // If we already have a row for this externalSessionId in this
+  // workspace, treat the call as a resume — bump updatedAt and refresh
+  // the latest prompt/dir/worktree fields rather than inserting a
+  // duplicate. The gateway re-emits the same sessionId every time we
+  // resume the session, so the unfiltered create here was producing one
+  // CodingSession row per coding_ask call.
+  if (params.externalSessionId) {
+    const existing = await prisma.codingSession.findFirst({
+      where: {
+        workspaceId: params.workspaceId,
+        externalSessionId: params.externalSessionId,
+      },
+      select: { id: true },
+    });
+    if (existing) {
+      // Resume — only refresh prompt and let @updatedAt bump itself.
+      // taskId / conversationId / gatewayId / agent / dir / worktree*
+      // are session-scoped and don't change across resumes.
+      return prisma.codingSession.update({
+        where: { id: existing.id },
+        data: { prompt: params.prompt },
+      });
+    }
+  }
+
   return prisma.codingSession.create({
     data: {
       workspaceId: params.workspaceId,

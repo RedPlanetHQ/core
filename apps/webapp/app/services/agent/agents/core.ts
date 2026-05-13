@@ -30,6 +30,7 @@ import { getMessageTools } from "../tools/message-tools";
 import { getSessionTools } from "../tools/session-tools";
 import { getSleepTool, getProgressUpdateTool } from "../tools/utils-tools";
 import {
+  getListAvailableIntegrationsTool,
   getSuggestIntegrationsTool,
   getCompleteOnboardingTool,
 } from "../tools/onboarding-tools";
@@ -129,6 +130,14 @@ export async function createCoreTools(
   // Progress narration — available globally so any long-running step
   // (delegations, syntheses) can keep the user informed.
   tools["progress_update"] = getProgressUpdateTool();
+
+  // Integration catalog — global. Agent calls this before
+  // suggest_integrations to see which slugs are valid and which are
+  // already connected for this workspace.
+  tools["list_available_integrations"] = getListAvailableIntegrationsTool(
+    userId,
+    workspaceId,
+  );
 
   // suggest_integrations — global. Agent may offer connect cards
   // anytime, not just during onboarding.

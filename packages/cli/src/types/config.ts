@@ -161,6 +161,8 @@ export interface ExecConfig {
 	deny?: string[]; // Glob-like patterns: "Bash(git push *)"
 	defaultDir?: string; // Default working directory
 	allowUnsafe?: boolean; // Disable default blocked patterns (rm, chmod, network cmds, etc.)
+	maxStdoutBytes?: number; // Cap captured stdout per command (default 128 KB)
+	maxStderrBytes?: number; // Cap captured stderr per command (default 16 KB)
 }
 
 export interface WidgetConfig {

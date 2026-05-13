@@ -18,6 +18,7 @@ import {
   hasNeedsApprovalDeep,
   mergeAgentParts,
 } from "./conversation-utils";
+import { ChatContextProvider } from "./chat-context";
 import {
   PermissionModeSelector,
   type PermissionMode,
@@ -332,7 +333,17 @@ export function ConversationView({
     [addToolApprovalResponse],
   );
 
+  // Bridge useChat's sendMessage to a simple text-in API so that
+  // nested tool renderers (e.g. suggest_integrations cards) can fire
+  // a programmatic user turn via ChatContext without knowing the AI
+  // SDK shape.
+  const sendTextMessage = useCallback(
+    (text: string) => sendMessage({ text }),
+    [sendMessage],
+  );
+
   return (
+    <ChatContextProvider sendMessage={sendTextMessage}>
     <div
       className={cn(
         "flex h-full w-full flex-col justify-end overflow-hidden py-4 pb-12 lg:pb-4",
@@ -422,5 +433,6 @@ export function ConversationView({
         </div>
       </div>
     </div>
+    </ChatContextProvider>
   );
 }

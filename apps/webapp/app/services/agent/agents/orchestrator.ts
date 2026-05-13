@@ -22,6 +22,7 @@ import {
 import { type SkillRef } from "../types";
 import { type OrchestratorTools, DirectOrchestratorTools } from "../executors";
 import { getProgressUpdateTool } from "../tools/utils-tools";
+import { truncateToolResult } from "../tools/truncate-result";
 
 export type OrchestratorMode = "read" | "write";
 
@@ -451,7 +452,10 @@ export async function createOrchestratorAgent(
           userId,
           source,
         );
-        return JSON.stringify(result);
+        return truncateToolResult(result, {
+          label: "execute_integration_action",
+          pretty: false,
+        });
       } catch (error: any) {
         const errorMessage =
           error instanceof Error ? error.message : String(error);
