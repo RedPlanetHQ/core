@@ -43,6 +43,15 @@ interface ConversationViewProps {
   /** DB conversation status — input is disabled when "running" */
   conversationStatus?: string;
   models?: LLMModel[];
+  /** When true, hide the very first user message from the rendered chat
+   *  while still keeping it in history (so the agent sees it). Used by
+   *  onboarding to keep the hidden seed instruction out of the UI. */
+  hideFirstUserMessage?: boolean;
+  /** Optional callback fired after each streamed turn finishes. The
+   *  onboarding page uses this to revalidate the loader — if the agent
+   *  has called complete_onboarding, the next loader run sees the flag
+   *  and redirects to /home/daily. */
+  onStreamComplete?: () => void;
 }
 
 export function ConversationView({
@@ -54,6 +63,8 @@ export function ConversationView({
   autoRegenerate = false,
   conversationStatus: conversationStatusProp,
   models: modelsProp = [],
+  hideFirstUserMessage = false,
+  onStreamComplete,
 }: ConversationViewProps) {
   // Local mirror of the loader-provided status — stays fresh across stop/
   // completion events without needing a route revalidation.
@@ -165,6 +176,7 @@ export function ConversationView({
         method: "GET",
         action: `/api/v1/conversation/${conversationId}/read`,
       });
+      onStreamComplete?.();
     },
     messages: history.map(
       (h) =>
@@ -332,24 +344,36 @@ export function ConversationView({
         className="flex grow flex-col items-center overflow-y-auto"
       >
         <div className="flex w-full max-w-[90ch] flex-col pb-4">
-          {messages.map((message: UIMessage, i: number) => (
-            <div
-              key={i}
-              ref={(el) => {
-                messageRefs.current[i] = el;
-              }}
-            >
-              <ConversationItem
-                message={message}
-                createdAt={history[i]?.createdAt}
-                addToolApprovalResponse={handleToolApprovalResponse}
-                setToolArgOverride={setToolArgOverride}
-                isChatBusy={status === "streaming" || status === "submitted"}
-                integrationAccountMap={integrationAccountMap}
-                integrationFrontendMap={integrationFrontendMap}
-              />
-            </div>
-          ))}
+          {messages.map((message: UIMessage, i: number) => {
+            // Onboarding: the very first user message is a seed
+            // instruction we keep in history (so the agent sees it)
+            // but don't render in the UI.
+            if (
+              hideFirstUserMessage &&
+              i === 0 &&
+              message.role === "user"
+            ) {
+              return null;
+            }
+            return (
+              <div
+                key={i}
+                ref={(el) => {
+                  messageRefs.current[i] = el;
+                }}
+              >
+                <ConversationItem
+                  message={message}
+                  createdAt={history[i]?.createdAt}
+                  addToolApprovalResponse={handleToolApprovalResponse}
+                  setToolArgOverride={setToolArgOverride}
+                  isChatBusy={status === "streaming" || status === "submitted"}
+                  integrationAccountMap={integrationAccountMap}
+                  integrationFrontendMap={integrationFrontendMap}
+                />
+              </div>
+            );
+          })}
           {/* Spacer while streaming or until user scrolls back to bottom */}
           {(status === "streaming" || status === "submitted" || keepSpacer) && (
             <div style={{ height: spacerHeight, flexShrink: 0 }} />

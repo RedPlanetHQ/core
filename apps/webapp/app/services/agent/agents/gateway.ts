@@ -25,6 +25,7 @@ import {
   fetchManifest,
 } from "~/services/gateway/transport.server";
 import type { Folder } from "@redplanethq/gateway-protocol";
+import { getProgressUpdateTool } from "../tools/utils-tools";
 
 // Types for gateway tools (matches schema in database)
 interface GatewayTool {
@@ -121,6 +122,10 @@ function createGatewayTools(
   sessionCtx?: SessionContext,
 ) {
   const tools: Record<string, any> = {};
+
+  // progress_update — every gateway agent can narrate during long
+  // sessions (coding runs, browser flows, exec scripts).
+  tools.progress_update = getProgressUpdateTool();
 
   for (const gatewayTool of gatewayTools) {
     const zodSchema = gatewayToolToZodSchema(gatewayTool);
@@ -257,6 +262,15 @@ const getGatewayAgentPrompt = (
 ${gatewayDescription ? `\nPurpose: ${gatewayDescription}\n` : ""}
 AVAILABLE TOOLS:
 ${toolsList}
+
+NARRATION:
+You also have a **progress_update** tool that streams a short observation to the user. The UI shows it as a transient status line while you work. Use it for the long beats — kicking off a coding session, switching files, polling a long-running run, finishing a phase. One sentence, specific. 1-2 per phase, not every internal step. Skip entirely when the work is fast.
+
+Good: "spinning up codex on the auth-fix worktree"
+Good: "phase 3 done — running the test suite now"
+Good: "session still running, checking back in 30s"
+Bad:  "working on it" (vague)
+Bad:  "Calling coding_read_session now..." (narrating mechanics)
 
 AVAILABLE FOLDERS (exposed by this gateway):
 ${foldersList}

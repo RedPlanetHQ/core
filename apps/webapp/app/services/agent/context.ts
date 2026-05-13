@@ -19,6 +19,7 @@ import {
   buildActivePageBlock,
   type ScreenContext,
 } from "~/services/agent/prompts/voice-mode";
+import { buildOnboardingModeBlock } from "~/services/agent/prompts/onboarding-mode";
 import {
   resolvePersonalityPrompt,
   type PersonalityType,
@@ -198,6 +199,13 @@ export async function buildAgentContext({
 
   const isBackgroundExecution = !!linkedTask;
 
+  // Onboarding mode — active whenever the user has not finished
+  // onboarding. Adds an <onboarding_mode> prompt block and three
+  // onboarding-only tools (progress_update, suggest_integrations,
+  // complete_onboarding). Email reading is done by delegating to the
+  // gather_context subagent, not via dedicated tools on the main agent.
+  const isOnboardingMode = user?.onboardingComplete === false;
+
   // Build tools and agents in parallel (no dependency between them)
   const [
     tools,
@@ -214,6 +222,7 @@ export async function buildAgentContext({
       defaultChannel,
       availableChannels,
       isBackgroundExecution,
+      isOnboardingMode,
       currentTaskId: linkedTask?.id,
       triggerChannel: triggerContext?.trigger.channel,
       triggerChannelId: triggerContext?.trigger.channelId,
@@ -616,6 +625,13 @@ The intent is your instruction — follow it precisely:
 
 Keep your response concise — this shows up on a scratchpad, not a chat conversation.
 </scratchpad_context>`;
+  }
+
+  // Onboarding-mode block — appended late so it takes precedence over
+  // generic default behavior. Active during the user's very first
+  // webapp conversation, gated by user.onboardingComplete === false.
+  if (isOnboardingMode) {
+    systemPrompt += `\n\n${buildOnboardingModeBlock()}`;
   }
 
   // Voice-mode constraint block — only when butler will be heard out

@@ -32,6 +32,7 @@ import {
 import { ICON_MAPPING } from "../icon-utils";
 import type { IconType } from "../icon-utils";
 import { Task } from "../icons/task";
+import { SuggestIntegrationsCards } from "./suggest-integrations-cards";
 
 export const Tool = ({
   part,
@@ -316,6 +317,30 @@ export const Tool = ({
         <span>{msg || "Processing..."}</span>
       </div>
     );
+  }
+
+  // progress_update → small italicized status line. Streamed live by
+  // any agent (main, orchestrator, gateway) while doing long work.
+  if (toolName === "progress_update") {
+    const msg = typeof input.message === "string" ? input.message : undefined;
+    if (!msg) return null;
+    return (
+      <div className="text-muted-foreground flex items-center gap-1.5 py-0.5 text-sm italic">
+        <span>{msg}</span>
+      </div>
+    );
+  }
+
+  // suggest_integrations → inline connect cards. The tool returns a
+  // JSON payload with cards: [{ slug, name, icon, definitionId, reason }].
+  if (toolName === "suggest_integrations") {
+    return <SuggestIntegrationsCards part={part} />;
+  }
+
+  // complete_onboarding → silent in the chat. The onboarding page
+  // detects this via revalidation and redirects to /home/daily.
+  if (toolName === "complete_onboarding") {
+    return null;
   }
 
   // take_action → render nested tools flat, no collapsible wrapper

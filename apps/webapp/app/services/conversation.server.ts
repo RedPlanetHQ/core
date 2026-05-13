@@ -208,6 +208,16 @@ export const getConversationAndHistory = async (
   return conversation;
 };
 
+/**
+ * Hidden first-turn user message seeded into every onboarding
+ * conversation. The user never sees it (the conversation UI hides the
+ * first user message when source === "onboarding"), but the agent does,
+ * and treats it as the trigger to start the onboarding flow described
+ * in the <onboarding_mode> prompt block.
+ */
+const ONBOARDING_SEED_MESSAGE =
+  "this is me coming here for the first time. take a look at my email from the last 60 days and tell me a few specific things you noticed about me — be specific, no fluff. then based on what you learned, suggest 1-2 integrations i should connect so you can see more of my work.";
+
 export const getOnboardingConversation = async (
   userId: string,
   workspaceId: string,
@@ -215,7 +225,7 @@ export const getOnboardingConversation = async (
   let conversation = await prisma.conversation.findFirst({
     where: {
       userId,
-      source: "onboarding-1",
+      source: "onboarding",
     },
     include: {
       ConversationHistory: {
@@ -233,12 +243,42 @@ export const getOnboardingConversation = async (
         workspaceId,
         source: "onboarding",
         title: "Onboarding",
+        ConversationHistory: {
+          create: {
+            userId,
+            userType: UserTypeEnum.User,
+            parts: [{ text: ONBOARDING_SEED_MESSAGE, type: "text" }],
+            message: ONBOARDING_SEED_MESSAGE,
+          },
+        },
       },
       include: {
         ConversationHistory: {
           orderBy: {
             createdAt: "asc",
           },
+        },
+      },
+    });
+  } else if (conversation.ConversationHistory.length === 0) {
+    // Conversation exists but the seed never landed (legacy row from
+    // an earlier version of this helper). Insert it now so the agent
+    // has something to react to on its first turn.
+    await prisma.conversationHistory.create({
+      data: {
+        conversationId: conversation.id,
+        userId,
+        userType: UserTypeEnum.User,
+        parts: [{ text: ONBOARDING_SEED_MESSAGE, type: "text" }],
+        message: ONBOARDING_SEED_MESSAGE,
+      },
+    });
+    // Refetch so the caller gets the populated history.
+    conversation = await prisma.conversation.findFirst({
+      where: { id: conversation.id },
+      include: {
+        ConversationHistory: {
+          orderBy: { createdAt: "asc" },
         },
       },
     });

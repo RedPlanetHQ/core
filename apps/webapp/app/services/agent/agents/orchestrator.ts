@@ -21,6 +21,7 @@ import {
 } from "~/services/llm-provider.server";
 import { type SkillRef } from "../types";
 import { type OrchestratorTools, DirectOrchestratorTools } from "../executors";
+import { getProgressUpdateTool } from "../tools/utils-tools";
 
 export type OrchestratorMode = "read" | "write";
 
@@ -148,6 +149,7 @@ TOOLS:
 - get_integration_actions: Discover available actions for an integration
 - execute_integration_action: Execute an action on a connected service (create, update, delete)
 - get_skill: Load a user-defined skill's full instructions by ID
+- progress_update: Stream a short progress observation to the user. Use 1-2 times between major steps when the work will take more than a few seconds (multi-step composes, slow integrations). One sentence, specific. Skip for fast actions.
 ${integrationInstructions}
 PRIORITY ORDER FOR CONTEXT:
 1. User persona above — check here FIRST for preferences, directives, identity, account details
@@ -211,6 +213,7 @@ TOOLS:
 - execute_integration_action: Query data from a connected service (read operations)
 - web_search: Real-time information from the web (news, docs, prices, weather). Also reads URLs.
 - get_skill: Load a user-defined skill's full instructions by ID
+- progress_update: Stream a short progress observation to the user — they see it live as a transient status line. Use as you page through batches, switch sources, or hit interesting findings. One sentence, specific. 1-2 between integration calls, never more than 6-8 total across a single delegation. The calling agent may include narration guidance in the intent (e.g. "drop witty observations while reading") — follow that tone when given.
 ${integrationInstructions}
 CRITICAL FOR memory_search - describe your INTENT, not keywords:
 
@@ -303,6 +306,9 @@ export async function createOrchestratorAgent(
 
   // Build Mastra tools
   const tools: Record<string, any> = {};
+
+  // progress_update — global narration for long-running fetches/writes
+  tools.progress_update = getProgressUpdateTool();
 
   // memory_search — available in both modes
   tools.memory_search = createTool({

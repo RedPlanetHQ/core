@@ -28,7 +28,11 @@ import {
 import { getTaskTools } from "../tools/task-tools";
 import { getMessageTools } from "../tools/message-tools";
 import { getSessionTools } from "../tools/session-tools";
-import { getSleepTool } from "../tools/utils-tools";
+import { getSleepTool, getProgressUpdateTool } from "../tools/utils-tools";
+import {
+  getSuggestIntegrationsTool,
+  getCompleteOnboardingTool,
+} from "../tools/onboarding-tools";
 import { createOrchestratorAgent } from "./orchestrator";
 import { createGatewayAgents } from "./gateway";
 import { getWorkspaceChannelContext } from "~/services/channel.server";
@@ -48,6 +52,8 @@ interface CreateCoreToolsParams {
   defaultChannel?: string;
   availableChannels?: string[];
   isBackgroundExecution?: boolean;
+  /** True when user.onboardingComplete === false — enables complete_onboarding on the main agent. (progress_update and suggest_integrations are globally available.) */
+  isOnboardingMode?: boolean;
   /** Task ID when running as a background task (for reschedule_self tool) */
   currentTaskId?: string;
   /** Channel name from trigger's reminder config (for send_message tool) */
@@ -106,6 +112,7 @@ export async function createCoreTools(
     defaultChannel,
     availableChannels,
     isBackgroundExecution,
+    isOnboardingMode,
     currentTaskId,
     triggerChannel,
     triggerChannelId,
@@ -118,6 +125,20 @@ export async function createCoreTools(
 
   // Sleep tool
   tools["sleep"] = getSleepTool();
+
+  // Progress narration — available globally so any long-running step
+  // (delegations, syntheses) can keep the user informed.
+  tools["progress_update"] = getProgressUpdateTool();
+
+  // suggest_integrations — global. Agent may offer connect cards
+  // anytime, not just during onboarding.
+  tools["suggest_integrations"] = getSuggestIntegrationsTool();
+
+  // complete_onboarding — only while user.onboardingComplete === false.
+  // Flips the flag and persists the final profile summary.
+  if (isOnboardingMode) {
+    tools["complete_onboarding"] = getCompleteOnboardingTool(userId);
+  }
 
   // Acknowledge tool for channels with intermediate message support
   if (onMessage) {

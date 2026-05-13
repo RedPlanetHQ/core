@@ -127,6 +127,7 @@ export default function SingleConversation() {
         conversationStatus={conversation.status}
         models={models}
         autoRegenerate
+        hideFirstUserMessage={conversation.source === "onboarding"}
       />
     </div>
   );
