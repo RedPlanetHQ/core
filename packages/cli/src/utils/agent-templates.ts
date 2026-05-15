@@ -40,6 +40,18 @@ export const AGENT_TEMPLATES: AgentTemplate[] = [
 			imageArg: '--image',
 		},
 	},
+	{
+		name: 'opencode',
+		commands: ['opencode'],
+		// opencode generates its own session ID; we discover it after spawn
+		// (sessionMode: 'existing') and resume via --session <id>.
+		defaultConfig: {
+			args: [],
+			resumeArgs: ['--session', '{sessionId}'],
+			sessionMode: 'existing',
+			modelArg: '--model',
+		},
+	},
 ];
 
 /**

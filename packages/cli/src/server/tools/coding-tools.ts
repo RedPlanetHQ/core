@@ -31,6 +31,7 @@ import {
 	scanAllSessions,
 	searchSessions,
 	findLatestCodexSession,
+	findLatestOpenCodeSession,
 } from '@/utils/coding-agents';
 import {ptyManager} from '@/server/pty/manager';
 import {
@@ -283,7 +284,7 @@ function detectAgentForSession(sessionId: string, dir: string): string {
 	if (stored?.agent) return stored.agent;
 
 	// Try each reader's sessionExists
-	const readers = ['claude-code', 'codex-cli'] as const;
+	const readers = ['claude-code', 'codex-cli', 'opencode'] as const;
 	for (const agentName of readers) {
 		const reader = getAgentReader(agentName);
 		if (reader?.sessionExists(dir, sessionId)) return agentName;
@@ -676,6 +677,35 @@ async function handleAsk(
 					sessionId: found.sessionId,
 					agentName,
 					dir: workingDir,
+				});
+				return {
+					success: true,
+					result: {
+						sessionId: found.sessionId,
+						pid,
+						resumed: isResume,
+						message:
+							'Session started. Poll with sleep(60) + coding_read_session, up to 3 times. If still running, use reschedule_self(10) for long polling.',
+					},
+				};
+			}
+		}
+
+		// For opencode on a new session: discover the session ID opencode assigned
+		// in its SQLite database and re-key our running session record to use it.
+		if (agentName === 'opencode' && !isResume) {
+			const found = await findLatestOpenCodeSession(workingDir, startedAt);
+
+			if (found && found.sessionId !== sessionId) {
+				sessionId = found.sessionId;
+				upsertSession({
+					sessionId: found.sessionId,
+					agent: agentName,
+					dir: params.dir,
+					pid,
+					startedAt,
+					worktreePath,
+					worktreeBranch,
 				});
 				return {
 					success: true,
