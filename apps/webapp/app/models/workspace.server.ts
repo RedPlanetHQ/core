@@ -55,10 +55,14 @@ export async function createWorkspace(
   await ensureDefaultProviders();
 
   // Auto-register the default gateway if configured via env vars.
-  await maybeRegisterDefaultGateway({
-    workspaceId: workspace.id,
-    userId: input.userId,
-  });
+  try {
+    await maybeRegisterDefaultGateway({
+      workspaceId: workspace.id,
+      userId: input.userId,
+    });
+  } catch (e) {
+    logger.error(`[default-gateway] unexpected error during auto-registration: ${e}`);
+  }
 
   // Create persona document and label
   try {

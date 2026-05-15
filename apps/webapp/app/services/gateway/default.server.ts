@@ -9,15 +9,15 @@ export async function maybeRegisterDefaultGateway({
   workspaceId: string;
   userId: string;
 }): Promise<void> {
-  const url = env.DEFAULT_GATEWAY_URL;
-  const key = env.COREBRAIN_GATEWAY_SECURITY_KEY;
+  const url = env.COREBRAIN_DEFAULT_GATEWAY_URL;
+  const key = env.COREBRAIN_DEFAULT_GATEWAY_SECURITY_KEY;
   if (!url || !key) return;
 
   try {
     const result = await registerGateway({
       baseUrl: url,
       securityKey: key,
-      name: env.DEFAULT_GATEWAY_NAME,
+      name: env.COREBRAIN_DEFAULT_GATEWAY_NAME,
       workspaceId,
       userId,
     });
