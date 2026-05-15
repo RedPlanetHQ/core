@@ -2,6 +2,7 @@ import { type Workspace } from "@core/database";
 import { prisma } from "~/db.server";
 import { ensureBillingInitialized } from "~/services/billing.server";
 import { ensureDefaultProviders } from "~/services/llm-provider.server";
+import { maybeRegisterDefaultGateway } from "~/services/gateway/default.server";
 import { sendEmail } from "~/services/email.server";
 import { logger } from "~/services/logger.service";
 import { LabelService } from "~/services/label.server";
@@ -52,6 +53,12 @@ export async function createWorkspace(
 
   await ensureBillingInitialized(workspace.id, input.userId);
   await ensureDefaultProviders();
+
+  // Auto-register the default gateway if configured via env vars.
+  await maybeRegisterDefaultGateway({
+    workspaceId: workspace.id,
+    userId: input.userId,
+  });
 
   // Create persona document and label
   try {

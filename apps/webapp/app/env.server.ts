@@ -240,6 +240,11 @@ const EnvironmentSchema = z
     // Resend
     RESEND_WEBHOOK_SECRET: z.string().optional(),
 
+    // Default gateway auto-registration
+    DEFAULT_GATEWAY_URL: z.string().url().optional(),
+    DEFAULT_GATEWAY_NAME: z.string().min(1).max(64).default("local-gateway"),
+    COREBRAIN_GATEWAY_SECURITY_KEY: z.string().optional(),
+
     // Sentry
     SENTRY_DSN: z.string().optional(),
   })
