@@ -285,6 +285,32 @@ export const scheduledTaskQueue = new Queue("scheduled-task-queue", {
 });
 
 /**
+ * Coding description update queue
+ * Refreshes Task.title (first turn only) and Task.description for a
+ * coding session in response to gateway turn-ended events.
+ */
+export const codingDescriptionUpdateQueue = new Queue(
+  "coding-description-update-queue",
+  {
+    connection: getRedisConnection(),
+    defaultJobOptions: {
+      attempts: 3,
+      backoff: {
+        type: "exponential",
+        delay: 2000,
+      },
+      removeOnComplete: {
+        age: 3600,
+        count: 200,
+      },
+      removeOnFail: {
+        age: 86400,
+      },
+    },
+  },
+);
+
+/**
  * Scratchpad scan queue
  * Handles mention and proactive scratchpad processing (LLM + agent execution)
  */

@@ -83,6 +83,10 @@ import {
   processScratchpadScan,
 } from "~/jobs/scratchpad/scratchpad-scan.logic";
 import {
+  type CodingDescriptionUpdatePayload,
+  processCodingDescriptionUpdate,
+} from "~/jobs/coding/description-update.logic";
+import {
   type ScheduledTaskPayload,
   processScheduledTask,
 } from "~/jobs/task/scheduled-task.logic";
@@ -373,6 +377,23 @@ export const scratchpadScanWorker = new Worker(
 );
 
 /**
+ * Coding description update worker
+ * Refreshes Task.title (first turn only) and Task.description from the
+ * latest set of session turns when the gateway reports a turn ended.
+ */
+export const codingDescriptionUpdateWorker = new Worker(
+  "coding-description-update-queue",
+  async (job) => {
+    const payload = job.data as CodingDescriptionUpdatePayload;
+    return await processCodingDescriptionUpdate(payload);
+  },
+  {
+    connection: getRedisConnection(),
+    concurrency: 5,
+  },
+);
+
+/**
  * Graceful shutdown handler
  */
 export async function closeAllWorkers(): Promise<void> {
@@ -397,6 +418,7 @@ export async function closeAllWorkers(): Promise<void> {
     taskQueue.close(),
     scratchpadScanWorker.close(),
     scratchpadScanQueue.close(),
+    codingDescriptionUpdateWorker.close(),
   ]);
   logger.log("All BullMQ workers closed");
 }

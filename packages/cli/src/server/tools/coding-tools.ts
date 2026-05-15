@@ -33,6 +33,10 @@ import {
 	findLatestCodexSession,
 } from '@/utils/coding-agents';
 import {ptyManager} from '@/server/pty/manager';
+import {
+	startCodingSessionWatcher,
+	stopCodingSessionWatcher,
+} from '@/server/coding-session-watcher';
 
 // ============ Schemas ============
 
@@ -668,6 +672,11 @@ async function handleAsk(
 					worktreePath,
 					worktreeBranch,
 				});
+				startCodingSessionWatcher({
+					sessionId: found.sessionId,
+					agentName,
+					dir: workingDir,
+				});
 				return {
 					success: true,
 					result: {
@@ -681,6 +690,14 @@ async function handleAsk(
 			}
 		}
 	}
+
+	// Watch the running transcript so the webapp learns about turn boundaries
+	// without having to poll. The watcher stops itself when the PTY exits.
+	startCodingSessionWatcher({
+		sessionId,
+		agentName,
+		dir: workingDir,
+	});
 
 	return {
 		success: true,
@@ -699,6 +716,7 @@ function handleCloseSession(params: zod.infer<typeof CloseSessionSchema>) {
 	const session = getSession(params.sessionId);
 	stopProcess(params.sessionId);
 	deleteSession(params.sessionId);
+	stopCodingSessionWatcher(params.sessionId);
 
 	if (session?.worktreePath) {
 		const {removed, uncommitted} = removeWorktree(
@@ -736,6 +754,7 @@ function handleCloseAll() {
 	for (const session of sessions) {
 		stopProcess(session.sessionId);
 		deleteSession(session.sessionId);
+		stopCodingSessionWatcher(session.sessionId);
 
 		if (session.worktreePath) {
 			const {removed, uncommitted} = removeWorktree(

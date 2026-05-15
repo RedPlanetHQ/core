@@ -1,10 +1,11 @@
 import React, { createContext, useContext, useState } from "react";
-import { Plus, History, Monitor } from "lucide-react";
+import { Plus, History, Monitor, Eye } from "lucide-react";
 import { format } from "date-fns";
 import { Button } from "~/components/ui/button";
 import { Popover, PopoverContent, PopoverTrigger } from "~/components/ui/popover";
 import { Badge } from "~/components/ui/badge";
 import { cn } from "~/lib/utils";
+import { toast } from "~/hooks/use-toast";
 
 type SessionItem = {
   id: string;
@@ -19,6 +20,7 @@ type CodingActionsValue = {
   sessions: SessionItem[];
   selectedId: string | null;
   onSelectSession: (id: string) => void;
+  taskId: string;
 } | null;
 
 const CodingActionsContext = createContext<CodingActionsValue>(null);
@@ -131,6 +133,54 @@ function CodingSessionsPopover({
   );
 }
 
+function WatchTaskButton({ taskId }: { taskId: string }) {
+  const [busy, setBusy] = useState(false);
+
+  const handleClick = async () => {
+    if (busy) return;
+    setBusy(true);
+    const nextRunAt = new Date(Date.now() + 5 * 60 * 1000).toISOString();
+    try {
+      const res = await fetch(`/api/v1/tasks/${taskId}`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ nextRunAt }),
+      });
+      if (!res.ok) {
+        const body = (await res.json().catch(() => ({}))) as {
+          error?: string;
+        };
+        throw new Error(body.error ?? `watch failed (${res.status})`);
+      }
+      toast({
+        title: "Watching session",
+        description: "core will check in on this task in 5 minutes.",
+      });
+    } catch (err) {
+      toast({
+        title: "Couldn't schedule watch",
+        description: err instanceof Error ? err.message : String(err),
+        variant: "destructive",
+      });
+    } finally {
+      setBusy(false);
+    }
+  };
+
+  return (
+    <Button
+      variant="ghost"
+      className="gap-2 rounded"
+      onClick={handleClick}
+      disabled={busy}
+      title="Have core check on this task in 5 minutes"
+    >
+      <Eye size={14} />
+      Watch
+    </Button>
+  );
+}
+
 export function CodingActions() {
   const ctx = useContext(CodingActionsContext);
   if (!ctx) return null;
@@ -142,6 +192,7 @@ export function CodingActions() {
         selectedId={ctx.selectedId}
         onSelect={ctx.onSelectSession}
       />
+      {ctx.selectedId ? <WatchTaskButton taskId={ctx.taskId} /> : null}
       <Button variant="secondary" onClick={ctx.onNewSession} className="gap-2">
         <Plus size={13} />
         New session
