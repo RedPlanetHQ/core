@@ -33,39 +33,7 @@
     }
   },
   "app": {
-    "windows": [
-      {
-        "label": "main",
-        "title": "",
-        "width": 1280,
-        "height": 800,
-        "minWidth": 800,
-        "minHeight": 600,
-        "resizable": true,
-        "fullscreen": false,
-        "titleBarStyle": "Overlay",
-        "trafficLightPosition": { "x": 18, "y": 25 },
-        "devtools": true
-      },
-      {
-        "label": "voice",
-        "url": "/voice-widget",
-        "title": "Butler",
-        "width": 360,
-        "height": 320,
-        "resizable": false,
-        "decorations": false,
-        "transparent": true,
-        "alwaysOnTop": true,
-        "skipTaskbar": true,
-        "visible": false,
-        "focus": false,
-        "shadow": true,
-        "visibleOnAllWorkspaces": true,
-        "acceptFirstMouse": true,
-        "devtools": true
-      }
-    ],
+    "windows": [],
     "security": {
       "csp": null
     },
