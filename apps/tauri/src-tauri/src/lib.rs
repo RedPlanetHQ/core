@@ -19,7 +19,7 @@ use base64::Engine as _;
 use serde::{Deserialize, Serialize};
 use tauri::menu::{Menu, MenuItem, PredefinedMenuItem};
 use tauri::tray::TrayIconBuilder;
-use tauri::{Emitter, Listener, LogicalPosition, Manager, State};
+use tauri::{Emitter, Listener, LogicalPosition, Manager, State, WebviewUrl, WebviewWindowBuilder};
 use tauri_plugin_notification::{NotificationExt, PermissionState};
 
 #[cfg(target_os = "macos")]
@@ -111,6 +111,82 @@ fn save_screen_context_settings(settings: &ScreenContextSettings) {
     }
     if let Ok(content) = serde_json::to_string_pretty(&json) {
         let _ = std::fs::write(&path, content);
+    }
+}
+
+// ── Frontend URL resolution ───────────────────────────────────────────────────
+//
+// `frontendDist` in tauri.conf.json is baked at build time, but users self-
+// hosting the CORE webapp can override the URL at runtime by setting
+// `preferences.frontendUrl` in ~/.corebrain/config.json (e.g.
+// "https://core.acme.internal"). Both the main and voice windows resolve
+// their URLs from the same base, so they share cookies/session.
+//
+// Dev mode (`debug_assertions`) always uses Tauri's bundled `devUrl` —
+// runtime override only kicks in for release builds.
+
+fn read_frontend_url() -> Option<String> {
+    let path = corebrain_config_path()?;
+    let raw = std::fs::read_to_string(&path).ok()?;
+    let json: serde_json::Value = serde_json::from_str(&raw).ok()?;
+    let url = json["preferences"]["frontendUrl"].as_str()?;
+    let trimmed = url.trim().trim_end_matches('/');
+    if trimmed.is_empty() {
+        None
+    } else {
+        Some(trimmed.to_string())
+    }
+}
+
+/// Resolve a `WebviewUrl` for the given path. In dev, use the bundled
+/// `WebviewUrl::App` (Tauri serves via the configured `devUrl`). In release,
+/// honor `preferences.frontendUrl` from config if set; otherwise fall through
+/// to the bundled `frontendDist` (app.getcore.me).
+fn resolve_webview_url(path: &str) -> WebviewUrl {
+    if cfg!(debug_assertions) {
+        return WebviewUrl::App(std::path::PathBuf::from(path));
+    }
+    let Some(base) = read_frontend_url() else {
+        return WebviewUrl::App(std::path::PathBuf::from(path));
+    };
+    let full = format!("{base}{path}");
+    match full.parse::<tauri::Url>() {
+        Ok(url) => {
+            log::info!("[startup] webview url ({path}) = {url} (from config)");
+            WebviewUrl::External(url)
+        }
+        Err(e) => {
+            log::warn!("[startup] invalid config frontendUrl '{full}' ({e}) — using bundled");
+            WebviewUrl::App(std::path::PathBuf::from(path))
+        }
+    }
+}
+
+/// If the user set a custom frontend URL, grant the main + voice windows the
+/// same permissions the bundled `remote.json` grants app.getcore.me.
+/// Without this, `tauriInvoke(...)` calls from the user-configured origin
+/// are silently dropped by Tauri's IPC authority.
+fn install_dynamic_remote_capability<R: tauri::Runtime>(app: &tauri::AppHandle<R>) {
+    let Some(url) = read_frontend_url() else { return };
+
+    let cap = serde_json::json!({
+        "identifier": "user-frontend-remote",
+        "description": "User-configured frontend URL (from ~/.corebrain/config.json)",
+        "remote": { "urls": [url.clone()] },
+        "windows": ["main", "voice"],
+        "permissions": [
+            "core:default",
+            "shell:allow-open",
+            "notification:default"
+        ]
+    });
+    let Ok(cap_str) = serde_json::to_string(&cap) else {
+        log::warn!("[startup] failed to serialize dynamic capability");
+        return;
+    };
+    match app.add_capability(cap_str) {
+        Ok(()) => log::info!("[startup] dynamic remote capability added for {url}"),
+        Err(e) => log::warn!("[startup] add_capability({url}) failed: {e}"),
     }
 }
 
@@ -667,6 +743,53 @@ pub fn run() {
             *settings.lock().unwrap() = load_screen_context_settings();
             #[cfg(target_os = "macos")]
             screen_context::start_polling(settings.clone());
+
+            // Apply any user-configured frontend URL override BEFORE building
+            // windows: add_capability has to land before the first webview
+            // load so IPC is authorized when the page boots.
+            install_dynamic_remote_capability(app.handle());
+
+            // Main app window (was declared in tauri.conf.json, moved here so
+            // its URL can be driven by ~/.corebrain/config.json).
+            let main_builder = WebviewWindowBuilder::new(app, "main", resolve_webview_url("/"))
+                .title("")
+                .inner_size(1280.0, 800.0)
+                .min_inner_size(800.0, 600.0)
+                .resizable(true)
+                .fullscreen(false)
+                .devtools(true);
+
+            #[cfg(target_os = "macos")]
+            let main_builder = main_builder
+                .title_bar_style(tauri::TitleBarStyle::Overlay)
+                .traffic_light_position(LogicalPosition::new(18.0, 25.0));
+
+            let _main_window = main_builder.build()?;
+
+            // Voice widget window (was declared in tauri.conf.json). Same URL
+            // resolution as main so cookies/session are shared.
+            #[cfg(target_os = "macos")]
+            {
+                let _voice_window = WebviewWindowBuilder::new(
+                    app,
+                    "voice",
+                    resolve_webview_url("/voice-widget"),
+                )
+                .title("Butler")
+                .inner_size(360.0, 320.0)
+                .resizable(false)
+                .decorations(false)
+                .transparent(true)
+                .always_on_top(true)
+                .skip_taskbar(true)
+                .visible(false)
+                .focused(false)
+                .shadow(true)
+                .visible_on_all_workspaces(true)
+                .accept_first_mouse(true)
+                .devtools(true)
+                .build()?;
+            }
 
             // Voice widget — install global double-tap-Option hotkey and
             // wire it to the floating call-card window.
