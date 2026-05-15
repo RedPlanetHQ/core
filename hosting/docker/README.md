@@ -37,8 +37,11 @@ Both compose files read from the same `.env` file. The gateway-specific variable
 | `COREBRAIN_GATEWAY_SECURITY_KEY` | gateway container + webapp | Shared secret that authenticates the webapp to the gateway |
 | `COREBRAIN_API_KEY` | gateway container | Personal access token from Core → Settings → Tokens |
 | `DEFAULT_GATEWAY_URL` | webapp | Internal URL the webapp uses to reach the gateway (`http://corebrain-gateway:7787`) |
-| `DEFAULT_GATEWAY_NAME` | webapp | Display name stored in the DB (default: `local-gateway`) |
+| `DEFAULT_GATEWAY_NAME` | webapp | Name stored in DB when auto-registering (default: `local-gateway`) |
+| `COREBRAIN_GATEWAY_NAME` | gateway container | Name the gateway reports in its own manifest (default: `cloud-gateway`) |
 | `COREBRAIN_GATEWAY_HTTP_PORT` | host port mapping | Host port the gateway listens on (default: `7787`) |
+| `CLAUDE_CODE_OAUTH_TOKEN` | gateway container | Long-lived Claude Code token (`claude setup-token`); optional |
+| `GITHUB_TOKEN` | gateway container | Token for `git clone` of private repos and author identity; optional |
 | `GATEWAY_VERSION` | gateway image tag | Pin to a specific release, e.g. `0.6.4`; omit for `latest` |
 
 The gateway's `COREBRAIN_API_URL` is hardcoded to `http://core:3000` (the webapp's internal address) in `docker-compose.gateway.yaml` — do not set this in `.env`.
@@ -69,8 +72,8 @@ Copy the printed key into `.env` as `COREBRAIN_GATEWAY_SECURITY_KEY`, then eithe
 - Set `DEFAULT_GATEWAY_URL` and restart so the webapp auto-registers it, **or**
 - Register it manually via the workspace gateway UI using that key.
 
-After setting the key in `.env`, restart the gateway so it picks it up:
+After setting the key in `.env`, re-create the gateway container so it picks up the new value (plain `restart` does not re-read `.env`):
 
 ```bash
-docker compose -f docker-compose.yaml -f docker-compose.gateway.yaml restart corebrain-gateway
+docker compose -f docker-compose.yaml -f docker-compose.gateway.yaml up -d corebrain-gateway
 ```
