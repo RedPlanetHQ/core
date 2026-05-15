@@ -177,13 +177,14 @@ export function NewSessionDialog({
     const prompt =
       sendInitialPrompt && initialPrompt.trim() ? initialPrompt.trim() : null;
     try {
-      const res = await fetch(`/api/v1/tasks/${taskId}/coding-sessions`, {
+      const res = await fetch(`/api/v1/coding-sessions/new`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
           agent: selectedAgent,
           dir: dirToSubmit,
           gatewayId: selectedGatewayId,
+          taskId,
           ...(prompt ? { prompt } : {}),
         }),
       });
@@ -196,15 +197,17 @@ export function NewSessionDialog({
         );
       }
       const data = (await res.json()) as {
-        id: string;
-        externalSessionId: string | null;
+        session: {
+          id: string;
+          externalSessionId: string | null;
+        };
       };
       onCreated({
-        id: data.id,
+        id: data.session.id,
         agent: selectedAgent,
         dir: dirToSubmit,
         gatewayId: selectedGatewayId,
-        externalSessionId: data.externalSessionId ?? null,
+        externalSessionId: data.session.externalSessionId ?? null,
         prompt,
       });
       onOpenChange(false);

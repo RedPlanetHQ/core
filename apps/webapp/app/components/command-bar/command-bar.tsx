@@ -9,6 +9,7 @@ import {
   Library,
   MessagesSquare,
   CalendarDays,
+  Terminal,
 } from "lucide-react";
 import {
   CommandDialog,
@@ -91,6 +92,16 @@ interface TaskResult {
   createdAt: string;
 }
 
+interface CodingTarget {
+  gatewayId: string;
+  gatewayName: string;
+  agent: string;
+  /// First coding-scoped folder on this gateway — the session will run here.
+  /// If null, the gateway has no coding-scoped folder configured and the
+  /// item is hidden.
+  folderPath: string;
+}
+
 export function CommandBar({ open, onOpenChange }: CommandBarProps) {
   const [searchQuery, setSearchQuery] = useState("");
   const debouncedQuery = useDebounce(searchQuery, 300);
@@ -101,7 +112,115 @@ export function CommandBar({ open, onOpenChange }: CommandBarProps) {
   const [labelResults, setLabelResults] = useState<LabelResult[]>([]);
   const [taskResults, setTaskResults] = useState<TaskResult[]>([]);
   const [isSearching, setIsSearching] = useState(false);
+  const [codingTargets, setCodingTargets] = useState<CodingTarget[]>([]);
+  const [spawningKey, setSpawningKey] = useState<string | null>(null);
   const navigate = useNavigate();
+
+  // Load connected gateways + their agents whenever the bar opens so the
+  // "New session" items reflect what's actually reachable right now.
+  useEffect(() => {
+    if (!open) {
+      setCodingTargets([]);
+      setSpawningKey(null);
+      return;
+    }
+    let cancelled = false;
+
+    (async () => {
+      try {
+        const gwRes = await fetch("/api/v1/gateways");
+        if (!gwRes.ok) return;
+        const gwBody = (await gwRes.json()) as {
+          gateways: Array<{
+            id: string;
+            name: string;
+            status: "CONNECTED" | "DISCONNECTED";
+          }>;
+        };
+        const connected = (gwBody.gateways ?? []).filter(
+          (g) => g.status === "CONNECTED",
+        );
+        if (connected.length === 0) {
+          if (!cancelled) setCodingTargets([]);
+          return;
+        }
+
+        const infos = await Promise.all(
+          connected.map(async (g) => {
+            try {
+              const res = await fetch(`/api/v1/gateways/${g.id}/info`);
+              if (!res.ok) return null;
+              const data = (await res.json()) as {
+                folders?: Array<{
+                  path: string;
+                  scopes: Array<"files" | "coding" | "exec">;
+                }>;
+                agents?: string[];
+              };
+              const codingFolder = (data.folders ?? []).find((f) =>
+                f.scopes.includes("coding"),
+              );
+              if (!codingFolder) return null;
+              const agents = data.agents ?? [];
+              if (agents.length === 0) return null;
+              return agents.map((agent) => ({
+                gatewayId: g.id,
+                gatewayName: g.name,
+                agent,
+                folderPath: codingFolder.path,
+              }));
+            } catch {
+              return null;
+            }
+          }),
+        );
+
+        if (cancelled) return;
+        const flat: CodingTarget[] = infos
+          .filter((x): x is CodingTarget[] => x !== null)
+          .flat();
+        setCodingTargets(flat);
+      } catch {
+        if (!cancelled) setCodingTargets([]);
+      }
+    })();
+
+    return () => {
+      cancelled = true;
+    };
+  }, [open]);
+
+  const handleNewCodingSession = async (target: CodingTarget) => {
+    const key = `${target.gatewayId}:${target.agent}`;
+    if (spawningKey) return;
+    setSpawningKey(key);
+    try {
+      const res = await fetch("/api/v1/coding-sessions/new", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          gatewayId: target.gatewayId,
+          agent: target.agent,
+          dir: target.folderPath,
+        }),
+      });
+      if (!res.ok) {
+        // Bar stays open so the user can retry on a different target.
+        console.error("Failed to spawn coding session", await res.text());
+        return;
+      }
+      const body = (await res.json()) as {
+        task: { id: string };
+        session: { id: string };
+      };
+      navigate(
+        `/home/tasks/${body.task.id}/coding/${body.session.id}`,
+      );
+      onOpenChange(false);
+    } finally {
+      setSpawningKey(null);
+    }
+  };
 
   // Search documents and conversations when debounced query changes
   useEffect(() => {
@@ -273,6 +392,49 @@ export function CommandBar({ open, onOpenChange }: CommandBarProps) {
                 </CommandItem>
               ))}
           </CommandGroup>
+
+          {/* Coding sessions (one item per gateway × agent that's connected
+              and has a coding-scoped folder). */}
+          {codingTargets.length > 0 && (
+            <>
+              <CommandSeparator />
+              <CommandGroup heading="New coding session" className="p-2">
+                {codingTargets
+                  .filter(
+                    (target) =>
+                      !searchQuery.trim() ||
+                      `new session ${target.agent} ${target.gatewayName}`
+                        .toLowerCase()
+                        .includes(searchQuery.toLowerCase()),
+                  )
+                  .map((target) => {
+                    const key = `${target.gatewayId}:${target.agent}`;
+                    const isSpawning = spawningKey === key;
+                    return (
+                      <CommandItem
+                        key={key}
+                        value={key}
+                        onSelect={() => handleNewCodingSession(target)}
+                        disabled={Boolean(spawningKey) && !isSpawning}
+                        className="flex items-center gap-2 py-1"
+                      >
+                        {isSpawning ? (
+                          <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                        ) : (
+                          <Terminal className="mr-2 h-4 w-4" />
+                        )}
+                        <span className="flex-1">
+                          New session — {target.agent} —{" "}
+                          <span className="text-muted-foreground">
+                            {target.gatewayName}
+                          </span>
+                        </span>
+                      </CommandItem>
+                    );
+                  })}
+              </CommandGroup>
+            </>
+          )}
 
           {/* Labels */}
           {labelResults.length > 0 && (

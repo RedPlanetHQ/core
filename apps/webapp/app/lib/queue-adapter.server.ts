@@ -25,6 +25,7 @@ import type {
 import type { TaskPayload } from "~/jobs/task/task.logic";
 import type { ActivityCasePayload } from "~/jobs/integrations/activity-case.logic";
 import type { ScratchpadScanPayload } from "~/jobs/scratchpad/scratchpad-scan.logic";
+import type { CodingDescriptionUpdatePayload } from "~/jobs/coding/description-update.logic";
 import { runs } from "@trigger.dev/sdk";
 
 export type QueueProvider = "trigger" | "bullmq";
@@ -452,6 +453,50 @@ export async function cancelFollowUpsForReminder(
 export const isTriggerDeployment = () => {
   return env.QUEUE_PROVIDER === "trigger";
 };
+
+/**
+ * Enqueue a coding-session description update. Debounced via jobId so
+ * repeated turn_ended events for the same session within `debounceMs`
+ * coalesce into one LLM call instead of N. Pass a small `debounceMs`
+ * (e.g. 5000) to absorb tool-call bursts.
+ */
+export async function enqueueCodingDescriptionUpdate(
+  payload: CodingDescriptionUpdatePayload,
+  debounceMs = 5000,
+): Promise<{ id?: string }> {
+  const provider = env.QUEUE_PROVIDER as QueueProvider;
+  // Coalesce on session id so bursts of turn events fold into one run.
+  const jobId = `coding-desc-${payload.codingSessionId}-${Math.floor(
+    Date.now() / Math.max(debounceMs, 1),
+  )}`;
+
+  if (provider === "trigger") {
+    const { codingDescriptionUpdateTask } = await import(
+      "~/trigger/coding/description-update"
+    );
+    const handler = await codingDescriptionUpdateTask.trigger(payload, {
+      queue: "coding-description-update-queue",
+      delay: debounceMs > 0 ? `${Math.ceil(debounceMs / 1000)}s` : undefined,
+      idempotencyKey: jobId,
+      concurrencyKey: payload.workspaceId,
+      tags: [`codingSession:${payload.codingSessionId}`, payload.workspaceId],
+    });
+    return { id: handler.id };
+  } else {
+    const { codingDescriptionUpdateQueue } = await import(
+      "~/bullmq/queues"
+    );
+    const job = await codingDescriptionUpdateQueue.add(
+      `coding-desc-${payload.codingSessionId}`,
+      payload,
+      {
+        delay: debounceMs,
+        jobId,
+      },
+    );
+    return { id: job.id };
+  }
+}
 
 // ============================================================================
 // Scheduled Task Queue (unified — replaces reminder queue for new tasks)

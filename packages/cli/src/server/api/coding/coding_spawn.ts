@@ -12,6 +12,7 @@ import {listFolders, resolveFolderForPath} from '@/config/folders';
 import {ptyManager} from '@/server/pty/manager';
 import {findLatestCodexSession, scanAllSessions} from '@/utils/coding-agents';
 import {gatewayLog} from '@/server/gateway-log';
+import {startCodingSessionWatcher} from '@/server/coding-session-watcher';
 
 /**
  * Spawn (or resume) a coding agent's interactive TUI so the xterm WS has a
@@ -142,6 +143,14 @@ export const codingSpawnRoute: FastifyPluginAsync = async (app) => {
 				});
 			}
 		}
+
+		// Register turn-ended watcher so the webapp can refresh the linked
+		// task's title/description as each turn completes.
+		startCodingSessionWatcher({
+			sessionId,
+			agentName: body.agent,
+			dir: body.dir,
+		});
 
 		return {
 			ok: true,

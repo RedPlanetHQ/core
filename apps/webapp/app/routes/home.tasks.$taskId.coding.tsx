@@ -150,6 +150,7 @@ function CodingLayout() {
       })),
       selectedId: sessionId ?? null,
       onSelectSession: (id) => navigate(`/home/tasks/${taskId}/coding/${id}`),
+      taskId: taskId!,
     });
     return () => setCodingActions(null);
     // eslint-disable-next-line react-hooks/exhaustive-deps
