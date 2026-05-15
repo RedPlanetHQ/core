@@ -47,6 +47,7 @@ function projectTool(t: {
 const KNOWN_AGENTS: Array<{name: string; command: string}> = [
 	{name: 'claude-code', command: 'claude'},
 	{name: 'codex-cli', command: 'codex'},
+	{name: 'opencode', command: 'opencode'},
 ];
 
 /**

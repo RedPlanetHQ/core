@@ -1,8 +1,9 @@
 import {BaseCodingAgentReader, type AgentReadResult, type AgentReadOptions, type AgentTurnsResult, type ConversationTurn, type ScannedSession, type ScanOptions, type ScanResult} from './types';
 import {claudeCodeReader, claudeCodeEntriesToTurns} from './claude-code';
 import {codexReader, codexEntriesToTurns, findLatestCodexSession} from './codex';
+import {opencodeReader, findLatestOpenCodeSession} from './opencode';
 
-export {findLatestCodexSession};
+export {findLatestCodexSession, findLatestOpenCodeSession};
 export {claudeCodeEntriesToTurns, codexEntriesToTurns};
 
 export type {AgentReadResult, AgentReadOptions, AgentTurnsResult, ConversationTurn, ScannedSession, ScanOptions, ScanResult};
@@ -11,6 +12,7 @@ export {BaseCodingAgentReader};
 const agentReaders: Record<string, BaseCodingAgentReader> = {
 	'claude-code': claudeCodeReader,
 	'codex-cli': codexReader,
+	'opencode': opencodeReader,
 };
 
 export function getAgentReader(agentName: string): BaseCodingAgentReader | null {
