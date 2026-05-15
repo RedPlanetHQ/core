@@ -43,11 +43,20 @@ export const AGENT_TEMPLATES: AgentTemplate[] = [
 	{
 		name: 'opencode',
 		commands: ['opencode'],
-		// opencode generates its own session ID; we discover it after spawn
-		// (sessionMode: 'existing') and resume via --session <id>.
+		// opencode run [message..] is the non-interactive form; the bare `opencode`
+		// command opens the TUI and does not accept a positional prompt.
+		// --dangerously-skip-permissions bypasses first-run permission dialogs so the
+		// headless gateway flow doesn't stall waiting for user interaction.
+		// sessionMode:'existing' means opencode assigns its own session ID which we
+		// discover from its SQLite database after spawn via findLatestOpenCodeSession.
 		defaultConfig: {
-			args: [],
-			resumeArgs: ['--session', '{sessionId}'],
+			args: ['run', '--dangerously-skip-permissions'],
+			resumeArgs: [
+				'run',
+				'--dangerously-skip-permissions',
+				'--session',
+				'{sessionId}',
+			],
 			sessionMode: 'existing',
 			modelArg: '--model',
 		},
