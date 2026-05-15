@@ -62,13 +62,22 @@ const loader = createHybridLoaderApiRoute(
   async ({ searchParams, authentication }) => {
     const { timezone } = searchParams;
     const userId = authentication.userId;
-    const workspaceId = authentication.workspaceId as string;
+    const workspaceId = authentication.workspaceId;
 
-    const accounts = await IntegrationLoader.getConnectedIntegrationAccounts(
-      userId,
-      workspaceId,
-      ["google-calendar"],
-    );
+    if (!workspaceId) {
+      return json({ events: [] as CalendarEvent[], connected: false });
+    }
+
+    let accounts;
+    try {
+      accounts = await IntegrationLoader.getConnectedIntegrationAccounts(
+        userId,
+        workspaceId,
+        ["google-calendar"],
+      );
+    } catch {
+      return json({ events: [] as CalendarEvent[], connected: false });
+    }
 
     if (accounts.length === 0) {
       return json({ events: [] as CalendarEvent[], connected: false });
@@ -92,6 +101,10 @@ const loader = createHybridLoaderApiRoute(
         },
         userId,
       );
+
+      if ((result as any)?.isError) {
+        return json({ events: [] as CalendarEvent[], connected: true, error: true });
+      }
 
       const text = (result as any)?.content?.[0]?.text;
       if (text) {
