@@ -62,13 +62,27 @@ const loader = createHybridLoaderApiRoute(
   async ({ searchParams, authentication }) => {
     const { timezone } = searchParams;
     const userId = authentication.userId;
-    const workspaceId = authentication.workspaceId as string;
+    const workspaceId = authentication.workspaceId as string | undefined;
 
-    const accounts = await IntegrationLoader.getConnectedIntegrationAccounts(
-      userId,
-      workspaceId,
-      ["google-calendar"],
-    );
+    // If the user isn't associated with a workspace (or we're missing it),
+    // treat as "not connected" so the widget can render an empty state.
+    if (!workspaceId) {
+      return json({ events: [] as CalendarEvent[], connected: false });
+    }
+
+    // If integration lookup fails for any reason, do not throw—allow empty state.
+    let accounts: Awaited<
+      ReturnType<typeof IntegrationLoader.getConnectedIntegrationAccounts>
+    > = [];
+    try {
+      accounts = await IntegrationLoader.getConnectedIntegrationAccounts(
+        userId,
+        workspaceId,
+        ["google-calendar"],
+      );
+    } catch {
+      return json({ events: [] as CalendarEvent[], connected: false });
+    }
 
     if (accounts.length === 0) {
       return json({ events: [] as CalendarEvent[], connected: false });
