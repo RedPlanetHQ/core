@@ -305,6 +305,23 @@ const { loader, action } = createHybridActionApiRoute(
           conversationId: body.id,
           messageCount: messages.length,
         });
+
+        // Schedule a delayed snapshot to see if heap recovers after the turn
+        // ends. If --expose-gc is enabled in prod (see docker/scripts/
+        // entrypoint.sh), also force a full GC first so we measure *retained*
+        // memory, not unreaped garbage. If heap stays high here, something
+        // has a strong reference to this turn's step history.
+        setTimeout(() => {
+          const gc = (globalThis as any).gc as (() => void) | undefined;
+          if (typeof gc === "function") {
+            gc();
+          }
+          logHeap("handler:post-cleanup", {
+            conversationId: body.id,
+            gcForced: typeof gc === "function",
+            delayMs: 5000,
+          });
+        }, 5000).unref?.();
         return messages;
       },
     };

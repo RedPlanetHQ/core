@@ -15,4 +15,4 @@ cp packages/database/prisma/schema.prisma apps/webapp/prisma/
 
 cd /core/apps/webapp
 # exec dumb-init pnpm run start:local
-NODE_PATH='/core/node_modules/.pnpm/node_modules' exec dumb-init node --max-old-space-size=8192 ./server.js
+NODE_PATH='/core/node_modules/.pnpm/node_modules' exec dumb-init node --max-old-space-size=8192 --expose-gc ./server.js
