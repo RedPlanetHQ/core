@@ -434,12 +434,11 @@ export async function callYnabTool(
         return { content: [{ type: 'text', text: 'No transactions found.' }] };
       }
       const list = transactions
-        .slice(0, 50)
         .map((t: any) => `ID: ${t.id} | Date: ${t.date} | Amount: ${formatMilliunits(t.amount)} | Payee: ${t.payee_name || 'N/A'} | Category: ${t.category_name || 'N/A'} | Memo: ${t.memo || ''}`)
         .join('\n');
       return {
         content: [
-          { type: 'text', text: `Found ${transactions.length} transactions (showing up to 50):\n\n${list}` },
+          { type: 'text', text: `Found ${transactions.length} transactions:\n\n${list}` },
         ],
       };
     }
@@ -496,7 +495,6 @@ export async function callYnabTool(
         return { content: [{ type: 'text', text: 'No transactions found for this account.' }] };
       }
       const list = transactions
-        .slice(0, 50)
         .map((t: any) => `ID: ${t.id} | Date: ${t.date} | Amount: ${formatMilliunits(t.amount)} | Payee: ${t.payee_name || 'N/A'} | Category: ${t.category_name || 'N/A'}`)
         .join('\n');
       return { content: [{ type: 'text', text: `Found ${transactions.length} transactions:\n\n${list}` }] };
@@ -512,7 +510,6 @@ export async function callYnabTool(
         return { content: [{ type: 'text', text: 'No transactions found for this category.' }] };
       }
       const list = transactions
-        .slice(0, 50)
         .map((t: any) => `ID: ${t.id} | Date: ${t.date} | Amount: ${formatMilliunits(t.amount)} | Payee: ${t.payee_name || 'N/A'}`)
         .join('\n');
       return { content: [{ type: 'text', text: `Found ${transactions.length} transactions:\n\n${list}` }] };
@@ -628,7 +625,6 @@ export async function callYnabTool(
         return { content: [{ type: 'text', text: 'No transactions found for this payee.' }] };
       }
       const list = transactions
-        .slice(0, 50)
         .map((t: any) => `ID: ${t.id} | Date: ${t.date} | Amount: ${formatMilliunits(t.amount)} | Category: ${t.category_name || 'N/A'} | Memo: ${t.memo || ''}`)
         .join('\n');
       return { content: [{ type: 'text', text: `Found ${transactions.length} transactions:\n\n${list}` }] };
