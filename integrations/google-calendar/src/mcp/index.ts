@@ -345,29 +345,11 @@ export async function callTool(
         });
 
         const events = response.data.items || [];
-        if (events.length === 0) {
-          return {
-            content: [
-              {
-                type: 'text',
-                text: 'No events found in the specified time range.',
-              },
-            ],
-          };
-        }
-
-        const eventList = events
-          .map(
-            event =>
-              `- ${event.summary} (${event.start?.dateTime || event.start?.date})\n  ID: ${event.id}\n  Location: ${event.location || 'N/A'}`
-          )
-          .join('\n\n');
-
         return {
           content: [
             {
               type: 'text',
-              text: `Found ${events.length} events:\n\n${eventList}`,
+              text: JSON.stringify(events),
             },
           ],
         };
