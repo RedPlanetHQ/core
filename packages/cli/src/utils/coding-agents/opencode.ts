@@ -30,13 +30,31 @@ interface SQLiteDatabase {
 // ─── Database path ────────────────────────────────────────────────────────────
 
 /**
- * OpenCode stores its SQLite database at $XDG_DATA_HOME/opencode/opencode.db.
- * On most Linux and macOS installs XDG_DATA_HOME defaults to ~/.local/share.
+ * Return the path to OpenCode's SQLite database.
+ *
+ * Resolution order:
+ *  1. $XDG_DATA_HOME/opencode/opencode.db  — explicit override always wins
+ *  2. ~/Library/Application Support/opencode/opencode.db  — macOS native path
+ *     (checked only when the file actually exists, so Linux is never penalised)
+ *  3. ~/.local/share/opencode/opencode.db  — XDG default for Linux + macOS
  */
 function getDbPath(): string {
-	const dataHome =
-		process.env['XDG_DATA_HOME'] ?? join(homedir(), '.local', 'share');
-	return join(dataHome, 'opencode', 'opencode.db');
+	if (process.env['XDG_DATA_HOME']) {
+		return join(process.env['XDG_DATA_HOME'], 'opencode', 'opencode.db');
+	}
+
+	if (process.platform === 'darwin') {
+		const macPath = join(
+			homedir(),
+			'Library',
+			'Application Support',
+			'opencode',
+			'opencode.db',
+		);
+		if (existsSync(macPath)) return macPath;
+	}
+
+	return join(homedir(), '.local', 'share', 'opencode', 'opencode.db');
 }
 
 function tryOpenDb(): SQLiteDatabase | null {
@@ -96,8 +114,8 @@ function formatToolPart(partData: Record<string, unknown>): string | null {
 			const args = inv['args'] as Record<string, unknown> | undefined;
 			const primaryArg = args
 				? Object.values(args).find(
-						(v) => typeof v === 'string' && (v as string).length > 0,
-					)
+						v => typeof v === 'string' && (v as string).length > 0,
+				  )
 				: undefined;
 			const hint =
 				typeof primaryArg === 'string'
@@ -173,7 +191,7 @@ export async function findLatestOpenCodeSession(
 	while (Date.now() < deadline) {
 		const result = await scan();
 		if (result) return result;
-		await new Promise<void>((resolve) => {
+		await new Promise<void>(resolve => {
 			setTimeout(resolve, 500);
 		});
 	}
@@ -414,7 +432,7 @@ export class OpenCodeReader extends BaseCodingAgentReader {
 
 			const rows = db.prepare(query).all(...params) as SessionRow[];
 
-			return rows.map((row) => ({
+			return rows.map(row => ({
 				sessionId: row.id,
 				agent: this.agentName,
 				dir: row.directory,
