@@ -264,7 +264,7 @@ export async function callTool(
         if (featured !== undefined) postData.featured = featured;
         if (custom_excerpt) postData.custom_excerpt = custom_excerpt;
 
-        const response = await ghostClient.post('/posts/', { posts: [postData] });
+        const response = await ghostClient.post('/posts/?source=html', { posts: [postData] });
         const p = response.data.posts[0];
 
         return {
