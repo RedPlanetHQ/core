@@ -5,6 +5,7 @@ import { Button } from "../ui";
 
 import {
   Dialog,
+  DialogClose,
   DialogContent,
   DialogDescription,
   DialogFooter,
@@ -12,7 +13,6 @@ import {
   DialogTitle,
   DialogTrigger,
 } from "~/components/ui/dialog";
-import React from "react";
 import { Trash } from "lucide-react";
 
 export interface PersonalAccessToken {
@@ -25,11 +25,9 @@ export interface PersonalAccessToken {
 
 export const useTokensColumns = (): Array<ColumnDef<PersonalAccessToken>> => {
   const fetcher = useFetcher();
-  const [open, setOpen] = React.useState(false);
 
   const onDelete = (id: string) => {
     fetcher.submit({ id }, { method: "DELETE", action: "/settings/api" });
-    setOpen(false);
   };
 
   return [
@@ -81,7 +79,7 @@ export const useTokensColumns = (): Array<ColumnDef<PersonalAccessToken>> => {
       },
       cell: ({ row }) => {
         return (
-          <Dialog onOpenChange={setOpen} open={open}>
+          <Dialog>
             <DialogTrigger asChild>
               <Button variant="ghost">
                 <Trash size={14} />
@@ -96,20 +94,17 @@ export const useTokensColumns = (): Array<ColumnDef<PersonalAccessToken>> => {
                 </DialogDescription>
               </DialogHeader>
               <DialogFooter>
-                <Button
-                  variant="ghost"
-                  onClick={() => {
-                    setOpen(false);
-                  }}
-                >
-                  Cancel
-                </Button>
-                <Button
-                  variant="destructive"
-                  onClick={() => onDelete(row.original.id)}
-                >
-                  Delete
-                </Button>
+                <DialogClose asChild>
+                  <Button variant="ghost">Cancel</Button>
+                </DialogClose>
+                <DialogClose asChild>
+                  <Button
+                    variant="destructive"
+                    onClick={() => onDelete(row.original.id)}
+                  >
+                    Delete
+                  </Button>
+                </DialogClose>
               </DialogFooter>
             </DialogContent>
           </Dialog>
