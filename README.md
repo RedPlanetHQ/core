@@ -35,7 +35,7 @@
 
 # Your personal AI OS.
 
-**Watches your work. Remembers what matters. Acts across your tools and agents. Open source, self-hosted, yours forever.**
+**Run Your OS.** Watches your work. Remembers what matters. Acts across your tools and agents. Open source, self-hosted, yours forever.
 
 <p align="center">
     <a href="https://getcore.me">
@@ -185,22 +185,6 @@ CORE achieves **88.24%** average accuracy on the [LoCoMo benchmark](https://gith
 - Your AI should know you across every tool, not just the current tab.
 - Work should move from intent to action without you becoming the glue.
 - Automation without accountability is chaos.
-- Open source is not a licensing decision. It is a design commitment.
-
----
-
-## Roadmap
-
-We are building in phases. Here is where we are.
-
-| | |
-|---|---|
-| **Phase 0** (done) | Contract layer. Schemas, task state, plans, and auditability. No silent action without a task. |
-| **Phase 1** (done) | Operating layer. Reliable integrations, tasks, and triage loops. |
-| **Phase 2** (now) | Ambient layer. Passive context capture across AI conversations, connected apps, and on Mac, any app you explicitly grant access to. |
-| **Phase 3** (future) | Personal model layer. A fine-tuned model trained on your memory and context. Privacy-first, runs locally. No timeline yet. |
-| **Phase 4** | New surfaces. Wearables, glanceable presence, edge devices. |
-| **Phase 5** | Ecosystem. Linux-style packages and plugins. Standard interfaces for memory, tools, and policy. |
 
 ---
 
