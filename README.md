@@ -35,7 +35,7 @@
 
 # Your personal AI OS.
 
-**Memory across all your tools. Agents that work while you're not watching. A scratchpad that turns intent into action. Self-hosted, yours forever.**
+**Watches your work. Remembers what matters. Acts across your tools and agents. Open source, self-hosted, yours forever.**
 
 <p align="center">
     <a href="https://getcore.me">
@@ -47,6 +47,9 @@
     <a href="https://discord.gg/YGUZcvDjUa">
         <img src="https://img.shields.io/badge/Discord-community-5865F2?style=for-the-badge&logo=discord&logoColor=white" alt="Discord" />
     </a>
+    <a href="https://github.com/RedPlanetHQ/core/blob/main/LICENSE">
+        <img src="https://img.shields.io/badge/License-AGPL%203.0-blue?style=for-the-badge" alt="License: AGPL 3.0" />
+    </a>
 </p>
 </div>
 
@@ -56,12 +59,25 @@
 
 - Chat is an interface. Not an OS.
 - Intelligence without memory is trivia.
-- Autonomous AI needs context. Context needs to be permanent.
 - Your AI should know you across every tool, not just the current tab.
 - Work should move from intent to action without you becoming the glue.
 - Automation without accountability is chaos.
-- Autonomy needs guardrails, approvals, and receipts.
-- Self-hosted, open source, yours forever.
+- Open source is not a licensing decision. It is a design commitment.
+
+---
+
+## Roadmap
+
+We are building in phases. Here is where we are.
+
+| | |
+|---|---|
+| **Phase 0** (done) | Contract layer. Schemas, task state, plans, and auditability. No silent action without a task. |
+| **Phase 1** (done) | Operating layer. Reliable integrations, tasks, and triage loops. |
+| **Phase 2** (now) | Ambient layer. Passive context capture across AI conversations, connected apps, and on Mac, any app you explicitly grant access to. |
+| **Phase 3** (future) | Personal model layer. A fine-tuned model trained on your memory and context. Privacy-first, runs locally. No timeline yet. |
+| **Phase 4** | New surfaces. Wearables, glanceable presence, edge devices. |
+| **Phase 5** | Ecosystem. Linux-style packages and plugins. Standard interfaces for memory, tools, and policy. |
 
 ---
 
@@ -118,10 +134,10 @@ It is not a chatbot you keep prompting. It is the layer that remembers, coordina
 
 | | |
 |---|---|
-| **Memory** | A temporal knowledge graph across your conversations, coding sessions, decisions, preferences, and connected tools. |
-| **Presence** | Scratchpad, web, voice, Slack, WhatsApp, Telegram, email, and other surfaces where work starts. |
-| **Agency** | Gateway-driven execution for Claude Code, Codex, browser agents, local folders, and app workflows. |
-| **Policies** | Approval flows, escalation rules, task state, plans, and receipts so autonomy stays accountable. |
+| **Watches** | Context from your AI conversations via MCP, 50+ connected apps, and on Mac, any app you explicitly grant access to. |
+| **Remembers** | A knowledge graph that tracks not just what you said, but what you decided, when, and why, across every tool and conversation. |
+| **Acts** | Takes direct actions in your connected apps, and delegates longer work to coding and browser agents via the gateway. |
+| **Policies** | Approval flows, escalation rules, plans, and audit logs so autonomy stays accountable. |
 
 CORE decides what it can do safely, asks before sensitive actions, and leaves a trail you can review.
 
@@ -131,9 +147,9 @@ CORE decides what it can do safely, asks before sensitive actions, and leaves a 
 
 | | |
 |---|---|
-| **Scratchpad** | A daily page for tasks, ideas, and work in progress. Type `[ ]` anywhere and CORE picks it up within 3 minutes. |
+| **Memory** | Tracks your preferences, decisions, goals, and directives across every tool and conversation, so every task starts with context loaded. |
 | **Tasks** | One-shot or recurring work units with your spec, CORE's plan, live state, and a dedicated chat thread. Each task can spawn coding or browser sessions. |
-| **Memory** | A temporal knowledge graph that stores preferences, decisions, goals, and directives so every task starts with context loaded. |
+| **Scratchpad** | A daily page for tasks, ideas, and work in progress. Type `[ ]` anywhere and CORE picks it up within 3 minutes. |
 | **Connectors** | 50+ apps through one MCP endpoint, plus webhook triggers for proactive automation. GitHub, Linear, Jira, Slack, Gmail, Calendar, Sentry, Granola, Todoist, and more. |
 | **Skills** | 100+ reusable instructions applied automatically based on context. Use built-in skills or write your own for repeatable workflows. |
 | **Gateway** | Runs Claude Code, Codex, browser agents, and local commands on your machine or in Docker / Railway, so CORE keeps working when your laptop is closed. |
@@ -163,7 +179,7 @@ A Sentry alert fires at 2am. CORE investigates, proposes a fix, and pings you on
 
 ### Get a morning brief that knows your work.
 
-Ask CORE to summarize what changed across email, calendar, Slack, GitHub, Linear, HN, papers, or any source you connect. It can run daily, cite what mattered, and turn follow-ups into tasks.
+Set a recurring task to pull from email, GitHub, Linear, and Slack every morning. CORE summarizes what needs attention, skips what doesn't, and turns follow-ups into tasks automatically.
 
 ### Delegate from wherever you are.
 
@@ -218,7 +234,7 @@ CORE achieves **88.24%** average accuracy on the [LoCoMo benchmark](https://gith
 
 We're building CORE in public.
 
-Star the repo, self-host it, share what you automate, and show the skill or workflow that made it work. Skills and use-cases are the main community surface; code, docs, and integrations are welcome too.
+We share the roadmap and architectural decisions openly because the hardest problems in building a personal OS are best solved with the people using it. Star the repo, self-host it, share what you build, and open issues for what's broken or missing.
 
 - [Discord](https://discord.gg/YGUZcvDjUa) - questions, ideas, show-and-tell
 - [Contributing docs](https://docs.getcore.me/opensource/contributing) - how to contribute to CORE
