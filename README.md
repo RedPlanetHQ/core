@@ -55,29 +55,87 @@
 
 ---
 
-## What we believe
+## See it work
 
-- Chat is an interface. Not an OS.
-- Intelligence without memory is trivia.
-- Your AI should know you across every tool, not just the current tab.
-- Work should move from intent to action without you becoming the glue.
-- Automation without accountability is chaos.
-- Open source is not a licensing decision. It is a design commitment.
+Watch CORE handle two coding tasks end to end:
+
+[![CORE Demo](https://img.youtube.com/vi/7y_kt_UTYQs/maxresdefault.jpg)](https://www.youtube.com/watch?v=7y_kt_UTYQs)
 
 ---
 
-## Roadmap
+## What CORE is
 
-We are building in phases. Here is where we are.
+CORE is the open-source operating layer for AI-native work.
+
+You write what needs doing in a scratchpad. CORE picks up the task, loads context from memory and connected apps, drafts a plan, runs the right agent through the gateway, handles blockers where it can, and comes back when human judgment is needed.
+
+It is not a chatbot you keep prompting. It is the layer that remembers, coordinates, acts, and escalates.
+
+### The architecture
 
 | | |
 |---|---|
-| **Phase 0** (done) | Contract layer. Schemas, task state, plans, and auditability. No silent action without a task. |
-| **Phase 1** (done) | Operating layer. Reliable integrations, tasks, and triage loops. |
-| **Phase 2** (now) | Ambient layer. Passive context capture across AI conversations, connected apps, and on Mac, any app you explicitly grant access to. |
-| **Phase 3** (future) | Personal model layer. A fine-tuned model trained on your memory and context. Privacy-first, runs locally. No timeline yet. |
-| **Phase 4** | New surfaces. Wearables, glanceable presence, edge devices. |
-| **Phase 5** | Ecosystem. Linux-style packages and plugins. Standard interfaces for memory, tools, and policy. |
+| **Watches** | Context from your AI conversations via MCP, 50+ connected apps, and on Mac, any app you explicitly grant access to. |
+| **Remembers** | A knowledge graph that tracks not just what you said, but what you decided, when, and why, across every tool and conversation. |
+| **Acts** | Takes direct actions in your connected apps, and delegates longer work to coding and browser agents via the gateway. |
+| **Policies** | Approval flows, escalation rules, plans, and audit logs so autonomy stays accountable. |
+
+CORE decides what it can do safely, asks before sensitive actions, and leaves a trail you can review.
+
+---
+
+## CORE in action
+
+### Delegate a coding task, come back to a PR.
+
+Tell CORE what needs doing. It gathers context from your repo, apps, and memory, drafts a plan, runs a Claude Code or Codex session, handles blockers where it can, and brings back a PR. You review when it is done.
+
+`[ ] Fix the race condition in the checkout flow from issue #312`
+
+### Clear your backlog while you sleep.
+
+Set a recurring task to pull from your backlog at a set time. CORE works through it while you are offline. Smooth runs wait for review in the morning. Stuck sessions come back with a tight question, not a stalled tab.
+
+`[ ] Work through tonight's backlog starting at 11pm`
+
+### Investigate alerts before they become interruptions.
+
+Set a recurring task to watch Sentry, logs, or any alert source. When something fires, CORE investigates, pulls related traces and prior incidents, and decides whether to handle it or escalate.
+
+A Sentry alert fires at 2am. CORE investigates, proposes a fix, and pings you on Slack for review.
+
+### Get a morning brief that knows your work.
+
+Set a recurring task to pull from email, GitHub, Linear, and Slack every morning. CORE summarizes what needs attention, skips what doesn't, and turns follow-ups into tasks automatically.
+
+### Delegate from wherever you are.
+
+Create tasks from Slack, WhatsApp, Telegram, email, or web. The gateway keeps running in Docker or Railway, so CORE can pick up work even when your laptop is closed.
+
+---
+
+## What's inside CORE
+
+| | |
+|---|---|
+| **Memory** | Tracks your preferences, decisions, goals, and directives across every tool and conversation, so every task starts with context loaded. |
+| **Tasks** | One-shot or recurring work units with your spec, CORE's plan, live state, and a dedicated chat thread. Each task can spawn coding or browser sessions. |
+| **Scratchpad** | A daily page for tasks, ideas, and work in progress. Type `[ ]` anywhere and CORE picks it up within 3 minutes. |
+| **Connectors** | 50+ apps through one MCP endpoint, plus webhook triggers for proactive automation. GitHub, Linear, Jira, Slack, Gmail, Calendar, Sentry, Granola, Todoist, and more. |
+| **Skills** | 100+ reusable instructions applied automatically based on context. Use built-in skills or write your own for repeatable workflows. |
+| **Gateway** | Runs Claude Code, Codex, browser agents, and local commands on your machine or in Docker / Railway, so CORE keeps working when your laptop is closed. |
+| **Model agnostic** | Bring your own provider: Anthropic, OpenAI, or open-weight models. Self-host the full stack for isolation. |
+
+---
+
+## What CORE is not
+
+| | |
+|---|---|
+| **Not a RAG wrapper.** | Memory is not just embedded chunks. It is a knowledge graph that tracks what you decided, when, and why. |
+| **Not a workflow builder.** | No drag-and-drop DAGs. You write what needs doing. CORE figures out the workflow and asks when it needs judgment. |
+| **Not another Devin.** | CORE proposes plans, you approve. CORE asks for unblocks, you decide. CORE brings back PRs, you review. Agents do not merge on their own. |
+| **Not a closed cloud assistant.** | CORE is open source, self-hostable, model-agnostic, and designed around your infrastructure. |
 
 ---
 
@@ -114,93 +172,35 @@ corebrain gateway setup
 
 ---
 
-## See it work
-
-Watch CORE handle two coding tasks end to end:
-
-[![CORE Demo](https://img.youtube.com/vi/7y_kt_UTYQs/maxresdefault.jpg)](https://www.youtube.com/watch?v=7y_kt_UTYQs)
-
----
-
-## What CORE is
-
-CORE is the open-source operating layer for AI-native work.
-
-You write what needs doing in a scratchpad. CORE picks up the task, loads context from memory and connected apps, drafts a plan, runs the right agent through the gateway, handles blockers where it can, and comes back when human judgment is needed.
-
-It is not a chatbot you keep prompting. It is the layer that remembers, coordinates, acts, and escalates.
-
-### The architecture
-
-| | |
-|---|---|
-| **Watches** | Context from your AI conversations via MCP, 50+ connected apps, and on Mac, any app you explicitly grant access to. |
-| **Remembers** | A knowledge graph that tracks not just what you said, but what you decided, when, and why, across every tool and conversation. |
-| **Acts** | Takes direct actions in your connected apps, and delegates longer work to coding and browser agents via the gateway. |
-| **Policies** | Approval flows, escalation rules, plans, and audit logs so autonomy stays accountable. |
-
-CORE decides what it can do safely, asks before sensitive actions, and leaves a trail you can review.
-
----
-
-## What's inside CORE
-
-| | |
-|---|---|
-| **Memory** | Tracks your preferences, decisions, goals, and directives across every tool and conversation, so every task starts with context loaded. |
-| **Tasks** | One-shot or recurring work units with your spec, CORE's plan, live state, and a dedicated chat thread. Each task can spawn coding or browser sessions. |
-| **Scratchpad** | A daily page for tasks, ideas, and work in progress. Type `[ ]` anywhere and CORE picks it up within 3 minutes. |
-| **Connectors** | 50+ apps through one MCP endpoint, plus webhook triggers for proactive automation. GitHub, Linear, Jira, Slack, Gmail, Calendar, Sentry, Granola, Todoist, and more. |
-| **Skills** | 100+ reusable instructions applied automatically based on context. Use built-in skills or write your own for repeatable workflows. |
-| **Gateway** | Runs Claude Code, Codex, browser agents, and local commands on your machine or in Docker / Railway, so CORE keeps working when your laptop is closed. |
-| **Model agnostic** | Bring your own provider: Anthropic, OpenAI, or open-weight models. Self-host the full stack for isolation. |
-
----
-
-## CORE in action
-
-### Delegate a coding task, come back to a PR.
-
-Tell CORE what needs doing. It gathers context from your repo, apps, and memory, drafts a plan, runs a Claude Code or Codex session, handles blockers where it can, and brings back a PR. You review when it is done.
-
-`[ ] Fix the race condition in the checkout flow from issue #312`
-
-### Clear your backlog while you sleep.
-
-Set a recurring task to pull from your backlog at a set time. CORE works through it while you are offline. Smooth runs wait for review in the morning. Stuck sessions come back with a tight question, not a stalled tab.
-
-`[ ] Work through tonight's backlog starting at 11pm`
-
-### Investigate alerts before they become interruptions.
-
-Set a recurring task to watch Sentry, logs, or any alert source. When something fires, CORE investigates, pulls related traces and prior incidents, and decides whether to handle it or escalate.
-
-A Sentry alert fires at 2am. CORE investigates, proposes a fix, and pings you on Slack for review.
-
-### Get a morning brief that knows your work.
-
-Set a recurring task to pull from email, GitHub, Linear, and Slack every morning. CORE summarizes what needs attention, skips what doesn't, and turns follow-ups into tasks automatically.
-
-### Delegate from wherever you are.
-
-Create tasks from Slack, WhatsApp, Telegram, email, or web. The gateway keeps running in Docker or Railway, so CORE can pick up work even when your laptop is closed.
-
----
-
-## What CORE is not
-
-| | |
-|---|---|
-| **Not a RAG wrapper.** | Memory is not just embedded chunks. It is a temporal knowledge graph that tracks what you decided, when, and why. |
-| **Not a workflow builder.** | No drag-and-drop DAGs. You write what needs doing. CORE figures out the workflow and asks when it needs judgment. |
-| **Not another Devin.** | CORE proposes plans, you approve. CORE asks for unblocks, you decide. CORE brings back PRs, you review. Agents do not merge on their own. |
-| **Not a closed cloud assistant.** | CORE is open source, self-hostable, model-agnostic, and designed around your infrastructure. |
-
----
-
 ## Benchmark
 
 CORE achieves **88.24%** average accuracy on the [LoCoMo benchmark](https://github.com/RedPlanetHQ/core-benchmark) across single-hop, multi-hop, open-domain, and temporal reasoning.
+
+---
+
+## What we believe
+
+- Chat is an interface. Not an OS.
+- Intelligence without memory is trivia.
+- Your AI should know you across every tool, not just the current tab.
+- Work should move from intent to action without you becoming the glue.
+- Automation without accountability is chaos.
+- Open source is not a licensing decision. It is a design commitment.
+
+---
+
+## Roadmap
+
+We are building in phases. Here is where we are.
+
+| | |
+|---|---|
+| **Phase 0** (done) | Contract layer. Schemas, task state, plans, and auditability. No silent action without a task. |
+| **Phase 1** (done) | Operating layer. Reliable integrations, tasks, and triage loops. |
+| **Phase 2** (now) | Ambient layer. Passive context capture across AI conversations, connected apps, and on Mac, any app you explicitly grant access to. |
+| **Phase 3** (future) | Personal model layer. A fine-tuned model trained on your memory and context. Privacy-first, runs locally. No timeline yet. |
+| **Phase 4** | New surfaces. Wearables, glanceable presence, edge devices. |
+| **Phase 5** | Ecosystem. Linux-style packages and plugins. Standard interfaces for memory, tools, and policy. |
 
 ---
 
