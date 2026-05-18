@@ -223,6 +223,14 @@ export class OpenCodeReader extends BaseCodingAgentReader {
 		}
 	}
 
+	getSessionFilePath(_dir: string, _sessionId: string): string | null {
+		// OpenCode stores all sessions in a single SQLite database. The watcher
+		// can fs.watch this file and use sessionUpdatedSince to disambiguate
+		// which session changed.
+		const dbPath = getDbPath();
+		return existsSync(dbPath) ? dbPath : null;
+	}
+
 	sessionUpdatedSince(_dir: string, sessionId: string, since: number): boolean {
 		const db = tryOpenDb();
 		if (!db) return false;
