@@ -370,12 +370,3 @@ export function XtermPane({
   );
 }
 
-export function buildGatewayXtermUrl(
-  gatewayId: string,
-  externalSessionId: string,
-): string {
-  const proto = window.location.protocol === "https:" ? "wss:" : "ws:";
-  return `${proto}//${window.location.host}/api/v1/gateways/${encodeURIComponent(
-    gatewayId,
-  )}/xterm?session_id=${encodeURIComponent(externalSessionId)}`;
-}
