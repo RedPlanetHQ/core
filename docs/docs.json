@@ -3,9 +3,9 @@
   "theme": "mint",
   "name": "CORE Documentation",
   "colors": {
-    "primary": "#c15e50",
-    "light": "#c15e50",
-    "dark": "#c15e50"
+    "primary": "#0381e9",
+    "light": "#0381e9",
+    "dark": "#0381e9"
   },
   "favicon": "/favicon.svg",
   "navigation": {
@@ -321,10 +321,7 @@
         "groups": [
           {
             "group": "Get Started",
-            "pages": [
-              "self-hosting/setup",
-              "self-hosting/mac-app"
-            ]
+            "pages": ["self-hosting/setup", "self-hosting/mac-app"]
           },
           {
             "group": "Configuration",
