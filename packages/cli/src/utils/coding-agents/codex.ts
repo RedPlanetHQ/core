@@ -196,6 +196,12 @@ export class CodexReader extends BaseCodingAgentReader {
 		return findSessionPath(sessionId) !== null;
 	}
 
+	getSessionFilePath(_dir: string, sessionId: string): string | null {
+		// codex scans `~/.codex/sessions/YYYY/MM/DD` for a UUID-named file.
+		// This is O(history) — callers should cache the returned path.
+		return findSessionPath(sessionId);
+	}
+
 	sessionUpdatedSince(_dir: string, sessionId: string, since: number): boolean {
 		const jsonlPath = findSessionPath(sessionId);
 		if (!jsonlPath) return false;

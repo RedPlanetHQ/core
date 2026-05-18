@@ -154,7 +154,7 @@ function WatchTaskButton({ taskId }: { taskId: string }) {
       }
       toast({
         title: "Watching session",
-        description: "core will check in on this task in 5 minutes.",
+        description: "core will check on the active coding session in 5 minutes.",
       });
     } catch (err) {
       toast({
@@ -173,7 +173,7 @@ function WatchTaskButton({ taskId }: { taskId: string }) {
       className="gap-2 rounded"
       onClick={handleClick}
       disabled={busy}
-      title="Have core check on this task in 5 minutes"
+      title="Have core check on the active coding session in 5 minutes"
     >
       <Eye size={14} />
       Watch
