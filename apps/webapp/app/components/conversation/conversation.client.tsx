@@ -27,6 +27,7 @@ import type { LLMModel } from "./conversation-textarea.client";
 import Avatar from "boring-avatars";
 import {
   createSkillSlashCommand,
+  SkillMention,
   SkillSlashPluginKey,
 } from "./slash-command-extension";
 
@@ -124,6 +125,7 @@ export const ConversationNew = ({
       Text,
       HardBreak.configure({ keepMarks: true }),
       History,
+      SkillMention,
       createSkillSlashCommand(skillsRef),
     ],
     immediatelyRender: false,
