@@ -322,7 +322,8 @@
           {
             "group": "Get Started",
             "pages": [
-              "self-hosting/setup"
+              "self-hosting/setup",
+              "self-hosting/mac-app"
             ]
           },
           {
