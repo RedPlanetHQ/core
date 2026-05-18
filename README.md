@@ -33,7 +33,7 @@
     <img width="200px" alt="CORE logo" src="https://github.com/user-attachments/assets/bd4e5e79-05b8-4d40-9aff-f1cf9e5d70de" />
   </a>
 
-# Your personal AI OS. Open source.
+# Your personal AI OS.
 
 **Memory across all your tools. Agents that work while you're not watching. A scratchpad that turns intent into action. Self-hosted, yours forever.**
 
