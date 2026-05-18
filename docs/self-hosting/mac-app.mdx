@@ -1,0 +1,89 @@
+---
+title: "Mac App"
+description: "Point the CORE Mac app at your self-hosted instance"
+---
+
+The CORE Mac app is a thin Tauri shell around the webapp — the main window and the voice widget both load whatever webapp URL you tell them to. By default that's `https://app.getcore.me` (CORE Cloud). If you self-host, set one config key and the app loads your instance instead.
+
+## Requirements
+
+- A self-hosted CORE webapp reachable from your Mac (see the [setup guide](/self-hosting/setup)).
+- macOS 12 or later.
+- The Mac app installed (release build — runtime URL override is intentionally ignored in `tauri dev` so local development always points at `devUrl`).
+
+## 1. Install the app
+
+Grab the latest `.dmg` from [GitHub Releases](https://github.com/RedPlanetHQ/core/releases). The app auto-updates against the same release feed.
+
+Open the `.dmg`, drag CORE to `/Applications`, and launch it once so it creates `~/.corebrain/`. You'll see the bundled cloud login screen — that's expected; we'll redirect it in the next step.
+
+## 2. Point it at your instance
+
+Edit `~/.corebrain/config.json` and add `preferences.frontendUrl`:
+
+```json
+{
+  "preferences": {
+    "frontendUrl": "https://core.acme.internal"
+  }
+}
+```
+
+The URL should be the origin where your self-hosted webapp is served — no trailing slash, no path. Examples:
+
+| Where you host         | `frontendUrl`                  |
+| ---------------------- | ------------------------------ |
+| Local Docker on Mac    | `http://localhost:3033`        |
+| Internal domain        | `https://core.acme.internal`   |
+| Railway deployment     | `https://core-production.up.railway.app` |
+
+The file can already exist (the gateway CLI writes other keys here). Merge into the existing `preferences` block rather than overwriting it.
+
+Quit CORE (`⌘Q`) and relaunch. Both the main window and the voice widget will now load from your instance and share session cookies.
+
+## 3. Verify
+
+- Main window shows your self-hosted login screen, not `app.getcore.me`.
+- Tail the app log to confirm the override was picked up:
+
+  ```bash
+  log stream --predicate 'process == "CORE"' --info | grep "webview url"
+  ```
+
+  You should see lines like `[startup] webview url (/) = https://core.acme.internal/ (from config)`.
+
+## Connect a gateway (optional)
+
+If you want the Mac app to drive coding agents, the browser, or local folders, install the gateway and log it into your instance:
+
+```bash
+npm install -g @redplanethq/corebrain
+corebrain login           # picks up frontendUrl from the same config
+corebrain gateway setup
+```
+
+See the [gateway setup guide](/gateway/setup) for the full walkthrough.
+
+## How the override works
+
+A few things worth knowing if you're debugging:
+
+- **Release builds only.** In `tauri dev` (`debug_assertions` true) the app always uses the bundled `devUrl` and ignores `frontendUrl`. This is so contributors can develop against `localhost:3033` without their config sending the dev shell off to production.
+- **Main + voice share the URL.** Both windows resolve their webview URL from the same base, which is what lets them share cookies and session state.
+- **Tauri IPC is granted dynamically.** The bundled remote capability only whitelists `app.getcore.me`. On launch, if `frontendUrl` is set, the app installs an equivalent `user-frontend-remote` capability for your URL so `window.__TAURI__` calls (notifications, shell open, etc.) work from your origin.
+- **Updates still flow from the official feed.** The Tauri updater endpoint is baked into the release build and points at the public GitHub release feed regardless of `frontendUrl`. You always get the same Mac app binary; only the webapp it loads changes.
+
+## Troubleshooting
+
+**App still loads `app.getcore.me`.** Check that:
+- The path is `~/.corebrain/config.json` (tilde, not literal `~`) and the JSON parses (`cat ~/.corebrain/config.json | jq .`).
+- `frontendUrl` is under `preferences`, not at the top level.
+- You fully quit CORE before relaunching — closing the window isn't enough.
+
+**Webview is blank or shows a CORS / cert error.** The Mac app loads your URL as a regular `https://` resource:
+- Self-signed certs aren't trusted. Use a real cert (Let's Encrypt is easiest) or trust the cert in your system keychain.
+- Make sure the host is reachable from your Mac, not just from inside your VPC.
+
+**Login works but `window.__TAURI__` calls are silently dropped.** The dynamic capability didn't install. Check the app log for `dynamic remote capability added for <url>`. If you see `add_capability(...) failed`, the URL probably has a trailing slash or path — strip it back to just the origin.
+
+**Voice widget points at the wrong instance.** It reads the same `frontendUrl` as the main window. If only one of them is wrong, you almost certainly have two CORE processes running — `killall CORE` and relaunch.
