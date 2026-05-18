@@ -25,6 +25,7 @@ import {
 import { useNavigate } from "@remix-run/react";
 import { useDebounce } from "~/hooks/use-debounce";
 import { Task } from "../icons/task";
+import { NewSessionDialog } from "~/components/coding/new-session-dialog";
 
 const NAV_ITEMS = [
   {
@@ -96,10 +97,6 @@ interface CodingTarget {
   gatewayId: string;
   gatewayName: string;
   agent: string;
-  /// First coding-scoped folder on this gateway — the session will run here.
-  /// If null, the gateway has no coding-scoped folder configured and the
-  /// item is hidden.
-  folderPath: string;
 }
 
 export function CommandBar({ open, onOpenChange }: CommandBarProps) {
@@ -113,7 +110,11 @@ export function CommandBar({ open, onOpenChange }: CommandBarProps) {
   const [taskResults, setTaskResults] = useState<TaskResult[]>([]);
   const [isSearching, setIsSearching] = useState(false);
   const [codingTargets, setCodingTargets] = useState<CodingTarget[]>([]);
-  const [spawningKey, setSpawningKey] = useState<string | null>(null);
+  // When set, NewSessionDialog opens prefilled with this gateway+agent so
+  // the user only has to pick (or type) a folder.
+  const [pendingTarget, setPendingTarget] = useState<CodingTarget | null>(
+    null,
+  );
   const navigate = useNavigate();
 
   // Load connected gateways + their agents whenever the bar opens so the
@@ -121,7 +122,6 @@ export function CommandBar({ open, onOpenChange }: CommandBarProps) {
   useEffect(() => {
     if (!open) {
       setCodingTargets([]);
-      setSpawningKey(null);
       return;
     }
     let cancelled = false;
@@ -151,23 +151,14 @@ export function CommandBar({ open, onOpenChange }: CommandBarProps) {
               const res = await fetch(`/api/v1/gateways/${g.id}/info`);
               if (!res.ok) return null;
               const data = (await res.json()) as {
-                folders?: Array<{
-                  path: string;
-                  scopes: Array<"files" | "coding" | "exec">;
-                }>;
                 agents?: string[];
               };
-              const codingFolder = (data.folders ?? []).find((f) =>
-                f.scopes.includes("coding"),
-              );
-              if (!codingFolder) return null;
               const agents = data.agents ?? [];
               if (agents.length === 0) return null;
               return agents.map((agent) => ({
                 gatewayId: g.id,
                 gatewayName: g.name,
                 agent,
-                folderPath: codingFolder.path,
               }));
             } catch {
               return null;
@@ -190,36 +181,19 @@ export function CommandBar({ open, onOpenChange }: CommandBarProps) {
     };
   }, [open]);
 
-  const handleNewCodingSession = async (target: CodingTarget) => {
-    const key = `${target.gatewayId}:${target.agent}`;
-    if (spawningKey) return;
-    setSpawningKey(key);
-    try {
-      const res = await fetch("/api/v1/coding-sessions/new", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          gatewayId: target.gatewayId,
-          agent: target.agent,
-          dir: target.folderPath,
-        }),
-      });
-      if (!res.ok) {
-        // Bar stays open so the user can retry on a different target.
-        console.error("Failed to spawn coding session", await res.text());
-        return;
-      }
-      const body = (await res.json()) as {
-        task: { id: string };
-        session: { id: string };
-      };
-      navigate(
-        `/home/tasks/${body.task.id}/coding/${body.session.id}`,
-      );
-      onOpenChange(false);
-    } finally {
-      setSpawningKey(null);
-    }
+  const handleNewCodingSession = (target: CodingTarget) => {
+    // Close the command-bar and hand off to NewSessionDialog so the user
+    // can pick or enter a folder. The dialog calls back into onCreated
+    // below, which routes to the new session.
+    setPendingTarget(target);
+    onOpenChange(false);
+  };
+
+  const handleSessionCreated = (args: {
+    id: string;
+    taskId: string;
+  }) => {
+    navigate(`/home/tasks/${args.taskId}/coding/${args.id}`);
   };
 
   // Search documents and conversations when debounced query changes
@@ -310,9 +284,45 @@ export function CommandBar({ open, onOpenChange }: CommandBarProps) {
     onOpenChange(false);
   };
 
+  const matchesQuery = (haystack: string) => {
+    const q = searchQuery.trim().toLowerCase();
+    if (!q) return true;
+    return haystack.toLowerCase().includes(q);
+  };
+
+  const filteredNavItems = NAV_ITEMS.filter((item) =>
+    matchesQuery(item.label),
+  );
+
+  const actionItems = [
+    { label: "New Chat", icon: MessageSquare, onSelect: handleNewChat },
+    { label: "Add Task", icon: Task, onSelect: handleAddTask },
+    { label: "Add Document", icon: Plus, onSelect: handleAddDocument },
+  ].filter((action) => matchesQuery(action.label));
+
+  const filteredCodingTargets = codingTargets.filter((target) =>
+    matchesQuery(
+      `new session ${target.agent} ${target.gatewayName}`,
+    ),
+  );
+
   return (
-    <CommandDialog open={open} onOpenChange={onOpenChange}>
-      <Command shouldFilter={false}>
+    <>
+      {/* NewSessionDialog renders here, not inside CommandDialog — when
+          the command-bar closes on selection its children unmount, so the
+          dialog has to be a sibling to outlive that. */}
+      <NewSessionDialog
+        open={pendingTarget !== null}
+        onOpenChange={(v) => {
+          if (!v) setPendingTarget(null);
+        }}
+        initialGatewayId={pendingTarget?.gatewayId}
+        initialAgent={pendingTarget?.agent}
+        onCreated={handleSessionCreated}
+      />
+
+      <CommandDialog open={open} onOpenChange={onOpenChange}>
+        <Command shouldFilter={false}>
         <CommandInput
           placeholder="Search conversations, tasks and documents..."
           className="py-1"
@@ -328,110 +338,79 @@ export function CommandBar({ open, onOpenChange }: CommandBarProps) {
               : ""}
           </CommandEmpty>
 
-          <CommandGroup heading="Navigate" className="p-2">
-            {NAV_ITEMS.filter(
-              (item) =>
-                !searchQuery.trim() ||
-                item.label.toLowerCase().includes(searchQuery.toLowerCase()),
-            ).map((item) => (
-              <CommandItem
-                key={item.url}
-                onSelect={() => {
-                  navigate(item.url);
-                  onOpenChange(false);
-                }}
-                className="flex w-full items-center gap-2 py-1"
-              >
-                <item.icon className="mr-2 h-4 w-4" />
-                <span className="flex-1">{item.label}</span>
-                <span className="text-muted-foreground ml-auto flex gap-1 text-xs">
-                  {item.shortcut.split(" ").map((key, i) => (
-                    <div
-                      key={i}
-                      className="bg-grayAlpha-100 rounded px-1.5 py-0.5 font-mono"
-                    >
-                      {key}
-                    </div>
-                  ))}
-                </span>
-              </CommandItem>
-            ))}
-          </CommandGroup>
-
-          <CommandSeparator />
-
-          <CommandGroup heading="Actions" className="p-2">
-            {[
-              {
-                label: "New Chat",
-                icon: MessageSquare,
-                onSelect: handleNewChat,
-              },
-              { label: "Add Task", icon: Task, onSelect: handleAddTask },
-              {
-                label: "Add Document",
-                icon: Plus,
-                onSelect: handleAddDocument,
-              },
-            ]
-              .filter(
-                (action) =>
-                  !searchQuery.trim() ||
-                  action.label
-                    .toLowerCase()
-                    .includes(searchQuery.toLowerCase()),
-              )
-              .map((action) => (
+          {filteredNavItems.length > 0 && (
+            <CommandGroup heading="Navigate" className="p-2">
+              {filteredNavItems.map((item) => (
                 <CommandItem
-                  key={action.label}
-                  onSelect={action.onSelect}
-                  className="flex items-center gap-2 py-1"
+                  key={item.url}
+                  onSelect={() => {
+                    navigate(item.url);
+                    onOpenChange(false);
+                  }}
+                  className="flex w-full items-center gap-2 py-1"
                 >
-                  <action.icon className="mr-2 h-4 w-4" />
-                  <span>{action.label}</span>
+                  <item.icon className="mr-2 h-4 w-4" />
+                  <span className="flex-1">{item.label}</span>
+                  <span className="text-muted-foreground ml-auto flex gap-1 text-xs">
+                    {item.shortcut.split(" ").map((key, i) => (
+                      <div
+                        key={i}
+                        className="bg-grayAlpha-100 rounded px-1.5 py-0.5 font-mono"
+                      >
+                        {key}
+                      </div>
+                    ))}
+                  </span>
                 </CommandItem>
               ))}
-          </CommandGroup>
+            </CommandGroup>
+          )}
+
+          {actionItems.length > 0 && (
+            <>
+              {filteredNavItems.length > 0 && <CommandSeparator />}
+              <CommandGroup heading="Actions" className="p-2">
+                {actionItems.map((action) => (
+                  <CommandItem
+                    key={action.label}
+                    onSelect={action.onSelect}
+                    className="flex items-center gap-2 py-1"
+                  >
+                    <action.icon className="mr-2 h-4 w-4" />
+                    <span>{action.label}</span>
+                  </CommandItem>
+                ))}
+              </CommandGroup>
+            </>
+          )}
 
           {/* Coding sessions (one item per gateway × agent that's connected
               and has a coding-scoped folder). */}
-          {codingTargets.length > 0 && (
+          {filteredCodingTargets.length > 0 && (
             <>
-              <CommandSeparator />
+              {(filteredNavItems.length > 0 || actionItems.length > 0) && (
+                <CommandSeparator />
+              )}
               <CommandGroup heading="New coding session" className="p-2">
-                {codingTargets
-                  .filter(
-                    (target) =>
-                      !searchQuery.trim() ||
-                      `new session ${target.agent} ${target.gatewayName}`
-                        .toLowerCase()
-                        .includes(searchQuery.toLowerCase()),
-                  )
-                  .map((target) => {
-                    const key = `${target.gatewayId}:${target.agent}`;
-                    const isSpawning = spawningKey === key;
-                    return (
-                      <CommandItem
-                        key={key}
-                        value={key}
-                        onSelect={() => handleNewCodingSession(target)}
-                        disabled={Boolean(spawningKey) && !isSpawning}
-                        className="flex items-center gap-2 py-1"
-                      >
-                        {isSpawning ? (
-                          <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-                        ) : (
-                          <Terminal className="mr-2 h-4 w-4" />
-                        )}
-                        <span className="flex-1">
-                          New session — {target.agent} —{" "}
-                          <span className="text-muted-foreground">
-                            {target.gatewayName}
-                          </span>
+                {filteredCodingTargets.map((target) => {
+                  const key = `${target.gatewayId}:${target.agent}`;
+                  return (
+                    <CommandItem
+                      key={key}
+                      value={key}
+                      onSelect={() => handleNewCodingSession(target)}
+                      className="flex items-center gap-2 py-1"
+                    >
+                      <Terminal className="mr-2 h-4 w-4" />
+                      <span className="flex-1">
+                        New session — {target.agent} —{" "}
+                        <span className="text-muted-foreground">
+                          {target.gatewayName}
                         </span>
-                      </CommandItem>
-                    );
-                  })}
+                      </span>
+                    </CommandItem>
+                  );
+                })}
               </CommandGroup>
             </>
           )}
@@ -505,49 +484,56 @@ export function CommandBar({ open, onOpenChange }: CommandBarProps) {
             </CommandGroup>
           )}
 
-          {/* Documents */}
-          <CommandGroup heading="Documents" className="max-w-[700px] p-2">
-            {isSearching && (
-              <div className="flex items-center justify-center py-4">
-                <Loader2 className="text-muted-foreground h-4 w-4 animate-spin" />
-              </div>
-            )}
-
-            {!isSearching &&
-              documentResults.map((doc) => (
-                <CommandItem
-                  key={doc.id}
-                  value={doc.id}
-                  onSelect={() => handleDocumentClick(doc.id)}
-                  className="flex items-center gap-2 py-2"
-                  disabled={false}
-                >
-                  <File className="h-4 w-4 flex-shrink-0" />
-                  <div className="min-w-0 flex-1">
-                    <p className="text-foreground truncate text-sm">
-                      {doc.title}
-                    </p>
-                    <p className="text-muted-foreground text-xs">
-                      {new Date(doc.updatedAt).toLocaleDateString("en-US", {
-                        month: "short",
-                        day: "numeric",
-                        year: "numeric",
-                      })}
-                    </p>
-                  </div>
-                </CommandItem>
-              ))}
-
-            {!isSearching &&
-              documentResults.length === 0 &&
-              debouncedQuery.length < 2 && (
-                <div className="text-muted-foreground py-4 text-center text-sm">
-                  Start typing to search
+          {/* Documents — hide the heading entirely when a search returned
+              nothing; CommandEmpty above already handles the empty-state
+              message. */}
+          {(isSearching ||
+            documentResults.length > 0 ||
+            debouncedQuery.length < 2) && (
+            <CommandGroup heading="Documents" className="max-w-[700px] p-2">
+              {isSearching && (
+                <div className="flex items-center justify-center py-4">
+                  <Loader2 className="text-muted-foreground h-4 w-4 animate-spin" />
                 </div>
               )}
-          </CommandGroup>
+
+              {!isSearching &&
+                documentResults.map((doc) => (
+                  <CommandItem
+                    key={doc.id}
+                    value={doc.id}
+                    onSelect={() => handleDocumentClick(doc.id)}
+                    className="flex items-center gap-2 py-2"
+                    disabled={false}
+                  >
+                    <File className="h-4 w-4 flex-shrink-0" />
+                    <div className="min-w-0 flex-1">
+                      <p className="text-foreground truncate text-sm">
+                        {doc.title}
+                      </p>
+                      <p className="text-muted-foreground text-xs">
+                        {new Date(doc.updatedAt).toLocaleDateString("en-US", {
+                          month: "short",
+                          day: "numeric",
+                          year: "numeric",
+                        })}
+                      </p>
+                    </div>
+                  </CommandItem>
+                ))}
+
+              {!isSearching &&
+                documentResults.length === 0 &&
+                debouncedQuery.length < 2 && (
+                  <div className="text-muted-foreground py-4 text-center text-sm">
+                    Start typing to search
+                  </div>
+                )}
+            </CommandGroup>
+          )}
         </CommandList>
-      </Command>
-    </CommandDialog>
+        </Command>
+      </CommandDialog>
+    </>
   );
 }
