@@ -114,6 +114,13 @@ export class ClaudeCodeReader extends BaseCodingAgentReader {
 		return existsSync(getSessionPath(dir, sessionId));
 	}
 
+	getSessionFilePath(dir: string, sessionId: string): string | null {
+		// Path is deterministic — `getSessionPath` builds it from cwd + sessionId
+		// without I/O. The file may not exist yet (agent still booting); the
+		// caller watches the parent dir to catch creation.
+		return getSessionPath(dir, sessionId);
+	}
+
 	sessionUpdatedSince(dir: string, sessionId: string, since: number): boolean {
 		const sessionPath = getSessionPath(dir, sessionId);
 		try {

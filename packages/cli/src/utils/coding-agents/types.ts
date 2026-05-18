@@ -77,6 +77,13 @@ export abstract class BaseCodingAgentReader {
 	abstract sessionExists(dir: string, sessionId: string): boolean;
 
 	/**
+	 * Absolute path to the on-disk JSONL transcript for this session. May return
+	 * null if the session id has no known file yet (e.g. codex hasn't written
+	 * one). Used by the watcher to set up a parent-dir `fs.watch`.
+	 */
+	abstract getSessionFilePath(dir: string, sessionId: string): string | null;
+
+	/**
 	 * Returns true if the session transcript has been written to since `since` (ms since epoch).
 	 * Used to detect readiness on resume, where the file pre-exists and `sessionExists` is
 	 * satisfied immediately — we need evidence of new activity by the resumed process.

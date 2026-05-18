@@ -75,10 +75,10 @@ interface Props {
   taskId?: string;
   taskTitle?: string;
   taskDescription?: string | null;
-  /// Pre-select and lock the gateway row when set (used by the
-  /// command-bar so the user only has to pick a folder).
+  /// Pre-select the gateway when set (the row stays editable — used by
+  /// the command-bar to default to the row the user picked).
   initialGatewayId?: string;
-  /// Pre-select and lock the agent row when set.
+  /// Pre-select the coding agent when set; row stays editable.
   initialAgent?: string;
   onCreated: (args: CreatedArgs) => void;
 }
@@ -121,9 +121,6 @@ export function NewSessionDialog({
   const [submitting, setSubmitting] = useState(false);
   const [submitError, setSubmitError] = useState<string | null>(null);
 
-  const gatewayLocked = Boolean(initialGatewayId);
-  const agentLocked = Boolean(initialAgent);
-
   // Reset when the dialog opens; load gateways.
   useEffect(() => {
     if (!open) return;
@@ -158,8 +155,13 @@ export function NewSessionDialog({
     })();
   }, [open, initialGatewayId, initialAgent]);
 
-  // Fetch folders + agents for the selected gateway.
+  // Fetch folders + agents for the selected gateway. Depends on `open`
+  // too so reopening the dialog with the same gateway still refreshes —
+  // otherwise the open-effect clears `info` but this effect wouldn't
+  // re-run (selectedGatewayId didn't change), leaving folders and the
+  // agent dropdown empty.
   useEffect(() => {
+    if (!open) return;
     if (!selectedGatewayId) {
       setInfo(null);
       return;
@@ -168,7 +170,6 @@ export function NewSessionDialog({
     setInfoError(null);
     setInfo(null);
     setSelectedFolderId("");
-    if (!initialAgent) setSelectedAgent("");
 
     (async () => {
       try {
@@ -181,16 +182,21 @@ export function NewSessionDialog({
         }
         const data = (await res.json()) as GatewayInfo;
         setInfo(data);
-        if (!initialAgent && data.agents.length > 0) {
-          setSelectedAgent(data.agents[0]);
-        }
+        // Keep the pre-selected agent if this gateway offers it; otherwise
+        // fall back to the first available. Covers both the initial open
+        // (preserves `initialAgent` from command-bar) and gateway switches
+        // (avoids leaving a stale agent that the new gateway doesn't have).
+        setSelectedAgent((curr) => {
+          if (curr && data.agents.includes(curr)) return curr;
+          return data.agents[0] ?? "";
+        });
       } catch (err) {
         setInfoError(err instanceof Error ? err.message : String(err));
       } finally {
         setInfoLoading(false);
       }
     })();
-  }, [selectedGatewayId, initialAgent]);
+  }, [open, selectedGatewayId]);
 
   const codingFolders = useMemo(
     () => (info?.folders ?? []).filter((f) => f.scopes.includes("coding")),
@@ -347,9 +353,6 @@ export function NewSessionDialog({
     }
   };
 
-  const lockedGatewayName =
-    initialGatewayId && info?.gateway.name ? info.gateway.name : null;
-
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogContent>
@@ -359,60 +362,44 @@ export function NewSessionDialog({
 
         <div className="flex flex-col gap-4 py-2">
           {/* Step 1 — Gateway */}
-          {gatewayLocked ? (
-            <div className="flex flex-col gap-1.5">
-              <label className="text-foreground text-sm font-medium">
-                Gateway
-              </label>
-              <div className="text-muted-foreground rounded border px-3 py-2 text-sm">
-                {lockedGatewayName ?? (
-                  <span className="flex items-center gap-1.5">
-                    <Loader2 size={12} className="animate-spin" />
-                    Loading…
-                  </span>
-                )}
-              </div>
-            </div>
-          ) : (
-            <div className="flex flex-col gap-1.5">
-              <label className="text-foreground text-sm font-medium">
-                Gateway
-              </label>
-              {gatewaysError ? (
-                <p className="text-destructive text-xs">{gatewaysError}</p>
-              ) : null}
-              <Select
-                value={selectedGatewayId}
-                onValueChange={setSelectedGatewayId}
-                disabled={!gateways}
-              >
-                <SelectTrigger>
-                  <SelectValue
-                    placeholder={
-                      gateways === null
-                        ? "Loading gateways…"
-                        : gateways.length === 0
-                          ? "No connected gateways"
-                          : "Select gateway…"
-                    }
-                  />
-                </SelectTrigger>
-                <SelectContent>
-                  {gateways?.map((g) => (
-                    <SelectItem key={g.id} value={g.id}>
-                      <span className="font-medium">{g.name}</span>
-                      {g.hostname ? (
-                        <span className="text-muted-foreground ml-2 text-xs">
-                          {g.hostname}
-                          {g.platform ? ` · ${g.platform}` : ""}
-                        </span>
-                      ) : null}
-                    </SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
-            </div>
-          )}
+          <div className="flex flex-col gap-1.5">
+            <label className="text-foreground text-sm font-medium">
+              Gateway
+            </label>
+            {gatewaysError ? (
+              <p className="text-destructive text-xs">{gatewaysError}</p>
+            ) : null}
+            <Select
+              value={selectedGatewayId}
+              onValueChange={setSelectedGatewayId}
+              disabled={!gateways}
+            >
+              <SelectTrigger>
+                <SelectValue
+                  placeholder={
+                    gateways === null
+                      ? "Loading gateways…"
+                      : gateways.length === 0
+                        ? "No connected gateways"
+                        : "Select gateway…"
+                  }
+                />
+              </SelectTrigger>
+              <SelectContent>
+                {gateways?.map((g) => (
+                  <SelectItem key={g.id} value={g.id}>
+                    <span className="font-medium">{g.name}</span>
+                    {g.hostname ? (
+                      <span className="text-muted-foreground ml-2 text-xs">
+                        {g.hostname}
+                        {g.platform ? ` · ${g.platform}` : ""}
+                      </span>
+                    ) : null}
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+          </div>
 
           {/* Step 2 — Folder (scoped to coding) */}
           <div className="flex flex-col gap-1.5">
@@ -605,48 +592,37 @@ export function NewSessionDialog({
           </div>
 
           {/* Step 3 — Coding agent */}
-          {agentLocked ? (
-            <div className="flex flex-col gap-1.5">
-              <label className="text-foreground text-sm font-medium">
-                Coding agent
-              </label>
-              <div className="text-muted-foreground rounded border px-3 py-2 text-sm">
-                {selectedAgent}
-              </div>
-            </div>
-          ) : (
-            <div className="flex flex-col gap-1.5">
-              <label className="text-foreground text-sm font-medium">
-                Coding agent
-              </label>
-              <Select
-                value={selectedAgent}
-                onValueChange={setSelectedAgent}
-                disabled={!info || info.agents.length === 0}
-              >
-                <SelectTrigger>
-                  <SelectValue
-                    placeholder={
-                      !selectedGatewayId
-                        ? "Pick a gateway first"
-                        : infoLoading
-                          ? "Loading…"
-                          : info?.agents.length === 0
-                            ? "No agents configured on this gateway"
-                            : "Select agent…"
-                    }
-                  />
-                </SelectTrigger>
-                <SelectContent>
-                  {(info?.agents ?? []).map((a) => (
-                    <SelectItem key={a} value={a}>
-                      {a}
-                    </SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
-            </div>
-          )}
+          <div className="flex flex-col gap-1.5">
+            <label className="text-foreground text-sm font-medium">
+              Coding agent
+            </label>
+            <Select
+              value={selectedAgent}
+              onValueChange={setSelectedAgent}
+              disabled={!info || info.agents.length === 0}
+            >
+              <SelectTrigger>
+                <SelectValue
+                  placeholder={
+                    !selectedGatewayId
+                      ? "Pick a gateway first"
+                      : infoLoading
+                        ? "Loading…"
+                        : info?.agents.length === 0
+                          ? "No agents configured on this gateway"
+                          : "Select agent…"
+                  }
+                />
+              </SelectTrigger>
+              <SelectContent>
+                {(info?.agents ?? []).map((a) => (
+                  <SelectItem key={a} value={a}>
+                    {a}
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+          </div>
 
           {submitError ? (
             <p className="text-destructive text-xs">{submitError}</p>
