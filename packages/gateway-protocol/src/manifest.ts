@@ -44,6 +44,13 @@ export const Manifest = z.object({
   }),
   capabilities: z.object({
     browser: z.object({ enabled: z.boolean(), engines: z.array(z.string()).optional() }),
+    /**
+     * Whether the gateway accepts short-lived HMAC tickets on its xterm
+     * WebSocket so the browser can connect directly without proxying through
+     * the webapp. Omitted on older gateways — webapp must fall back to the
+     * proxy path in that case.
+     */
+    directXterm: z.boolean().optional(),
   }),
   folders: z.array(Folder),
   tools: z.array(GatewayTool),

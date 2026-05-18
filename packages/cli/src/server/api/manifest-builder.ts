@@ -191,6 +191,10 @@ export function buildManifest(): {manifest: Manifest; etag: string} {
 				enabled: isSlotEnabled(slots, 'browser'),
 				engines: ['chromium'],
 			},
+			// Browser-direct xterm via HMAC tickets is available whenever the
+			// coding slot is on (that's where the xterm WS route lives). When
+			// off, the webapp falls back to its proxy path.
+			directXterm: isSlotEnabled(slots, 'coding'),
 		},
 		folders: listFolders(),
 		tools,

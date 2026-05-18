@@ -1,14 +1,16 @@
 import { useEffect, useRef, useState } from "react";
 import { Loader2, AlertCircle, CheckCircle2 } from "lucide-react";
 import { Button } from "~/components/ui/button";
+import { requestCodingSessionXtermWsUrl } from "~/lib/xterm-ws.client";
 import { terminalThemes } from "./terminal-themes";
 import "@xterm/xterm/css/xterm.css";
 
 type TerminalState = "connecting" | "running" | "ended" | "error";
 
 interface Props {
-  /** CodingSession.id in CORE's DB. The webapp resolves it to the gateway +
-   *  externalSessionId and proxies the WS. */
+  /** CodingSession.id in CORE's DB. The webapp's /xterm-ticket endpoint
+   *  resolves it to the gateway + externalSessionId and either signs a
+   *  direct-attach ticket or returns the proxy URL. */
   codingSessionId: string;
   onNewSession?: () => void;
   /** Resume the same session (re-spawns the agent with `--resume <id>` on the
@@ -38,13 +40,6 @@ function useHtmlTheme(): "dark" | "light" {
   }, []);
 
   return theme;
-}
-
-function buildXtermUrl(codingSessionId: string): string {
-  const proto = window.location.protocol === "https:" ? "wss:" : "ws:";
-  return `${proto}//${window.location.host}/api/v1/coding-sessions/${encodeURIComponent(
-    codingSessionId,
-  )}/xterm`;
 }
 
 export function GatewayTerminal({
@@ -143,8 +138,23 @@ export function GatewayTerminal({
       term.focus();
       termRef.current = term;
 
-      // ── WebSocket to webapp proxy ─────────────────────────────────────
-      const ws = new WebSocket(buildXtermUrl(codingSessionId));
+      // Resolve the WS URL via /xterm-ticket. Capable gateways return a
+      // direct wss:// URL (browser → gateway, no webapp hop); older or
+      // http-only gateways return the existing webapp proxy path.
+      let wsUrl: string;
+      try {
+        wsUrl = await requestCodingSessionXtermWsUrl(codingSessionId);
+      } catch (err) {
+        if (!mounted) return;
+        setErrorMsg(
+          err instanceof Error ? err.message : "Failed to open terminal",
+        );
+        setStatusBoth("error");
+        return;
+      }
+      if (!mounted) return;
+
+      const ws = new WebSocket(wsUrl);
       localWs = ws;
       wsRef.current = ws;
 
