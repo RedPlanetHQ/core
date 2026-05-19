@@ -35,7 +35,9 @@
 
 # Your personal AI OS.
 
-Not a chatbot you open. An operating layer that is always on. Name it, shape it, connect it to everything you use, and reach it however you work. Open source, self-hosted, yours forever.
+Not a chatbot you open. An AI that is always on, always watching.
+Name it. Shape it. Connect it to everything you use. Reach it however you work.
+Open source, self-hosted, yours forever.
 
 <p align="center">
     <a href="https://getcore.me">
@@ -66,7 +68,7 @@ Watch CORE take a plain-text task, gather context from GitHub and memory, plan t
 
 ---
 
-## What makes it an OS
+## Always watching. Always ready.
 
 Most AI tools wait to be asked. CORE watches.
 
@@ -119,7 +121,7 @@ Then write the directives it follows across every session:
 - "Run the test suite before committing."
 - "Send me a morning brief at 8am."
 
-Choose its voice for spoken interactions. From then on, whether you reach it by scratchpad, WhatsApp, or the Ctrl+Option voice shortcut, it sounds and behaves like the AI you configured.
+Choose its voice for spoken interactions. From then on, it sounds and behaves like the AI you configured, across every interface.
 
 ---
 
@@ -159,11 +161,9 @@ CORE already knows the branch, the context, and your preferences. It is running 
 |---|---|
 | **Memory** | Temporal knowledge graph across every tool and conversation. Preferences, decisions, goals, and directives, so every task starts with context loaded. |
 | **Tasks** | One-shot or recurring work units with your spec, CORE's plan, live state, and a dedicated chat thread. Each task can spawn coding, browser, or terminal sessions. |
-| **Scratchpad** | Your daily page for tasks, ideas, and work in progress. Type `[ ]` anywhere and CORE picks it up within 3 minutes. |
 | **Connectors** | 50+ apps through one MCP endpoint, plus webhook triggers for proactive automation. GitHub, Linear, Jira, Slack, Gmail, Calendar, Sentry, Notion, Todoist, and more. |
 | **Skills** | Reusable instructions that fire automatically based on context. For example: "always pull related Linear issues before planning a fix," "run tests before opening a PR," or "post a Slack summary when a task completes." 100+ built-in, or write your own. |
 | **Gateway** | Runs Claude Code, Codex, browser agents, and terminal commands on your machine or in Docker and Railway, so CORE keeps working when your laptop is closed. |
-| **Personalization** | Give your AI a name, a personality, a voice, and a set of directives it carries into every task and session. |
 | **Model agnostic** | Bring your own provider: Anthropic, OpenAI, or open-weight models. Self-host the full stack for full isolation. |
 
 ---
@@ -181,17 +181,6 @@ CORE already knows the branch, the context, and your preferences. It is running 
 | Terminal and browser access via gateway | ✅ | ✅ | ✅ | ✅ |
 | Human-in-loop by default | ✅ | ❌ | ❌ | ❌ |
 | Open source and self-hostable | ✅ | ✅ | ✅ | ❌ |
-
----
-
-## What CORE is not
-
-| | |
-|---|---|
-| **Not a RAG wrapper.** | Memory is not embedded chunks. It is a temporal knowledge graph that tracks what you decided, when, and why. |
-| **Not a workflow builder.** | No drag-and-drop DAGs. You write what needs doing. CORE figures out the steps and asks when it needs judgment. |
-| **Not another Devin.** | CORE proposes plans, you approve. CORE asks for unblocks, you decide. CORE brings back PRs, you review. Nothing merges on its own. |
-| **Not a closed cloud assistant.** | CORE is open source, self-hostable, model-agnostic, and designed around your infrastructure. |
 
 ---
 
@@ -243,12 +232,6 @@ corebrain gateway setup
 
 ---
 
-## Benchmark
-
-CORE achieves **88.24%** average accuracy on the [LoCoMo benchmark](https://github.com/RedPlanetHQ/core-benchmark) across single-hop, multi-hop, open-domain, and temporal reasoning. See the benchmark repo for full results and baseline comparisons.
-
----
-
 ## Docs
 
 - [**Memory**](https://docs.getcore.me/memory/overview) - Temporal knowledge graph, fact classification, intent-driven retrieval
@@ -260,6 +243,12 @@ CORE achieves **88.24%** average accuracy on the [LoCoMo benchmark](https://gith
 - [**Skills**](https://docs.getcore.me/skills/overview) - Reusable instructions for repeatable workflows
 - [**Self-hosting**](https://docs.getcore.me/self-hosting/setup) - Full deployment guide
 - [**Changelog**](https://docs.getcore.me/opensource/changelog) - What has shipped
+
+---
+
+## Benchmark
+
+CORE achieves **88.24%** average accuracy on the [LoCoMo benchmark](https://github.com/RedPlanetHQ/core-benchmark) across single-hop, multi-hop, open-domain, and temporal reasoning. See the benchmark repo for full results and baseline comparisons.
 
 ---
 
