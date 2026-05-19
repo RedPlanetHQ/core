@@ -117,12 +117,23 @@ interface DocumentUpdateParams {
 }
 
 export const getDocument = async (id: string, workspaceId: string) => {
-  const document = await prisma.document.findUnique({
-    where: {
-      id,
-      workspaceId,
-    },
-  });
+  // Guard against callers that pass an undefined/empty id (e.g. when a
+  // helper like getPersonaForUser returns undefined for workspaces with
+  // no persona). Prisma's findUnique requires a complete unique key and
+  // throws a noisy validation error otherwise.
+  if (!id) return null;
+
+  let document;
+  try {
+    document = await prisma.document.findUnique({
+      where: {
+        id,
+        workspaceId,
+      },
+    });
+  } catch {
+    return null;
+  }
 
   if (!document) {
     return null;

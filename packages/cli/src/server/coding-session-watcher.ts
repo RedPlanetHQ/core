@@ -126,16 +126,26 @@ export function startCodingSessionWatcher(args: {
 	};
 	watched.set(args.sessionId, entry);
 
+	gatewayLog(
+		`coding-watch: started sessionId=${args.sessionId} agent=${args.agentName} file=${filePath}`,
+	);
+
 	// Watch the parent directory and filter by basename. Watching the
 	// dir (not the file) handles: file doesn't exist yet, agent uses
 	// temp+rename for atomic writes, file gets replaced.
 	const parentDir = dirname(filePath);
 	const targetBasename = basename(filePath);
 	try {
-		entry.watcher = fsWatch(parentDir, {persistent: false}, (_event, name) => {
+		entry.watcher = fsWatch(parentDir, {persistent: false}, (event, name) => {
 			if (name && name !== targetBasename) return;
+			gatewayLog(
+				`coding-watch: fs event sessionId=${args.sessionId} event=${event} name=${name ?? '(null)'}`,
+			);
 			scheduleTick(entry, 'watch');
 		});
+		gatewayLog(
+			`coding-watch: fs.watch attached sessionId=${args.sessionId} dir=${parentDir} basename=${targetBasename}`,
+		);
 	} catch (err) {
 		gatewayLog(
 			`coding-watch: fs.watch failed for ${parentDir} err=${
@@ -151,6 +161,9 @@ export function startCodingSessionWatcher(args: {
 	entry.mtimePoll = setInterval(() => {
 		const mtime = safeMtime(entry.filePath);
 		if (mtime > entry.lastMtimeMs) {
+			gatewayLog(
+				`coding-watch: mtime change sessionId=${args.sessionId} prev=${entry.lastMtimeMs} cur=${mtime}`,
+			);
 			scheduleTick(entry, 'mtime');
 		}
 	}, MTIME_POLL_MS);
@@ -216,6 +229,7 @@ export function stopCodingSessionWatcher(sessionId: string): void {
 function flushAndStop(sessionId: string): void {
 	const entry = watched.get(sessionId);
 	if (!entry) return;
+	gatewayLog(`coding-watch: pty exit sessionId=${sessionId}, flushing final tick`);
 	if (entry.debounceTimer) {
 		clearTimeout(entry.debounceTimer);
 		entry.debounceTimer = null;
@@ -266,9 +280,16 @@ async function tick(entry: WatchedSession, source: string): Promise<void> {
 
 	const status: WatchedStatus = deriveStatus({running, fileExists, turns});
 
+	gatewayLog(
+		`coding-watch: tick sessionId=${entry.sessionId} src=${source} status=${status} prev=${entry.lastStatus} turns=${turns.length} running=${running} fileExists=${fileExists}`,
+	);
+
 	// working → idle (and initializing → idle) = assistant finished
 	// responding. The only edge we care about.
 	if (status === 'idle' && entry.lastStatus !== 'idle') {
+		gatewayLog(
+			`coding-watch: transition ${entry.lastStatus}→idle sessionId=${entry.sessionId}, posting turn_ended`,
+		);
 		postTurnEnded(entry.sessionId).catch(err => {
 			gatewayLog(
 				`coding-watch: post failed sessionId=${entry.sessionId} err=${
@@ -344,14 +365,26 @@ async function postTurnEnded(sessionId: string): Promise<void> {
 		// Gateway never logged in — silently skip. Headless gateways
 		// without a configured webapp are still valid: they just don't
 		// get the task-description update side-effect.
+		gatewayLog(
+			`coding-watch: skip post sessionId=${sessionId} reason=no_auth url=${url ?? '(missing)'} apiKey=${apiKey ? '(set)' : '(missing)'}`,
+		);
 		return;
 	}
 
 	const prefs = getPreferences();
 	const baseUrl = prefs.gateway?.httpBaseUrl;
-	if (!baseUrl) return;
+	if (!baseUrl) {
+		gatewayLog(
+			`coding-watch: skip post sessionId=${sessionId} reason=no_baseUrl`,
+		);
+		return;
+	}
 
 	const endpoint = `${url.replace(/\/+$/, '')}/api/v1/internal/coding-events`;
+	const sanitizedBaseUrl = baseUrl.replace(/\/+$/, '');
+	gatewayLog(
+		`coding-watch: posting turn_ended sessionId=${sessionId} endpoint=${endpoint} baseUrl=${sanitizedBaseUrl}`,
+	);
 	const controller = new AbortController();
 	const timeout = setTimeout(() => controller.abort(), 8_000);
 	try {
@@ -363,17 +396,28 @@ async function postTurnEnded(sessionId: string): Promise<void> {
 			},
 			body: JSON.stringify({
 				kind: 'turn_ended',
-				baseUrl: baseUrl.replace(/\/+$/, ''),
+				baseUrl: sanitizedBaseUrl,
 				sessionId,
 				at: new Date().toISOString(),
 			}),
 			signal: controller.signal,
 		});
+		const bodyText = await res.text().catch(() => '');
 		if (!res.ok) {
 			gatewayLog(
-				`coding-watch: post turn_ended status=${res.status} sessionId=${sessionId}`,
+				`coding-watch: post turn_ended FAILED status=${res.status} sessionId=${sessionId} body=${bodyText.slice(0, 200)}`,
+			);
+		} else {
+			gatewayLog(
+				`coding-watch: post turn_ended OK status=${res.status} sessionId=${sessionId}`,
 			);
 		}
+	} catch (err) {
+		gatewayLog(
+			`coding-watch: post turn_ended threw sessionId=${sessionId} err=${
+				err instanceof Error ? err.message : String(err)
+			}`,
+		);
 	} finally {
 		clearTimeout(timeout);
 	}
