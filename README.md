@@ -35,7 +35,7 @@
 
 # Your personal AI OS.
 
-Watches your work. Remembers what matters. Acts across your tools and agents — then brings you back only when judgment is needed. Open source, self-hosted, yours forever.
+Watches your work. Remembers what matters. Acts across your tools and agents, then brings you back only when judgment is needed. Open source, self-hosted, yours forever.
 
 <p align="center">
     <a href="https://getcore.me">
@@ -50,9 +50,6 @@ Watches your work. Remembers what matters. Acts across your tools and agents —
     <a href="https://github.com/RedPlanetHQ/core/blob/main/LICENSE">
         <img src="https://img.shields.io/badge/License-AGPL%203.0-blue?style=for-the-badge" alt="License: AGPL 3.0" />
     </a>
-    <a href="https://news.ycombinator.com/item?id=43986085">
-        <img src="https://img.shields.io/badge/Y%20Combinator-S23-F26522?style=for-the-badge&logo=ycombinator&logoColor=white" alt="YC S23" />
-    </a>
     <a href="https://github.com/RedPlanetHQ/core/stargazers">
         <img src="https://img.shields.io/github/stars/RedPlanetHQ/core?style=for-the-badge&color=gold&logo=github" alt="GitHub Stars" />
     </a>
@@ -63,7 +60,7 @@ Watches your work. Remembers what matters. Acts across your tools and agents —
 
 ## See it work
 
-Watch CORE take a plain-text task, gather context from GitHub and memory, plan the work, run a Claude Code session, and open a PR — without you touching anything:
+Watch CORE take a plain-text task, gather context from GitHub and memory, plan the work, run a Claude Code session, and open a PR, without you touching anything:
 
 [![CORE Demo](https://img.youtube.com/vi/7y_kt_UTYQs/maxresdefault.jpg)](https://www.youtube.com/watch?v=7y_kt_UTYQs)
 
@@ -198,8 +195,8 @@ corebrain gateway setup
 
 **Your first task (2 minutes after setup):**
 
-1. Open the **Scratchpad** — your daily page at `http://localhost:3033`
-2. Type `[ ] Summarize my open GitHub issues` — or any task you'd normally do yourself
+1. Open the **Scratchpad** (your daily page at `http://localhost:3033`)
+2. Type `[ ] Summarize my open GitHub issues` or any task you'd normally do yourself
 3. CORE picks it up within 3 minutes, gathers context from connected apps, and drafts a plan
 4. Approve the plan → CORE runs it and brings back the result
 
