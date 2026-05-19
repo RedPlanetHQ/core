@@ -1,81 +1,88 @@
 ---
-title: "CORE - Your Personal Butler"
-description: "The first AI butler you actually own. Open source. Named. Persistent. Yours."
+title: "Introduction"
+description: "Your personal AI OS — always on, always watching, open source and self-hosted."
 ---
 
-AI removed the inertia of building. CORE removes the inertia of operating.
+Not a chatbot you open. An AI that is always on, always watching.
+Name it. Shape it. Connect it to everything you use. Reach it however you work.
+Open source, self-hosted, yours forever.
 
-You built more tools, more systems, more things that need to run. Then the problem changed — it was no longer about building. It was about operating everything you built. Deployments to watch. Issues to follow up on. Customers to reply to. Systems that only worked if someone kept an eye on them.
+---
 
-Your butler handles that. It knows your tools, your preferences, and your people. It's always on, it remembers everything, and it acts — so you don't have to.
+## What CORE does
 
-**Open source. Named. Persistent. Yours.**
+CORE watches activity across your connected apps and AI sessions. An email arrives from a client, a GitHub issue gets assigned, a Sentry alert fires, a meeting ends — CORE sees it, checks your memory and the skills you have set, and either handles it or surfaces it for your judgment. You do not trigger it. It notices on its own.
 
-## What Makes a Personal Butler?
+It remembers what matters. Not just what you said, but what you decided, when, and why — across every tool and conversation. Install the CORE plugin in Claude Code, Codex, or Cursor and your agent sessions get watched too, so the next task CORE picks up already knows what happened in your last session.
 
-A personal butler isn't just another AI assistant. It needs to do four things:
+When it acts, it acts directly. It can reply to emails, update Linear issues, file GitHub PRs, send Slack messages, run terminal commands, drive a browser, and spawn a Claude Code or Codex session — from any interface, even when your laptop is closed. The gateway is what makes this possible: it runs on your machine or in Docker and Railway, keeping CORE operational around the clock.
 
-### It Remembers Everything
+Where it acts on its own and where it waits for your call is yours to set, per task, per app, per action.
 
-Nothing you say is ever lost. Every conversation, decision, preference, and relationship is retained - not as raw text, but as structured knowledge. It knows who said what, when things changed, and what kind of information it's holding (a preference vs. a decision vs. a goal). Ask about something from weeks ago and the answer is there, with full context of how you got there.
+---
 
-CORE implements this through a [temporal knowledge graph](/memory/overview) that captures, classifies, and connects everything over time.
+## Four ways to reach it
 
-### It Can Take Actions
+A chatbot has one interface. An OS has many.
 
-Remembering is not enough if it can't act on what it knows. A personal butler should be able to perform actions on your behalf without you leaving the conversation.
-
-Simple actions: create a GitHub issue, send a Slack message, add a calendar event.
-
-Complex actions: research LinkedIn to find leads matching a criteria, add them to a Google Sheet, and send the sheet over Slack to your sales team — all from a single request. Multiple tools, multiple steps, orchestrated together with context carried through each one.
-
-CORE's [Toolkit](/concepts/toolkit) gives the brain hands — 200+ actions across 50+ apps, all through a single connection point.
-
-### It Thinks and Works Across Systems
-
-Your tools are siloed. Claude Code can't talk to your WhatsApp. Cursor can't check your calendar. A personal butler breaks these walls — it can access and coordinate across all your agents and apps from any single interface.
-
-Message the Butler on WhatsApp and it can spin up a Claude Code session to fix a bug, start a browser session to research something, or pull context from memory - all without you opening a laptop. One brain that reaches into every tool you use, from wherever you are.
-
-The [Agent](/concepts/meta-agent) is this orchestrator - it understands intent, searches memory, picks tools, and coordinates across agents and apps.
-
-### It Can Proactively Act
-
-You shouldn't have to ask for everything. A personal butler monitors what's happening — a new email, a GitHub event, a calendar change — and evaluates it against what it knows about you: your preferences, your rules, your relationships. When the situation calls for it, it acts on your behalf. An email arrives from a client; your butler already knows how you handle that relationship and drafts the right response for your review.
-
-CORE combines [Agent, Memory, and Toolkit](/memory/overview#how-core-learns-about-you) to make this happen.
-
-## How CORE Implements This
-
-CORE's architecture has three layers that implement these four pillars:
-
-<CardGroup cols={3}>
-  <Card title="Agent" icon="brain" href="/concepts/meta-agent">
-    The orchestrator. Understands intent, searches memory, routes to tools, and acts proactively. (Pillars 3 & 4)
+<CardGroup cols={2}>
+  <Card title="Voice" icon="microphone">
+    Press **Ctrl+Option** on Mac and say what needs doing. CORE runs it in the background without breaking your flow.
   </Card>
 
-  <Card title="Memory" icon="database" href="/memory/overview">
-    The knowledge graph. Stores episodes, entities, and facts. Gets smarter over time. (Pillar 1)
+  <Card title="Scratchpad" icon="pen-to-square">
+    Open your daily page and write `[ ] Fix the auth bug from issue #47`. CORE picks it up within 3 minutes, loads context from your repo and memory, and drafts a plan.
   </Card>
 
-  <Card title="Toolkit" icon="wrench" href="/concepts/toolkit">
-    The actions layer. 15+ app integrations through a single MCP endpoint. (Pillar 2)
+  <Card title="Messaging" icon="message">
+    WhatsApp, Slack, Telegram. Send a task from the airport, from your phone, from bed. CORE has your full context regardless of where the message comes from.
+  </Card>
+
+  <Card title="Chat" icon="comments">
+    Open the dashboard and talk directly. When you want a back-and-forth before delegating.
   </Card>
 </CardGroup>
 
-## Get Started
+One AI, four surfaces, the same memory and context behind all of them.
+
+---
+
+## Make it yours
+
+Give it a name. Choose how it speaks. Set the rules it follows everywhere.
+
+Pick from built-in personalities — TARS's dry efficiency, Alfred's loyal formality, Hudson's warm practicality — or write your own. The personality carries into every task it runs, every plan it drafts, every message it sends on your behalf.
+
+Choose its voice for spoken interactions. From then on, it sounds and behaves like the AI you configured, across every interface.
+
+---
+
+## What's inside CORE
+
+| | |
+|---|---|
+| **Memory** | Temporal knowledge graph across every tool and conversation. Preferences, decisions, goals, and directives — so every task starts with context loaded. |
+| **Tasks** | One-shot or recurring work units with your spec, CORE's plan, live state, and a dedicated chat thread. Each task can spawn coding, browser, or terminal sessions. |
+| **Connectors** | 50+ apps through one MCP endpoint, plus webhook triggers for proactive automation. GitHub, Linear, Jira, Slack, Gmail, Calendar, Sentry, Notion, Todoist, and more. |
+| **Skills** | Reusable instructions that fire automatically based on context — "always pull related Linear issues before planning a fix," "run tests before opening a PR." 100+ built-in, or write your own. |
+| **Gateway** | Runs Claude Code, Codex, browser agents, and terminal commands on your machine or in Docker and Railway, so CORE keeps working when your laptop is closed. |
+| **Model agnostic** | Bring your own provider: Anthropic, OpenAI, or open-weight models. Self-host the full stack for full isolation. |
+
+---
+
+## Get started
 
 <CardGroup cols={2}>
-  <Card title="Get Started" icon="rocket" href="/getting-started">
-    Ready to set it up? Cloud waitlist or self-host in minutes.
-  </Card>
-  <Card title="Talk to Your Butler" icon="message" href="/access-core/overview">
-    Connect via WhatsApp, Slack, email, or the web dashboard.
+  <Card title="Quickstart" icon="rocket" href="/getting-started">
+    Install and run CORE in minutes. Self-hosted, your data stays with you.
   </Card>
   <Card title="Self-Host" icon="server" href="/self-hosting/setup">
-    Open source. Run your butler on your own infrastructure — your data never leaves.
+    Full deployment guide — Docker, Railway, or your own infrastructure.
   </Card>
-  <Card title="Local Development" icon="code" href="/guides/local-setup">
-    Modify CORE's source code and run it locally.
+  <Card title="Memory" icon="database" href="/memory/overview">
+    How CORE remembers what matters across every tool and conversation.
+  </Card>
+  <Card title="Gateway" icon="terminal" href="/gateway/overview">
+    How CORE drives coding agents, browsers, and terminal commands.
   </Card>
 </CardGroup>

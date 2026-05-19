@@ -1,51 +1,108 @@
 ---
 title: "Getting Started"
-description: "Your personal AI butler — open source, named, persistent, yours."
+description: "Install and run your personal AI OS in minutes. Open source, self-hosted, yours forever."
 ---
 
-CORE is your personal AI butler. It knows your tools, your preferences, and your people. It remembers everything across conversations, takes actions across your apps, and works proactively — so you describe outcomes and it does the work.
-
-**Open source. Named. Persistent. Yours.**
-
----
-
-## How do you want to get started?
-
-<CardGroup cols={2}>
-  <Card title="Join the Cloud Waitlist" icon="cloud" href="https://app.getcore.me">
-    Cloud is coming. Join the waitlist and we'll reach out when your spot is ready.
-  </Card>
-
-  <Card title="Self-Host (Open Source)" icon="server" href="/self-hosting/setup">
-    Run your butler on your own infrastructure today. Docker-based, fully open source, your data stays with you.
-  </Card>
-</CardGroup>
+CORE is your personal AI OS. It watches your apps and AI sessions, remembers what matters across every conversation, and acts — directly in your tools or by spawning coding and browser agents — without you staying in the loop for every step.
 
 ---
 
-## What your butler can do
+## Choose your path
 
-Once you're set up, you can message your butler from WhatsApp, Slack, email, or the web dashboard — like messaging a person:
-
-- *"What are my priorities for today?"*
-- *"Fix the auth timeout bug in the API repo"*
-- *"When a Sentry alert fires tonight, investigate it and create an issue"*
-- *"Summarise my emails from the last 24 hours"*
-
-The more you use it, the more it learns — your preferences, patterns, and relationships. That's what makes it a butler, not just a chatbot.
+| I want to... | How |
+|---|---|
+| Try it on my machine | Run the one-step install below (requires Docker) |
+| Deploy on a server or VPS | One-click Railway deploy |
+| Use the Mac app | [Join the waitlist](https://www.getcore.me/) |
 
 ---
 
-## Want to understand how it works first?
+## Install and start CORE
+
+```bash
+npm install -g @redplanethq/corebrain && corebrain setup
+```
+
+The setup wizard asks for an install directory, AI provider, API key, and chat model. It generates secrets, starts the stack, and opens `http://localhost:3033`.
+
+Most local installs take a few minutes once Docker is running.
+
+**Requirements:** Docker 20.10+, Docker Compose 2.20+, 4 vCPU / 8GB RAM
+
+**Or deploy on Railway:**
+
+[![Deploy on Railway](https://railway.app/button.svg)](https://railway.com/deploy/core)
+
+[Full self-hosting guide →](/self-hosting/setup)
+
+---
+
+## Connect a gateway
+
+The gateway is what lets CORE drive coding agents, your browser, and terminal commands — even when your laptop is closed.
+
+```bash
+corebrain login
+corebrain gateway setup
+```
+
+Run this on your laptop, a Docker host, or a Railway service. Once it's connected, CORE can spawn Claude Code or Codex sessions, run terminal commands, and open PRs on your behalf.
+
+---
+
+## Your first task
+
+Once CORE is running:
+
+1. Open the **Scratchpad** — your daily page at `http://localhost:3033`
+2. Type `[ ] Summarize my open GitHub issues` (or any task you'd normally handle yourself)
+3. CORE picks it up within 3 minutes, gathers context from your connected apps and memory, and drafts a plan
+4. Approve the plan — CORE runs it and brings back the result
+
+That's the core loop: you write what needs doing, CORE owns it end to end.
+
+---
+
+## CORE in action
+
+### Say it, come back to a PR.
+
+Press Ctrl+Option, speak: *"Fix the race condition in the checkout flow from issue #312."*
+
+CORE loads the issue, pulls related commits and Slack threads, drafts a plan, and runs a Claude Code session. You come back to a diff.
+
+### Write it at night, review it in the morning.
+
+Scratchpad: `[ ] Work through tonight's backlog starting at 11pm`
+
+CORE pulls from Linear, GitHub, and memory, prioritizes, and works through it while you sleep. Smooth runs are waiting for your review. Stuck sessions come back with one tight question, not a stalled tab.
+
+### Message it from anywhere.
+
+WhatsApp from the airport: *"Ship the auth refactor."*
+
+CORE already knows the branch, the context, and your preferences. It is running in Railway. It kicks off the session before you board.
+
+### Investigate alerts before they become incidents.
+
+Sentry fires at 2am. CORE investigates, pulls related traces and prior incidents from memory, proposes a fix, and pings you on Slack: "Issue #847, fix proposed, awaiting your review." You approve from your phone.
+
+### Get a brief that already knows your week.
+
+Recurring task, every morning at 8am. CORE pulls from email, GitHub, Linear, and Slack, surfaces what actually needs attention, skips what does not, and turns follow-ups into tasks automatically.
+
+---
+
+## Next steps
 
 <CardGroup cols={3}>
-  <Card title="Concepts" icon="brain" href="/introduction">
-    The four pillars: memory, agent, toolkit, proactive actions.
+  <Card title="Connect apps" icon="plug" href="/toolkit/overview">
+    50+ connectors — GitHub, Linear, Slack, Gmail, and more.
   </Card>
   <Card title="Memory" icon="database" href="/memory/overview">
-    How your butler never forgets anything you tell it.
+    How CORE remembers across every tool and conversation.
   </Card>
-  <Card title="Toolkit" icon="wrench" href="/concepts/toolkit">
-    200+ actions across 50+ apps through a single connection.
+  <Card title="Skills" icon="wand-magic-sparkles" href="/skills/overview">
+    Reusable instructions that fire automatically based on context.
   </Card>
 </CardGroup>
