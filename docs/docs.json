@@ -415,8 +415,8 @@
     ]
   },
   "logo": {
-    "light": "/logo/core_logo.png",
-    "dark": "/logo/core_logo.png"
+    "light": "/logo/logo.png",
+    "dark": "/logo/logo.png"
   },
   "api": {
     "playground": {

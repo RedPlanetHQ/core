@@ -9,18 +9,23 @@ import { changeTaskStatus } from "~/services/task.server";
 import { getTaskPhase } from "~/services/task.phase";
 import { logger } from "~/services/logger.service";
 
-const STRUCTURED_TYPES = new Set(["plan", "output"]);
+// `OutcomeNode.parseHTML` accepts both <outcome> and the legacy <output>
+// tag, so both incoming HTML variants resolve to `type: "outcome"` by
+// the time we get here. The set is keyed on tiptap node types, not HTML
+// tag names.
+const STRUCTURED_TYPES = new Set(["plan", "outcome"]);
 
 type DocNode = { type: string; content?: DocNode[]; [key: string]: unknown };
 
 /**
- * Merge structured agent sections (`plan`, `output`) from `input` into `existing`.
+ * Merge structured agent sections (`plan`, `outcome`) from `input` into `existing`.
  *
  * Strict input contract: at most one top-level <plan> and at most one
- * top-level <output> per call. Multiple of either throws — the agent sees
- * the error and self-corrects.
+ * top-level <outcome> per call. Multiple of either throws — the agent sees
+ * the error and self-corrects. The legacy <output> tag is still accepted
+ * on input (OutcomeNode.parseHTML maps it to type "outcome").
  *
- * For each (≤1) plan/output node in the input: replace the FIRST matching
+ * For each (≤1) plan/outcome node in the input: replace the FIRST matching
  * node in `existing` in place (position preserved); append at end if no
  * match exists. Everything else in `input` is dropped — the user's prose
  * is never modified. Pre-existing duplicates in `existing` are NOT deduped.
@@ -79,9 +84,10 @@ export function mergeStructuredSections(
 
 // ─── upsertPageSection ───────────────────────────────────────────────
 // Node-type-aware merge for task pages. The agent writes <plan>...</plan>
-// and <output>...</output> blocks; this function upserts those into the
-// page document while leaving the user's prose untouched. Anything else
-// in the input HTML is ignored.
+// and <outcome>...</outcome> blocks; this function upserts those into
+// the page document while leaving the user's prose untouched. Anything
+// else in the input HTML is ignored. Legacy <output> on input still
+// works (handled by OutcomeNode.parseHTML).
 
 export async function upsertPageSection(
   pageId: string,

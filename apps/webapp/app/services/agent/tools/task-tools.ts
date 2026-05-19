@@ -509,9 +509,9 @@ DESCRIPTION CONTENT (the task body the user reads):
 The description has two structured zones the agent owns. Pass HTML in the \`description\` parameter containing one or both of these tags:
 
 - <plan>...</plan> — the current plan or step-by-step approach you are following. Rewrite this in full whenever the plan changes.
-- <output>...</output> — the result the user reads when the work is done. Replace each run.
+- <outcome>...</outcome> — the result the user reads when the work is done. Replace each run.
 
-Strict input contract: at most ONE <plan> tag and at most ONE <output> tag per call. Multiple of either returns an error and the description is not updated. To update both at once, send HTML containing both tags in a single call.
+Strict input contract: at most ONE <plan> tag and at most ONE <outcome> tag per call. Multiple of either returns an error and the description is not updated. To update both at once, send HTML containing both tags in a single call.
 
 Anything outside these tags is silently dropped — the user's prose elsewhere on the page is sacred and never modified by this tool. Do NOT use the description for status updates, error logs, or transient state; status updates go via send_message.
 
@@ -529,13 +529,13 @@ REPARENTING: Pass newParentId to move a task under a different parent (or null t
           .string()
           .optional()
           .describe(
-            "Task description as HTML — provide <plan>...</plan> and/or <output>...</output> tags to upsert those sections. At most one of each per call. Other content is dropped.",
+            "Task description as HTML — provide <plan>...</plan> and/or <outcome>...</outcome> tags to upsert those sections. At most one of each per call. Other content is dropped.",
           ),
         replaceDescription: z
           .boolean()
           .optional()
           .describe(
-            "Set true to replace the entire description verbatim (only valid for task creation flows where the agent writes the user's prose from a brief). Default: false — description is merged via <plan>/<output> upsert.",
+            "Set true to replace the entire description verbatim (only valid for task creation flows where the agent writes the user's prose from a brief). Default: false — description is merged via <plan>/<outcome> upsert.",
           ),
         schedule: z.string().optional().describe("New RRule schedule string"),
         isActive: z
@@ -612,7 +612,7 @@ REPARENTING: Pass newParentId to move a task under a different parent (or null t
                 if (existingHtml.length > 0) {
                   const similarity = textSimilarity(existingHtml, description);
                   if (similarity < 0.3) {
-                    return `Description update rejected: the new content is too different from the existing description (similarity: ${Math.round(similarity * 100)}%). Omit replaceDescription and pass <plan>/<output> tags to upsert sections instead.`;
+                    return `Description update rejected: the new content is too different from the existing description (similarity: ${Math.round(similarity * 100)}%). Omit replaceDescription and pass <plan>/<outcome> tags to upsert sections instead.`;
                   }
                 }
                 await setPageContentFromHtml(currentTask.pageId, description);

@@ -79,16 +79,18 @@ const ServerPlanNode = Node.create({
   },
 });
 
-const ServerOutputNode = Node.create({
-  name: "output",
+const ServerOutcomeNode = Node.create({
+  name: "outcome",
   group: "block",
   content: "block+",
   defining: true,
+  // Accept the legacy <output> tag too so existing pages still parse.
+  // New writes render as <outcome>.
   parseHTML() {
-    return [{ tag: "output" }];
+    return [{ tag: "outcome" }, { tag: "output" }];
   },
   renderHTML() {
-    return ["output", 0];
+    return ["outcome", 0];
   },
 });
 
@@ -107,7 +109,7 @@ export function getServerExtensions(): Extensions {
     TableHeader,
     TableCell,
     ServerPlanNode,
-    ServerOutputNode,
+    ServerOutcomeNode,
   ];
 }
 
