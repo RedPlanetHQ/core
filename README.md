@@ -86,7 +86,7 @@ You decide where it acts on its own and where it waits for your call. Handle Sen
 
 A chatbot has one interface. An OS has many.
 
-**Voice.** Press Ctrl+Option on Mac and say what needs doing. CORE creates the task and starts running it in the background before you put your phone down.
+**Voice.** Press Ctrl+Option on Mac and say what needs doing. CORE runs it in the background without breaking your flow.
 
 **Scratchpad.** Open your daily page and write `[ ] Fix the auth bug from issue #47`. CORE picks it up within 3 minutes, loads context from your repo and memory, and drafts a plan.
 
