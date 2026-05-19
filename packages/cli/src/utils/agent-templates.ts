@@ -43,20 +43,15 @@ export const AGENT_TEMPLATES: AgentTemplate[] = [
 	{
 		name: 'opencode',
 		commands: ['opencode'],
-		// opencode run [message..] is the non-interactive form; the bare `opencode`
-		// command opens the TUI and does not accept a positional prompt.
-		// --dangerously-skip-permissions bypasses first-run permission dialogs so the
-		// headless gateway flow doesn't stall waiting for user interaction.
-		// sessionMode:'existing' means opencode assigns its own session ID which we
-		// discover from its SQLite database after spawn via findLatestOpenCodeSession.
+		// Always launch the bare TUI inside the PTY — that's the only mode the
+		// gateway uses (xterm session and coding_ask both run in an interactive
+		// PTY). Resume uses `--session <id>` to reattach to a specific session.
+		// sessionMode:'existing' means opencode assigns its own session ID which
+		// we discover from its SQLite database after spawn via
+		// findLatestOpenCodeSession.
 		defaultConfig: {
-			args: ['run', '--dangerously-skip-permissions'],
-			resumeArgs: [
-				'run',
-				'--dangerously-skip-permissions',
-				'--session',
-				'{sessionId}',
-			],
+			args: [],
+			resumeArgs: ['--session', '{sessionId}'],
 			sessionMode: 'existing',
 			modelArg: '--model',
 		},
