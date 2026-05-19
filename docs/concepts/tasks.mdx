@@ -1,35 +1,79 @@
 ---
 title: "Tasks"
-description: "SOL's task system and planner"
+description: "CORE's task system — one-shot and recurring work units with plans, state, and coding sessions"
 ---
 
 ## Overview
 
-SOL's task system is designed to centralize and streamline your work across multiple platforms, providing a unified system for tracking, prioritizing, and completing work items.
+CORE's task system is the unit of delegated work. When you write a `[ ]` in the Scratchpad, send a message, or set up a recurring job, CORE creates a task — loads context from memory and connected apps, drafts a plan, runs the work through the gateway, handles blockers where it can, and comes back when judgment is needed.
 
-A SOL task is a work item that:
+A CORE task is a work item that:
 
 - Has a clear objective
 - Can be tracked to completion
 - May be linked to external systems (GitHub, Linear, etc.)
 - Contains context relevant to the work needed
-- Can be prioritized and scheduled
+- Can be one-shot or recurring on a schedule
 
-## Task Sources
+---
 
-Tasks in SOL can be created from multiple sources:
+## Task sources
 
-1. **Manual Creation**: Directly created by you in SOL
-2. **Automation Rules**: Generated automatically based on triggers from connected platforms (Linear issues, GitHub PRs, etc.)
-3. **Conversation**: Created from chat with SOL
+Tasks in CORE can be created from multiple sources:
 
-## Task Anatomy
+1. **Scratchpad** — Type `[ ]` on your daily page. CORE picks it up within 3 minutes and starts working.
+2. **Chat** — Created from a conversation with CORE directly.
+3. **Messaging** — Sent via WhatsApp, Slack, Telegram, or email.
+4. **Automation** — Triggered automatically from connected apps (a Sentry alert fires, a Linear issue is assigned, a GitHub PR is opened).
+5. **Recurring** — Scheduled to run at a set time, daily, weekly, or any cron pattern.
 
-Each task in SOL consists of:
+---
 
-- **Title**: Clear description of the work to be done
-- **Status**: Current state (Todo, Done)
-- **Scheduled Date**: When the task should be scheduled
-- **Descriptions**: Related information, links, and background
-- **Subtasks**: Smaller steps needed to complete the main task
-- **Activity**: History of actions and changes
+## Task anatomy
+
+Each task in CORE consists of:
+
+- **Title** — Clear description of the work to be done
+- **Status** — Current state (Todo, In Progress, Done)
+- **Scheduled date** — When the task is set to run
+- **Description** — Spec, related links, and background context
+- **Plan** — CORE's proposed steps, presented for your approval before execution
+- **Subtasks** — Smaller steps broken out during planning
+- **Sessions** — Coding, browser, or terminal sessions spawned to execute the work
+- **Activity** — Full history of actions, decisions, and changes
+- **Chat thread** — A dedicated conversation scoped to this task for follow-up
+
+---
+
+## How a task runs
+
+<Steps>
+  <Step title="Task is created">
+    You write a `[ ]`, send a message, or a trigger fires. CORE creates the task and loads context from memory and connected apps.
+  </Step>
+  <Step title="Plan is drafted">
+    CORE drafts a step-by-step plan and presents it for your approval. You can edit, approve, or reject it.
+  </Step>
+  <Step title="Work executes">
+    CORE runs the plan — taking direct actions in your apps, spawning Claude Code or Codex sessions via the gateway, or driving the browser. Skills fire automatically based on context.
+  </Step>
+  <Step title="Blockers are handled or escalated">
+    If CORE hits something it can resolve, it does. If it needs your judgment, it comes back with a tight question — not a stalled tab.
+  </Step>
+  <Step title="Result is delivered">
+    CORE brings back the output — a PR, a summary, a completed action — and logs everything to memory so future tasks start with that context loaded.
+  </Step>
+</Steps>
+
+---
+
+## Recurring tasks
+
+Tasks can be scheduled to run on a recurring basis. Set a time and CORE runs the full loop — gathering fresh context, executing the work, and reporting back — on every cycle.
+
+Examples:
+- `Every morning at 8am, pull from email, GitHub, and Slack and surface what needs attention`
+- `Every Monday, find 10 new leads matching our ICP on LinkedIn and add them to the Leads sheet`
+- `Every night at 11pm, work through the backlog`
+
+Recurring tasks are created from the Tasks page or from a message in any channel.
