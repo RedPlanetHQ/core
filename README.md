@@ -68,20 +68,15 @@ Watch CORE take a plain-text task, gather context from GitHub and memory, plan t
 
 ## What makes it an OS
 
-Every chatbot, every agent tool, every AI assistant you use today has the same assumption baked in: you open it, you type, it responds, you close it. That is a chat interface. Not an OS.
+Most AI tools wait to be asked. CORE watches.
 
-Your Mac OS does not wait for you to open a window. It runs in the background, manages memory across every process, coordinates work across every app, and responds to keyboard, trackpad, and voice equally. You configure it once and it works your way everywhere.
+Connect it to your apps and it monitors activity across all of them. An email arrives from a client, a GitHub issue gets assigned, a Sentry alert fires, a meeting ends. CORE sees it, checks your memory and the skills you have set, and either handles it or surfaces it for your judgment. You do not trigger it. It notices on its own.
 
-CORE works the same way. It does not need a chat window. It is always on. It picks up work from wherever you give it. It has persistent memory across every tool, every session, every conversation. It coordinates coding agents, browser agents, and app actions. And you configure it once: name, personality, voice, directives.
+Install the CORE plugin in Claude Code, Codex, or Cursor and your agent conversations get watched too. Context discussed, decisions made, code written, all of it feeds the memory knowledge graph. The next task CORE picks up already knows what happened in your last session.
 
-Four things give it OS-level capability:
+When it acts, it acts directly. It can reply to emails, update Linear issues, file GitHub PRs, send Slack messages, run terminal commands, drive a browser, and spawn a Claude Code or Codex session from any interface. Send a WhatsApp message from the airport and CORE can have a coding session running and a PR open before you board.
 
-| | |
-|---|---|
-| **Memory** | A temporal knowledge graph of your preferences, decisions, goals, and history across every tool and conversation. Every task starts with full context already loaded. Not embedded chunks. What you decided, when, and why. |
-| **Tasks** | The process manager. CORE owns work end to end: reads the brief, drafts a plan, runs the agents, handles blockers, and brings back a result for your review. |
-| **Gateway** | The execution layer. Runs Claude Code, Codex, browser agents, and terminal commands on your machine or in Docker and Railway. Keeps running when your laptop is closed. |
-| **Toolkit** | The application layer. 1000+ actions across 50+ apps via MCP. GitHub, Linear, Slack, Gmail, Sentry, Notion, Jira, Calendar, and more. |
+You decide where it acts on its own and where it waits for your call. Handle Sentry alerts automatically but always ask before merging. Approve a plan before a coding session starts. Require confirmation before any email goes out. The level of autonomy is yours to set, per task, per app, per action.
 
 ---
 
@@ -103,18 +98,28 @@ No chat window required. One AI, four surfaces, the same memory and context behi
 
 ## Make it yours
 
-Every other AI assistant is built for everyone. That is why it feels like no one's.
+Give it a name. Choose how it speaks. Set the rules it follows everywhere.
 
-Give CORE a name. Set its personality: how formal it sounds, how much detail it gives, how it handles uncertainty. Choose its voice. Write the directives it follows everywhere:
+CORE ships with five built-in personalities:
+
+| | |
+|---|---|
+| **TARS** | Dry wit, minimal, efficient. Like TARS from Interstellar. Built for Mars habitat management, now running your entire life. |
+| **Alfred** | Alfred Pennyworth. Formal, protective, decades of loyalty. Dry wit with genuine care underneath. Will tell you the hard truth with impeccable timing. |
+| **Hobson** | Sharp, acerbic, witty. Will say what no one else will. Loyalty disguised as sharpness. |
+| **Hudson** | Warm, practical, grounded. Common sense as a superpower. Gets things done without fuss. |
+| **Jeeves** | Quietly the most capable person in the room. Solves problems before you know you have them. |
+
+Or write your own. The personality applies everywhere: every task it runs, every plan it drafts, every message it sends on your behalf.
+
+Then write the directives it follows across every session:
 
 - "Always check my calendar before scheduling anything."
 - "Never open a PR without my approval."
 - "Run the test suite before committing."
-- "Send me a morning brief at 8am with what needs attention."
+- "Send me a morning brief at 8am."
 
-These apply across every task, every session, every interface. CORE carries them into every Claude Code session it runs, every action it takes in your apps, every plan it drafts.
-
-This is not configuration. It is closer to training an AI that already knows your stack, your preferences, and your standards, and applies them without being reminded.
+Choose its voice for spoken interactions. From then on, whether you reach it by scratchpad, WhatsApp, or the Ctrl+Option voice shortcut, it sounds and behaves like the AI you configured.
 
 ---
 
