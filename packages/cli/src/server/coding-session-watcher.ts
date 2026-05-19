@@ -28,16 +28,16 @@
  *   event, backstop mtime change, or a tick that sees `working`).
  *   Reaps abandoned sessions without cutting off active ones.
  *
- * Auth: we POST with the user's API key (`config.auth.apiKey`) and
- * identify the gateway by its `httpBaseUrl`, since the CLI doesn't
- * know its own webapp-side ID.
+ * Auth: we POST with the user's API key (`config.auth.apiKey`). The
+ * webapp resolves the session from `(workspaceId, externalSessionId)`
+ * — workspaceId comes from the API key, and externalSessionId is a UUID
+ * the coding agent generated, so no gateway-identity field is needed.
  */
 
 import {watch as fsWatch, statSync, type FSWatcher} from 'node:fs';
 import {basename, dirname} from 'node:path';
 
 import {getConfig} from '@/config/index';
-import {getPreferences} from '@/config/preferences';
 import {gatewayLog} from '@/server/gateway-log';
 import {ptyManager} from '@/server/pty/manager';
 import {
@@ -371,19 +371,9 @@ async function postTurnEnded(sessionId: string): Promise<void> {
 		return;
 	}
 
-	const prefs = getPreferences();
-	const baseUrl = prefs.gateway?.httpBaseUrl;
-	if (!baseUrl) {
-		gatewayLog(
-			`coding-watch: skip post sessionId=${sessionId} reason=no_baseUrl`,
-		);
-		return;
-	}
-
 	const endpoint = `${url.replace(/\/+$/, '')}/api/v1/internal/coding-events`;
-	const sanitizedBaseUrl = baseUrl.replace(/\/+$/, '');
 	gatewayLog(
-		`coding-watch: posting turn_ended sessionId=${sessionId} endpoint=${endpoint} baseUrl=${sanitizedBaseUrl}`,
+		`coding-watch: posting turn_ended sessionId=${sessionId} endpoint=${endpoint}`,
 	);
 	const controller = new AbortController();
 	const timeout = setTimeout(() => controller.abort(), 8_000);
@@ -396,7 +386,6 @@ async function postTurnEnded(sessionId: string): Promise<void> {
 			},
 			body: JSON.stringify({
 				kind: 'turn_ended',
-				baseUrl: sanitizedBaseUrl,
 				sessionId,
 				at: new Date().toISOString(),
 			}),
