@@ -14,6 +14,7 @@ import { Terminal, Plus } from "lucide-react";
 import { getWorkspaceId, requireUser } from "~/services/session.server";
 import { getCodingSessionsForTask } from "~/services/coding/coding-session.server";
 import type { CodingSessionListItem } from "~/services/coding/coding-session.server";
+import { getPageContentAsHtml } from "~/services/hocuspocus/content.server";
 import { Button } from "~/components/ui/button";
 import { useTauri } from "~/hooks/use-tauri";
 import { NewSessionDialog } from "~/components/coding/new-session-dialog";
@@ -43,14 +44,18 @@ export async function loader({ request, params }: LoaderFunctionArgs) {
     getCodingSessionsForTask(taskId, workspaceId),
     prisma.task.findUnique({
       where: { id: taskId, workspaceId },
-      select: { title: true, description: true },
+      select: { title: true, pageId: true },
     }),
   ]);
+
+  const taskDescription = task?.pageId
+    ? await getPageContentAsHtml(task.pageId)
+    : null;
 
   return typedjson({
     sessions,
     taskTitle: task?.title ?? "",
-    taskDescription: task?.description ?? null,
+    taskDescription: taskDescription ?? null,
   });
 }
 
