@@ -114,13 +114,6 @@ CORE ships with five built-in personalities:
 
 Or write your own. The personality applies everywhere: every task it runs, every plan it drafts, every message it sends on your behalf.
 
-Then write the directives it follows across every session:
-
-- "Always check my calendar before scheduling anything."
-- "Never open a PR without my approval."
-- "Run the test suite before committing."
-- "Send me a morning brief at 8am."
-
 Choose its voice for spoken interactions. From then on, it sounds and behaves like the AI you configured, across every interface.
 
 ---
