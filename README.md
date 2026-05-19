@@ -94,6 +94,7 @@ A chatbot has one interface. An OS has many.
 
 **Chat.** Open the dashboard and talk directly, like any assistant. When you want a back-and-forth before delegating.
 
+One AI, four surfaces, the same memory and context behind all of them.
 
 ---
 
