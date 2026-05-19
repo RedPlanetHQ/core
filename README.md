@@ -35,7 +35,7 @@
 
 # Your personal AI OS.
 
-**Run Your OS.** Watches your work. Remembers what matters. Acts across your tools and agents. Open source, self-hosted, yours forever.
+Watches your work. Remembers what matters. Acts across your tools and agents — then brings you back only when judgment is needed. Open source, self-hosted, yours forever.
 
 <p align="center">
     <a href="https://getcore.me">
@@ -50,6 +50,12 @@
     <a href="https://github.com/RedPlanetHQ/core/blob/main/LICENSE">
         <img src="https://img.shields.io/badge/License-AGPL%203.0-blue?style=for-the-badge" alt="License: AGPL 3.0" />
     </a>
+    <a href="https://news.ycombinator.com/item?id=43986085">
+        <img src="https://img.shields.io/badge/Y%20Combinator-S23-F26522?style=for-the-badge&logo=ycombinator&logoColor=white" alt="YC S23" />
+    </a>
+    <a href="https://github.com/RedPlanetHQ/core/stargazers">
+        <img src="https://img.shields.io/github/stars/RedPlanetHQ/core?style=for-the-badge&color=gold&logo=github" alt="GitHub Stars" />
+    </a>
 </p>
 </div>
 
@@ -57,7 +63,7 @@
 
 ## See it work
 
-Watch CORE handle two coding tasks end to end:
+Watch CORE take a plain-text task, gather context from GitHub and memory, plan the work, run a Claude Code session, and open a PR — without you touching anything:
 
 [![CORE Demo](https://img.youtube.com/vi/7y_kt_UTYQs/maxresdefault.jpg)](https://www.youtube.com/watch?v=7y_kt_UTYQs)
 
@@ -122,9 +128,23 @@ Create tasks from Slack, WhatsApp, Telegram, email, or web. The gateway keeps ru
 | **Tasks** | One-shot or recurring work units with your spec, CORE's plan, live state, and a dedicated chat thread. Each task can spawn coding or browser sessions. |
 | **Scratchpad** | A daily page for tasks, ideas, and work in progress. Type `[ ]` anywhere and CORE picks it up within 3 minutes. |
 | **Connectors** | 50+ apps through one MCP endpoint, plus webhook triggers for proactive automation. GitHub, Linear, Jira, Slack, Gmail, Calendar, Sentry, Granola, Todoist, and more. |
-| **Skills** | 100+ reusable instructions applied automatically based on context. Use built-in skills or write your own for repeatable workflows. |
+| **Skills** | Reusable instructions that fire automatically based on context. For example: "always pull related Linear issues before planning a fix," "run tests before opening a PR," or "post a Slack summary when a task completes." 100+ built-in, or write your own. |
 | **Gateway** | Runs Claude Code, Codex, browser agents, and local commands on your machine or in Docker / Railway, so CORE keeps working when your laptop is closed. |
 | **Model agnostic** | Bring your own provider: Anthropic, OpenAI, or open-weight models. Self-host the full stack for isolation. |
+
+---
+
+## How CORE compares
+
+| | CORE | Devin / Copilot Workspace | Zapier / n8n | Mem / Notion AI |
+|---|:---:|:---:|:---:|:---:|
+| Delegates full tasks to coding agents | ✅ | ✅ | ❌ | ❌ |
+| Persistent memory across tasks | ✅ | ❌ | ❌ | Partial |
+| 50+ app connectors | ✅ | ❌ | ✅ | ❌ |
+| Human-in-loop by default | ✅ | ❌ | ❌ | N/A |
+| Open source and self-hostable | ✅ | ❌ | Partial | ❌ |
+| Works from plain-language task descriptions | ✅ | Partial | ❌ | Partial |
+| Runs while your laptop is closed | ✅ | ✅ | ✅ | ❌ |
 
 ---
 
@@ -142,6 +162,14 @@ Create tasks from Slack, WhatsApp, Telegram, email, or web. The gateway keeps ru
 ## Quickstart
 
 Open source and self-hosted. Your data stays in your infrastructure.
+
+**Choose your path:**
+
+| I want to… | How |
+|---|---|
+| Try it on my machine | Run the one-step install below (requires Docker) |
+| Deploy on a server or VPS | One-click Railway deploy |
+| Use a Mac app | [Join the waitlist →](https://www.getcore.me/) |
 
 **Install and start CORE:**
 
@@ -168,13 +196,20 @@ corebrain gateway setup
 
 [Full self-hosting guide](https://docs.getcore.me/self-hosting/setup)
 
-> Want the Mac app? Join the waitlist at [getcore.me](https://www.getcore.me/).
+**Your first task (2 minutes after setup):**
+
+1. Open the **Scratchpad** — your daily page at `http://localhost:3033`
+2. Type `[ ] Summarize my open GitHub issues` — or any task you'd normally do yourself
+3. CORE picks it up within 3 minutes, gathers context from connected apps, and drafts a plan
+4. Approve the plan → CORE runs it and brings back the result
+
+[Connect your first app →](https://docs.getcore.me/connectors)
 
 ---
 
 ## Benchmark
 
-CORE achieves **88.24%** average accuracy on the [LoCoMo benchmark](https://github.com/RedPlanetHQ/core-benchmark) across single-hop, multi-hop, open-domain, and temporal reasoning.
+CORE achieves **88.24%** average accuracy on the [LoCoMo benchmark](https://github.com/RedPlanetHQ/core-benchmark) across single-hop, multi-hop, open-domain, and temporal reasoning. See the benchmark repo for full results and baseline comparisons.
 
 ---
 
