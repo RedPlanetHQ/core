@@ -390,21 +390,28 @@ async function createTransport(
     },
   });
 
-  const keepAlive = setInterval(() => {
-    try {
-      transport.send({ jsonrpc: "2.0", method: "ping" });
-    } catch (e) {
-      // If sending a ping fails, the connection is likely broken.
-      // Log the error and clear the interval to prevent further attempts.
-      logger.error("Failed to send keep-alive ping, cleaning up interval." + e);
-      clearInterval(keepAlive);
-    }
-  }, 30000); // Send ping every 60 seconds
+  // Only run keep-alive for sessionful transports. Stateless transports are
+  // one-shot and have no peer to ping; a setInterval here would retain the
+  // transport forever because transport.send() returns silently when no SSE
+  // stream is open (it does not throw), so the catch clause never clears it.
+  let keepAlive: ReturnType<typeof setInterval> | null = null;
+  if (!noSession) {
+    keepAlive = setInterval(() => {
+      try {
+        transport.send({ jsonrpc: "2.0", method: "ping" });
+      } catch (e) {
+        logger.error(
+          "Failed to send keep-alive ping, cleaning up interval." + e,
+        );
+        if (keepAlive) clearInterval(keepAlive);
+      }
+    }, 30000);
+  }
 
   // Setup cleanup on close
   transport.onclose = async () => {
     try {
-      clearInterval(keepAlive);
+      if (keepAlive) clearInterval(keepAlive);
       await MCPSessionManager.deleteSession(sessionId);
       await TransportManager.cleanupSession(sessionId);
     } catch (e) {
@@ -492,6 +499,10 @@ export const handleMCPRequest = async (
   try {
     let transport: StreamableHTTPServerTransport;
     let currentSessionId = sessionId;
+    // Stateless transports (noSession=true) are one-shot per SDK contract.
+    // Track them so we can close() after handleRequest — otherwise the
+    // transport + its MCP Server + tools closures are retained forever.
+    let isStateless = false;
 
     if (
       sessionId &&
@@ -521,6 +532,7 @@ export const handleMCPRequest = async (
             skipTools,
             true,
           );
+          isStateless = true;
 
           logger.log(`Successfully recreated session ${sessionId}`);
         } else {
@@ -561,6 +573,7 @@ export const handleMCPRequest = async (
         skipTools,
         true,
       );
+      isStateless = true;
 
       logger.log(`Successfully recreated session ${sessionId}`);
     } else {
@@ -571,8 +584,18 @@ export const handleMCPRequest = async (
       });
     }
 
-    // Handle the request through existing transport utility
-    return await transport.handleRequest(request, res, body);
+    try {
+      // Handle the request through existing transport utility
+      return await transport.handleRequest(request, res, body);
+    } finally {
+      if (isStateless) {
+        try {
+          await transport.close();
+        } catch (e) {
+          logger.error("Failed to close stateless transport", { error: e });
+        }
+      }
+    }
   } catch (error) {
     console.error("MCP SSE request error:", error);
     throw new Error("MCP SSE request error");
