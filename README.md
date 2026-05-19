@@ -102,17 +102,7 @@ One AI, four surfaces, the same memory and context behind all of them.
 
 Give it a name. Choose how it speaks. Set the rules it follows everywhere.
 
-CORE ships with five built-in personalities:
-
-| | |
-|---|---|
-| **TARS** | Dry wit, minimal, efficient. Like TARS from Interstellar. Built for Mars habitat management, now running your entire life. |
-| **Alfred** | Alfred Pennyworth. Formal, protective, decades of loyalty. Dry wit with genuine care underneath. Will tell you the hard truth with impeccable timing. |
-| **Hobson** | Sharp, acerbic, witty. Will say what no one else will. Loyalty disguised as sharpness. |
-| **Hudson** | Warm, practical, grounded. Common sense as a superpower. Gets things done without fuss. |
-| **Jeeves** | Quietly the most capable person in the room. Solves problems before you know you have them. |
-
-Or write your own. The personality applies everywhere: every task it runs, every plan it drafts, every message it sends on your behalf.
+Pick from five built-in personalities — TARS's dry efficiency, Alfred's loyal formality, Hudson's warm practicality — or write your own. The personality carries into every task it runs, every plan it drafts, every message it sends on your behalf.
 
 Choose its voice for spoken interactions. From then on, it sounds and behaves like the AI you configured, across every interface.
 
