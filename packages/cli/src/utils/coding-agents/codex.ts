@@ -1,4 +1,4 @@
-import {existsSync, statSync, readdirSync, createReadStream} from 'node:fs';
+import {existsSync, statSync, readdirSync, createReadStream, realpathSync} from 'node:fs';
 import {join} from 'node:path';
 import {homedir} from 'node:os';
 import {createInterface} from 'node:readline';
@@ -129,6 +129,12 @@ export async function findLatestCodexSession(
 	const cutoff = startedAfter - 2_000;
 	const deadline = Date.now() + 10_000;
 
+	// codex records realpath in session_meta.cwd, but the caller passes the
+	// user-supplied symlinked form (e.g. Railway's `/app` → `/mnt/volume/workspace`).
+	// Resolve both sides so the match works regardless of which form arrives.
+	let targetDir = dir;
+	try { targetDir = realpathSync(dir); } catch { /* dir may not exist yet */ }
+
 	async function scan(): Promise<{sessionId: string; filePath: string} | null> {
 		for (const {filePath, sessionId} of walkCodexSessions()) {
 			let stats;
@@ -143,8 +149,11 @@ export async function findLatestCodexSession(
 
 			const first = await readFirstLine(filePath);
 			if (first?.type === 'session_meta') {
-				const cwd = (first.payload as any)?.cwd;
-				if (cwd === dir) return {sessionId, filePath};
+				const recordedCwd = (first.payload as any)?.cwd;
+				if (typeof recordedCwd !== 'string') continue;
+				let cwd = recordedCwd;
+				try { cwd = realpathSync(recordedCwd); } catch { /* recorded path may be gone */ }
+				if (cwd === targetDir || recordedCwd === dir) return {sessionId, filePath};
 			}
 		}
 		return null;

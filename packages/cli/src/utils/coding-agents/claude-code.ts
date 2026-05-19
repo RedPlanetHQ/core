@@ -1,4 +1,4 @@
-import {existsSync, statSync, readdirSync, createReadStream} from 'node:fs';
+import {existsSync, statSync, readdirSync, createReadStream, realpathSync} from 'node:fs';
 import {join, basename} from 'node:path';
 import {homedir} from 'node:os';
 import {createInterface} from 'node:readline';
@@ -54,8 +54,13 @@ async function readCwdFromJsonl(filePath: string): Promise<string | null> {
 	});
 }
 
+// claude-code resolves symlinks before computing its project folder name, so
+// `/app/core` on Railway (a symlink to `/mnt/volume/workspace/core`) ends up as
+// `-mnt-volume-workspace-core` on disk. Match that or fs.watch misses the file.
 function getSessionPath(dir: string, sessionId: string): string {
-	return join(CLAUDE_PROJECTS_DIR, dirToProjectFolder(dir), `${sessionId}.jsonl`);
+	let physical = dir;
+	try { physical = realpathSync(dir); } catch { /* dir may not exist yet */ }
+	return join(CLAUDE_PROJECTS_DIR, dirToProjectFolder(physical), `${sessionId}.jsonl`);
 }
 
 const TOOL_PRIMARY_KEYS = ['command', 'file_path', 'query', 'prompt', 'description', 'title', 'pattern'];
