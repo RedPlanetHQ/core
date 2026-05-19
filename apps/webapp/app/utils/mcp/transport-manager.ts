@@ -49,11 +49,10 @@ export class TransportManager {
   ): void {
     const session = this.getOrCreateSession(sessionId);
     session.mainTransport = transport;
-
-    // Setup cleanup on transport close
-    transport.onclose = () => {
-      this.cleanupSession(sessionId);
-    };
+    // NOTE: do not override transport.onclose here — createTransport
+    // installs the canonical onclose (clearInterval + deleteSession +
+    // cleanupSession). Reassigning here would drop the keep-alive
+    // clearInterval and cause an OOM via retained timer closures.
   }
 
   /**
