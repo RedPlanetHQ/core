@@ -60,6 +60,10 @@ export function unregisterStream(streamId: string): void {
   controllers.delete(streamId);
 }
 
+export function getActiveStreamCount(): number {
+  return controllers.size;
+}
+
 /**
  * Abort a stream by id. Aborts locally if this process owns it, then
  * publishes on the stop channel so other instances can abort their copy.
