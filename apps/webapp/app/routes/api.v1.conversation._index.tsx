@@ -28,6 +28,7 @@ import {
 import {
   registerStream,
   unregisterStream,
+  getActiveStreamCount,
 } from "~/services/agent/stream-registry.server";
 import { type OutputProcessor, type Processor } from "@mastra/core/processors";
 import { patchArgsDeep } from "~/services/agent/tool-args-patch-processor";
@@ -56,6 +57,54 @@ function logHeap(
     rssMB: Math.round(m.rss / 1024 / 1024),
     externalMB: Math.round(m.external / 1024 / 1024),
   });
+}
+
+// Cross-turn retention tracking. Updated only at post-cleanup so we
+// compare apples-to-apples (after forced GC). retainedSinceLastTurn
+// will reveal which turn(s) leak.
+let turnCounter = 0;
+let lastPostCleanupHeapMB: number | null = null;
+
+// Best-effort Mastra registry size probe. Uses public listTools/listAgents
+// /listProcessors — if they return undefined or throw, we report -1 so the
+// log line still emits.
+function getMastraSizes(): {
+  toolsCount: number;
+  agentsCount: number;
+  processorsCount: number;
+} {
+  let toolsCount = -1;
+  let agentsCount = -1;
+  let processorsCount = -1;
+  try {
+    const t = (mastra as any).listTools?.();
+    if (t && typeof t === "object") toolsCount = Object.keys(t).length;
+  } catch {
+    // ignore
+  }
+  try {
+    const a = (mastra as any).listAgents?.();
+    if (a && typeof a === "object") agentsCount = Object.keys(a).length;
+  } catch {
+    // ignore
+  }
+  try {
+    const p = (mastra as any).listProcessors?.();
+    if (p && typeof p === "object") processorsCount = Object.keys(p).length;
+  } catch {
+    // ignore
+  }
+  return { toolsCount, agentsCount, processorsCount };
+}
+
+// Cheap byte-size estimate for JSON-serializable payloads. Avoids the cost
+// of full stringification when we only need an order-of-magnitude signal.
+function approxJsonBytes(value: unknown): number {
+  try {
+    return Buffer.byteLength(JSON.stringify(value) ?? "", "utf8");
+  } catch {
+    return -1;
+  }
 }
 
 const ChatRequestSchema = z.object({
@@ -99,7 +148,27 @@ const { loader, action } = createHybridActionApiRoute(
     corsStrategy: "all",
   },
   async ({ body, authentication, request }) => {
-    logHeap("handler:start", { conversationId: body.id });
+    const turnIndex = ++turnCounter;
+    const mastraSizes = getMastraSizes();
+    const m0 = process.memoryUsage();
+    const entryHeapMB = Math.round(m0.heapUsed / 1024 / 1024);
+    // Retention since previous turn's post-cleanup. Tracks the slow drift
+    // (~few MB per turn that doesn't GC away) — large positive deltas point
+    // to specific turns leaking at scale.
+    const retentionSinceLastPostCleanupMB =
+      lastPostCleanupHeapMB === null
+        ? null
+        : entryHeapMB - lastPostCleanupHeapMB;
+
+    logHeap("handler:start", {
+      conversationId: body.id,
+      turnIndex,
+      retentionSinceLastPostCleanupMB,
+      activeStreams: getActiveStreamCount(),
+      mastraToolsCount: mastraSizes.toolsCount,
+      mastraAgentsCount: mastraSizes.agentsCount,
+      mastraProcessorsCount: mastraSizes.processorsCount,
+    });
 
     const conversation = await getConversationAndHistory(
       body.id,
@@ -211,7 +280,10 @@ const { loader, action } = createHybridActionApiRoute(
 
     logHeap("handler:context-selected", {
       conversationId: body.id,
+      turnIndex,
       finalMessageCount: finalMessages.length,
+      finalMessagesBytes: approxJsonBytes(finalMessages),
+      historyMessagesBytes: approxJsonBytes(historyMessages),
     });
 
     // -----------------------------------------------------------------------
@@ -301,9 +373,18 @@ const { loader, action } = createHybridActionApiRoute(
           ...saveParams,
         });
 
+        const mStream = process.memoryUsage();
+        const streamCompleteHeapMB = Math.round(mStream.heapUsed / 1024 / 1024);
+        // Allocated during this turn (ungarbaged peak). Compared with the
+        // post-cleanup value below, the difference is what GC reclaimed.
+        const allocatedThisTurnMB = streamCompleteHeapMB - entryHeapMB;
+        const messagesBytes = approxJsonBytes(messages);
         logHeap("handler:stream-complete", {
           conversationId: body.id,
+          turnIndex,
           messageCount: messages.length,
+          messagesBytes,
+          allocatedThisTurnMB,
         });
 
         // Schedule a delayed snapshot to see if heap recovers after the turn
@@ -316,11 +397,27 @@ const { loader, action } = createHybridActionApiRoute(
           if (typeof gc === "function") {
             gc();
           }
+          const mAfter = process.memoryUsage();
+          const postCleanupHeapMB = Math.round(mAfter.heapUsed / 1024 / 1024);
+          const retainedThisTurnMB =
+            lastPostCleanupHeapMB === null
+              ? null
+              : postCleanupHeapMB - lastPostCleanupHeapMB;
+          const reclaimedAfterGcMB = streamCompleteHeapMB - postCleanupHeapMB;
+          const mastraNow = getMastraSizes();
           logHeap("handler:post-cleanup", {
             conversationId: body.id,
+            turnIndex,
             gcForced: typeof gc === "function",
             delayMs: 5000,
+            retainedThisTurnMB,
+            reclaimedAfterGcMB,
+            activeStreams: getActiveStreamCount(),
+            mastraToolsCount: mastraNow.toolsCount,
+            mastraAgentsCount: mastraNow.agentsCount,
+            mastraProcessorsCount: mastraNow.processorsCount,
           });
+          lastPostCleanupHeapMB = postCleanupHeapMB;
         }, 5000).unref?.();
         return messages;
       },
