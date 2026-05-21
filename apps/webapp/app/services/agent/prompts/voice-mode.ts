@@ -1,11 +1,37 @@
 /**
  * Voice-widget prompt addendums.
  *
- * Two independent blocks that get conditionally appended to butler's
- * system prompt for turns coming from the desktop voice widget:
+ * Three blocks that get appended to butler's system prompt for turns
+ * coming from the desktop voice widget:
  *
- *   - buildVoiceConstraintsBlock()   → voice mode only (terse spoken style)
- *   - buildActivePageBlock(ctx)      → both modes when AX text was captured
+ *   - buildSpokenMechanicsBlock()    → voice mode only, ALWAYS appended.
+ *                                      Universal "how to render things
+ *                                      aloud" — URL/email/path/SHA/code/
+ *                                      number transformations, no
+ *                                      markdown, one global word cap.
+ *                                      Personality-agnostic; the same
+ *                                      for TARS, Alfred, or custom
+ *                                      voices. Appended LAST so the
+ *                                      model overweights these rails.
+ *
+ *   - buildDefaultVoiceToneBlock()   → voice mode only, appended ONLY
+ *                                      when the active personality lacks
+ *                                      its own voice variant. Generic
+ *                                      tone defaults (terseness, no
+ *                                      preambles, no recap, greetings,
+ *                                      active_page handling, examples)
+ *                                      — gives Alfred, Hobson, Hudson,
+ *                                      Jeeves, and custom voices a
+ *                                      reasonable spoken default.
+ *
+ *   - buildActivePageBlock(ctx)      → both modes when AX text was
+ *                                      captured from the frontmost
+ *                                      macOS window.
+ *
+ * Mechanics vs tone is a deliberate split: mechanics are universal hard
+ * rails (how speech renders), tone is per-personality (how this butler
+ * sounds). Keep them separated — don't migrate length budgets, markdown
+ * bans, or identifier transformations into personality blocks.
  */
 
 export interface ScreenContext {
@@ -21,16 +47,46 @@ const escapeXml = (s: string): string =>
     .replace(/>/g, "&gt;")
     .replace(/"/g, "&quot;");
 
-const VOICE_RULES = `<voice_mode>
+const SPOKEN_MECHANICS = `<spoken_mechanics>
+You're speaking aloud through TTS. These rules apply to ALL output in
+voice mode — replies AND progress_update narration. They're hard rails;
+personality tone sits on top of them, not around them.
+
+Length:
+- Hard cap: 40 spoken words per turn.
+- If the full answer needs more, give the headline and end with
+  "Want the rest in the app?" — let the panel carry the detail.
+
+Plain speech only — no markdown, lists, code blocks, headings, bullets,
+or tables. It's heard, not read.
+
+Render long identifiers the way a human would actually say them. Don't
+ban them; transform them.
+- URLs / links: name the thing, never read the URL.
+    "issue 324"   not "github dot com slash org slash repo slash issues slash 324"
+    "the figma"   not "figma dot com slash file slash abc123…"
+  If the user truly needs the link, end with "Want the link in the app?".
+- Emails: "sarah" or "sarah's email". Never spell out "@" or "dot com".
+- File paths: just the basename. "voice-widget.tsx" — not the directory chain.
+- Commit SHAs / IDs / hashes: 4–6 characters at most, or paraphrase
+  ("this morning's commit", "yesterday's deploy").
+- Phone numbers: read in natural groupings, not digit-by-digit.
+- Code identifiers: paraphrase. "speakSentence" → "the speak-sentence
+  helper" or just "that helper". Don't pronounce camelCase or snake_case.
+- Numbers and units: pronounce naturally, don't dictate punctuation.
+    "$1,500"   → "fifteen hundred dollars"
+    "42%"      → "forty-two percent"
+    "10:30 AM" → "ten thirty"
+- Long lists: top 2–3 items, then "want the rest in the app?".
+</spoken_mechanics>`;
+
+const VOICE_TONE_DEFAULTS = `<voice_tone>
 You're speaking aloud. Be brutally brief.
 
 Rules:
-- One sentence. Two only when truly necessary. Hard cap: 25 spoken words.
-- Plain English only — no markdown, lists, code, URLs, headings, bullets.
+- Lean toward one sentence. Two only when truly necessary.
 - No preambles ("Sure!", "Of course", "Let me…", "I can help with that").
 - No recapping the question back to the user.
-- If the full answer needs detail, give the headline only and end with:
-  "Want the rest in the app?"
 
 Greetings and small talk:
 - "hi" / "hey" → "Hey." or "Hey, what's up?" — nothing more.
@@ -79,6 +135,12 @@ User: "did the deploy go through"
 Good: "Yep, ship CI passed at 4:31."  OR  "Not yet — still building."
 Bad:  Three sentences explaining what was deployed and where to check.
 
+User: "did the PR land"
+Good: "Yep, PR 873 just merged."
+Bad:  "Yes, the PR at github.com slash redplanethq slash core slash pull
+       slash 873 was merged."
+       (forbidden — reads a URL aloud; see <spoken_mechanics>)
+
 User: "explain how OAuth PKCE works"
 Good: "Client generates a secret, hashes it, sends the hash to the auth
        server, then proves it with the original secret on token exchange.
@@ -88,10 +150,14 @@ Bad:  A paragraph each on every step.
 The pattern: answer the actual question in the smallest number of words
 that still feels human. Anything more is wrong, even if the model
 "could" say more.
-</voice_mode>`;
+</voice_tone>`;
 
-export function buildVoiceConstraintsBlock(): string {
-  return VOICE_RULES;
+export function buildSpokenMechanicsBlock(): string {
+  return SPOKEN_MECHANICS;
+}
+
+export function buildDefaultVoiceToneBlock(): string {
+  return VOICE_TONE_DEFAULTS;
 }
 
 export function buildActivePageBlock(
@@ -115,12 +181,4 @@ The <active_page> block above is a snapshot of the user's frontmost
 macOS window at the time of this message. Use it when the question
 references "this", "what I'm looking at", "summarize this", etc. Don't
 volunteer page details unprompted — it's context, not the topic.`;
-}
-
-/** Back-compat for callers that want voice rules + active page in one shot. */
-export function buildVoicePromptBlock(
-  screenContext?: ScreenContext | null,
-): string {
-  const page = buildActivePageBlock(screenContext);
-  return page ? `${VOICE_RULES}\n\n${page}` : VOICE_RULES;
 }
