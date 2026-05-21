@@ -15,7 +15,8 @@ import { getPersonaDocumentForUser } from "~/services/document.server";
 import { IntegrationLoader } from "~/utils/mcp/integration-loader";
 import { getCorePrompt } from "~/services/agent/prompts";
 import {
-  buildVoiceConstraintsBlock,
+  buildDefaultVoiceToneBlock,
+  buildSpokenMechanicsBlock,
   buildActivePageBlock,
   type ScreenContext,
 } from "~/services/agent/prompts/voice-mode";
@@ -634,22 +635,31 @@ Keep your response concise — this shows up on a scratchpad, not a chat convers
     systemPrompt += `\n\n${buildOnboardingModeBlock()}`;
   }
 
-  // Voice-mode constraint block — only when butler will be heard out
-  // loud AND the personality didn't already define its own voice
-  // variant. Personalities with a dedicated voice prompt carry their
-  // own spoken-style rules; we don't want to double up.
-  if (mode === "voice" && !customPersonality) {
-    const personalityHasVoiceVariant = resolvePersonalityPrompt(
-      personality as PersonalityType,
-      "voice",
-    ).hasVoiceVariant;
-    if (!personalityHasVoiceVariant) {
-      systemPrompt += `\n\n${buildVoiceConstraintsBlock()}`;
+  // Voice-mode blocks. Order matters — personality first (already in
+  // systemPrompt from PERSONALITY()), then optional tone defaults for
+  // personalities without their own voice variant, then the universal
+  // spoken-mechanics rails LAST so the model overweights them.
+  //
+  //   personality voice  →  tone defaults (maybe)  →  spoken_mechanics
+  //
+  // Mechanics is appended unconditionally in voice mode — it owns the
+  // hard rails (word budget, no markdown, identifier transformations)
+  // that apply equally to TARS, Alfred, Hudson, or any custom voice.
+  if (mode === "voice") {
+    if (customPersonality) {
+      // Custom personalities never define a voice variant — give them
+      // the generic tone defaults so spoken delivery stays sane.
+      systemPrompt += `\n\n${buildDefaultVoiceToneBlock()}`;
+    } else {
+      const personalityHasVoiceVariant = resolvePersonalityPrompt(
+        personality as PersonalityType,
+        "voice",
+      ).hasVoiceVariant;
+      if (!personalityHasVoiceVariant) {
+        systemPrompt += `\n\n${buildDefaultVoiceToneBlock()}`;
+      }
     }
-  } else if (mode === "voice" && customPersonality) {
-    // Custom personalities don't have voice variants — always apply
-    // the generic spoken-style guard so TTS reads cleanly.
-    systemPrompt += `\n\n${buildVoiceConstraintsBlock()}`;
+    systemPrompt += `\n\n${buildSpokenMechanicsBlock()}`;
   }
 
   // Active-page snapshot — flows through in BOTH modes whenever the
