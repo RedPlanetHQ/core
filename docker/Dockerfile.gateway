@@ -2,7 +2,7 @@
 #
 # CoreBrain Gateway — one-container deploy.
 #
-# Boots a CORE gateway with the two coding agents pre-installed and a
+# Boots a CORE gateway with the three coding agents pre-installed and a
 # pre-approved /app workspace folder. Designed for Railway / Fly / Render /
 # any Docker host. For laptop installs use `npm install -g @redplanethq/corebrain`
 # instead — this image exists to make the hosted-gateway deploy one command.
@@ -18,8 +18,8 @@
 #     -e COREBRAIN_GATEWAY_DESCRIPTION="Cloud agent runtime" \
 #     -e COREBRAIN_GATEWAY_SECURITY_KEY=...       # optional; auto-generated if absent \
 #     -e GITHUB_TOKEN=...                         # optional; for `git clone` of private repos \
-#     -e ANTHROPIC_API_KEY=...                    # optional; lets claude skip OAuth login \
-#     -e OPENAI_API_KEY=...                       # optional; lets codex skip OAuth login \
+#     -e ANTHROPIC_API_KEY=...                    # optional; lets claude + opencode (Anthropic provider) skip OAuth login \
+#     -e OPENAI_API_KEY=...                       # optional; lets codex + opencode (OpenAI provider) skip OAuth login \
 #     -v corebrain-home:/home/corebrain                 # persist gateway id, agent login + session state, chromium cache \
 #     -v corebrain-workspace:/app                       # persist cloned repos and worktree state \
 #     corebrain-gateway
@@ -42,13 +42,14 @@ RUN apt-get update \
         openssh-client \
     && rm -rf /var/lib/apt/lists/*
 
-# Coding agents — shipped so every gateway has claude + codex available out
-# of the box. Users still need to log them in from the webapp (or set
-# ANTHROPIC_API_KEY / OPENAI_API_KEY) to authenticate.
+# Coding agents — shipped so every gateway has claude + codex + opencode
+# available out of the box. Users still need to log them in from the webapp
+# (or set ANTHROPIC_API_KEY / OPENAI_API_KEY) to authenticate.
 RUN npm install -g \
         @redplanethq/corebrain@2.8.30 \
         @anthropic-ai/claude-code \
         @openai/codex \
+        opencode-ai \
         playwright \
     && npm cache clean --force
 
