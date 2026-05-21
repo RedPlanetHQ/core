@@ -340,7 +340,10 @@ fn read_api_config() -> Option<(String, String)> {
 }
 
 fn send_episode(app_name: &str, text: &str, session_id: &str) {
-    let Some((token, api_url)) = read_api_config() else { return };
+    let Some((token, api_url)) = read_api_config() else {
+        log::warn!("[screen_context] skipping episode for {}: no API config at ~/.corebrain/config.json", app_name);
+        return;
+    };
     let title = format!("{} - {}", app_name, today_str());
 
     let body = serde_json::json!({
@@ -353,12 +356,19 @@ fn send_episode(app_name: &str, text: &str, session_id: &str) {
     });
 
     let url = format!("{}/api/v1/add", api_url.trim_end_matches('/'));
-    if let Err(e) = ureq::post(&url)
+    match ureq::post(&url)
         .set("Authorization", &format!("Bearer {}", token))
         .set("Content-Type", "application/json")
         .send_json(body)
     {
-        log::error!("screen_context: failed to send episode: {}", e);
+        Ok(resp) => log::info!(
+            "[screen_context] sent episode app={} session={} bytes={} status={}",
+            app_name,
+            session_id,
+            text.len(),
+            resp.status(),
+        ),
+        Err(e) => log::error!("[screen_context] failed to send episode app={}: {}", app_name, e),
     }
 }
 
@@ -421,16 +431,31 @@ pub fn start_polling(settings: Arc<Mutex<ScreenContextSettings>>) {
                 let (title, text, ax_disabled) = query(pid);
 
                 if ax_disabled {
+                    log::warn!("[screen_context] AX API disabled for {}, re-requesting permission", app_name);
                     granted = false;
                     continue;
                 }
 
+                log::debug!(
+                    "[screen_context] {} initial query: title={:?} text_len={}",
+                    app_name,
+                    title.as_deref().unwrap_or(""),
+                    text.as_deref().map(|t| t.len()).unwrap_or(0),
+                );
+
                 // Retry if thin
                 let (title, text) = if !is_substantive(&title, &text) {
+                    log::debug!("[screen_context] {} text not substantive, pumping observer and retrying", app_name);
                     if let Some(ref obs) = observer {
                         unsafe { obs.pump(2.0) };
                     }
                     let (t2, tx2, _) = query(pid);
+                    log::debug!(
+                        "[screen_context] {} retry query: title={:?} text_len={}",
+                        app_name,
+                        t2.as_deref().unwrap_or(""),
+                        tx2.as_deref().map(|t| t.len()).unwrap_or(0),
+                    );
                     (t2, tx2)
                 } else {
                     (title, text)
@@ -438,6 +463,7 @@ pub fn start_polling(settings: Arc<Mutex<ScreenContextSettings>>) {
 
                 // Clean using the app-specific cleaner
                 let cleaner = apps::get_cleaner(&app_name);
+                let raw_len = text.as_deref().map(|t| t.len()).unwrap_or(0);
                 let cleaned = text
                     .as_deref()
                     .map(|raw| cleaner.clean(raw))
@@ -447,17 +473,42 @@ pub fn start_polling(settings: Arc<Mutex<ScreenContextSettings>>) {
                     let today = today_str();
                     let day_key = format!("{}-{}", app_name, today);
                     let already_sent = sent_today.get(&day_key);
-                    let too_similar = already_sent.map_or(false, |prev_texts| {
-                        prev_texts.iter().any(|prev| jaccard_similarity(prev, text) >= SIMILARITY_THRESHOLD)
-                    });
-                    if !too_similar {
+                    let max_sim = already_sent
+                        .map(|prev_texts| {
+                            prev_texts
+                                .iter()
+                                .map(|prev| jaccard_similarity(prev, text))
+                                .fold(0.0_f64, f64::max)
+                        })
+                        .unwrap_or(0.0);
+                    let too_similar = max_sim >= SIMILARITY_THRESHOLD;
+                    if too_similar {
+                        log::info!(
+                            "[screen_context] skipping episode for {}: too similar to prior (jaccard={:.2})",
+                            app_name,
+                            max_sim,
+                        );
+                    } else {
                         let session_id = sessions
                             .entry(day_key.clone())
                             .or_insert_with(|| uuid::Uuid::new_v4().to_string())
                             .clone();
+                        log::info!(
+                            "[screen_context] queueing episode for {}: raw={}B cleaned={}B prior_max_sim={:.2}",
+                            app_name,
+                            raw_len,
+                            text.len(),
+                            max_sim,
+                        );
                         send_episode(&app_name, text, &session_id);
                         sent_today.entry(day_key).or_default().push(text.clone());
                     }
+                } else {
+                    log::info!(
+                        "[screen_context] no usable text for {} (raw={}B); skipping",
+                        app_name,
+                        raw_len,
+                    );
                 }
             }
 
