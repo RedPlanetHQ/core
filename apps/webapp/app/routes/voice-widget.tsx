@@ -61,7 +61,7 @@ interface ScreenContext {
 }
 
 interface Turn {
-  role: "user" | "assistant";
+  role: "user" | "assistant" | "progress";
   text: string;
 }
 
@@ -93,6 +93,8 @@ export default function VoiceWidget() {
   /** ElevenLabs audio queue — sentences play sequentially via <audio>. */
   const elQueueRef = useRef<HTMLAudioElement[]>([]);
   const elActiveRef = useRef<HTMLAudioElement | null>(null);
+  /** toolCallIds of progress_update events already spoken — dedupe across retries. */
+  const spokenProgressRef = useRef<Set<string>>(new Set());
   /** True while the user has the chord held — controls "armed" vs "listening" transition */
   const chordHeldRef = useRef<boolean>(false);
   /** Did we receive any partial transcript during this hold? Drives finalization. */
@@ -386,6 +388,7 @@ export default function VoiceWidget() {
     setStatus("thinking");
     ttsBufferRef.current = "";
     ttsConsumedRef.current = 0;
+    spokenProgressRef.current.clear();
 
     try {
       const response = await fetch("/api/v1/voice-turn", {
@@ -404,8 +407,6 @@ export default function VoiceWidget() {
       if (!response.ok || !response.body) {
         throw new Error(`voice-turn: ${response.status}`);
       }
-
-      setTurns((prev) => [...prev, { role: "assistant", text: "" }]);
 
       const reader = response.body.getReader();
       const decoder = new TextDecoder();
@@ -466,17 +467,41 @@ export default function VoiceWidget() {
       typeof event.data === "string"
     ) {
       appendAssistantText(event.data);
+    } else if (
+      (event.type === "tool-input-available" || event.type === "tool-call") &&
+      event.toolName === "progress_update"
+    ) {
+      // Agent narrates long work via progress_update — surface those
+      // beats in the voice widget too. Speak them through the same
+      // sentence queue as the main reply (so they interleave in order
+      // and barge-in cancels them along with everything else).
+      const id = typeof event.toolCallId === "string" ? event.toolCallId : null;
+      if (id && spokenProgressRef.current.has(id)) return;
+      if (id) spokenProgressRef.current.add(id);
+      const payload = (event.input ?? event.args) as
+        | { message?: unknown }
+        | undefined;
+      const message =
+        typeof payload?.message === "string" ? payload.message.trim() : "";
+      if (!message) return;
+      setTurns((prev) => [...prev, { role: "progress", text: message }]);
+      if (currentTurnModeRef.current === "voice") {
+        void speakSentence(message);
+      }
     }
   }
 
   function appendAssistantText(delta: string) {
     setTurns((prev) => {
-      if (prev.length === 0) return prev;
-      const next = [...prev];
-      const last = next[next.length - 1];
-      if (last.role !== "assistant") return prev;
-      next[next.length - 1] = { ...last, text: last.text + delta };
-      return next;
+      const last = prev[prev.length - 1];
+      if (last?.role === "assistant") {
+        const next = [...prev];
+        next[next.length - 1] = { ...last, text: last.text + delta };
+        return next;
+      }
+      // Lazy assistant turn — created on first delta so any progress
+      // updates that fire before the reply starts render above it.
+      return [...prev, { role: "assistant", text: delta }];
     });
 
     // Text-mode turns are read silently — skip TTS.
@@ -679,19 +704,31 @@ export default function VoiceWidget() {
             Type below, or hold <kbd>Ctrl</kbd>+<kbd>Option</kbd> and speak.
           </div>
         )}
-        {turns.map((t, i) => (
-          <div
-            key={i}
-            className={cn(
-              "max-w-[85%] rounded-md px-3 py-1.5 text-[13px] leading-snug",
-              t.role === "user"
-                ? "bg-primary/15 text-foreground self-end"
-                : "bg-accent text-foreground self-start",
-            )}
-          >
-            {t.text || (t.role === "assistant" ? "…" : "")}
-          </div>
-        ))}
+        {turns.map((t, i) => {
+          if (t.role === "progress") {
+            return (
+              <div
+                key={i}
+                className="text-muted-foreground self-center px-2 py-0.5 text-[11px] italic leading-snug"
+              >
+                {t.text}
+              </div>
+            );
+          }
+          return (
+            <div
+              key={i}
+              className={cn(
+                "max-w-[85%] rounded-md px-3 py-1.5 text-[13px] leading-snug",
+                t.role === "user"
+                  ? "bg-primary/15 text-foreground self-end"
+                  : "bg-accent text-foreground self-start",
+              )}
+            >
+              {t.text || (t.role === "assistant" ? "…" : "")}
+            </div>
+          );
+        })}
       </div>
 
       <form
