@@ -23,8 +23,7 @@ import type {
   FollowUpJobData,
 } from "~/jobs/reminder/reminder.logic";
 import type { TaskPayload } from "~/jobs/task/task.logic";
-import type { ActivityCasePayload } from "~/jobs/integrations/activity-case.logic";
-import type { MemoryIngestPayload } from "~/jobs/memory-ingest/memory-ingest-case.logic";
+import type { CasePayload } from "~/jobs/case/case.logic";
 import type { ScratchpadScanPayload } from "~/jobs/scratchpad/scratchpad-scan.logic";
 import type { CodingDescriptionUpdatePayload } from "~/jobs/coding/description-update.logic";
 import { runs } from "@trigger.dev/sdk";
@@ -583,57 +582,37 @@ export async function removeScheduledTask(taskId: string): Promise<void> {
 }
 
 /**
- * Enqueue activity CASE job
+ * Enqueue a CASE pipeline job — one helper for every non-user trigger that
+ * flows through the decision pipeline. Dispatch happens inside the worker
+ * based on `payload.type` ("activity" | "memory_ingest").
  */
-export async function enqueueActivityCase(
-  payload: ActivityCasePayload,
+export async function enqueueCase(
+  payload: CasePayload,
 ): Promise<{ id?: string }> {
   const provider = env.QUEUE_PROVIDER as QueueProvider;
 
+  // Per-type tags + jobId prefix so the queue UI is still readable.
+  const tagBits =
+    payload.type === "activity"
+      ? [payload.workspaceId, "activity", payload.integrationSlug]
+      : [payload.workspaceId, "memory_ingest", payload.source];
+  const jobIdSuffix =
+    payload.type === "activity"
+      ? `activity-${payload.integrationAccountId}`
+      : `memory-ingest-${payload.documentId}`;
+
   if (provider === "trigger") {
-    const { activityCaseTask } =
-      await import("~/trigger/integrations/activity-case");
-    const handler = await activityCaseTask.trigger(payload, {
-      queue: "activity-case-queue",
+    const { caseTask } = await import("~/trigger/case/case");
+    const handler = await caseTask.trigger(payload, {
+      queue: "case-queue",
       concurrencyKey: payload.workspaceId,
-      tags: [payload.workspaceId, payload.integrationSlug],
+      tags: tagBits,
     });
     return { id: handler.id };
   } else {
-    const { activityCaseQueue } = await import("~/bullmq/queues");
-    const job = await activityCaseQueue.add("activity-case", payload, {
-      jobId: `activity-case-${payload.integrationAccountId}-${Date.now()}`,
-      attempts: 1,
-    });
-    return { id: job.id };
-  }
-}
-
-/**
- * Enqueue memory-ingest CASE job. Fired after a Task-aspect is saved during
- * episode ingestion (voice/screen/chat). Routes through the CASE pipeline so
- * Watch Rules decide whether to surface (channel ping + scratchpad append) or
- * stay silent.
- */
-export async function enqueueMemoryIngestCase(
-  payload: MemoryIngestPayload,
-): Promise<{ id?: string }> {
-  const provider = env.QUEUE_PROVIDER as QueueProvider;
-
-  if (provider === "trigger") {
-    const { memoryIngestCaseTask } = await import(
-      "~/trigger/memory-ingest/memory-ingest-case"
-    );
-    const handler = await memoryIngestCaseTask.trigger(payload, {
-      queue: "memory-ingest-case-queue",
-      concurrencyKey: payload.workspaceId,
-      tags: [payload.workspaceId, payload.source, payload.aspect],
-    });
-    return { id: handler.id };
-  } else {
-    const { memoryIngestCaseQueue } = await import("~/bullmq/queues");
-    const job = await memoryIngestCaseQueue.add("memory-ingest-case", payload, {
-      jobId: `memory-ingest-case-${payload.aspectId}-${Date.now()}`,
+    const { caseQueue } = await import("~/bullmq/queues");
+    const job = await caseQueue.add("case", payload, {
+      jobId: `case-${jobIdSuffix}-${Date.now()}`,
       attempts: 1,
     });
     return { id: job.id };

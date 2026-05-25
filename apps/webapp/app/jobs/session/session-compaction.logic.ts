@@ -10,7 +10,7 @@ import { prisma } from "~/db.server";
 import { type Document } from "@prisma/client";
 
 import { processTitleGeneration } from "~/jobs/titles/title-generation.logic";
-import { enqueueMemoryIngestCase } from "~/lib/queue-adapter.server";
+import { enqueueCase } from "~/lib/queue-adapter.server";
 import { type ModelMessage } from "ai";
 
 export interface SessionCompactionPayload {
@@ -637,7 +637,8 @@ async function enqueueMacMemoryIngest(args: {
       (user.metadata as Record<string, unknown> | null) ?? null;
     const timezone = (userMetadata?.timezone as string) ?? "UTC";
 
-    await enqueueMemoryIngestCase({
+    await enqueueCase({
+      type: "memory_ingest",
       workspaceId: args.workspaceId,
       userId: args.userId,
       userEmail: user.email,
