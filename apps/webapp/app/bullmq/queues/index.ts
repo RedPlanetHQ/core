@@ -246,29 +246,12 @@ export const followUpQueue = new Queue("followup-queue", {
 });
 
 /**
- * Activity CASE queue
- * Sends new integration activities through the CASE pipeline
+ * CASE pipeline queue — single queue for every non-user trigger that flows
+ * through the decision pipeline. Dispatch is by `payload.type`:
+ *   - "activity"       → integration webhook activities
+ *   - "memory_ingest"  → Mac session compact summaries
  */
-export const activityCaseQueue = new Queue("activity-case-queue", {
-  connection: getRedisConnection(),
-  defaultJobOptions: {
-    attempts: 1,
-    removeOnComplete: {
-      age: 3600,
-      count: 1000,
-    },
-    removeOnFail: {
-      age: 86400,
-    },
-  },
-});
-
-/**
- * Memory ingest CASE queue
- * Routes Task-aspects extracted during episode ingestion through the CASE
- * pipeline so Watch Rules can decide whether to surface them.
- */
-export const memoryIngestCaseQueue = new Queue("memory-ingest-case-queue", {
+export const caseQueue = new Queue("case-queue", {
   connection: getRedisConnection(),
   defaultJobOptions: {
     attempts: 1,

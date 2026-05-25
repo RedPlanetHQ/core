@@ -3,7 +3,7 @@ import { addToQueue } from "./queue";
 import { triggerWebhookDelivery } from "../webhooks/webhook-delivery";
 import { logger } from "@trigger.dev/sdk";
 import { prisma } from "~/db.server";
-import { enqueueActivityCase } from "~/lib/queue-adapter.server";
+import { enqueueCase } from "~/lib/queue-adapter.server";
 
 export const createIntegrationAccount = async ({
   integrationDefinitionId,
@@ -185,7 +185,8 @@ export const createActivities = async ({
 
       if (user?.email) {
         const activitiesText = results.map((r) => r.text).join("\n\n");
-        await enqueueActivityCase({
+        await enqueueCase({
+          type: "activity",
           integrationAccountId,
           accountId: integrationAccount.accountId ?? integrationAccountId,
           workspaceId: integrationAccount.workspaceId,

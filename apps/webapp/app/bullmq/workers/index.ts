@@ -90,14 +90,7 @@ import {
   type ScheduledTaskPayload,
   processScheduledTask,
 } from "~/jobs/task/scheduled-task.logic";
-import {
-  type ActivityCasePayload,
-  processActivityCase,
-} from "~/jobs/integrations/activity-case.logic";
-import {
-  type MemoryIngestPayload,
-  processMemoryIngestCase,
-} from "~/jobs/memory-ingest/memory-ingest-case.logic";
+import { type CasePayload, processCase } from "~/jobs/case/case.logic";
 import { env } from "~/env.server";
 
 /**
@@ -317,31 +310,15 @@ export const followUpWorker = new Worker(
 );
 
 /**
- * Activity CASE worker
- * Sends new integration activities through the CASE pipeline
+ * CASE pipeline worker — single worker for every non-user trigger that flows
+ * through the decision pipeline. Dispatch happens inside `processCase` based
+ * on `payload.type` ("activity" | "memory_ingest").
  */
-export const activityCaseWorker = new Worker(
-  "activity-case-queue",
+export const caseWorker = new Worker(
+  "case-queue",
   async (job) => {
-    const payload = job.data as ActivityCasePayload;
-    return await processActivityCase(payload);
-  },
-  {
-    connection: getRedisConnection(),
-    concurrency: 5,
-  },
-);
-
-/**
- * Memory ingest CASE worker
- * Routes Task-aspects extracted during episode ingestion through the CASE
- * pipeline so Watch Rules decide surface vs silence.
- */
-export const memoryIngestCaseWorker = new Worker(
-  "memory-ingest-case-queue",
-  async (job) => {
-    const payload = job.data as MemoryIngestPayload;
-    return await processMemoryIngestCase(payload);
+    const payload = job.data as CasePayload;
+    return await processCase(payload);
   },
   {
     connection: getRedisConnection(),
@@ -430,8 +407,7 @@ export async function closeAllWorkers(): Promise<void> {
     integrationRunWorker.close(),
     reminderWorker.close(),
     followUpWorker.close(),
-    activityCaseWorker.close(),
-    memoryIngestCaseWorker.close(),
+    caseWorker.close(),
     scheduledTaskWorker.close(),
     taskWorker.close(),
     reminderQueue.close(),
