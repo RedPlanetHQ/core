@@ -585,21 +585,43 @@ export async function removeScheduledTask(taskId: string): Promise<void> {
  * Enqueue a CASE pipeline job — one helper for every non-user trigger that
  * flows through the decision pipeline. Dispatch happens inside the worker
  * based on `payload.type` ("activity" | "memory_ingest").
+ *
+ * Per-type throttling:
+ *   - "activity": no throttle. Webhook activities are already batched upstream
+ *     (15-minute integration batches), so each enqueue should fire once.
+ *   - "memory_ingest": throttled to one fire per session per 10 minutes.
+ *     Mac sessions (e.g. Slack open in the foreground) compact every ~5s
+ *     while ingesting. Without throttling, every compact would invoke the
+ *     decision agent — wasteful, and would also push the conversation
+ *     forward every 5 seconds. The bucketed-jobId trick mirrors
+ *     `enqueueCodingDescriptionUpdate`: identical jobIds within the same
+ *     time bucket get deduped by BullMQ/Trigger.dev, and the job fires once
+ *     when the delay elapses.
  */
+const MEMORY_INGEST_THROTTLE_MS = 10 * 60_000; // 10 minutes
+
 export async function enqueueCase(
   payload: CasePayload,
 ): Promise<{ id?: string }> {
   const provider = env.QUEUE_PROVIDER as QueueProvider;
 
-  // Per-type tags + jobId prefix so the queue UI is still readable.
-  const tagBits =
-    payload.type === "activity"
-      ? [payload.workspaceId, "activity", payload.integrationSlug]
-      : [payload.workspaceId, "memory_ingest", payload.source];
-  const jobIdSuffix =
-    payload.type === "activity"
-      ? `activity-${payload.integrationAccountId}`
-      : `memory-ingest-${payload.documentId}`;
+  let dedupKey: string;
+  let tagBits: string[];
+  let throttleMs = 0;
+
+  if (payload.type === "activity") {
+    // No throttle — Date.now() suffix makes every enqueue unique.
+    dedupKey = `activity-${payload.integrationAccountId}-${Date.now()}`;
+    tagBits = [payload.workspaceId, "activity", payload.integrationSlug];
+  } else {
+    // Bucketed dedup: every event for the same session inside the same
+    // 10-minute window collapses to one job. Bucket changes when the wall
+    // clock crosses the next 10-minute boundary.
+    throttleMs = MEMORY_INGEST_THROTTLE_MS;
+    const bucket = Math.floor(Date.now() / throttleMs);
+    dedupKey = `memory-ingest-${payload.sessionId}-${bucket}`;
+    tagBits = [payload.workspaceId, "memory_ingest", payload.source];
+  }
 
   if (provider === "trigger") {
     const { caseTask } = await import("~/trigger/case/case");
@@ -607,13 +629,18 @@ export async function enqueueCase(
       queue: "case-queue",
       concurrencyKey: payload.workspaceId,
       tags: tagBits,
+      ...(throttleMs > 0 && {
+        idempotencyKey: dedupKey,
+        delay: `${Math.ceil(throttleMs / 1000)}s`,
+      }),
     });
     return { id: handler.id };
   } else {
     const { caseQueue } = await import("~/bullmq/queues");
     const job = await caseQueue.add("case", payload, {
-      jobId: `case-${jobIdSuffix}-${Date.now()}`,
+      jobId: `case-${dedupKey}`,
       attempts: 1,
+      ...(throttleMs > 0 && { delay: throttleMs }),
     });
     return { id: job.id };
   }
