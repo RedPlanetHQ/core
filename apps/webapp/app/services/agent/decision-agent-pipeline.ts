@@ -106,7 +106,9 @@ export async function runCASEPipeline(
         ? ((trigger.data as any).integration ?? "integration")
         : trigger.type === "scheduled_task_fired"
           ? "scheduled-task"
-          : "reminder";
+          : trigger.type === "memory_ingest"
+            ? `memory-ingest:${(trigger.data as any).source ?? "unknown"}`
+            : "reminder";
 
     let conversationId: string;
 
