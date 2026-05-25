@@ -19,6 +19,7 @@ import {
   titleGenerationWorker,
   integrationRunWorker,
   scratchpadScanWorker,
+  caseWorker,
 } from "./workers";
 import { initializeReminderScheduler } from "~/services/reminder-scheduler";
 import { initializeScheduledTaskScheduler } from "~/services/task-scheduler";
@@ -31,6 +32,7 @@ import {
   preprocessQueue,
   integrationRunQueue,
   scratchpadScanQueue,
+  caseQueue,
 } from "./queues";
 import {
   setupWorkerLogging,
@@ -84,6 +86,7 @@ export async function initWorkers(): Promise<void> {
     scratchpadScanQueue,
     "scratchpad-scan",
   );
+  setupWorkerLogging(caseWorker, caseQueue, "case");
 
   // Start periodic metrics logging (every 60 seconds)
   metricsInterval = startPeriodicMetricsLogging(
@@ -125,6 +128,7 @@ export async function initWorkers(): Promise<void> {
         queue: scratchpadScanQueue,
         name: "scratchpad-scan",
       },
+      { worker: caseWorker, queue: caseQueue, name: "case" },
     ],
     60000, // Log metrics every 60 seconds
   );
@@ -158,6 +162,7 @@ export async function initWorkers(): Promise<void> {
     `✓ Integration run worker: ${integrationRunWorker.name} (concurrency: 3)`,
   );
   logger.log(`✓ Scratchpad scan worker: ${scratchpadScanWorker.name} (concurrency: 5)`);
+  logger.log(`✓ Case worker: ${caseWorker.name} (concurrency: 5)`);
   logger.log(`✓ Reminder scheduler: reminder-queue + followup-queue`);
   logger.log(`✓ Scheduled task scheduler: scheduled-task-queue`);
   logger.log("─".repeat(80));
