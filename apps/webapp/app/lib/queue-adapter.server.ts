@@ -614,12 +614,15 @@ export async function enqueueCase(
     dedupKey = `activity-${payload.integrationAccountId}-${Date.now()}`;
     tagBits = [payload.workspaceId, "activity", payload.integrationSlug];
   } else {
-    // Bucketed dedup: every event for the same session inside the same
-    // 10-minute window collapses to one job. Bucket changes when the wall
-    // clock crosses the next 10-minute boundary.
+    // Bucketed dedup keyed on documentId: every event for the same compact
+    // Document inside the same 10-minute window collapses to one job.
+    // documentId is the Document row that session-compaction upserts — it's
+    // stable across re-compacts of the same session, so successive compacts
+    // hit the same dedup key and only the first one in each bucket
+    // schedules a delayed case run.
     throttleMs = MEMORY_INGEST_THROTTLE_MS;
     const bucket = Math.floor(Date.now() / throttleMs);
-    dedupKey = `memory-ingest-${payload.sessionId}-${bucket}`;
+    dedupKey = `memory-ingest-${payload.documentId}-${bucket}`;
     tagBits = [payload.workspaceId, "memory_ingest", payload.source];
   }
 
