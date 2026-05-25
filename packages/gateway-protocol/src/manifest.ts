@@ -9,6 +9,18 @@ export const GatewayTool = z.object({
   inputSchema: z.record(z.string(), z.unknown()).optional(),
 });
 
+export const GatewaySkill = z.object({
+  /** Folder name and frontmatter `name` (must match). Kebab-case slug. */
+  name: z.string(),
+  /** Short one-liner shown in the agent system prompt and the UI. */
+  description: z.string(),
+  /** Frontmatter `allowed-tools`. Read for UI display only in v1; no runtime enforcement. */
+  allowedTools: z.array(z.string()).optional(),
+  /** Absolute path to the skill directory on the gateway host. Used to construct `SKILL.md` reads. */
+  path: z.string(),
+});
+export type GatewaySkill = z.infer<typeof GatewaySkill>;
+
 /**
  * A coding agent binary the gateway has detected on its `PATH` but not yet
  * configured in `preferences.coding`. The webapp uses this to surface
@@ -54,6 +66,8 @@ export const Manifest = z.object({
   }),
   folders: z.array(Folder),
   tools: z.array(GatewayTool),
+  /** Skills installed on the gateway. Bodies are NOT included — read SKILL.md via files_read on demand. */
+  skills: z.array(GatewaySkill).default([]),
   /** Configured coding agents on this gateway (e.g. "claude-code", "codex-cli"). */
   agents: z.array(z.string()),
   /** Detected agent binaries (configured or not). Used by the "Log in" UI. */
