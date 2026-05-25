@@ -26,6 +26,7 @@ import {
   selectModelMessages,
   generateWithRetry,
   describeAgentError,
+  prepareHistoryParts,
   type MessageEntry,
 } from "./context-window";
 
@@ -120,10 +121,7 @@ export async function noStreamProcess(
       const role =
         history.role ?? (history.userType === "Agent" ? "assistant" : "user");
       const normalized = normalizeParts(history.parts);
-      const parts =
-        role === "assistant"
-          ? normalized.filter((p: any) => p.type === "text")
-          : normalized;
+      const parts = prepareHistoryParts(role, normalized);
       return { parts, role, id: history.id };
     })
     .filter((m) => hasNonEmptyParts(m.parts));

@@ -35,6 +35,7 @@ import { patchArgsDeep } from "~/services/agent/tool-args-patch-processor";
 import {
   selectModelMessages,
   describeAgentError,
+  prepareHistoryParts,
   type MessageEntry,
 } from "~/services/agent/context-window";
 
@@ -217,10 +218,7 @@ const { loader, action } = createHybridActionApiRoute(
         const role =
           history.role ?? (history.userType === "Agent" ? "assistant" : "user");
         const normalized = normalizeParts(history.parts);
-        const parts =
-          role === "assistant"
-            ? normalized.filter((p: any) => p.type === "text")
-            : normalized;
+        const parts = prepareHistoryParts(role, normalized);
         return { parts, role, id: history.id };
       },
     );

@@ -28,6 +28,32 @@ export interface MessageEntry {
   parts: MessagePart[];
 }
 
+/**
+ * Trim assistant-role history parts before sending them back to the model.
+ *
+ * Keeps direct tool calls intact so the agent remembers what it actually did
+ * last turn (otherwise it has been observed denying its own tool calls — e.g.
+ * calling `create_skill` then claiming it never ran). Collapses sub-agent
+ * tool calls (`tool-agent-*`) to drop their inlined `subAgentToolResults`
+ * trace, since the parent has already synthesized whatever mattered into the
+ * following text part and carrying the full sub-agent trace forward bloats
+ * context turn after turn.
+ */
+export function prepareHistoryParts(
+  role: "user" | "assistant" | "system",
+  parts: MessagePart[],
+): MessagePart[] {
+  if (role !== "assistant") return parts;
+  return parts.map((p) => {
+    if (typeof p.type === "string" && p.type.startsWith("tool-agent-")) {
+      const output = (p as { output?: { text?: unknown } }).output ?? {};
+      const text = typeof output.text === "string" ? output.text : "";
+      return { ...p, output: { text } };
+    }
+    return p;
+  });
+}
+
 export type SelectionMode = "full" | "compact+recent" | "budget-trim";
 
 export interface SelectionResult {
