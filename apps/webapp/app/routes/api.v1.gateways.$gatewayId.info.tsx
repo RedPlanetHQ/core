@@ -1,7 +1,7 @@
 import { json, type LoaderFunctionArgs } from "@remix-run/node";
 import { prisma } from "~/db.server";
 import { requireUser, getWorkspaceId } from "~/services/session.server";
-import { getGatewayInfo } from "~/services/gateway/utils.server";
+import { gatewayInfoFromManifest } from "~/services/gateway/utils.server";
 import { refreshGatewayHealth } from "~/services/gateway/health.server";
 
 /**
@@ -34,10 +34,10 @@ export async function loader({ request, params }: LoaderFunctionArgs) {
   }
 
   // Probe the gateway so the manifest we return is fresh. Short timeout so
-  // a dead gateway doesn't stall the dialog.
-  await refreshGatewayHealth(gatewayId, 4_000).catch(() => "disconnected");
-
-  const info = await getGatewayInfo(gatewayId);
+  // a dead gateway doesn't stall the dialog. Reuse the manifest from the
+  // probe instead of issuing a second /manifest fetch.
+  const probe = await refreshGatewayHealth(gatewayId, 4_000).catch(() => null);
+  const info = probe?.manifest ? gatewayInfoFromManifest(probe.manifest) : null;
   if (!info) {
     return json(
       { error: "Gateway is unreachable", gateway },

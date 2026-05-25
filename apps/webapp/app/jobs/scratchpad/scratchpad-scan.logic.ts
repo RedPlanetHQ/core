@@ -7,7 +7,6 @@
  * The delay difference (10s vs 20s) is handled in collab-scanner.server.ts.
  */
 
-import { runScratchpadObserver } from "~/services/agent/agents/scratchpad-observer";
 import { createConversation } from "~/services/conversation.server";
 import { createButlerComment } from "~/services/butler-comment.server";
 import { noStreamProcess } from "~/services/agent/no-stream-process";
@@ -41,11 +40,6 @@ export async function processScratchpadScan(
     if (payload.type === "mention") {
       await processMention(payload);
     } else {
-      await runScratchpadObserver({
-        pageId: payload.pageId,
-        userId: payload.userId,
-        workspaceId: payload.workspaceId,
-      });
     }
   } catch (err) {
     logger.error(`[scratchpad] ${payload.type} job failed`, { err });

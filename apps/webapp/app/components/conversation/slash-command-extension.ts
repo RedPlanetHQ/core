@@ -116,7 +116,7 @@ export function createSkillSlashCommand(
           },
           items: ({ query }: { query: string }) => {
             const q = query.toLowerCase();
-            const DEFAULT_SKILLS = ["persona", "reading guide", "watch rules"];
+            const DEFAULT_SKILLS = ["persona", "watch rules"];
             return skillsRef.current
               .filter(
                 (s) =>

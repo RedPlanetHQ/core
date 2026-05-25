@@ -11,6 +11,7 @@ import {
   useNavigate,
   useNavigation,
   useRevalidator,
+  type ShouldRevalidateFunction,
 } from "@remix-run/react";
 import { useEffect, useState } from "react";
 import { Pencil, Plus, Trash2 } from "lucide-react";
@@ -32,7 +33,7 @@ import {
 import { requireUser } from "~/services/session.server";
 import { getGateway } from "~/services/gateway.server";
 import { refreshGatewayHealth } from "~/services/gateway/health.server";
-import { getGatewayInfo } from "~/services/gateway/utils.server";
+import { gatewayInfoFromManifest } from "~/services/gateway/utils.server";
 import { prisma } from "~/db.server";
 import type { DeployMode } from "@redplanethq/gateway-protocol";
 
@@ -63,12 +64,10 @@ export async function loader({ request, params }: LoaderFunctionArgs) {
   });
   if (!gw) return redirect("/home/gateways");
 
-  // Refresh health so status badge / connection indicator reflect reality.
-  await refreshGatewayHealth(gatewayId).catch(() => "disconnected");
-
-  // Live-fetch manifest for the initial provider snapshot — the client takes
-  // over from here via /api/v1/gateways/:id/info on refresh.
-  const info = await getGatewayInfo(gatewayId);
+  // Refresh health and reuse the manifest it already fetched — avoids a
+  // second /manifest roundtrip for the initial provider snapshot.
+  const probe = await refreshGatewayHealth(gatewayId).catch(() => null);
+  const info = probe?.manifest ? gatewayInfoFromManifest(probe.manifest) : null;
 
   // Re-read after refresh so status reflects the latest probe.
   const fresh = await getGateway(gatewayId);
@@ -87,6 +86,26 @@ export async function loader({ request, params }: LoaderFunctionArgs) {
     info,
   });
 }
+
+// Sibling tab navs (info ↔ terminal ↔ browser) keep gatewayId the same and
+// the snapshot stays valid — skip the gateway-side health + manifest fetches
+// so tab switching is instant. The 20s setInterval in `GatewayDetailShell`
+// keeps the snapshot fresh while the page is open.
+export const shouldRevalidate: ShouldRevalidateFunction = ({
+  currentParams,
+  nextParams,
+  currentUrl,
+  nextUrl,
+  defaultShouldRevalidate,
+}) => {
+  if (
+    currentParams.gatewayId === nextParams.gatewayId &&
+    currentUrl.pathname !== nextUrl.pathname
+  ) {
+    return false;
+  }
+  return defaultShouldRevalidate;
+};
 
 export default function GatewayDetailLayout() {
   const { gateway, info } = useLoaderData<typeof loader>();

@@ -1,6 +1,13 @@
 import { prisma } from "~/db.server";
 import { fetchHealth, fetchManifest } from "./transport.server";
 import { markConnected, markDisconnected } from "./crud.server";
+import type { Manifest as ManifestT } from "@redplanethq/gateway-protocol";
+
+export interface RefreshGatewayResult {
+  status: "connected" | "disconnected";
+  /** The manifest fetched during this probe — reusable so callers can avoid a second /manifest roundtrip. */
+  manifest: ManifestT | null;
+}
 
 /**
  * Live health probe for a single gateway. Pings `/healthz`, and on success
@@ -9,16 +16,18 @@ import { markConnected, markDisconnected } from "./crud.server";
  * UI code live-fetch it on demand.
  *
  * Designed to be called from user-facing loaders — keep the timeout short so
- * a dead gateway doesn't stall page rendering.
+ * a dead gateway doesn't stall page rendering. Returns the manifest fetched
+ * during the probe so callers (e.g. the gateway page loader) can build a
+ * `GatewayInfo` without a second /manifest fetch.
  */
 export async function refreshGatewayHealth(
   gatewayId: string,
   timeoutMs = 4_000,
-): Promise<"connected" | "disconnected"> {
+): Promise<RefreshGatewayResult> {
   const health = await fetchHealth(gatewayId, timeoutMs);
   if (!health) {
     await markDisconnected(gatewayId, "health check failed");
-    return "disconnected";
+    return { status: "disconnected", manifest: null };
   }
 
   const m = await fetchManifest(gatewayId, timeoutMs);
@@ -61,7 +70,7 @@ export async function refreshGatewayHealth(
     }
   }
 
-  return "connected";
+  return { status: "connected", manifest: m?.manifest ?? null };
 }
 
 /**
@@ -78,7 +87,7 @@ export async function refreshWorkspaceGateways(
   });
   await Promise.all(
     rows.map((g) =>
-      refreshGatewayHealth(g.id, timeoutMs).catch(() => "disconnected"),
+      refreshGatewayHealth(g.id, timeoutMs).catch(() => undefined),
     ),
   );
 }
