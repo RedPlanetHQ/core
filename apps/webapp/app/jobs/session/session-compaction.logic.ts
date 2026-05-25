@@ -10,6 +10,7 @@ import { prisma } from "~/db.server";
 import { type Document } from "@prisma/client";
 
 import { processTitleGeneration } from "~/jobs/titles/title-generation.logic";
+import { enqueueMemoryIngestCase } from "~/lib/queue-adapter.server";
 import { type ModelMessage } from "ai";
 
 export interface SessionCompactionPayload {
@@ -115,6 +116,9 @@ export async function processSessionCompaction(
     }
 
     // Generate or update compaction
+    const compactionKind: "created" | "updated" = existingCompact
+      ? "updated"
+      : "created";
     const compactionResult = existingCompact
       ? await updateCompaction(
           existingCompact,
@@ -136,6 +140,23 @@ export async function processSessionCompaction(
         sessionId,
         compactUuid: compactionResult.id,
       });
+
+      // Route Mac-sourced compacts through the CASE pipeline so Watch Rules
+      // can scan the summary for task suggestions and surface them. Other
+      // sources keep their existing triggers. Fire-and-forget — compaction
+      // success must not depend on decision-agent throughput.
+      if (source === "mac") {
+        void enqueueMacMemoryIngest({
+          userId,
+          workspaceId,
+          sessionId,
+          documentId: compactionResult.id,
+          title: compactionResult.title,
+          summary: compactionResult.content,
+          episodeCount: episodes.length,
+          kind: compactionKind,
+        });
+      }
 
       return {
         success: true,
@@ -582,6 +603,57 @@ function parseCompactionResponse(
       response: response.substring(0, 500),
     });
     throw new Error(`Failed to parse compaction response: ${error}`);
+  }
+}
+
+/**
+ * Fire a memory_ingest CASE job for a Mac-sourced session compact. Looks up
+ * the user's email + timezone, then enqueues the routing job. Errors are
+ * logged and swallowed — compaction success must not depend on this side
+ * effect.
+ */
+async function enqueueMacMemoryIngest(args: {
+  userId: string;
+  workspaceId: string;
+  sessionId: string;
+  documentId: string;
+  title: string;
+  summary: string;
+  episodeCount: number;
+  kind: "created" | "updated";
+}): Promise<void> {
+  try {
+    const user = await prisma.user.findUnique({
+      where: { id: args.userId },
+      select: { email: true, metadata: true },
+    });
+    if (!user) {
+      logger.warn(
+        `[memory-ingest] User ${args.userId} not found; skipping routing for session ${args.sessionId}`,
+      );
+      return;
+    }
+    const userMetadata =
+      (user.metadata as Record<string, unknown> | null) ?? null;
+    const timezone = (userMetadata?.timezone as string) ?? "UTC";
+
+    await enqueueMemoryIngestCase({
+      workspaceId: args.workspaceId,
+      userId: args.userId,
+      userEmail: user.email,
+      source: "mac",
+      sessionId: args.sessionId,
+      documentId: args.documentId,
+      title: args.title,
+      summary: args.summary,
+      episodeCount: args.episodeCount,
+      kind: args.kind,
+      timezone,
+    });
+  } catch (err) {
+    logger.error(
+      `[memory-ingest] Failed to enqueue Mac compact ${args.sessionId}: ${err}`,
+    );
   }
 }
 

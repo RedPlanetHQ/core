@@ -8,6 +8,7 @@ import { LabelService } from "~/services/label.server";
 import { createSkill } from "~/services/skills.server";
 import { DEFAULT_SKILL_DEFINITIONS } from "~/services/skills.defaults";
 import { READINESS_SKILL_DEFINITIONS } from "~/services/skills.readiness";
+import { createScheduledTask } from "~/services/task.server";
 
 interface CreateWorkspaceDto {
   name: string;
@@ -112,6 +113,41 @@ export async function createWorkspace(
     logger.info(`Seeded readiness skills for workspace ${workspace.id}`);
   } catch (e) {
     logger.error(`Error seeding readiness skills: ${e}`);
+  }
+
+  // Seed the daily Morning Brief scheduled task (fires 9am in user's local
+  // timezone — defaults to UTC until the user updates it via set_timezone,
+  // which calls recalculateTasksForTimezone to shift the nextRunAt).
+  try {
+    const morningBriefSkill = await prisma.document.findFirst({
+      where: {
+        workspaceId: workspace.id,
+        metadata: {
+          path: ["skillType"],
+          equals: "morning-brief",
+        },
+      },
+      select: { id: true, title: true },
+    });
+    if (morningBriefSkill) {
+      await createScheduledTask(workspace.id, input.userId, {
+        title: "Morning brief",
+        schedule: "FREQ=DAILY;BYHOUR=9",
+        maxOccurrences: null,
+        metadata: {
+          skillId: morningBriefSkill.id,
+          skillName: morningBriefSkill.title,
+          kind: "morning_brief_daily",
+        },
+      });
+      logger.info(`Seeded morning brief task for workspace ${workspace.id}`);
+    } else {
+      logger.warn(
+        `Morning brief skill not found for workspace ${workspace.id}; task not seeded`,
+      );
+    }
+  } catch (e) {
+    logger.error(`Error seeding morning brief task: ${e}`);
   }
 
   try {

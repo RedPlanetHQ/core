@@ -17,6 +17,7 @@ export type TriggerType =
   | "scheduled_task_fired"
   | "daily_sync"
   | "integration_webhook"
+  | "memory_ingest"
   | "scheduled_check"
   | "task_completed"
   | "task_failed"
@@ -96,12 +97,46 @@ export interface ScheduledTaskTrigger extends BaseTrigger {
   data: ScheduledTaskTriggerData;
 }
 
+/**
+ * Memory ingest trigger — fires once per session compact (NOT per aspect).
+ * When the session-compaction job creates or updates a `Document` row for a
+ * Mac-sourced session, the resulting summary is sent through the decision
+ * pipeline so Watch Rules can identify task suggestions and surface them.
+ *
+ * Currently scoped to `source === "mac"`. Other sources (chat, integrations)
+ * still flow through their existing triggers and are not re-routed through
+ * memory_ingest.
+ */
+export interface MemoryIngestTriggerData {
+  /** Origin of the compacted session — currently always "mac" for this trigger. */
+  source: string;
+  /** Session id that was compacted. */
+  sessionId: string;
+  /** Document row id (same row that `update_document`/UI shows). */
+  documentId: string;
+  /** Compaction title — short, human-readable. */
+  title: string;
+  /** Full compact summary text (markdown). The decision agent reads this to
+   * find task suggestions. */
+  summary: string;
+  /** How many episodes were rolled into this compact. */
+  episodeCount: number;
+  /** Whether this is the first compaction for the session or an update. */
+  kind: "created" | "updated";
+}
+
+export interface MemoryIngestTrigger extends BaseTrigger {
+  type: "memory_ingest";
+  data: MemoryIngestTriggerData;
+}
+
 export type Trigger =
   | ReminderTrigger
   | ScheduledTaskTrigger
   | WebhookTrigger
   | SyncTrigger
-  | ScheduledCheckTrigger;
+  | ScheduledCheckTrigger
+  | MemoryIngestTrigger;
 
 // ============================================================================
 // Goal & Response Types

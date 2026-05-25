@@ -264,6 +264,25 @@ export const activityCaseQueue = new Queue("activity-case-queue", {
 });
 
 /**
+ * Memory ingest CASE queue
+ * Routes Task-aspects extracted during episode ingestion through the CASE
+ * pipeline so Watch Rules can decide whether to surface them.
+ */
+export const memoryIngestCaseQueue = new Queue("memory-ingest-case-queue", {
+  connection: getRedisConnection(),
+  defaultJobOptions: {
+    attempts: 1,
+    removeOnComplete: {
+      age: 3600,
+      count: 1000,
+    },
+    removeOnFail: {
+      age: 86400,
+    },
+  },
+});
+
+/**
  * Scheduled task queue
  * Handles scheduled/recurring tasks (unified with reminders)
  */

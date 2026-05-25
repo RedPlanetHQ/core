@@ -94,6 +94,10 @@ import {
   type ActivityCasePayload,
   processActivityCase,
 } from "~/jobs/integrations/activity-case.logic";
+import {
+  type MemoryIngestPayload,
+  processMemoryIngestCase,
+} from "~/jobs/memory-ingest/memory-ingest-case.logic";
 import { env } from "~/env.server";
 
 /**
@@ -329,6 +333,23 @@ export const activityCaseWorker = new Worker(
 );
 
 /**
+ * Memory ingest CASE worker
+ * Routes Task-aspects extracted during episode ingestion through the CASE
+ * pipeline so Watch Rules decide surface vs silence.
+ */
+export const memoryIngestCaseWorker = new Worker(
+  "memory-ingest-case-queue",
+  async (job) => {
+    const payload = job.data as MemoryIngestPayload;
+    return await processMemoryIngestCase(payload);
+  },
+  {
+    connection: getRedisConnection(),
+    concurrency: 5,
+  },
+);
+
+/**
  * Scheduled task worker
  * Processes scheduled/recurring tasks (unified with reminders)
  */
@@ -410,6 +431,7 @@ export async function closeAllWorkers(): Promise<void> {
     reminderWorker.close(),
     followUpWorker.close(),
     activityCaseWorker.close(),
+    memoryIngestCaseWorker.close(),
     scheduledTaskWorker.close(),
     taskWorker.close(),
     reminderQueue.close(),

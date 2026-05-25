@@ -24,6 +24,7 @@ import type {
 } from "~/jobs/reminder/reminder.logic";
 import type { TaskPayload } from "~/jobs/task/task.logic";
 import type { ActivityCasePayload } from "~/jobs/integrations/activity-case.logic";
+import type { MemoryIngestPayload } from "~/jobs/memory-ingest/memory-ingest-case.logic";
 import type { ScratchpadScanPayload } from "~/jobs/scratchpad/scratchpad-scan.logic";
 import type { CodingDescriptionUpdatePayload } from "~/jobs/coding/description-update.logic";
 import { runs } from "@trigger.dev/sdk";
@@ -602,6 +603,37 @@ export async function enqueueActivityCase(
     const { activityCaseQueue } = await import("~/bullmq/queues");
     const job = await activityCaseQueue.add("activity-case", payload, {
       jobId: `activity-case-${payload.integrationAccountId}-${Date.now()}`,
+      attempts: 1,
+    });
+    return { id: job.id };
+  }
+}
+
+/**
+ * Enqueue memory-ingest CASE job. Fired after a Task-aspect is saved during
+ * episode ingestion (voice/screen/chat). Routes through the CASE pipeline so
+ * Watch Rules decide whether to surface (channel ping + scratchpad append) or
+ * stay silent.
+ */
+export async function enqueueMemoryIngestCase(
+  payload: MemoryIngestPayload,
+): Promise<{ id?: string }> {
+  const provider = env.QUEUE_PROVIDER as QueueProvider;
+
+  if (provider === "trigger") {
+    const { memoryIngestCaseTask } = await import(
+      "~/trigger/memory-ingest/memory-ingest-case"
+    );
+    const handler = await memoryIngestCaseTask.trigger(payload, {
+      queue: "memory-ingest-case-queue",
+      concurrencyKey: payload.workspaceId,
+      tags: [payload.workspaceId, payload.source, payload.aspect],
+    });
+    return { id: handler.id };
+  } else {
+    const { memoryIngestCaseQueue } = await import("~/bullmq/queues");
+    const job = await memoryIngestCaseQueue.add("memory-ingest-case", payload, {
+      jobId: `memory-ingest-case-${payload.aspectId}-${Date.now()}`,
       attempts: 1,
     });
     return { id: job.id };
