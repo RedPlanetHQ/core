@@ -53,11 +53,17 @@ export interface MemoryIngestData {
   source: string; // currently "mac"
   sessionId: string;
   documentId: string;
-  title: string;
-  summary: string;
-  episodeCount: number;
+  /** "created" on first compact for this session, "updated" on re-compacts.
+   * Decided by the producer (session-compaction) at enqueue time and frozen
+   * for the bucket — not re-derived at run time. */
   kind: "created" | "updated";
   timezone: string;
+  // NOTE: title/summary/episodeCount are intentionally NOT in the payload.
+  // The job is throttled to one fire per documentId per 10 minutes, so the
+  // payload that gets enqueued at T+0 would be stale by the time the job
+  // runs at T+600s if Slack keeps re-compacting the session in between.
+  // The worker re-reads the Document at run time so the decision agent
+  // always sees the latest compact.
 }
 
 export type CasePayload =
@@ -186,21 +192,39 @@ async function runMemoryIngestCase(
     source,
     sessionId,
     documentId,
-    title,
-    summary,
-    episodeCount,
     kind,
     timezone,
   } = payload;
 
   try {
+    // Read the latest compact for this document fresh. The payload was
+    // captured 10 minutes ago when the first compact in this bucket fired;
+    // any subsequent re-compacts (e.g. Slack ingesting every 5s) have
+    // upserted the same Document row with richer content. Always operate
+    // on the latest state, not the snapshot from enqueue time.
+    const doc = await prisma.document.findUnique({
+      where: { id: documentId },
+      select: { id: true, title: true, content: true, metadata: true },
+    });
+
+    if (!doc) {
+      logger.warn(
+        `[case/memory_ingest] Document ${documentId} no longer exists at run time; skipping`,
+      );
+      return { success: true };
+    }
+
+    const docMetadata =
+      (doc.metadata as Record<string, unknown> | null) ?? null;
+    const episodeCount = (docMetadata?.episodeCount as number) ?? 0;
+
     const user = await prisma.user.findUnique({
       where: { id: userId },
       select: { metadata: true },
     });
-    const metadata = user?.metadata as Record<string, unknown> | null;
+    const userMetadata = user?.metadata as Record<string, unknown> | null;
     const defaultChannel: MessageChannel =
-      (metadata?.defaultChannel as MessageChannel | undefined) ?? "email";
+      (userMetadata?.defaultChannel as MessageChannel | undefined) ?? "email";
 
     const trigger: MemoryIngestTrigger = {
       type: "memory_ingest",
@@ -212,8 +236,8 @@ async function runMemoryIngestCase(
         source,
         sessionId,
         documentId,
-        title,
-        summary,
+        title: doc.title,
+        summary: doc.content,
         episodeCount,
         kind,
       },
@@ -239,7 +263,7 @@ async function runMemoryIngestCase(
       context,
       userPersona: userPersona?.content,
       userData: { userId, email: userEmail, workspaceId },
-      reminderText: summary,
+      reminderText: doc.content,
       reminderId: documentId,
       timezone: timezone ?? "UTC",
       executorTools,
