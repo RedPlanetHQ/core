@@ -3,7 +3,46 @@ import type {
   Folder,
   FolderScope,
   DeployMode,
+  Manifest as ManifestT,
 } from "@redplanethq/gateway-protocol";
+
+export interface GatewayInfo {
+  folders: Folder[];
+  agents: string[];
+  gateway: {
+    id: string;
+    name: string;
+    description?: string;
+    hostname: string;
+    platform: string;
+    deployMode: DeployMode;
+  };
+  tools: Array<{ name: string; description: string }>;
+}
+
+/**
+ * Pure shaper — turn a manifest into the UI-friendly info object without
+ * issuing another /manifest fetch. Use this when you already have a manifest
+ * in hand (e.g. from `refreshGatewayHealth`).
+ */
+export function gatewayInfoFromManifest(manifest: ManifestT): GatewayInfo {
+  return {
+    folders: manifest.folders ?? [],
+    agents: manifest.agents ?? [],
+    gateway: {
+      id: manifest.gateway.id,
+      name: manifest.gateway.name,
+      description: manifest.gateway.description,
+      hostname: manifest.gateway.hostname,
+      platform: manifest.gateway.platform,
+      deployMode: manifest.gateway.deployMode ?? "native",
+    },
+    tools: (manifest.tools ?? []).map((t) => ({
+      name: t.name,
+      description: t.description,
+    })),
+  };
+}
 
 interface ConfiguredBrowserSession {
   name: string;
@@ -90,38 +129,12 @@ export async function getGatewayAgents(gatewayId: string): Promise<string[]> {
 /**
  * Live-fetch everything the UI typically needs in one roundtrip.
  */
-export async function getGatewayInfo(gatewayId: string): Promise<{
-  folders: Folder[];
-  agents: string[];
-  gateway: {
-    id: string;
-    name: string;
-    description?: string;
-    hostname: string;
-    platform: string;
-    deployMode: DeployMode;
-  };
-  tools: Array<{ name: string; description: string }>;
-} | null> {
+export async function getGatewayInfo(
+  gatewayId: string,
+): Promise<GatewayInfo | null> {
   const m = await fetchManifest(gatewayId);
   if (!m) return null;
-  const { manifest } = m;
-  return {
-    folders: manifest.folders ?? [],
-    agents: manifest.agents ?? [],
-    gateway: {
-      id: manifest.gateway.id,
-      name: manifest.gateway.name,
-      description: manifest.gateway.description,
-      hostname: manifest.gateway.hostname,
-      platform: manifest.gateway.platform,
-      deployMode: manifest.gateway.deployMode ?? "native",
-    },
-    tools: (manifest.tools ?? []).map((t) => ({
-      name: t.name,
-      description: t.description,
-    })),
-  };
+  return gatewayInfoFromManifest(m.manifest);
 }
 
 const CAPABILITY_PREFIXES: Array<{ prefix: string; tag: string }> = [

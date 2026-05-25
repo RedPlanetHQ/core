@@ -69,7 +69,7 @@ const { action, loader } = createHybridActionApiRoute(
         body.securityKey !== undefined ? ciphertext(nextSecurityKey) : undefined,
     });
 
-    await refreshGatewayHealth(gateway.id).catch(() => "disconnected");
+    await refreshGatewayHealth(gateway.id).catch(() => null);
 
     return json({ ok: true });
   },
