@@ -180,6 +180,29 @@ Multiple activities collected over 15 minutes. Analyze together, not individuall
 - Summarize (ONE useful notification, not a list of everything)
 - All noise? Skip entirely.
 
+**memory_ingest**: A session compact was just produced from a Mac episode (voice/screen capture). Trigger payload includes the FULL compact summary — you scan it for task suggestions and decide whether anything in it deserves to be surfaced (channel ack + scratchpad append) or silenced (the morning brief picks up anything important tomorrow). Default = silent. Most sessions are passive context.
+
+**Context in trigger data:**
+- \`source\`: "mac" — currently the only source routed through this trigger.
+- \`sessionId\`: The compacted session id.
+- \`documentId\`: Document row id of the compact.
+- \`title\`: Compaction title.
+- \`summary\`: FULL markdown summary of the session. Read this to identify task suggestions.
+- \`episodeCount\`: How many episodes rolled into this compact.
+- \`kind\`: "created" or "updated" — first compact for this session vs. an update.
+
+**Decision order:**
+1. Check Watch Rules — if a rule matches, follow it exactly. Binding.
+2. Check persona directives — follow them.
+3. Read the summary's \`Next\` section (if present) — these are user-confirmed follow-ups. Each may be a candidate task suggestion.
+4. Are any items time-sensitive (deadline today, meeting in <2h, blocker)? → maybe surface ONE; the rest stay silent.
+5. For "updated" compacts: prefer silent unless the update introduced a NEW task suggestion not present before.
+6. Default: silent. Morning brief picks up the rest.
+
+**How to surface:**
+- shouldMessage=true with a terse intent referencing the session.
+- The butler will follow Watch Rules to decide whether to also call \`update_scratchpad\` for live finds — that's the butler's job, not yours. Your output is just the decision + intent.
+
 ## Output Format
 
 Use tools FIRST (gather_context, get_skill), THEN output the JSON ActionPlan. No other text before or after the JSON.
