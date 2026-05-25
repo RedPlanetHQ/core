@@ -145,15 +145,17 @@ export async function processSessionCompaction(
       // can scan the summary for task suggestions and surface them. Other
       // sources keep their existing triggers. Fire-and-forget — compaction
       // success must not depend on decision-agent throughput.
+      //
+      // Only IDs are passed: the case worker is throttled to one fire per
+      // document per 10 minutes, so any title/summary captured here would
+      // be stale by the time the worker runs. The worker re-reads the
+      // Document row at run time to operate on the latest compact.
       if (source === "mac") {
         void enqueueMacMemoryIngest({
           userId,
           workspaceId,
           sessionId,
           documentId: compactionResult.id,
-          title: compactionResult.title,
-          summary: compactionResult.content,
-          episodeCount: episodes.length,
           kind: compactionKind,
         });
       }
@@ -608,18 +610,15 @@ function parseCompactionResponse(
 
 /**
  * Fire a memory_ingest CASE job for a Mac-sourced session compact. Looks up
- * the user's email + timezone, then enqueues the routing job. Errors are
- * logged and swallowed — compaction success must not depend on this side
- * effect.
+ * the user's email + timezone, then enqueues the routing job with just IDs —
+ * the worker re-reads the Document at run time. Errors are logged and
+ * swallowed: compaction success must not depend on this side effect.
  */
 async function enqueueMacMemoryIngest(args: {
   userId: string;
   workspaceId: string;
   sessionId: string;
   documentId: string;
-  title: string;
-  summary: string;
-  episodeCount: number;
   kind: "created" | "updated";
 }): Promise<void> {
   try {
@@ -645,9 +644,6 @@ async function enqueueMacMemoryIngest(args: {
       source: "mac",
       sessionId: args.sessionId,
       documentId: args.documentId,
-      title: args.title,
-      summary: args.summary,
-      episodeCount: args.episodeCount,
       kind: args.kind,
       timezone,
     });
