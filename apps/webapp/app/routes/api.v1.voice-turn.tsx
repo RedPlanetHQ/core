@@ -31,6 +31,7 @@ import {
   resolveModelConfig,
 } from "~/services/llm-provider.server";
 import { buildAgentContext } from "~/services/agent/context";
+import { prepareHistoryParts } from "~/services/agent/context-window";
 import { mastra } from "~/services/agent/mastra";
 import {
   saveConversationResult,
@@ -83,14 +84,19 @@ const { loader, action } = createHybridActionApiRoute(
     // Build conversation history snapshot for the model
     const conversation = await getConversationAndHistory(conversationId, userId);
     const history = (conversation?.ConversationHistory ?? []).map(
-      (h: any) => ({
-        id: h.id,
-        role: h.userType === "Agent" ? "assistant" : "user",
-        parts:
+      (h: any) => {
+        const role: "assistant" | "user" =
+          h.userType === "Agent" ? "assistant" : "user";
+        const rawParts =
           h.parts && Array.isArray(h.parts) && h.parts.length > 0
             ? h.parts
-            : [{ type: "text", text: h.message ?? "" }],
-      }),
+            : [{ type: "text", text: h.message ?? "" }];
+        return {
+          id: h.id,
+          role,
+          parts: prepareHistoryParts(role, rawParts),
+        };
+      },
     );
 
     const modelString = body.modelId ?? getDefaultChatModelId();
