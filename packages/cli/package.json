@@ -14,7 +14,8 @@
 	"author": "RedPlanetHQ",
 	"scripts": {
 		"build": "tsc && tsc-alias && chmod +x dist/cli.js && cp -r src/assets dist/assets",
-		"test": "prettier --check . && xo && ava"
+		"test": "prettier --check . && xo && ava",
+		"test:unit": "vitest run"
 	},
 	"files": [
 		"dist"
@@ -33,6 +34,7 @@
 		"fast-glob": "^3.3.2",
 		"fast-png": "^8.0.0",
 		"fastify": "^5.0.0",
+		"gray-matter": "4.0.3",
 		"ink": "^6.6.0",
 		"ink-select-input": "^6.2.0",
 		"ink-spinner": "5.0.0",
@@ -63,9 +65,14 @@
 		"ts-node": "^10.9.1",
 		"tsc-alias": "^1.8.16",
 		"typescript": "^5.0.3",
+		"vitest": "^3.2.0",
 		"xo": "^1.2.3"
 	},
 	"ava": {
+		"files": [
+			"test.tsx",
+			"!src/**/__tests__/**"
+		],
 		"extensions": {
 			"ts": "module",
 			"tsx": "module"
