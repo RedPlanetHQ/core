@@ -1,6 +1,5 @@
 import { z } from "zod";
 import { Folder } from "./folders.js";
-import { WorkflowsBlock, PluginSkill } from "./workflows.js";
 
 export const PROTOCOL_VERSION = "1";
 
@@ -73,10 +72,6 @@ export const Manifest = z.object({
   agents: z.array(z.string()),
   /** Detected agent binaries (configured or not). Used by the "Log in" UI. */
   availableAgents: z.array(AvailableAgent).default([]),
-  /** Resolved coding workflow templates per agent. */
-  workflows: WorkflowsBlock.optional(),
-  /** Plugin slash commands detected on the host, per agent. */
-  pluginSkills: z.array(PluginSkill).default([]),
 });
 export type Manifest = z.infer<typeof Manifest>;
 

@@ -103,9 +103,6 @@ export default function GatewayDetailLayout() {
     platform: gateway.platform,
     folders: info?.folders ?? [],
     agents: info?.agents ?? [],
-    skills: info?.skills ?? [],
-    workflows: info?.workflows,
-    pluginSkills: info?.pluginSkills ?? [],
   };
 
   return (
@@ -131,8 +128,7 @@ function GatewayDetailShell() {
   const activePath = navigation.location?.pathname ?? location.pathname;
   const isTerminal = activePath.endsWith("/terminal");
   const isBrowser = /\/browser(\/|$)/.test(activePath);
-  const isSkills = activePath.endsWith("/skills");
-  const isInfo = !isTerminal && !isBrowser && !isSkills;
+  const isInfo = !isTerminal && !isBrowser;
 
   // Periodic re-run of the layout loader so the connection indicator,
   // manifest data, and DB-synced name/description stay current while the
@@ -173,12 +169,6 @@ function GatewayDetailShell() {
             value: "browser",
             isActive: isBrowser,
             onClick: () => navigate(`/home/gateways/${gw.id}/browser`),
-          },
-          {
-            label: 'Skills',
-            value: 'skills',
-            isActive: isSkills,
-            onClick: () => navigate(`/home/gateways/${gw.id}/skills`),
           },
         ]}
         actionsNode={

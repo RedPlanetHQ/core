@@ -174,29 +174,6 @@ export interface WidgetConfig {
 	accountName: string;
 }
 
-// Per-phase shape — mirrors WorkflowPhase but kept loose at this layer
-// because the daemon validates with the protocol's zod schema at resolve time.
-export interface CodingWorkflowPhase {
-	name: string;
-	prompt: string;
-	pollSeconds: number;
-	advanceOn: 'user-approval' | 'done';
-}
-
-export interface CodingWorkflowTrack {
-	phases: CodingWorkflowPhase[];
-}
-
-export interface AgentCodingWorkflows {
-	bug?: CodingWorkflowTrack;
-	feature?: CodingWorkflowTrack;
-}
-
-export interface CodingWorkflowsConfig {
-	// Keyed by agent name: "claude-code", "codex-cli", etc.
-	[agentName: string]: AgentCodingWorkflows | undefined;
-}
-
 export interface UserPreferences {
 	lastProvider?: string;
 	lastModel?: string;
@@ -208,7 +185,6 @@ export interface UserPreferences {
 	gateway?: GatewayConfig;
 	coding?: CodingConfig;
 	defaultCodingAgent?: string;
-	codingWorkflows?: CodingWorkflowsConfig;
 	browser?: BrowserConfig;
 	exec?: ExecConfig;
 	widgets?: {

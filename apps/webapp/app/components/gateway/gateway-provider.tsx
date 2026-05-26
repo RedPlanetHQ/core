@@ -6,13 +6,7 @@ import {
   useMemo,
   useState,
 } from "react";
-import type {
-  DeployMode,
-  Folder,
-  GatewaySkill,
-  WorkflowsBlock,
-  PluginSkill,
-} from "@redplanethq/gateway-protocol";
+import type { DeployMode, Folder } from "@redplanethq/gateway-protocol";
 
 /**
  * Manifest-derived state for a single gateway. Server-rendered by the
@@ -30,9 +24,6 @@ export interface GatewaySnapshot {
   platform: string | null;
   folders: Folder[];
   agents: string[];
-  skills: GatewaySkill[];
-  workflows?: WorkflowsBlock;
-  pluginSkills: PluginSkill[];
 }
 
 interface GatewayContextValue extends GatewaySnapshot {

@@ -13,7 +13,7 @@
 	},
 	"author": "RedPlanetHQ",
 	"scripts": {
-		"build": "tsc && tsc-alias && chmod +x dist/cli.js && cp -r src/assets dist/assets && rm -rf dist/server/skills/builtin && cp -r src/server/skills/builtin dist/server/skills/builtin && rm -rf dist/server/workflows/presets && mkdir -p dist/server/workflows && cp -r src/server/workflows/presets dist/server/workflows/presets",
+		"build": "tsc && tsc-alias && chmod +x dist/cli.js && cp -r src/assets dist/assets",
 		"test": "prettier --check . && xo && ava",
 		"test:unit": "vitest run"
 	},

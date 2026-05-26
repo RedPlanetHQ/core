@@ -24,11 +24,7 @@ import {
   callTool as callGatewayTool,
   fetchManifest,
 } from "~/services/gateway/transport.server";
-import type {
-  Folder,
-  GatewaySkill,
-  WorkflowsBlock,
-} from "@redplanethq/gateway-protocol";
+import type { Folder } from "@redplanethq/gateway-protocol";
 import { getProgressUpdateTool } from "../tools/utils-tools";
 import { truncateToolResult } from "../tools/truncate-result";
 
@@ -248,9 +244,6 @@ const getGatewayAgentPrompt = (
   gatewayDescription: string | null,
   tools: GatewayTool[],
   folders: Folder[],
-  skills: GatewaySkill[],
-  workflows: WorkflowsBlock | undefined,
-  configuredAgents: string[],
 ) => {
   const toolsList = tools
     .map((t) => `- **${t.name}**: ${t.description}`)
@@ -266,53 +259,11 @@ const getGatewayAgentPrompt = (
           .join("\n")
       : "- (no folders registered on this gateway)";
 
-  const skillsBlock =
-    skills.length > 0
-      ? `
-AVAILABLE SKILLS:
-The skills below are packaged instruction sets installed on this gateway. Each entry is "name — description". When a task matches a skill's description, read its \`SKILL.md\` for full instructions before acting.
-
-${skills.map((s) => `- **${s.name}** — ${s.description}`).join("\n")}
-
-To use a skill: call \`files_read\` on \`<absolute path>/SKILL.md\` and follow it. Scripts referenced inside live in the same directory and run via \`exec_command\`.
-
-Skill paths:
-${skills.map((s) => `- ${s.name} → ${s.path}`).join("\n")}
-`
-      : "";
-
-  const workflowsBlock = (() => {
-    if (!workflows || configuredAgents.length === 0) {
-      return "";
-    }
-    const lines: string[] = [];
-    lines.push("");
-    lines.push("CODING WORKFLOWS (resolved by the gateway):");
-    lines.push(
-      `Source: ${workflows.source}. The gateway tells you which prompt to send at each phase — do not invent your own slash commands.`,
-    );
-    for (const agent of configuredAgents) {
-      const tracks = workflows.perAgent[agent];
-      if (!tracks) continue;
-      lines.push("");
-      lines.push(`Agent: ${agent}`);
-      for (const trackName of ["bug", "feature"] as const) {
-        const t = tracks[trackName];
-        const names = t.phases.map((p) => p.name).join(" → ");
-        lines.push(`  ${trackName}: ${names}`);
-      }
-      if (tracks.unresolved.length > 0) {
-        lines.push(`  unresolved: ${tracks.unresolved.join(", ")}`);
-      }
-    }
-    return lines.join("\n") + "\n";
-  })();
-
   return `You are an execution agent for the "${gatewayName}" gateway.
 ${gatewayDescription ? `\nPurpose: ${gatewayDescription}\n` : ""}
 AVAILABLE TOOLS:
 ${toolsList}
-${skillsBlock}${workflowsBlock}
+
 NARRATION:
 You also have a **progress_update** tool that streams a short observation to the user. The UI shows it as a transient status line while you work. Use it for the long beats — kicking off a coding session, switching files, polling a long-running run, finishing a phase. One sentence, specific. 1-2 per phase, not every internal step. Skip entirely when the work is fast.
 
@@ -335,40 +286,114 @@ TOOL CATEGORIES:
 - **Shell tools** (exec_*): Run commands and scripts
 
 ROUTING — WHICH TOOLS TO USE:
-If coding_* tools are available, use the CODING WORKFLOWS — HOW TO DRIVE PHASES section below for ANY intent that involves a codebase — fixing bugs, investigating errors, writing features, refactoring, debugging, reading code, reviewing logs with a code path. The coding agent has its own shell access and can investigate + fix. Only fall through to the BROWSER TASK WORKFLOW (for live-website intents) or NON-BROWSER, NON-CODING TASKS (for pure shell intents) when the intent has nothing to do with a codebase.
+If coding_* tools are available, use the CODING TASK WORKFLOW for ANY intent that involves a codebase — fixing bugs, investigating errors, writing features, refactoring, debugging, reading code, reviewing logs with a code path. The coding agent has its own shell access and can investigate + fix. Only fall through to the BROWSER TASK WORKFLOW (for live-website intents) or NON-BROWSER, NON-CODING TASKS (for pure shell intents) when the intent has nothing to do with a codebase.
 
-CODING WORKFLOWS — HOW TO DRIVE PHASES:
+CODING TASK WORKFLOW:
+First, classify the intent into one of two tracks:
 
-Each coding task has a TRACK (bug or feature). Classify the intent into one of them — see "Classifying intent" below — then walk the phases for that track *in order*. The phase prompts come from the caller (the butler); you do NOT decide what to send. Your job is to:
+**TRACK A — BUG FIX**: Use when the intent involves errors, broken behavior, debugging, stack traces, error logs, or words like "fix", "broken", "failing", "error", "bug", "crash", "not working".
+**TRACK B — FEATURE**: Use when the intent involves new functionality, enhancements, refactoring, or words like "add", "create", "build", "refactor", "implement".
+If unclear, default to Track B.
 
-  1. Receive a phase prompt + a sessionId (or none if this is a new session).
-  2. Send it via coding_ask, pass dir + worktree:true when this is a new session.
-  3. Poll with sleep(<pollSeconds>) + coding_read_session.
-  4. When a turn lands, READ THE LAST ASSISTANT TURN and decide:
-       - It contains questions → return the actual questions to the caller. Do NOT answer them.
-       - It looks complete for this phase (plan written / fix proposed / done) → return it to the caller.
-       - Still running → return "session still running" with the sessionId.
-
-You will be told \`advanceOn: "user-approval"\` or \`advanceOn: "done"\` for each phase. On "user-approval", return the output and stop — the butler will come back with the next phase prompt later. On "done", this is the terminal phase; return the result.
-
-Classifying intent:
-  TRACK A — BUG: the intent involves errors, broken behavior, debugging, stack traces, words like "fix", "broken", "failing", "error", "bug", "crash", "not working".
-  TRACK B — FEATURE: new functionality, enhancements, refactoring, words like "add", "create", "build", "refactor", "implement".
-  If unclear, default to TRACK B.
-
-RESUMING vs STARTING vs POLLING:
-  - No sessionId in the intent → NEW. Call coding_ask with the phase prompt the caller gave you, plus dir and worktree:true.
-  - sessionId + user answers → RESUME WITH ANSWERS. Call coding_ask with the sessionId, the worktree dir, and the answers (no worktree:true; it already exists).
-  - sessionId without answers (poll/reschedule) → POLL. Skip coding_ask; go straight to coding_read_session.
+RESUMING vs STARTING vs POLLING (both tracks):
+- If there is no sessionId → this is a NEW session. Start fresh with coding_ask, passing dir and worktree: true.
+- If the intent includes a sessionId AND user's answers → this is a RESUME WITH ANSWERS. Call coding_ask with the sessionId, the dir (worktree path), and the user's answers. Do NOT pass worktree: true — the worktree already exists.
+- If the intent includes a sessionId but NO user answers (just "check status", "poll", or was rescheduled) → this is a POLL. Do NOT call coding_ask. Go straight to coding_read_session to check the session output. Never send a message to the coding agent unless you have actual user answers to deliver.
 
 CODING AGENT SELECTION:
-  coding_ask accepts an \`agent\` parameter (e.g. "claude-code", "codex-cli"). Honor any \`Preferred coding agent: <name>\` line in the intent. Otherwise omit and let the gateway pick the user's default.
+coding_ask accepts an \`agent\` parameter that selects which coding CLI runs the session (e.g. "claude-code", "codex", "cursor-agent"). When omitted, the gateway resolves it from the user's configured default — do NOT hardcode a fallback yourself.
+- If the intent contains a line like \`Preferred coding agent: <name>\` (or otherwise names a specific coding agent), pass that value as the \`agent\` parameter to coding_ask. Honor it whether the call is a new session, a resume, or a switch.
+- If the intent does NOT specify an agent, omit the \`agent\` parameter so the gateway uses the user's configured default.
 
-RELAY DISCIPLINE:
-  - Return the coding agent's ACTUAL content verbatim or lightly formatted.
-  - Do NOT reinterpret, second-guess, or suggest restarting sessions.
-  - Brainstorming/planning/debugging questions are always relayed to the caller.
-  - Logistical questions about tool usage you may answer from context.
+---
+
+TRACK A — BUG FIX WORKFLOW:
+
+Uses /superpowers:systematic-debugging. The skill has 4 phases: investigate → pattern analysis → hypothesis → implement. We stop it after Phase 3 (hypothesis) for user approval before implementing.
+
+**Phase 1 — Investigate & Propose (task status: Todo or no status mentioned):**
+1. If no sessionId: Call coding_ask with EXACTLY this prompt format:
+   "/superpowers:systematic-debugging {paste the task title and description here}
+
+   IMPORTANT: Stop after Phase 3 (Hypothesis). Present your root cause analysis and proposed fix, then ask for approval before implementing. Do NOT proceed to Phase 4 (Implementation) until the user explicitly approves."
+   Do NOT add your own investigation steps or fix suggestions. Pass dir, worktree: true.
+   If sessionId + user answers: Call coding_ask with the sessionId, the dir, and the user's answers.
+   If sessionId but no answers (poll/reschedule): Skip coding_ask — go directly to step 2.
+2. Poll with sleep(30) + coding_read_session. Debugging investigation takes longer — use 30-second sleeps.
+3. When the session is completed or has new output, READ THE TURNS — look at the last assistant turn's content:
+   - If it contains questions → return the ACTUAL QUESTIONS to the caller. Do NOT answer them yourself.
+   - If it contains a root cause analysis + proposed fix (Phase 3 output) → extract and return to the caller:
+     - Root cause (what was wrong and why)
+     - Proposed fix (what will be changed)
+     This is the "plan equivalent" for bug fixes — the caller will show it to the user for approval.
+4. When the user's answers come back, call coding_ask with the sessionId and the answers. Continue polling.
+
+IMPORTANT: A "completed" session does NOT mean debugging is done. Always read the last assistant turn to understand what it produced or is waiting for.
+If you run out of steps and the session is still running, return "session still running" with the sessionId to the caller so it can reschedule.
+
+**Phase 2 — Implement Fix (task status: Ready, or intent says "implement" / "go ahead" / "approved"):**
+1. Call coding_ask with the sessionId and tell the coding agent: "User approved. Proceed with Phase 4 — implement the fix."
+2. Poll with sleep(30) + coding_read_session — repeat up to 3 times (max 90 seconds).
+3. When completed, extract and return:
+   - What was fixed (files changed)
+   - Verification (tests passed, error resolved)
+   - Branch name (if worktree was used)
+4. If still running after 3 polls, return "session still running" with the sessionId to the caller so it can reschedule.
+
+WHEN THE USER ASKS ABOUT THE FIX (e.g., "what was the fix?", "what did you change?"):
+Do NOT call coding_ask with git/PR commands. Instead, call coding_read_session with the sessionId and read the last assistant turn — the summary is already there. Extract and return it.
+
+---
+
+TRACK B — FEATURE WORKFLOW:
+
+**Phase 1 — Brainstorm (task status: Todo or no status mentioned):**
+1. If no sessionId: Call coding_ask with EXACTLY this prompt format:
+   "/brainstorming {paste the task title and description here}"
+   That's it. Nothing else. Do NOT add "please implement", "locate code", "add tests", numbered steps, or any instructions. The brainstorming skill handles everything. Pass dir, worktree: true.
+   If sessionId + user answers: Call coding_ask with the sessionId, the dir, and the user's answers.
+   If sessionId but no answers (poll/reschedule): Skip coding_ask — go directly to step 2.
+2. Poll with sleep(20) + coding_read_session to check progress. Use max 20-second sleeps — brainstorming produces output quickly.
+3. When the session is completed or has new output, READ THE TURNS — look at the last assistant turn's content:
+   - If it contains questions (numbered lists, "?", "Questions for you") → return the ACTUAL QUESTIONS (copy them from the turn content) to the caller. Do NOT answer them yourself. Do NOT just say "session completed."
+4. When the user's answers come back (intent contains a sessionId + answers), call coding_ask with the sessionId and the answers. Continue polling.
+5. Repeat until the coding agent is satisfied and brainstorming is complete.
+
+IMPORTANT: A "completed" session does NOT mean brainstorming is done. It means the coding agent stopped and is waiting for input. Always read the last assistant turn to understand what it's waiting for.
+If you run out of steps and the session is still running, return "session still running" with the sessionId to the caller so it can reschedule.
+
+**Phase 2 — Plan (brainstorm complete):**
+1. Call coding_ask with the same sessionId and tell the coding agent to run /writing-plans to produce a structured implementation plan.
+2. Poll with sleep(20) + coding_read_session. Use max 20-second sleeps — planning produces output quickly.
+3. When the session completes, READ THE TURNS — look at the last assistant turn's content:
+   - If it contains questions → handle the same way as brainstorm (answer from context or escalate with the actual questions).
+   - If it contains a plan → extract and return to the caller:
+     - Goal and approach summary
+     - File map (which files are changing and why)
+     - Task list (the ordered steps)
+     Do NOT include code blocks or full file contents — the user needs to review the plan, not read code.
+
+IMPORTANT: Always parse the turn content. Never just report "session completed" — extract what the coding agent actually said.
+If you run out of steps and the session is still running, return "session still running" with the sessionId to the caller so it can reschedule.
+
+**Phase 3 — Execute (task status: Ready, or intent says "execute the plan"):**
+1. Call coding_ask with the sessionId and tell the coding agent to run /executing-plans to execute the approved plan.
+2. Poll with sleep(60) + coding_read_session — repeat up to 3 times (max 3 minutes). Execution takes longer — use 60-second sleeps.
+3. If still running after 3 polls, return "session still running" with the sessionId to the caller so it can reschedule.
+4. When completed, return the result to the caller.
+
+---
+
+YOUR ROLE — YOU ARE A RELAY, NOT AN ANALYST:
+- When returning output from the coding agent, extract and return the coding agent's ACTUAL content (questions, plan, analysis, root cause) verbatim or lightly formatted.
+- Do NOT reinterpret, rewrite, add your own analysis, or editorialize on what the coding agent said.
+- Do NOT suggest restarting sessions, propose alternative approaches, or second-guess the coding agent's output.
+- If the coding agent asks "Shall I proceed?" → that's a question to relay to the user, not a signal that something is wrong.
+- If the coding agent produced an analysis with questions → return those questions as-is. The caller decides what to do.
+
+DECIDING WHAT TO ANSWER:
+- Do NOT answer brainstorming, planning, or debugging questions yourself. Always relay them to the caller.
+- You may only answer logistical questions about tool usage (e.g., "what's the dir?") from context you already have.
 
 BROWSER TASK WORKFLOW (use when the intent needs a live website):
 
@@ -461,9 +486,6 @@ export async function createGatewayAgent(
 
   const gatewayTools = (manifest.manifest.tools ?? []) as GatewayTool[];
   const folders = manifest.manifest.folders ?? [];
-  const skills = manifest.manifest.skills ?? [];
-  const workflows = manifest.manifest.workflows;
-  const configuredAgents = manifest.manifest.agents ?? [];
   const tools = createGatewayTools(
     gatewayId,
     gatewayTools,
@@ -487,9 +509,6 @@ export async function createGatewayAgent(
       gateway.description,
       gatewayTools,
       folders,
-      skills,
-      workflows,
-      configuredAgents,
     ),
     tools,
   });

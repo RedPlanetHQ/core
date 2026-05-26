@@ -11,17 +11,11 @@ import {
 import type {GatewayConfig, GatewaySlots} from '@/types/config';
 import {getPreferences} from '@/config/preferences';
 import {listFolders} from '@/config/folders';
-import {listSkills} from '@/server/skills/skill-store';
 import {browserTools} from '@/server/tools/browser-tools';
 import {codingTools} from '@/server/tools/coding-tools';
 import {execTools} from '@/server/tools/exec-tools';
 import {filesTools} from '@/server/tools/files-tools';
 import {utilsTools} from '@/server/tools/utils-tools';
-import {resolveWorkflows} from '@/server/workflows/resolver';
-import {
-	detectPluginSkills,
-	detectSuperpowersPresent,
-} from '@/server/workflows/detect';
 
 let cliVersion = '0.0.0';
 try {
@@ -150,7 +144,7 @@ export function isSlotEnabled(
 	return (entry as {enabled?: boolean}).enabled !== false;
 }
 
-export async function buildManifest(): Promise<{manifest: Manifest; etag: string}> {
+export function buildManifest(): {manifest: Manifest; etag: string} {
 	const prefs = getPreferences();
 	const gw: Partial<GatewayConfig> = prefs.gateway ?? {};
 	const slots = gw.slots;
@@ -181,27 +175,6 @@ export async function buildManifest(): Promise<{manifest: Manifest; etag: string
 		  )
 		: [];
 
-	// Detect plugin slash commands for each configured agent.
-	const pluginSkills = isSlotEnabled(slots, 'coding')
-		? agents.flatMap((a) => detectPluginSkills(a))
-		: [];
-
-	const superpowersPresent = isSlotEnabled(slots, 'coding')
-		? detectSuperpowersPresent()
-		: false;
-
-	const skillsList = await listSkills();
-
-	const workflows = isSlotEnabled(slots, 'coding')
-		? resolveWorkflows({
-				prefs,
-				agentsConfigured: agents,
-				pluginSkills,
-				skills: skillsList,
-				superpowersPresent,
-		  })
-		: undefined;
-
 	const manifest: Manifest = {
 		protocolVersion: PROTOCOL_VERSION,
 		gateway: {
@@ -224,12 +197,9 @@ export async function buildManifest(): Promise<{manifest: Manifest; etag: string
 			directXterm: isSlotEnabled(slots, 'coding'),
 		},
 		folders: listFolders(),
-		skills: skillsList,
 		tools,
 		agents,
 		availableAgents,
-		...(workflows ? {workflows} : {}),
-		pluginSkills,
 	};
 	const etag = createHash('sha256')
 		.update(JSON.stringify(manifest))

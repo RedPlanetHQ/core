@@ -3,9 +3,6 @@ import type {
   Folder,
   FolderScope,
   DeployMode,
-  GatewaySkill,
-  WorkflowsBlock,
-  PluginSkill,
 } from "@redplanethq/gateway-protocol";
 
 interface ConfiguredBrowserSession {
@@ -96,9 +93,6 @@ export async function getGatewayAgents(gatewayId: string): Promise<string[]> {
 export async function getGatewayInfo(gatewayId: string): Promise<{
   folders: Folder[];
   agents: string[];
-  skills: GatewaySkill[];
-  workflows?: WorkflowsBlock;
-  pluginSkills: PluginSkill[];
   gateway: {
     id: string;
     name: string;
@@ -115,9 +109,6 @@ export async function getGatewayInfo(gatewayId: string): Promise<{
   return {
     folders: manifest.folders ?? [],
     agents: manifest.agents ?? [],
-    skills: manifest.skills ?? [],
-    workflows: manifest.workflows,
-    pluginSkills: manifest.pluginSkills ?? [],
     gateway: {
       id: manifest.gateway.id,
       name: manifest.gateway.name,
