@@ -636,7 +636,7 @@ async function enqueueMacMemoryIngest(args: {
       (user.metadata as Record<string, unknown> | null) ?? null;
     const timezone = (userMetadata?.timezone as string) ?? "UTC";
 
-    await enqueueCase({
+    const result = await enqueueCase({
       type: "memory_ingest",
       workspaceId: args.workspaceId,
       userId: args.userId,
@@ -647,6 +647,11 @@ async function enqueueMacMemoryIngest(args: {
       kind: args.kind,
       timezone,
     });
+
+    logger.info(
+      `[memory-ingest] Enqueued Mac compact ${args.sessionId} (document=${args.documentId}, kind=${args.kind}, jobId=${result?.id ?? "unknown"}). ` +
+        `Throttled to once per documentId per 10 minutes — first fire will run after the bucketed delay elapses.`,
+    );
   } catch (err) {
     logger.error(
       `[memory-ingest] Failed to enqueue Mac compact ${args.sessionId}: ${err}`,

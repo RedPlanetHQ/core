@@ -196,6 +196,10 @@ async function runMemoryIngestCase(
     timezone,
   } = payload;
 
+  logger.info(
+    `[case/memory_ingest] Firing for document ${documentId} (session=${sessionId}, source=${source}, kind=${kind})`,
+  );
+
   try {
     // Read the latest compact for this document fresh. The payload was
     // captured 10 minutes ago when the first compact in this bucket fired;
