@@ -417,12 +417,19 @@ export async function createCoreAgents(
       interactive,
       modelConfig,
     ),
-    createGatewayAgents(gateways, executorTools, interactive, modelConfig, {
-      conversationId,
-      taskId,
-      workspaceId,
-      userId,
-    }),
+    createGatewayAgents(
+      gateways,
+      executorTools,
+      interactive,
+      modelConfig,
+      {
+        conversationId,
+        taskId,
+        workspaceId,
+        userId,
+      },
+      skills,
+    ),
   ]);
 
   // Think agent — only when triggered (reminders, webhooks, scheduled jobs)

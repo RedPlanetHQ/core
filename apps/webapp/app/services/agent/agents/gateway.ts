@@ -26,7 +26,9 @@ import {
 } from "~/services/gateway/transport.server";
 import type { Folder } from "@redplanethq/gateway-protocol";
 import { getProgressUpdateTool } from "../tools/utils-tools";
+import { getSkillTool } from "../tools/skill-tools";
 import { truncateToolResult } from "../tools/truncate-result";
+import { type SkillRef } from "../types";
 
 // Types for gateway tools (matches schema in database)
 interface GatewayTool {
@@ -127,6 +129,12 @@ function createGatewayTools(
   // progress_update — every gateway agent can narrate during long
   // sessions (coding runs, browser flows, exec scripts).
   tools.progress_update = getProgressUpdateTool();
+
+  // get_skill — load a user-defined skill's instructions when the
+  // caller references one (e.g. orchestrator delegates with a skill ID).
+  if (sessionCtx?.workspaceId) {
+    tools.get_skill = getSkillTool(sessionCtx.workspaceId);
+  }
 
   for (const gatewayTool of gatewayTools) {
     const zodSchema = gatewayToolToZodSchema(gatewayTool);
@@ -244,6 +252,7 @@ const getGatewayAgentPrompt = (
   gatewayDescription: string | null,
   tools: GatewayTool[],
   folders: Folder[],
+  skills?: SkillRef[],
 ) => {
   const toolsList = tools
     .map((t) => `- **${t.name}**: ${t.description}`)
@@ -259,6 +268,37 @@ const getGatewayAgentPrompt = (
           .join("\n")
       : "- (no folders registered on this gateway)";
 
+  const skillsSection =
+    skills && skills.length > 0
+      ? `\n<skills>
+User-defined skills you can apply when their purpose fits the delegated intent. Each description below is "when to use" — pick by INTENT, not by title.
+
+A skill applies if its purpose helps with what the caller is asking for, even if its name was never mentioned:
+- Debugging skills → bug fixes, errors, "this is broken"
+- Brainstorm skills → open-ended design, "what's the approach", new features
+- Planning skills → decomposing multi-step work
+- Format/style skills → output that needs a specific voice (PR description, commit message, docs)
+
+If there is even a small chance a skill applies, load it. Cost of loading a wrong one: one tool call. Cost of skipping the right one: wrong-shape output.
+
+Process skills (debugging / brainstorm / planning) come before domain or format skills — load the process skill first.
+
+Load a skill when:
+- The delegated intent matches a skill's purpose → call get_skill with the ID and incorporate the relevant guidance into the prompt you send to coding_/browser_/exec_ tools.
+- The intent contains an explicit skill reference (name + ID, slash command) → load that one.
+If multiple fit, prefer the most specific. If none fit, don't force one.
+
+Available skills:
+${skills
+  .map((s, i) => {
+    const meta = s.metadata as Record<string, unknown> | null;
+    const desc = meta?.shortDescription as string | undefined;
+    return `${i + 1}. "${s.title}" (id: ${s.id})${desc ? ` — when to use: ${desc}` : ""}`;
+  })
+  .join("\n")}
+</skills>\n`
+      : "";
+
   return `You are an execution agent for the "${gatewayName}" gateway.
 ${gatewayDescription ? `\nPurpose: ${gatewayDescription}\n` : ""}
 AVAILABLE TOOLS:
@@ -272,7 +312,7 @@ Good: "phase 3 done — running the test suite now"
 Good: "session still running, checking back in 30s"
 Bad:  "working on it" (vague)
 Bad:  "Calling coding_read_session now..." (narrating mechanics)
-
+${skillsSection}
 AVAILABLE FOLDERS (exposed by this gateway):
 ${foldersList}
 
@@ -476,6 +516,7 @@ export async function createGatewayAgent(
   interactive: boolean = true,
   modelConfig?: ModelConfig,
   sessionCtx?: SessionContext,
+  skills?: SkillRef[],
 ): Promise<{ agent: Agent; connected: boolean }> {
   const gateway = await getGateway(gatewayId);
 
@@ -524,6 +565,7 @@ export async function createGatewayAgent(
       gateway.description,
       gatewayTools,
       folders,
+      skills,
     ),
     tools,
   });
@@ -541,6 +583,7 @@ export async function createGatewayAgents(
   interactive: boolean = true,
   modelConfig?: ModelConfig,
   sessionCtx?: SessionContext,
+  skills?: SkillRef[],
 ): Promise<{ agents: Record<string, Agent>; agentList: Agent[] }> {
   const agents: Record<string, Agent> = {};
   const agentList: Agent[] = [];
@@ -558,6 +601,7 @@ export async function createGatewayAgents(
       interactive,
       modelConfig,
       sessionCtx,
+      skills,
     );
     if (connected) {
       const agentId = `gateway_${gw.name.toLowerCase().replace(/[^a-z0-9]/g, "_")}`;

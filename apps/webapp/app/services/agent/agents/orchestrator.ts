@@ -86,16 +86,27 @@ const getOrchestratorPrompt = (
   const skillsSection =
     skills && skills.length > 0
       ? `\n<skills>
-Available user-defined skills:
+User-defined skills you can apply. Each description below is "when to use" — pick by INTENT, not by title.
+
+Match the delegated intent against what each skill is for: debugging skills apply when the user is solving an issue or chasing an error; brainstorm skills apply when shaping a feature or open-ended problem; format/style skills apply when writing in a defined voice (investor update, digest, code review); planning skills apply when decomposing multi-step work. A skill applies if its purpose helps with the current intent, even if its name was never mentioned.
+
+If there is even a small chance a skill applies, load it. Cost of loading a wrong one: one tool call. Cost of skipping the right one: wrong-shape output.
+
+When multiple skills fit, process skills (debugging / brainstorm / planning — shape HOW you approach) come before domain or format skills (shape the OUTPUT). Load the process skill first.
+
+Load a skill when:
+- The delegated intent matches a skill's purpose → call get_skill and follow it.
+- The intent contains an explicit skill reference (name + ID, slash command) → load that one.
+If multiple fit, prefer the most specific. If none fit, don't force one.
+
+Available skills:
 ${skills
   .map((s, i) => {
     const meta = s.metadata as Record<string, unknown> | null;
     const desc = meta?.shortDescription as string | undefined;
-    return `${i + 1}. "${s.title}" (id: ${s.id})${desc ? ` — ${desc}` : ""}`;
+    return `${i + 1}. "${s.title}" (id: ${s.id})${desc ? ` — when to use: ${desc}` : ""}`;
   })
   .join("\n")}
-
-When you receive a skill reference (skill name + ID) in the user message, call get_skill to load the full instructions, then follow them step-by-step using your available tools.
 </skills>\n`
       : "";
 

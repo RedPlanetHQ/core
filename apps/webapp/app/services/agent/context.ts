@@ -363,13 +363,26 @@ export async function buildAgentContext({
           .toLowerCase()
           .replace(/\s+/g, "-")
           .replace(/[^a-z0-9-]/g, "");
-        return `${i + 1}. "${s.title}" (id: ${s.id}, slash: /${slug})${desc ? ` — ${desc}` : ""}`;
+        return `${i + 1}. "${s.title}" (id: ${s.id}, slash: /${slug})${desc ? ` — when to use: ${desc}` : ""}`;
       })
       .join("\n");
 
     systemPrompt += `
     <skills>
-    You have access to user-defined skills (reusable workflows). When a user's request matches a skill — or they invoke one with a slash command like /skill-name — call get_skill to load its full instructions, then follow them step-by-step using your tools.
+    User-defined skills are reusable workflows or knowledge. Each skill's description tells you when it applies — the title is just a label.
+
+    PICK BY INTENT, NOT BY NAME. Match the user's current intent against what each skill is for:
+    - Solving a bug / chasing an error / something broken → a debugging skill
+    - Shaping a new feature / open-ended problem / "let's think about" → a brainstorm skill
+    - Writing in a specific voice or format (investor update, weekly digest, code review) → that format/style skill
+    - Planning multi-step work / decomposing → a planning skill
+    A skill applies if its purpose helps with what the user is actually trying to do, even if they never said the skill's name.
+
+    WHEN TO LOAD:
+    - The current intent matches a skill's purpose → call get_skill with the ID and follow it.
+    - The user invokes /skill-name (slash command) → load that one directly.
+    - The user names a skill by title → load it.
+    - Multiple skills could apply → prefer the most specific. If none clearly fit, don't force one.
 
     Available skills:
     ${skillsList}
