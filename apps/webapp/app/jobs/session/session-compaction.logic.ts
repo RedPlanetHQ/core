@@ -151,13 +151,13 @@ export async function processSessionCompaction(
       // be stale by the time the worker runs. The worker re-reads the
       // Document row at run time to operate on the latest compact.
       if (source === "mac") {
-        void enqueueMacMemoryIngest({
+        void (await enqueueMacMemoryIngest({
           userId,
           workspaceId,
           sessionId,
           documentId: compactionResult.id,
           kind: compactionKind,
-        });
+        }));
       }
 
       return {
@@ -588,7 +588,9 @@ function parseCompactionResponse(
     let summaryText: string;
     if (!outputMatch) {
       // Some local/self-hosted models won't follow the tag format; accept raw text.
-      logger.warn("No <output> tags found in LLM compaction response; using raw response");
+      logger.warn(
+        "No <output> tags found in LLM compaction response; using raw response",
+      );
       summaryText = response.trim();
     } else {
       summaryText = outputMatch[1].trim();

@@ -309,14 +309,20 @@ coding_ask accepts an \`agent\` parameter that selects which coding CLI runs the
 
 TRACK A — BUG FIX WORKFLOW:
 
-Uses /superpowers:systematic-debugging. The skill has 4 phases: investigate → pattern analysis → hypothesis → implement. We stop it after Phase 3 (hypothesis) for user approval before implementing.
+Three phases: investigate → hypothesize → implement. We stop after Hypothesis for user approval before implementing.
 
 **Phase 1 — Investigate & Propose (task status: Todo or no status mentioned):**
 1. If no sessionId: Call coding_ask with EXACTLY this prompt format:
-   "/superpowers:systematic-debugging {paste the task title and description here}
+   "You're investigating a bug — NOT fixing it yet. Follow this 3-phase flow:
 
-   IMPORTANT: Stop after Phase 3 (Hypothesis). Present your root cause analysis and proposed fix, then ask for approval before implementing. Do NOT proceed to Phase 4 (Implementation) until the user explicitly approves."
-   Do NOT add your own investigation steps or fix suggestions. Pass dir, worktree: true.
+   Phase 1 — Investigate: Read the code paths involved. Reproduce the failure if you can. Note what's actually happening versus what's expected.
+   Phase 2 — Pattern analysis: Trace the failure end-to-end. Form candidate hypotheses for the root cause and confirm or rule out each one with concrete evidence from code, logs, or repro.
+   Phase 3 — Hypothesis: State the root cause and propose a specific fix (what changes, in which files, why it resolves the cause).
+
+   STOP after Phase 3. Present your root cause analysis and proposed fix, then ask for approval. Do NOT implement until the user explicitly approves.
+
+   Task: {paste the task title and description here}"
+   Do NOT add your own investigation steps or fix suggestions beyond the preamble above. Pass dir, worktree: true.
    If sessionId + user answers: Call coding_ask with the sessionId, the dir, and the user's answers.
    If sessionId but no answers (poll/reschedule): Skip coding_ask — go directly to step 2.
 2. Poll with sleep(30) + coding_read_session. Debugging investigation takes longer — use 30-second sleeps.
@@ -332,7 +338,7 @@ IMPORTANT: A "completed" session does NOT mean debugging is done. Always read th
 If you run out of steps and the session is still running, return "session still running" with the sessionId to the caller so it can reschedule.
 
 **Phase 2 — Implement Fix (task status: Ready, or intent says "implement" / "go ahead" / "approved"):**
-1. Call coding_ask with the sessionId and tell the coding agent: "User approved. Proceed with Phase 4 — implement the fix."
+1. Call coding_ask with the sessionId and tell the coding agent: "User approved the proposed fix. Implement it now — make the changes, run the relevant tests, and report what was changed."
 2. Poll with sleep(30) + coding_read_session — repeat up to 3 times (max 90 seconds).
 3. When completed, extract and return:
    - What was fixed (files changed)
@@ -349,8 +355,10 @@ TRACK B — FEATURE WORKFLOW:
 
 **Phase 1 — Brainstorm (task status: Todo or no status mentioned):**
 1. If no sessionId: Call coding_ask with EXACTLY this prompt format:
-   "/brainstorming {paste the task title and description here}"
-   That's it. Nothing else. Do NOT add "please implement", "locate code", "add tests", numbered steps, or any instructions. The brainstorming skill handles everything. Pass dir, worktree: true.
+   "You're brainstorming an approach for this task — NOT implementing yet. Read the relevant code paths to understand current behavior and constraints. Identify any ambiguities about intent, requirements, or design. If anything is unclear, ASK clarifying questions in a numbered list and stop. If it's clear, propose a concrete approach: what changes, in which files, with what tradeoffs. Stop after proposing and wait for approval before implementing.
+
+   Task: {paste the task title and description here}"
+   Do NOT add extra instructions like "please implement", "add tests", numbered steps, or anything beyond the preamble above. Pass dir, worktree: true.
    If sessionId + user answers: Call coding_ask with the sessionId, the dir, and the user's answers.
    If sessionId but no answers (poll/reschedule): Skip coding_ask — go directly to step 2.
 2. Poll with sleep(20) + coding_read_session to check progress. Use max 20-second sleeps — brainstorming produces output quickly.
@@ -363,7 +371,13 @@ IMPORTANT: A "completed" session does NOT mean brainstorming is done. It means t
 If you run out of steps and the session is still running, return "session still running" with the sessionId to the caller so it can reschedule.
 
 **Phase 2 — Plan (brainstorm complete):**
-1. Call coding_ask with the same sessionId and tell the coding agent to run /writing-plans to produce a structured implementation plan.
+1. Call coding_ask with the same sessionId. Send EXACTLY this message:
+   "Now produce a structured implementation plan for the approach we landed on. Include:
+   - Goal: one sentence on what we're building/changing and why.
+   - File map: each file you'll touch with a one-line note on what changes.
+   - Task list: ordered steps to implement, each step a meaningful work chunk.
+
+   Do NOT include code blocks or full file contents — this is a review-ready plan, not the implementation."
 2. Poll with sleep(20) + coding_read_session. Use max 20-second sleeps — planning produces output quickly.
 3. When the session completes, READ THE TURNS — look at the last assistant turn's content:
    - If it contains questions → handle the same way as brainstorm (answer from context or escalate with the actual questions).
@@ -377,7 +391,8 @@ IMPORTANT: Always parse the turn content. Never just report "session completed" 
 If you run out of steps and the session is still running, return "session still running" with the sessionId to the caller so it can reschedule.
 
 **Phase 3 — Execute (task status: Ready, or intent says "execute the plan"):**
-1. Call coding_ask with the sessionId and tell the coding agent to run /executing-plans to execute the approved plan.
+1. Call coding_ask with the sessionId. Send EXACTLY this message:
+   "Execute the approved implementation plan step by step. Verify each step works (tests pass, types check) before moving on. Commit logical chunks of work as you go. When all steps are complete, report files changed and verification results."
 2. Poll with sleep(60) + coding_read_session — repeat up to 3 times (max 3 minutes). Execution takes longer — use 60-second sleeps.
 3. If still running after 3 polls, return "session still running" with the sessionId to the caller so it can reschedule.
 4. When completed, return the result to the caller.

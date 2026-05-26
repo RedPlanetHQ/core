@@ -151,10 +151,15 @@ export async function buildAgentContext({
       : ([] as { id: string; title: string; updatedAt: Date }[]),
   ]);
 
-  // Exclude default skills (those with skillType in metadata) from the dynamic skills list
+  // Exclude reserved defaults (Persona + Watch Rules) from the dynamic
+  // skills list — those have separate injection paths (personality blocks +
+  // decision agent). Other default skills (Morning Brief, etc.) stay in the
+  // list so the agent can discover them via <skills> and call get_skill, and
+  // so the scheduled-task skillHint lookup below can resolve them.
   const skills = allSkills.filter((s) => {
     const meta = s.metadata as Record<string, unknown> | null;
-    return !meta?.skillType;
+    const skillType = meta?.skillType as string | undefined;
+    return skillType !== "persona" && skillType !== "watch-rules";
   });
 
   // Look up linked task context
