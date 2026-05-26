@@ -1,3 +1,4 @@
+import PQueue from "p-queue";
 import { z } from "zod";
 import { makeStructuredModelCall } from "~/lib/model.server";
 import { logger } from "~/services/logger.service";
@@ -156,11 +157,15 @@ Generate 1-5 optimized search queries to retrieve relevant context from memory.`
       `[MemoryAgent] Generated ${queries.length} queries: ${JSON.stringify(queries)}`,
     );
 
-    // Step 2: Execute all searches in parallel
-    const searchResults = await Promise.all(
-      queries.map(async (query) => {
+    // Step 2: Execute searches with bounded concurrency.
+    // Each search fans out into BFS + episode/vector graph queries that
+    // materialize hundreds of episodes; running all 1–5 in parallel was a
+    // primary OOM contributor (see crash logs, morning-brief workflow).
+    const searchQueue = new PQueue({ concurrency: 2 });
+    const searchResults = await searchQueue.addAll(
+      queries.map((query) => async () => {
         logger.info(`[MemoryAgent] Executing search: "${query}"`);
-        const result = (await searchService.search(
+        return (await searchService.search(
           query,
           userId,
           workspaceId,
@@ -170,8 +175,6 @@ Generate 1-5 optimized search queries to retrieve relevant context from memory.`
           },
           source,
         )) as any;
-
-        return result;
       }),
     );
 

@@ -10,6 +10,7 @@
 
 import { Agent } from "@mastra/core/agent";
 import { createTool } from "@mastra/core/tools";
+import PQueue from "p-queue";
 import { z } from "zod";
 
 import { runWebExplorer, searchCoreDocs } from "../explorers";
@@ -289,6 +290,12 @@ export async function createOrchestratorAgent(
 ): Promise<CreateOrchestratorAgentResult> {
   const executor = executorTools ?? new DirectOrchestratorTools();
 
+  // Per-turn cap on parallel integration actions. A single morning-brief turn
+  // was firing ~10 read_email calls at once, each pinning a full Gmail body
+  // in heap until the truncation step ran. Concurrency 3 keeps a 4x ceiling
+  // on simultaneous raw payloads.
+  const integrationActionQueue = new PQueue({ concurrency: 3 });
+
   const connectedIntegrations = await executor.getIntegrations(
     userId,
     workspaceId,
@@ -445,17 +452,22 @@ export async function createOrchestratorAgent(
         logger.info(
           `Orchestrator: execute_integration_action - ${inputData.accountId}/${inputData.action} with params: ${JSON.stringify(parsedParams)}`,
         );
-        const result = await executor.executeIntegrationAction(
-          inputData.accountId,
-          inputData.action,
-          parsedParams,
-          userId,
-          source,
-        );
-        return truncateToolResult(result, {
-          label: "execute_integration_action",
-          pretty: false,
+        const truncated = await integrationActionQueue.add(async () => {
+          const result = await executor.executeIntegrationAction(
+            inputData.accountId,
+            inputData.action,
+            parsedParams,
+            userId,
+            source,
+          );
+          // Truncate inside the queue slot so the raw response is released
+          // before the next slot starts — this is the whole point of the cap.
+          return truncateToolResult(result, {
+            label: "execute_integration_action",
+            pretty: false,
+          });
         });
+        return truncated;
       } catch (error: any) {
         const errorMessage =
           error instanceof Error ? error.message : String(error);

@@ -435,8 +435,10 @@ async function bfsTraversal(
         .map((r) => r.entityId)
         .filter((id) => !visitedEntities.has(`${id}`));
 
-      // Take only the first N entities to limit exponential growth
-      currentLevelEntities = unvisitedEntities;
+      // Take only the first N entities to limit exponential growth.
+      // Without this cap BFS hop N+1 can fan out to thousands of entities,
+      // each pulling 200 statements at the next hop — a major OOM contributor.
+      currentLevelEntities = unvisitedEntities.slice(0, 100);
     } else {
       currentLevelEntities = [];
     }
