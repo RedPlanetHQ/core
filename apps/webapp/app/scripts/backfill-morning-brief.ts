@@ -55,6 +55,7 @@ import { logger } from "~/services/logger.service";
 const WORKSPACE_IDS: string[] = [
   // "ws_xxx",
   // "ws_yyy",
+  "acb2f980-4442-4720-b8f9-be83f8520b2f",
 ];
 // ----------------------------------------------------------------------------
 
@@ -253,9 +254,7 @@ export async function replaceWatchRulesForWorkspaces(
         status: "failed",
         reason: err instanceof Error ? err.message : String(err),
       });
-      logger.error(
-        `[backfill-watch-rules] Failed for ${workspaceId}: ${err}`,
-      );
+      logger.error(`[backfill-watch-rules] Failed for ${workspaceId}: ${err}`);
     }
   }
 
@@ -281,7 +280,7 @@ export async function deleteReadRulesForWorkspaces(
           workspaceId,
           type: "skill",
           OR: [
-            { title: { equals: "Read Rules", mode: "insensitive" } },
+            { title: { equals: "Reading Guide", mode: "insensitive" } },
             { metadata: { path: ["skillType"], equals: "read-rules" } },
             { metadata: { path: ["skillType"], equals: "read_rules" } },
           ],
@@ -310,9 +309,7 @@ export async function deleteReadRulesForWorkspaces(
         status: "failed",
         reason: err instanceof Error ? err.message : String(err),
       });
-      logger.error(
-        `[backfill-read-rules] Failed for ${workspaceId}: ${err}`,
-      );
+      logger.error(`[backfill-read-rules] Failed for ${workspaceId}: ${err}`);
     }
   }
 
@@ -365,16 +362,15 @@ async function resolveWorkspaceIds(
   return [];
 }
 
-async function main(): Promise<void> {
-  const modeRaw = (process.env.MODE ?? "both").toLowerCase();
+export async function backrunMain(): Promise<void> {
+  const modeRaw = (process.env.MODE ?? "all").toLowerCase();
   // Accept comma-separated multi-mode too: MODE=watch,read
   const modeBits = new Set(modeRaw.split(",").map((s) => s.trim()));
   const runMorning =
     modeBits.has("morning") || modeBits.has("both") || modeBits.has("all");
   const runWatch =
     modeBits.has("watch") || modeBits.has("both") || modeBits.has("all");
-  const runRead =
-    modeBits.has("read") || modeBits.has("all");
+  const runRead = modeBits.has("read") || modeBits.has("all");
 
   // Morning brief: explicit IDs only (no auto-all). Watch + Read: default to
   // all workspaces if no explicit list.
@@ -410,11 +406,4 @@ async function main(): Promise<void> {
   }
 
   await prisma.$disconnect();
-}
-
-if (import.meta.url === `file://${process.argv[1]}`) {
-  main().catch((err) => {
-    console.error("Backfill script failed:", err);
-    prisma.$disconnect().finally(() => process.exit(1));
-  });
 }
