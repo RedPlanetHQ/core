@@ -1,11 +1,13 @@
 /**
- * Backfill: Morning Brief task + Watch Rules refresh for existing workspaces.
+ * Backfill: Morning Brief task + Watch Rules refresh + legacy Read Rules
+ * cleanup for existing workspaces.
  *
  * New workspaces get the Morning Brief scheduled task + updated Watch Rules
- * skill automatically via `createWorkspace`. This script applies the same
- * to a list of EXISTING workspaces.
+ * automatically via `createWorkspace`. This script applies the same to
+ * existing workspaces and additionally deletes the legacy "Read Rules"
+ * skill (which is no longer part of DEFAULT_SKILL_DEFINITIONS).
  *
- * Two operations:
+ * Three operations:
  *   1. seedMorningBriefForWorkspaces — for each workspaceId:
  *        - Ensure the "Morning Brief" Document (skill) exists
  *        - Create a daily 9am scheduled task pointing at it (idempotent —
@@ -13,20 +15,33 @@
  *          exists for that workspace)
  *
  *   2. replaceWatchRulesForWorkspaces — for each workspaceId:
- *        - Delete the existing "Watch Rules" Document (any row with
- *          metadata.skillType="watch-rules")
- *        - Recreate it with the current content from skills.defaults.ts
- *        - The new content includes the "Task suggestions" rule and the
- *          "Memory ingest" rule that the latest skill ships with.
+ *        - Hard-delete existing Watch Rules Document(s)
+ *        - Recreate from current DEFAULT_SKILL_DEFINITIONS so the latest
+ *          content (Task suggestions + Memory ingest rules) lands in place.
+ *
+ *   3. deleteReadRulesForWorkspaces — for each workspaceId:
+ *        - Hard-delete any "Read Rules" skill rows (matched by title or
+ *          metadata.skillType in (read-rules, read_rules)).
  *
  * Usage:
  *   tsx apps/webapp/app/scripts/backfill-morning-brief.ts
  *
- * Either edit WORKSPACE_IDS below, or pass them via env:
- *   WORKSPACE_IDS=ws_1,ws_2,ws_3 tsx apps/webapp/app/scripts/backfill-morning-brief.ts
+ * Workspace ID resolution:
+ *   - Morning brief: requires explicit IDs (curated rollout).
+ *   - Watch Rules + Read Rules: default to ALL workspaces.
  *
- * Pass MODE=morning to run only morning-brief seeding; MODE=watch to run only
- * Watch Rules refresh; MODE=both (default) to do both.
+ *   Pass via env:
+ *     WORKSPACE_IDS=ws_1,ws_2 tsx apps/webapp/app/scripts/backfill-morning-brief.ts
+ *
+ *   Or hard-code at WORKSPACE_IDS below.
+ *
+ * Mode selection (MODE env, default "both"):
+ *   MODE=morning       — only morning-brief seeding
+ *   MODE=watch         — only Watch Rules refresh
+ *   MODE=read          — only delete legacy Read Rules
+ *   MODE=both          — morning + watch (legacy default)
+ *   MODE=all           — all three
+ *   MODE=watch,read    — comma-separated combinations are accepted
  */
 
 import { prisma } from "~/db.server";
@@ -247,6 +262,63 @@ export async function replaceWatchRulesForWorkspaces(
   return results;
 }
 
+/**
+ * Hard-delete the legacy "Read Rules" skill for each workspace. The skill
+ * is no longer part of DEFAULT_SKILL_DEFINITIONS — its responsibilities were
+ * folded into the updated Watch Rules. Match is on title (case-insensitive)
+ * plus an optional metadata.skillType variant, in case older seeders used
+ * either spelling.
+ */
+export async function deleteReadRulesForWorkspaces(
+  workspaceIds: string[],
+): Promise<BackfillResult[]> {
+  const results: BackfillResult[] = [];
+
+  for (const workspaceId of workspaceIds) {
+    try {
+      const deleteResult = await prisma.document.deleteMany({
+        where: {
+          workspaceId,
+          type: "skill",
+          OR: [
+            { title: { equals: "Read Rules", mode: "insensitive" } },
+            { metadata: { path: ["skillType"], equals: "read-rules" } },
+            { metadata: { path: ["skillType"], equals: "read_rules" } },
+          ],
+        },
+      });
+
+      if (deleteResult.count === 0) {
+        results.push({
+          workspaceId,
+          status: "skipped",
+          reason: "no Read Rules skill found",
+        });
+      } else {
+        results.push({
+          workspaceId,
+          status: "seeded",
+          reason: `deleted ${deleteResult.count} Read Rules row(s)`,
+        });
+        logger.info(
+          `[backfill-read-rules] Deleted ${deleteResult.count} Read Rules row(s) for ${workspaceId}`,
+        );
+      }
+    } catch (err) {
+      results.push({
+        workspaceId,
+        status: "failed",
+        reason: err instanceof Error ? err.message : String(err),
+      });
+      logger.error(
+        `[backfill-read-rules] Failed for ${workspaceId}: ${err}`,
+      );
+    }
+  }
+
+  return results;
+}
+
 // ----- runner ---------------------------------------------------------------
 
 function printReport(label: string, results: BackfillResult[]): void {
@@ -266,33 +338,75 @@ function printReport(label: string, results: BackfillResult[]): void {
   }
 }
 
-async function main(): Promise<void> {
+/**
+ * Resolve which workspace IDs to operate on for a given step.
+ *
+ *   ALL_WORKSPACES=1 → pull every workspace.id from the DB
+ *   otherwise        → use WORKSPACE_IDS env (comma-sep) or hard-coded constant
+ *
+ * The morning brief task uses the explicit list (creating a 9am task for
+ * every user might be undesirable — the user wanted a curated rollout).
+ * Watch Rules + Read Rules are "for everyone" by spec, so they default to
+ * ALL_WORKSPACES when no explicit list is set.
+ */
+async function resolveWorkspaceIds(
+  preferAllWhenEmpty: boolean,
+): Promise<string[]> {
   const fromEnv = process.env.WORKSPACE_IDS?.split(",")
     .map((s) => s.trim())
     .filter(Boolean);
-  const workspaceIds = fromEnv?.length ? fromEnv : WORKSPACE_IDS;
+  if (fromEnv?.length) return fromEnv;
+  if (WORKSPACE_IDS.length > 0) return WORKSPACE_IDS;
 
-  if (workspaceIds.length === 0) {
-    console.error(
-      "No workspaceIds provided. Set WORKSPACE_IDS env var or edit the constant in this file.",
-    );
-    process.exit(1);
+  if (process.env.ALL_WORKSPACES === "1" || preferAllWhenEmpty) {
+    const rows = await prisma.workspace.findMany({ select: { id: true } });
+    return rows.map((r) => r.id);
   }
+  return [];
+}
 
-  const mode = (process.env.MODE ?? "both").toLowerCase();
-  console.log(
-    `Running mode="${mode}" for ${workspaceIds.length} workspace(s):`,
-  );
-  for (const id of workspaceIds) console.log(`  - ${id}`);
+async function main(): Promise<void> {
+  const modeRaw = (process.env.MODE ?? "both").toLowerCase();
+  // Accept comma-separated multi-mode too: MODE=watch,read
+  const modeBits = new Set(modeRaw.split(",").map((s) => s.trim()));
+  const runMorning =
+    modeBits.has("morning") || modeBits.has("both") || modeBits.has("all");
+  const runWatch =
+    modeBits.has("watch") || modeBits.has("both") || modeBits.has("all");
+  const runRead =
+    modeBits.has("read") || modeBits.has("all");
 
-  if (mode === "morning" || mode === "both") {
-    const r = await seedMorningBriefForWorkspaces(workspaceIds);
+  // Morning brief: explicit IDs only (no auto-all). Watch + Read: default to
+  // all workspaces if no explicit list.
+  const morningIds = runMorning ? await resolveWorkspaceIds(false) : [];
+  const watchReadIds =
+    runWatch || runRead ? await resolveWorkspaceIds(true) : [];
+
+  console.log(`Running mode="${modeRaw}"`);
+
+  if (runMorning) {
+    if (morningIds.length === 0) {
+      console.error(
+        "MODE includes 'morning' but no workspaceIds provided. " +
+          "Set WORKSPACE_IDS env var or edit the constant in this file.",
+      );
+      process.exit(1);
+    }
+    console.log(`  morning brief → ${morningIds.length} workspace(s)`);
+    const r = await seedMorningBriefForWorkspaces(morningIds);
     printReport("morning-brief", r);
   }
 
-  if (mode === "watch" || mode === "both") {
-    const r = await replaceWatchRulesForWorkspaces(workspaceIds);
+  if (runWatch) {
+    console.log(`  watch rules   → ${watchReadIds.length} workspace(s)`);
+    const r = await replaceWatchRulesForWorkspaces(watchReadIds);
     printReport("watch-rules", r);
+  }
+
+  if (runRead) {
+    console.log(`  read rules    → ${watchReadIds.length} workspace(s)`);
+    const r = await deleteReadRulesForWorkspaces(watchReadIds);
+    printReport("read-rules", r);
   }
 
   await prisma.$disconnect();
