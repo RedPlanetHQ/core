@@ -186,16 +186,12 @@ export function LibrarySkillCard({
 
           <div className="flex items-center gap-2">
             <CardTitle className="text-md font-medium">{skill.title}</CardTitle>
-            <span
-              className={cn(
-                "rounded px-1.5 py-0.5 text-[10px] font-medium",
-                skill.target === "gateway"
-                  ? "bg-primary/10 text-primary"
-                  : "bg-muted text-muted-foreground",
-              )}
+            <Badge
+              className="shrink-0 gap-1 rounded text-xs"
+              variant="secondary"
             >
               {skill.target === "gateway" ? "Gateway" : "Cloud"}
-            </span>
+            </Badge>
           </div>
           <CardDescription className="line-clamp-3 flex-1 text-sm">
             {skill.shortDescription}

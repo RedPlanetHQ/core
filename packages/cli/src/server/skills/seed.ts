@@ -1,43 +1,29 @@
-import {existsSync, mkdirSync, copyFileSync, writeFileSync} from 'node:fs';
-import {dirname, resolve, join} from 'node:path';
-import {fileURLToPath} from 'node:url';
-import {homedir} from 'node:os';
+import {existsSync, mkdirSync, writeFileSync} from 'node:fs';
+import {join} from 'node:path';
 import {DEFAULT_SKILLS_DIR} from './skill-store';
+import {BUILTIN_SKILLS} from './builtins';
 import {gatewayLog} from '@/server/gateway-log';
 
-const SENTINEL = resolve(homedir(), '.corebrain', '.skills-seeded');
-
-function builtinPath(name: string): string {
-  const here = dirname(fileURLToPath(import.meta.url));
-  // Resolved from compiled output `dist/server/skills/seed.js` → up to dist root, then to builtin/.
-  return resolve(here, 'builtin', name);
-}
-
 /**
- * Copy bundled builtin skills into `~/.corebrain/skills/` the first time the
- * daemon starts. Uses `~/.corebrain/.skills-seeded` as a sentinel so the user
- * can delete a builtin and have it stay deleted across restarts.
+ * Install bundled builtin skills into `~/.corebrain/skills/` whenever they're
+ * not already present. Directory existence IS the "already installed" check
+ * — no sentinel file. Trade-off: deleting a builtin won't stick across
+ * restarts; remove the entry from BUILTIN_SKILLS if you want it gone for
+ * good.
  */
 export function seedBuiltinSkills(): void {
-  if (existsSync(SENTINEL)) return;
-
-  try {
-    mkdirSync(DEFAULT_SKILLS_DIR, {recursive: true});
-
-    const findSkillsDst = join(DEFAULT_SKILLS_DIR, 'find-skills');
-    if (!existsSync(findSkillsDst)) {
-      mkdirSync(findSkillsDst, {recursive: true});
-      copyFileSync(
-        join(builtinPath('find-skills'), 'SKILL.md'),
-        join(findSkillsDst, 'SKILL.md'),
-      );
-      gatewayLog('seeded builtin skill: find-skills');
-    }
-
-    writeFileSync(SENTINEL, new Date().toISOString());
-  } catch (err) {
-    gatewayLog(
-      `failed to seed builtin skills: ${err instanceof Error ? err.message : err}`,
-    );
-  }
+	try {
+		mkdirSync(DEFAULT_SKILLS_DIR, {recursive: true});
+		for (const {name, skillMd} of BUILTIN_SKILLS) {
+			const dst = join(DEFAULT_SKILLS_DIR, name);
+			if (existsSync(dst)) continue;
+			mkdirSync(dst, {recursive: true});
+			writeFileSync(join(dst, 'SKILL.md'), skillMd);
+			gatewayLog(`seeded builtin skill: ${name}`);
+		}
+	} catch (err) {
+		gatewayLog(
+			`failed to seed builtin skills: ${err instanceof Error ? err.message : err}`,
+		);
+	}
 }

@@ -20,12 +20,18 @@ interface ToolResponseEnvelope {
  *   coding_*   → /api/coding
  *   browser_*  → /api/browser
  *   exec_*     → /api/exec
+ *   files_*    → /api/files
+ *   *_skill    → /api/skills (gateway-side: load_skill, create_skill, update_skill)
  *   (others)   → /api/utils
  */
-function toolGroup(toolName: string): "coding" | "browser" | "exec" | "utils" {
+function toolGroup(
+  toolName: string,
+): "coding" | "browser" | "exec" | "files" | "skills" | "utils" {
+  if (toolName.endsWith("_skill")) return "skills";
   if (toolName.startsWith("coding_")) return "coding";
   if (toolName.startsWith("browser_")) return "browser";
   if (toolName.startsWith("exec_")) return "exec";
+  if (toolName.startsWith("files_")) return "files";
   return "utils";
 }
 

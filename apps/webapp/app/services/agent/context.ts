@@ -293,30 +293,42 @@ export async function buildAgentContext({
   const executor = executorTools ?? new DirectOrchestratorTools();
   const gatewayInfos = await executor.getGateways(workspaceId);
 
-  // Pre-fetch manifests in parallel so we can render capability tags.
+  // Pre-fetch manifests in parallel so we can render capability tags + skills.
   // A failed manifest fetch renders as [capabilities: unknown] — the gateway
   // is still listed so butler can attempt delegation.
-  const gatewayCapabilities = await Promise.all(
+  const gatewayManifestDetails = await Promise.all(
     gatewayInfos.map(async (gw) => {
       const manifest = await fetchManifest(gw.id);
       if (!manifest) return null;
       const toolNames = (manifest.manifest.tools ?? []).map((t) => t.name);
-      return deriveCapabilityTags(toolNames);
+      const skills = (manifest.manifest.skills ?? []) as Array<{
+        name: string;
+        description: string;
+      }>;
+      return { tags: deriveCapabilityTags(toolNames), skills };
     }),
   );
 
   const gatewaysList = gatewayInfos
     .map((gw, index) => {
-      const tags = gatewayCapabilities[index];
+      const detail = gatewayManifestDetails[index];
+      const tags = detail?.tags;
       const capStr =
-        tags === null
+        detail === null
           ? "[capabilities: unknown]"
-          : tags.length === 0
+          : !tags || tags.length === 0
             ? "[capabilities: none]"
             : `[capabilities: ${tags.join(", ")}]`;
       const slug = gw.name.toLowerCase().replace(/[^a-z0-9]/g, "_");
       const desc = gw.description ? `\n   ${gw.description}` : "";
-      return `${index + 1}. **${gw.name}** ${capStr} — agent: agent-gateway_${slug}${desc}`;
+      const skills = detail?.skills ?? [];
+      const skillsBlock =
+        skills.length > 0
+          ? `\n   Skills: ${skills
+              .map((s) => `\`${s.name}\` (${s.description})`)
+              .join("; ")}`
+          : "\n   Skills: (none installed)";
+      return `${index + 1}. **${gw.name}** ${capStr} — agent: agent-gateway_${slug}${desc}${skillsBlock}`;
     })
     .join("\n");
 
@@ -334,7 +346,12 @@ export async function buildAgentContext({
     </connected_integrations>
 
     <connected_gateways>
-    Each gateway is a subagent you can call directly. The [capabilities: …] tag tells you what each gateway can do (browser, coding, exec, files). Pick a gateway whose capabilities match the intent — see the GATEWAYS section above for routing rules.
+    Each gateway is a subagent you can call directly. The [capabilities: …] tag tells you what each gateway can do (browser, coding, exec, files). The \`Skills:\` line previews the procedures installed on that gateway, with each skill's "Use when ..." description in parentheses — use it as a routing hint, not a source of truth.
+
+    ANYTHING about a specific gateway — "what skills does <gateway> have", "what folders are on <gateway>", "what can <gateway> do", "show me <gateway>'s files", "run X on <gateway>" — delegate to that gateway's subagent. The gateway agent has the authoritative live view of its own state and tools; ask it directly instead of answering from this block or from gather_context (gather_context reads memory + integrations, not gateway manifests).
+
+    When the user's intent matches a skill's "Use when ..." description, route the task to that gateway and reference the skill by name in your intent (e.g. "Use the \`draft-prd\` skill: …"). The gateway agent will \`load_skill\` to follow it. Don't paraphrase the skill back to the user before dispatching — let the gateway own the execution.
+
     ${gatewaysList || "No gateways connected."}
     </connected_gateways>
     `;
@@ -364,7 +381,16 @@ export async function buildAgentContext({
 
     systemPrompt += `
     <skills>
-    You have access to user-defined skills (reusable workflows). When a user's request matches a skill — or they invoke one with a slash command like /skill-name — call get_skill to load its full instructions, then follow them step-by-step using your tools.
+    You have access to user-defined skills (reusable workflows + captured knowledge). BEFORE doing the work yourself, scan this list and ask "does the SITUATION I'm in match what any of these skills are for?"
+
+    **Match by intent, not by name.** Each skill has a "Use when ..." description — that's the trigger. If the user is debugging an issue and a "Debugging procedure" skill exists, load it even though they didn't say "debug". If they're brainstorming a feature and a "Feature brainstorm" skill exists, load it. If they ask for the morning brief and a "Morning Brief" skill exists, load it. The skill's description is what determines a match, not the literal words in the user's message.
+
+    Load with \`get_skill\` whenever ANY of these are true:
+    - The skill's "Use when ..." description fits what the user is asking for, OR the situation you're now in.
+    - The user invokes a slash command — \`/morning-brief\`, \`/debug\`.
+    - The user names the skill explicitly.
+
+    Match liberally and don't ask the user to confirm. If two skills could fit, pick the one whose description matches more specifically. If you start the work without loading a matching skill first, you'll redo what the user already captured.
 
     Available skills:
     ${skillsList}

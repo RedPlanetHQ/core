@@ -1,16 +1,23 @@
 import type {FastifyPluginAsync} from 'fastify';
 import {installSkill, removeSkill, type InstallSource} from '@/server/skills/install';
+import {skillsTools, executeSkillsTool} from '@/server/tools/skills-tools';
+import {makeToolGroupRoutes} from '../tool-group';
 
 /**
- * Skill management routes (mounted at `/api/skills`).
+ * Skill management + tool routes (mounted at `/api/skills`).
  *
- *   POST   /api/skills/install   → body: InstallSource (url or files)
- *   DELETE /api/skills/:name     → uninstall
+ *   POST   /api/skills/install       → body: InstallSource (url or files)
+ *   DELETE /api/skills/:name         → uninstall
+ *   POST   /api/skills/load_skill    → tool: read SKILL.md (or a file inside the skill dir)
+ *   POST   /api/skills/create_skill  → tool: author a new SKILL.md from name/desc/body
+ *   POST   /api/skills/update_skill  → tool: append body to an existing SKILL.md
  *
  * Auth is handled upstream (`makeAuthHook`); these handlers assume the caller
  * already passed the gateway's security key.
  */
 export const skillsRoutes: FastifyPluginAsync = async (app) => {
+	await app.register(makeToolGroupRoutes(skillsTools, executeSkillsTool));
+
   app.post<{Body: InstallSource}>('/install', async (req, reply) => {
     const body = req.body as InstallSource | undefined;
     if (!body || !body.source) {

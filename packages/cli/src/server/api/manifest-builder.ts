@@ -11,6 +11,7 @@ import {
 import type {GatewayConfig, GatewaySlots} from '@/types/config';
 import {getPreferences} from '@/config/preferences';
 import {listFolders} from '@/config/folders';
+import {listSkills} from '@/server/skills/skill-store';
 import {browserTools} from '@/server/tools/browser-tools';
 import {codingTools} from '@/server/tools/coding-tools';
 import {execTools} from '@/server/tools/exec-tools';
@@ -144,7 +145,7 @@ export function isSlotEnabled(
 	return (entry as {enabled?: boolean}).enabled !== false;
 }
 
-export function buildManifest(): {manifest: Manifest; etag: string} {
+export async function buildManifest(): Promise<{manifest: Manifest; etag: string}> {
 	const prefs = getPreferences();
 	const gw: Partial<GatewayConfig> = prefs.gateway ?? {};
 	const slots = gw.slots;
@@ -153,6 +154,11 @@ export function buildManifest(): {manifest: Manifest; etag: string} {
 	// agents, when coding is off) from the manifest. Callers that shouldn't
 	// see a tool shouldn't be able to hit its route either; server.ts applies
 	// the same filter when registering routes.
+	// Skills tools (load_skill / create_skill / update_skill) are always-on on
+	// the daemon — they live at /api/skills/<tool> regardless of slot config —
+	// but they don't appear here. The webapp's gateway agent factory hardcodes
+	// the Mastra wrappers for them, since their definitions are constant
+	// across every gateway and there's no slot to gate them on.
 	const tools = [
 		...(isSlotEnabled(slots, 'browser') ? browserTools : []),
 		...(isSlotEnabled(slots, 'coding') ? codingTools : []),
@@ -160,6 +166,11 @@ export function buildManifest(): {manifest: Manifest; etag: string} {
 		...(isSlotEnabled(slots, 'files') ? filesTools : []),
 		...utilsTools,
 	].map(projectTool);
+
+	// Skills installed on this gateway (~/.corebrain/skills/*/SKILL.md).
+	// Always populated regardless of slot config — load_skill is an
+	// always-on tool.
+	const skills = await listSkills();
 
 	// Configured coding agents — keys of prefs.coding (e.g. "claude-code", "codex-cli").
 	// Empty when the coding slot is disabled so UIs don't offer agents the user
@@ -198,6 +209,7 @@ export function buildManifest(): {manifest: Manifest; etag: string} {
 		},
 		folders: listFolders(),
 		tools,
+		skills,
 		agents,
 		availableAgents,
 	};

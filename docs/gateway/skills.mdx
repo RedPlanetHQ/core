@@ -1,0 +1,128 @@
+---
+title: "Skills"
+description: "Install instruction-set skills onto a gateway so the gateway agent can load them on demand"
+---
+
+## What is a gateway skill?
+
+A **skill** is a folder under `~/.corebrain/skills/` containing a `SKILL.md` file with YAML frontmatter (`name`, `description`, optional `allowed-tools`) and any supporting files the instructions reference. The gateway exposes the list of installed skills on its manifest, and the gateway agent can fetch a skill's body on demand via the always-on `load_skill` tool.
+
+Skills are the lightweight way to teach the gateway agent a repeatable procedure (e.g. "how to triage a production alert", "how to migrate a Prisma schema", "how to draft a release note") without changing CORE's code.
+
+---
+
+## Where skills come from
+
+| Source | Install with |
+| ------ | ------------ |
+| **Corebrain library** — `docs/gateway-skills/` in the CORE repo, curated for the gateway's tool surface. | `corebrain skills install https://github.com/RedPlanetHQ/core --skill <slug>` |
+| **skills.sh** — the open Vercel skills ecosystem. Anything listed at [https://skills.sh](https://skills.sh) can be installed via its git URL. | `corebrain skills install <git-url>` (use the `installUrl` from the skills.sh entry) |
+| **Your own git repo** — any repo with a `SKILL.md` at the root (or `--skill <subdir>` for a specific folder). | `corebrain skills install <git-url>` |
+| **Webapp library** — Library tab in CORE shows both the corebrain and the gateway-curated sets and installs into the gateway you pick. | UI: Sidebar → Skills Library → Add to gateway |
+
+Installs are atomic (staged in a temp dir, `fs.rename` into place) with a `--force` flag to overwrite an existing install. Removal: `corebrain skills remove <name>` or the trash button in the per-gateway Skills tab.
+
+> **skills.sh note.** The Vercel CLI (`npx skills`) is not required — corebrain installs the same skills directly from their git URLs and stores them in `~/.corebrain/skills/`. A native skills.sh integration that browses the registry from inside corebrain is on the roadmap; today, copy the git URL from a skills.sh listing and pass it to `corebrain skills install`.
+
+---
+
+## CLI
+
+```bash
+corebrain skills install <git-url> [--skill <subdir>] [--force]
+corebrain skills list
+corebrain skills remove <name>
+```
+
+- `--skill <subdir>` picks a specific skill out of a repo that contains many.
+- `--force` overwrites an existing install of the same name.
+- Skill names must match `^[a-z0-9][a-z0-9-]*$` (kebab-case).
+- The repo's `SKILL.md` frontmatter `name` must match the directory name; mismatches are rejected at install time.
+
+---
+
+## How the gateway agent sees skills
+
+Every gateway agent's system prompt includes an **AVAILABLE SKILLS** section listing the installed skills' `name` + `description` — no extra polling required. When the user's intent matches one, the agent calls:
+
+```
+load_skill({ name: "<skill-name>" })
+```
+
+…to fetch the full `SKILL.md`, then follows it step-by-step using the other gateway tools. Supporting files inside the skill dir are reachable with `load_skill({ name, file: "examples/foo.md" })`.
+
+`load_skill` is the only way to reach `~/.corebrain/skills/` — `files_read` is scoped to user-registered folders and intentionally cannot read from the skills directory.
+
+## Authoring skills from the gateway agent
+
+Skills are owned by the gateway they live on. CRUD happens **on the gateway**, not from the cloud butler:
+
+- `create_skill({ name, description, body, allowed_tools?, force? })` — writes a new `SKILL.md` with frontmatter generated from the args. Fails if a skill with the same name already exists unless `force: true`.
+- `update_skill({ name, body })` — appends the new body to the existing skill's `SKILL.md`. Frontmatter and prior content are preserved.
+- `load_skill({ name })` — read it back.
+
+The butler (cloud agent) does NOT author or modify gateway skills. Its `create_skill` / `update_skill` tools only touch workspace skills (stored in Prisma). If the user wants a new skill on a specific gateway, they invoke that gateway directly — per-gateway chat, this `create_skill` tool, the CLI (`corebrain skills install`), or the webapp Skills tab.
+
+This keeps the contract simple: **the agent that runs the skill is also the agent that writes the skill.**
+
+### Built-in: `find-skills`
+
+The gateway seeds one built-in skill on first boot: `find-skills`. When the user's intent doesn't match any installed skill, the agent loads `find-skills` and uses its procedure to search the corebrain library + skills.sh, confirm a candidate with the user, install it via `corebrain skills install`, and continue. The seed is one-shot: deleting the builtin keeps it deleted across restarts (sentinel at `~/.corebrain/.skills-seeded`).
+
+---
+
+## Authoring a skill
+
+A minimal skill is a single file:
+
+```markdown
+---
+name: my-skill
+description: One-line summary the agent reads to decide whether this skill applies.
+allowed-tools: [exec_command, files_read]
+---
+
+# my-skill
+
+Your instructions here. Be specific about which gateway tools to use and in what order.
+
+## Procedure
+
+1. …
+2. …
+```
+
+- **`name`** — kebab-case slug, must match the directory name.
+- **`description`** — one line shown to the agent in the system prompt; write it as a trigger ("Use when…").
+- **`allowed-tools`** — informational only in v1 (UI display, not runtime enforcement). Lists which gateway tools your procedure expects to use.
+
+Put supporting examples or templates in sibling files (e.g. `examples/foo.md`); the agent fetches them via `load_skill({ name, file })` as needed.
+
+---
+
+## Manifest shape
+
+Skills appear on the gateway manifest:
+
+```json
+{
+  "skills": [
+    {
+      "name": "my-skill",
+      "description": "One-line summary…",
+      "allowedTools": ["exec_command", "files_read"],
+      "path": "/Users/me/.corebrain/skills/my-skill"
+    }
+  ]
+}
+```
+
+Bodies are **not** included on the manifest — the agent reads them with `load_skill` on demand. The webapp uses the manifest entries to render the per-gateway Skills tab.
+
+---
+
+## Where next?
+
+- [Coding](/gateway/coding) — coding agents that skills often orchestrate via `coding_ask`.
+- [Exec](/gateway/exec) — the shell tool most skills rely on.
+- [Gateway overview](/gateway/overview) — full capability map.

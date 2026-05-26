@@ -1,12 +1,6 @@
 import { useState } from "react";
-import {
-  Bot,
-  FolderOpen,
-  Loader2,
-  Plus,
-  Trash2,
-} from "lucide-react";
-import { Button } from "~/components/ui/button";
+import { Bot, FolderOpen, Library, Loader2, Plus, Trash2 } from "lucide-react";
+import { Button, buttonVariants } from "~/components/ui/button";
 import { AddFolderDialog } from "~/components/gateway/add-folder-dialog";
 import { useGateway } from "~/components/gateway/gateway-provider";
 import { cn } from "~/lib/utils";
@@ -15,12 +9,32 @@ export default function GatewayInfoTab() {
   const gw = useGateway();
   const [addFolderOpen, setAddFolderOpen] = useState(false);
   const [removingFolderId, setRemovingFolderId] = useState<string | null>(null);
+  const [removingSkillName, setRemovingSkillName] = useState<string | null>(
+    null,
+  );
 
   const handleRemoveFolder = async (folderId: string) => {
     setRemovingFolderId(folderId);
     try {
+      const res = await fetch(`/api/v1/gateways/${gw.id}/folders/${folderId}`, {
+        method: "DELETE",
+      });
+      if (!res.ok) {
+        const body = (await res.json().catch(() => ({}))) as { error?: string };
+        // eslint-disable-next-line no-alert
+        alert(body.error ?? `Failed (${res.status})`);
+      }
+      gw.refresh();
+    } finally {
+      setRemovingFolderId(null);
+    }
+  };
+
+  const handleRemoveSkill = async (name: string) => {
+    setRemovingSkillName(name);
+    try {
       const res = await fetch(
-        `/api/v1/gateways/${gw.id}/folders/${folderId}`,
+        `/api/v1/gateways/${gw.id}/skills/${encodeURIComponent(name)}`,
         { method: "DELETE" },
       );
       if (!res.ok) {
@@ -30,7 +44,7 @@ export default function GatewayInfoTab() {
       }
       gw.refresh();
     } finally {
-      setRemovingFolderId(null);
+      setRemovingSkillName(null);
     }
   };
 
@@ -53,9 +67,7 @@ export default function GatewayInfoTab() {
           <span className="font-medium">{gw.name}</span>
           <span className="text-muted-foreground">Description</span>
           <span
-            className={cn(
-              gw.description ? "" : "text-muted-foreground italic",
-            )}
+            className={cn(gw.description ? "" : "text-muted-foreground italic")}
           >
             {gw.description ?? "—"}
           </span>
@@ -161,6 +173,63 @@ export default function GatewayInfoTab() {
                   title="Unregister folder"
                 >
                   {removingFolderId === f.id ? (
+                    <Loader2 size={12} className="animate-spin" />
+                  ) : (
+                    <Trash2 size={12} />
+                  )}
+                </Button>
+              </div>
+            ))}
+          </div>
+        )}
+      </section>
+
+      {/* ── Skills ── */}
+      <section className="flex flex-col gap-3">
+        <div className="flex items-center justify-between">
+          <h2 className="text-lg font-medium">
+            Installed skills ({gw.skills.length})
+          </h2>
+          <a
+            className={cn(buttonVariants({ variant: "secondary" }))}
+            href="/home/agent/skills?target=gateway"
+          >
+            Browse library →
+          </a>
+        </div>
+
+        {gw.skills.length === 0 ? (
+          <p className="text-muted-foreground text-sm">
+            No skills installed yet. Builtins seed on first boot — install more
+            from the library or via{" "}
+            <code className="font-mono text-xs">corebrain skills install</code>.
+          </p>
+        ) : (
+          <div className="flex flex-col gap-1.5">
+            {gw.skills.map((s) => (
+              <div
+                key={s.name}
+                className="bg-background-3 flex items-start gap-3 rounded border px-3 py-2"
+              >
+                <Library
+                  size={16}
+                  className="text-muted-foreground mt-1 shrink-0"
+                />
+                <div className="flex min-w-0 flex-1 flex-col">
+                  <span className="font-medium">{s.name}</span>
+                  <span className="text-muted-foreground text-sm">
+                    {s.description}
+                  </span>
+                </div>
+                <Button
+                  variant="ghost"
+                  size="icon"
+                  className="text-muted-foreground hover:text-destructive h-7 w-7"
+                  disabled={removingSkillName === s.name}
+                  onClick={() => handleRemoveSkill(s.name)}
+                  title="Remove skill"
+                >
+                  {removingSkillName === s.name ? (
                     <Loader2 size={12} className="animate-spin" />
                   ) : (
                     <Trash2 size={12} />

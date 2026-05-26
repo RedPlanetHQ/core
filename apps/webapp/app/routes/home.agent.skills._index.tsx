@@ -147,8 +147,11 @@ export async function action({ request }: ActionFunctionArgs) {
 }
 
 export default function Skills() {
-  const { installedSlugs: loaderInstalledSlugs, librarySkills, gateways } =
-    useLoaderData<typeof loader>();
+  const {
+    installedSlugs: loaderInstalledSlugs,
+    librarySkills,
+    gateways,
+  } = useLoaderData<typeof loader>();
   const navigate = useNavigate();
   const { skills, hasMore, loadMore, isLoading, isInitialLoad, reset } =
     useSkills();
@@ -166,10 +169,7 @@ export default function Skills() {
   // Merge loader state with optimistic updates
   const installedSlugs = { ...loaderInstalledSlugs };
 
-  const targetFilter = searchParams.get("target") as
-    | "cloud"
-    | "gateway"
-    | null;
+  const targetFilter = searchParams.get("target") as "cloud" | "gateway" | null;
   const filteredLibrary = targetFilter
     ? librarySkills.filter((s) => s.target === targetFilter)
     : librarySkills;

@@ -3,15 +3,19 @@ import {useApp} from 'ink';
 import * as p from '@clack/prompts';
 import chalk from 'chalk';
 import zod from 'zod';
-import {copyFileSync, mkdirSync, existsSync} from 'node:fs';
-import {join, resolve, dirname} from 'node:path';
-import {fileURLToPath} from 'node:url';
+import {mkdirSync, writeFileSync, existsSync} from 'node:fs';
+import {join} from 'node:path';
 import {installSkill} from '@/server/skills/install';
 import {DEFAULT_SKILLS_DIR} from '@/server/skills/skill-store';
+import {getBuiltin, BUILTIN_SKILLS} from '@/server/skills/builtins';
 import {requireNativeGateway} from '@/utils/require-native-gateway';
 
 export const args = zod.tuple([
-	zod.string().describe('Git URL of the skill repo, or "builtin:find-skills"'),
+	zod
+		.string()
+		.describe(
+			'Git URL of the skill repo, or "builtin:<name>" (e.g. "builtin:find-skills")',
+		),
 ]);
 
 export const options = zod.object({
@@ -30,25 +34,24 @@ type Props = {
 	options: zod.infer<typeof options>;
 };
 
-// Resolve the bundled builtin template path. The template lives next to the
-// source tree under server/skills/builtin and is copied to dist by the build.
-function builtinPath(name: string): string {
-	const here = dirname(fileURLToPath(import.meta.url));
-	// From `dist/commands/skills/install.js` walk to dist root, then to server/skills/builtin.
-	return resolve(here, '..', '..', 'server', 'skills', 'builtin', name);
-}
-
-async function installBuiltinFindSkills(force: boolean): Promise<void> {
-	const src = builtinPath('find-skills');
-	const dst = join(DEFAULT_SKILLS_DIR, 'find-skills');
-	if (existsSync(dst) && !force) {
+async function installBuiltin(name: string, force: boolean): Promise<void> {
+	const builtin = getBuiltin(name);
+	if (!builtin) {
+		const known = BUILTIN_SKILLS.map((b) => b.name).join(', ') || '(none)';
 		throw new Error(
-			`Skill 'find-skills' already installed. Use --force to overwrite, or 'corebrain skills remove find-skills' first.`,
+			`Unknown builtin "${name}". Available builtins: ${known}.`,
 		);
 	}
-	mkdirSync(DEFAULT_SKILLS_DIR, {recursive: true});
+
+	const dst = join(DEFAULT_SKILLS_DIR, builtin.name);
+	if (existsSync(dst) && !force) {
+		throw new Error(
+			`Skill '${builtin.name}' already installed. Use --force to overwrite, or 'corebrain skills remove ${builtin.name}' first.`,
+		);
+	}
+
 	mkdirSync(dst, {recursive: true});
-	copyFileSync(join(src, 'SKILL.md'), join(dst, 'SKILL.md'));
+	writeFileSync(join(dst, 'SKILL.md'), builtin.skillMd);
 }
 
 async function runSkillsInstall(
@@ -57,9 +60,10 @@ async function runSkillsInstall(
 ): Promise<void> {
 	if (!requireNativeGateway()) return;
 
-	if (target === 'builtin:find-skills') {
-		await installBuiltinFindSkills(!!opts.force);
-		p.log.success(chalk.green('Installed builtin skill: find-skills'));
+	if (target.startsWith('builtin:')) {
+		const name = target.slice('builtin:'.length);
+		await installBuiltin(name, !!opts.force);
+		p.log.success(chalk.green(`Installed builtin skill: ${name}`));
 		return;
 	}
 

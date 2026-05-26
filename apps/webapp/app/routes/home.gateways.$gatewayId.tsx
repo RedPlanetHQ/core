@@ -103,6 +103,7 @@ export default function GatewayDetailLayout() {
     platform: gateway.platform,
     folders: info?.folders ?? [],
     agents: info?.agents ?? [],
+    skills: info?.skills ?? [],
   };
 
   return (

@@ -105,6 +105,87 @@ function requiresApproval(toolName: string): boolean {
 }
 
 /**
+ * Always-on skills tools that the daemon exposes at /api/skills/<tool>.
+ * Kept off the manifest because they're constant across every gateway —
+ * see `manifest-builder.ts` for the matching note on the daemon side.
+ */
+function getGatewaySkillTools(): Array<{
+  name: string;
+  description: string;
+  inputSchema: z.ZodObject<Record<string, any>>;
+}> {
+  return [
+    {
+      name: "load_skill",
+      description:
+        "Load a gateway skill's content. Defaults to its SKILL.md. Use the name from the gateway's skills list — the skills directory is not reachable via files_read.",
+      inputSchema: z.object({
+        name: z
+          .string()
+          .describe(
+            "Skill name (kebab-case slug, matching one of the entries in the gateway manifest skills list).",
+          ),
+        file: z
+          .string()
+          .optional()
+          .describe(
+            'Relative path within the skill dir. Defaults to "SKILL.md".',
+          ),
+      }),
+    },
+    {
+      name: "create_skill",
+      description:
+        "Create a new gateway skill under ~/.corebrain/skills/<name>/SKILL.md. Frontmatter (name, description, allowed-tools) is generated from the args; the body is plain markdown. Fails if a skill with the same name exists unless force=true. Use update_skill to append instead.",
+      inputSchema: z.object({
+        name: z
+          .string()
+          .describe(
+            "Kebab-case skill slug. Becomes both the SKILL.md frontmatter name and the directory under ~/.corebrain/skills/.",
+          ),
+        description: z
+          .string()
+          .describe(
+            'One-line description shown to the agent in the AVAILABLE SKILLS block. Write it as a trigger ("Use when ...").',
+          ),
+        body: z
+          .string()
+          .describe(
+            "Markdown body of the SKILL.md (everything after the YAML frontmatter). Do NOT include `---` fences — the daemon wraps the frontmatter for you.",
+          ),
+        allowed_tools: z
+          .array(z.string())
+          .optional()
+          .describe(
+            'Optional list of gateway tools this skill uses (e.g. ["exec_command", "coding_ask"]).',
+          ),
+        force: z
+          .boolean()
+          .optional()
+          .describe(
+            "If true, overwrite an existing skill with the same name.",
+          ),
+      }),
+    },
+    {
+      name: "update_skill",
+      description:
+        "Append content to an existing gateway skill's SKILL.md. Body is appended after the existing body; frontmatter and prior content are preserved. Pass only what is new.",
+      inputSchema: z.object({
+        name: z
+          .string()
+          .describe("Skill name to update (must already exist)."),
+        body: z
+          .string()
+          .describe(
+            "New body content to APPEND. Frontmatter and prior body are preserved.",
+          ),
+      }),
+    },
+  ];
+}
+
+/**
  * Create Mastra tools from a gateway's tool definitions.
  * Each gateway tool becomes a Mastra createTool() with proper Zod schema.
  */
@@ -127,6 +208,45 @@ function createGatewayTools(
   // progress_update — every gateway agent can narrate during long
   // sessions (coding runs, browser flows, exec scripts).
   tools.progress_update = getProgressUpdateTool();
+
+  // load_skill / create_skill / update_skill — always-on on the daemon
+  // (routes at /api/skills/<tool>). Hardcoded here instead of plumbed
+  // through the manifest because the definitions are constant across
+  // every gateway, slot-independent, and adding them to every manifest
+  // payload would be noise.
+  for (const skillTool of getGatewaySkillTools()) {
+    tools[skillTool.name] = createTool({
+      id: skillTool.name,
+      description: skillTool.description,
+      inputSchema: skillTool.inputSchema,
+      requireApproval: false,
+      execute: async (params) => {
+        try {
+          const result = executorTools
+            ? await executorTools.executeGatewayTool(
+                gatewayId,
+                skillTool.name,
+                params as Record<string, unknown>,
+              )
+            : await callGatewayTool(
+                gatewayId,
+                skillTool.name,
+                params as Record<string, unknown>,
+                30_000,
+              );
+          return truncateToolResult(result, { label: skillTool.name });
+        } catch (error: unknown) {
+          const errorMessage =
+            error instanceof Error ? error.message : String(error);
+          logger.warn(
+            `Gateway tool failed: ${gatewayId}/${skillTool.name}`,
+            { error },
+          );
+          return `ERROR: ${errorMessage}`;
+        }
+      },
+    });
+  }
 
   for (const gatewayTool of gatewayTools) {
     const zodSchema = gatewayToolToZodSchema(gatewayTool);
