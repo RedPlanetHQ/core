@@ -463,7 +463,15 @@ ${
 SUBTASK PREP RULES:
 1. You are prepping ONE CHUNK of a larger task. Read the parent task description and any prior sibling outputs for context.
 2. Self-resolve questions using available context (parent description, gather_context, code reading). ONLY move to Waiting and ask the user if you genuinely cannot proceed without their input.
-3. For CODING tasks (when a gateway is connected): delegate brainstorming/planning to the gateway sub-agent. Before delegating, call get_task_coding_session. If status is "starting" (gateway hasn't echoed back the sessionId — the session is still spinning up), call reschedule_self(minutesFromNow=2); do NOT call the gateway. If status is "ready", resume by default: pass sessionId, dir, and worktreeBranch. EXCEPTION: if the user explicitly asked for a fresh session or a different coding agent, omit the sessionId so the gateway starts a new session with the requested agent.
+3. For CODING tasks (when a gateway is connected): the gateway publishes a workflows block with phase prompts for the bug and feature tracks. To drive a coding task:
+   a. Classify the user's intent as bug or feature.
+   b. Read the gateway's workflows.perAgent[<agent>][<track>].phases array.
+   c. Send phase[0].prompt to the gateway via coding_ask (new session).
+   d. When the gateway returns, the phase's advanceOn tells you what to do:
+      - "user-approval" → show the output to the user, wait for their response, then send phase[i+1].prompt with their answers.
+      - "done" → this is the terminal phase; finalize the task.
+   Do not invent your own slash commands; do not tell the gateway "now run /writing-plans" — the next phase prompt is what comes next.
+   Before delegating, call get_task_coding_session. If status is "starting" (gateway hasn't echoed back the sessionId — the session is still spinning up), call reschedule_self(minutesFromNow=2); do NOT call the gateway. If status is "ready", resume by default: pass sessionId, dir, and worktreeBranch. EXCEPTION: if the user explicitly asked for a fresh session or a different coding agent, omit the sessionId so the gateway starts a new session with the requested agent.
 4. For NON-CODING tasks: do the prep yourself using gather_context, take_action, and the readiness skills.
 5. Write your plan into the task description using update_task.
 6. When prep is complete, move to Review: update_task(taskId: "${linkedTask.id}", status: "Review"). Do NOT wait for user approval — subtasks auto-transition from prep to execute.
@@ -493,7 +501,15 @@ PREP RULES:
    - Unclear what's needed? → load "Gather Information" skill
    - Open-ended, needs shaping? → load "Brainstorm" skill
    - Multi-step, needs decomposition? → load "Plan" skill
-2. For CODING tasks (when a gateway is connected): delegate brainstorming/planning to the gateway sub-agent. Pass the task title and description. The gateway will return questions or a plan — do NOT tell it to execute. Before delegating, call get_task_coding_session. If status is "starting" (gateway hasn't echoed back the sessionId — the session is still spinning up), call reschedule_self(minutesFromNow=2); do NOT call the gateway. If status is "ready", resume by default (pass sessionId, dir, worktreeBranch). EXCEPTION: if the user explicitly asked for a fresh session or a different coding agent, omit the sessionId so the gateway starts a new session.
+2. For CODING tasks (when a gateway is connected): the gateway publishes a workflows block with phase prompts for the bug and feature tracks. To drive a coding task:
+   a. Classify the user's intent as bug or feature.
+   b. Read the gateway's workflows.perAgent[<agent>][<track>].phases array.
+   c. Send phase[0].prompt to the gateway via coding_ask (new session).
+   d. When the gateway returns, the phase's advanceOn tells you what to do:
+      - "user-approval" → show the output to the user, wait for their response, then send phase[i+1].prompt with their answers.
+      - "done" → this is the terminal phase; finalize the task.
+   Do not invent your own slash commands; do not tell the gateway "now run /writing-plans" — the next phase prompt is what comes next.
+   Before delegating, call get_task_coding_session. If status is "starting" (gateway hasn't echoed back the sessionId — the session is still spinning up), call reschedule_self(minutesFromNow=2); do NOT call the gateway. If status is "ready", resume by default (pass sessionId, dir, worktreeBranch). EXCEPTION: if the user explicitly asked for a fresh session or a different coding agent, omit the sessionId so the gateway starts a new session.
 3. For NON-CODING tasks: do the prep yourself using gather_context, take_action, and the readiness skills.
 4. Write your findings/plan into the task description using update_task.
 5. When prep is complete, move to Review: update_task(taskId: "${linkedTask.id}", status: "Review")

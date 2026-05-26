@@ -1,11 +1,13 @@
-import { useState } from "react";
+import { Fragment, useState } from "react";
 import {
   Bot,
   FolderOpen,
+  Library,
   Loader2,
   Plus,
   Trash2,
 } from "lucide-react";
+import { useNavigate } from "@remix-run/react";
 import { Button } from "~/components/ui/button";
 import { AddFolderDialog } from "~/components/gateway/add-folder-dialog";
 import { useGateway } from "~/components/gateway/gateway-provider";
@@ -13,6 +15,7 @@ import { cn } from "~/lib/utils";
 
 export default function GatewayInfoTab() {
   const gw = useGateway();
+  const navigate = useNavigate();
   const [addFolderOpen, setAddFolderOpen] = useState(false);
   const [removingFolderId, setRemovingFolderId] = useState<string | null>(null);
 
@@ -171,6 +174,60 @@ export default function GatewayInfoTab() {
           </div>
         )}
       </section>
+
+      {/* ── Skills ── */}
+      <section className="flex flex-col gap-3">
+        <div className="flex items-center justify-between">
+          <h2 className="text-lg font-medium">Skills</h2>
+          <Button
+            variant="secondary"
+            size="sm"
+            className="gap-1.5"
+            onClick={() => navigate(`/home/gateways/${gw.id}/skills`)}
+          >
+            <Library size={12} />
+            Manage
+          </Button>
+        </div>
+
+        <p className="text-muted-foreground text-sm">
+          {gw.skills.length === 0
+            ? 'No skills installed.'
+            : `${gw.skills.length} skill${gw.skills.length === 1 ? '' : 's'} installed.`}
+        </p>
+      </section>
+
+      {/* ── Workflows ── */}
+      {gw.workflows ? (
+        <section className="flex flex-col gap-3">
+          <div className="flex items-center justify-between">
+            <h2 className="text-lg font-medium">Workflows</h2>
+          </div>
+
+          <div className="grid grid-cols-[140px_1fr] gap-y-2 text-sm">
+            <span className="text-muted-foreground">Source</span>
+            <span className="font-mono text-xs">{gw.workflows.source}</span>
+            {Object.entries(gw.workflows.perAgent).map(([agent, tracks]) => {
+              const total = tracks.unresolved.length;
+              return (
+                <Fragment key={agent}>
+                  <span className="text-muted-foreground">{agent}</span>
+                  <span className="text-xs">
+                    bug ({tracks.bug.phases.length} phases), feature (
+                    {tracks.feature.phases.length} phases)
+                    {total > 0 ? (
+                      <span className="text-muted-foreground">
+                        {" "}
+                        — {total} unresolved
+                      </span>
+                    ) : null}
+                  </span>
+                </Fragment>
+              );
+            })}
+          </div>
+        </section>
+      ) : null}
 
       <AddFolderDialog
         open={addFolderOpen}
