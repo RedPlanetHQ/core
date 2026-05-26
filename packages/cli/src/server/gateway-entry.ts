@@ -10,6 +10,7 @@ import {startServer} from './api/server.js';
 import {ptyManager} from './pty/manager.js';
 import {gatewayLog, GATEWAY_LOG_FILE} from './gateway-log.js';
 import {clearStaleProfileLocks, closeAllSessions} from '../utils/browser-manager.js';
+import {seedBuiltinSkills} from './skills/seed.js';
 
 const LOG_MAX_AGE_DAYS = 3;
 
@@ -67,6 +68,8 @@ async function main() {
 			'WARNING: No securityKey configured. Run `corebrain gateway register` first — every request will return 401 until a key is set.',
 		);
 	}
+
+	seedBuiltinSkills();
 
 	try {
 		await startServer({port, log});

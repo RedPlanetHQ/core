@@ -4,6 +4,8 @@ export interface SkillIntegration {
   optional?: boolean;
 }
 
+export type SkillTarget = 'cloud' | 'gateway';
+
 export interface LibrarySkill {
   slug: string;
   title: string;
@@ -11,17 +13,79 @@ export interface LibrarySkill {
   category: string;
   integrations: SkillIntegration[];
   content: string;
+  target: SkillTarget;
+  /** Frontmatter `allowed-tools` (gateway skills only). UI display only. */
+  allowedTools?: string[];
 }
 
-import matter from "gray-matter";
+import matter from 'gray-matter';
 
-const GITHUB_API =
-  "https://api.github.com/repos/RedPlanetHQ/core/contents/docs/skills?ref=main";
+const SOURCES: Array<{target: SkillTarget; api: string}> = [
+  {
+    target: 'cloud',
+    api: 'https://api.github.com/repos/RedPlanetHQ/core/contents/docs/skills?ref=main',
+  },
+  {
+    target: 'gateway',
+    api: 'https://api.github.com/repos/RedPlanetHQ/core/contents/docs/gateway-skills?ref=main',
+  },
+];
 
-// Simple in-memory cache
 let cachedSkills: LibrarySkill[] | null = null;
 let cacheTime = 0;
-const CACHE_TTL_MS = 5 * 60 * 1000; // 5 minutes
+const CACHE_TTL_MS = 5 * 60 * 1000;
+
+async function fetchOne(target: SkillTarget, api: string): Promise<LibrarySkill[]> {
+  const listRes = await fetch(api, {
+    headers: {Accept: 'application/vnd.github.v3+json'},
+  });
+  if (!listRes.ok) return [];
+
+  const files: Array<{name: string; download_url: string}> =
+    await listRes.json();
+
+  const skillFiles = files.filter(
+    (f) => f.name.endsWith('.mdx') && f.name !== 'overview.mdx',
+  );
+
+  return Promise.all(
+    skillFiles.map(async (file) => {
+      const slug = file.name.replace('.mdx', '');
+      const rawRes = await fetch(file.download_url);
+      const text = await rawRes.text();
+      const {data, content} = matter(text);
+
+      let integrations: SkillIntegration[] = [];
+      try {
+        if (data.integrations) {
+          integrations =
+            typeof data.integrations === 'string'
+              ? JSON.parse(data.integrations)
+              : data.integrations;
+        }
+      } catch {
+        integrations = [];
+      }
+
+      const at = (data as Record<string, unknown>)['allowed-tools'];
+      const allowedTools =
+        Array.isArray(at) && at.every((s) => typeof s === 'string')
+          ? (at as string[])
+          : undefined;
+
+      return {
+        slug,
+        title: (data.title as string) ?? slug,
+        shortDescription: (data.description as string) ?? '',
+        category: (data.category as string) ?? 'General',
+        integrations,
+        content: content.trim(),
+        target,
+        ...(allowedTools ? {allowedTools} : {}),
+      } satisfies LibrarySkill;
+    }),
+  );
+}
 
 export async function getLibrarySkills(): Promise<LibrarySkill[]> {
   if (cachedSkills && Date.now() - cacheTime < CACHE_TTL_MS) {
@@ -29,54 +93,12 @@ export async function getLibrarySkills(): Promise<LibrarySkill[]> {
   }
 
   try {
-    const listRes = await fetch(GITHUB_API, {
-      headers: { Accept: "application/vnd.github.v3+json" },
-    });
-
-    if (!listRes.ok) {
-      return cachedSkills ?? [];
-    }
-
-    const files: Array<{ name: string; download_url: string }> =
-      await listRes.json();
-
-    const skillFiles = files.filter(
-      (f) => f.name.endsWith(".mdx") && f.name !== "overview.mdx",
+    const buckets = await Promise.all(
+      SOURCES.map(({target, api}) => fetchOne(target, api)),
     );
-
-    const skills = await Promise.all(
-      skillFiles.map(async (file) => {
-        const slug = file.name.replace(".mdx", "");
-        const rawRes = await fetch(file.download_url);
-        const text = await rawRes.text();
-        const { data, content } = matter(text);
-
-        let integrations: SkillIntegration[] = [];
-        try {
-          if (data.integrations) {
-            integrations =
-              typeof data.integrations === "string"
-                ? JSON.parse(data.integrations)
-                : data.integrations;
-          }
-        } catch {
-          integrations = [];
-        }
-
-        return {
-          slug,
-          title: data.title ?? slug,
-          shortDescription: data.description ?? "",
-          category: data.category ?? "General",
-          integrations,
-          content: content.trim(),
-        } satisfies LibrarySkill;
-      }),
-    );
-
-    cachedSkills = skills;
+    cachedSkills = buckets.flat();
     cacheTime = Date.now();
-    return skills;
+    return cachedSkills;
   } catch {
     return cachedSkills ?? [];
   }

@@ -8,6 +8,7 @@ import {execRoutes} from './exec';
 import {filesRoutes} from './files';
 import {utilsRoutes} from './utils';
 import {folderRoutes} from './folders';
+import {skillsRoutes} from './skills';
 import {shellRoutes} from './shell';
 import {isSlotEnabled} from './manifest-builder';
 import {getPreferences} from '@/config/preferences';
@@ -55,6 +56,10 @@ export async function buildServer(opts: ApiServerOptions): Promise<FastifyInstan
 	// Folder management — used by the webapp's per-gateway settings page to
 	// add/remove local paths or clone GitHub URLs into the workspace.
 	await app.register(folderRoutes, {prefix: '/api/folders'});
+
+	// Skill management — used by the webapp's per-gateway settings page to
+	// install/remove skills (instruction sets the agent can opt into).
+	await app.register(skillsRoutes, {prefix: '/api/skills'});
 
 	// General-purpose shell PTY for the webapp's Terminal tab.
 	await app.register(shellRoutes, {prefix: '/api/shell'});

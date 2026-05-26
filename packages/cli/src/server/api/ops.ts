@@ -8,13 +8,13 @@ const startedAt = Date.now();
 
 export const opsRoutes: FastifyPluginAsync = async (app) => {
 	app.get('/manifest', async (_req, reply) => {
-		const {manifest, etag} = buildManifest();
+		const {manifest, etag} = await buildManifest();
 		reply.header('etag', etag);
 		return manifest;
 	});
 
 	app.get('/healthz', async () => {
-		const {etag} = buildManifest();
+		const {etag} = await buildManifest();
 		return {
 			status: 'ok' as const,
 			manifestEtag: etag,

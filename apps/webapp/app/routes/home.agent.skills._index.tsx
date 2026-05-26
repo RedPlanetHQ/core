@@ -4,7 +4,12 @@ import {
   type ActionFunctionArgs,
   type LoaderFunctionArgs,
 } from "@remix-run/node";
-import { useFetcher, useLoaderData, useNavigate } from "@remix-run/react";
+import {
+  useFetcher,
+  useLoaderData,
+  useNavigate,
+  useSearchParams,
+} from "@remix-run/react";
 import { Library, LoaderCircle, Plus } from "lucide-react";
 import { PageHeader } from "~/components/common/page-header";
 import { useSkills } from "~/hooks/use-skills";
@@ -14,8 +19,13 @@ import { Card, CardContent } from "~/components/ui/card";
 import { prisma } from "~/db.server";
 import { getUser, getWorkspaceId } from "~/services/session.server";
 import { createSkill, deleteSkill } from "~/services/skills.server";
-import { getLibrarySkills, groupSkillsByCategory } from "~/lib/skills-library";
+import {
+  getLibrarySkills,
+  groupSkillsByCategory,
+  type LibrarySkill,
+} from "~/lib/skills-library";
 import { ClientOnly } from "remix-utils/client-only";
+import { SelectGatewayDialog } from "~/components/skills/select-gateway-dialog";
 
 export const meta = () => [{ title: "Skills" }];
 
@@ -23,15 +33,22 @@ export async function loader({ request }: LoaderFunctionArgs) {
   const user = await getUser(request);
   const workspaceId = await getWorkspaceId(request, user?.id as string);
 
-  const libraryInstalls = await prisma.document.findMany({
-    where: {
-      workspaceId: workspaceId as string,
-      type: "skill",
-      source: "library",
-      deleted: null,
-    },
-    select: { id: true, metadata: true },
-  });
+  const [libraryInstalls, gateways] = await Promise.all([
+    prisma.document.findMany({
+      where: {
+        workspaceId: workspaceId as string,
+        type: "skill",
+        source: "library",
+        deleted: null,
+      },
+      select: { id: true, metadata: true },
+    }),
+    prisma.gateway.findMany({
+      where: { workspaceId: workspaceId as string },
+      select: { id: true, name: true, status: true, lastSeenAt: true },
+      orderBy: { createdAt: "desc" },
+    }),
+  ]);
 
   const installedSlugs: Record<string, string> = {};
   for (const doc of libraryInstalls) {
@@ -43,7 +60,7 @@ export async function loader({ request }: LoaderFunctionArgs) {
 
   const librarySkills = await getLibrarySkills();
 
-  return json({ installedSlugs, librarySkills });
+  return json({ installedSlugs, librarySkills, gateways });
 }
 
 export async function action({ request }: ActionFunctionArgs) {
@@ -77,17 +94,66 @@ export async function action({ request }: ActionFunctionArgs) {
     return json({ success: true });
   }
 
+  if (intent === "install-gateway-skill") {
+    const slug = formData.get("slug") as string;
+    const gatewayId = formData.get("gatewayId") as string;
+    if (!slug || !gatewayId) {
+      return json({ error: "slug and gatewayId required" }, { status: 400 });
+    }
+
+    const librarySkills = await getLibrarySkills();
+    const skill = librarySkills.find(
+      (s) => s.slug === slug && s.target === "gateway",
+    );
+    if (!skill) return json({ error: "Skill not found" }, { status: 404 });
+
+    const gw = await prisma.gateway.findFirst({
+      where: { id: gatewayId, workspaceId: workspaceId as string },
+      select: { id: true },
+    });
+    if (!gw) return json({ error: "Gateway not found" }, { status: 404 });
+
+    // Build the SKILL.md content (frontmatter from the .mdx + body).
+    const skillMd = `---\nname: ${slug}\ndescription: ${skill.shortDescription}\n${
+      skill.allowedTools?.length
+        ? `allowed-tools: [${skill.allowedTools.join(", ")}]\n`
+        : ""
+    }---\n\n${skill.content}\n`;
+
+    const { gatewayApi } = await import("~/services/gateway/transport.server");
+    const { status, body } = await gatewayApi<{
+      ok: boolean;
+      skill?: unknown;
+      error?: string;
+    }>(gatewayId, "/api/skills/install", {
+      method: "POST",
+      body: JSON.stringify({
+        source: "files",
+        name: slug,
+        files: { "SKILL.md": skillMd },
+      }),
+      timeoutMs: 60_000,
+    });
+    if (status >= 400 || !body.ok) {
+      return json(
+        { error: body.error ?? `Gateway error (${status})` },
+        { status: status >= 400 ? status : 502 },
+      );
+    }
+    return json({ success: true, gatewayId });
+  }
+
   return json({ error: "Invalid intent" }, { status: 400 });
 }
 
 export default function Skills() {
-  const { installedSlugs: loaderInstalledSlugs, librarySkills } =
+  const { installedSlugs: loaderInstalledSlugs, librarySkills, gateways } =
     useLoaderData<typeof loader>();
-  const libraryByCategory = groupSkillsByCategory(librarySkills);
   const navigate = useNavigate();
   const { skills, hasMore, loadMore, isLoading, isInitialLoad, reset } =
     useSkills();
   const fetcher = useFetcher<{ success: boolean }>();
+  const [searchParams] = useSearchParams();
 
   // Optimistically track pending operations
   const [activeTab, setActiveTab] = useState<"my-skills" | "library">(
@@ -95,9 +161,19 @@ export default function Skills() {
   );
   const [pendingInstall, setPendingInstall] = useState<string | null>(null);
   const [pendingRemove, setPendingRemove] = useState<string | null>(null);
+  const [dialogSkill, setDialogSkill] = useState<LibrarySkill | null>(null);
 
   // Merge loader state with optimistic updates
   const installedSlugs = { ...loaderInstalledSlugs };
+
+  const targetFilter = searchParams.get("target") as
+    | "cloud"
+    | "gateway"
+    | null;
+  const filteredLibrary = targetFilter
+    ? librarySkills.filter((s) => s.target === targetFilter)
+    : librarySkills;
+  const libraryByCategory = groupSkillsByCategory(filteredLibrary);
 
   const handleInstall = (slug: string) => {
     setPendingInstall(slug);
@@ -113,6 +189,23 @@ export default function Skills() {
       { intent: "uninstall-library-skill", skillId },
       { method: "post" },
     );
+  };
+
+  const handleGatewayInstall = (skill: LibrarySkill) => {
+    setDialogSkill(skill);
+  };
+
+  const installOnGateway = async (gatewayId: string) => {
+    if (!dialogSkill) return;
+    const fd = new FormData();
+    fd.set("intent", "install-gateway-skill");
+    fd.set("slug", dialogSkill.slug);
+    fd.set("gatewayId", gatewayId);
+    const res = await fetch("", { method: "POST", body: fd });
+    if (!res.ok) {
+      const body = (await res.json().catch(() => ({}))) as { error?: string };
+      throw new Error(body.error ?? `Failed (${res.status})`);
+    }
   };
 
   // When install/uninstall completes, clear pending state and re-sync My Skills list
@@ -213,7 +306,11 @@ export default function Skills() {
                               installedSkillId={installedSlugs[skill.slug]}
                               isInstalling={pendingInstall === skill.slug}
                               isRemoving={pendingRemove === skill.slug}
-                              onInstall={() => handleInstall(skill.slug)}
+                              onInstall={() =>
+                                skill.target === "gateway"
+                                  ? handleGatewayInstall(skill)
+                                  : handleInstall(skill.slug)
+                              }
                               onUninstall={() =>
                                 handleUninstall(
                                   installedSlugs[skill.slug],
@@ -232,6 +329,21 @@ export default function Skills() {
           </ClientOnly>
         )}
       </div>
+
+      <SelectGatewayDialog
+        open={!!dialogSkill}
+        onOpenChange={(open) => !open && setDialogSkill(null)}
+        gateways={gateways.map((g) => ({
+          id: g.id,
+          name: g.name,
+          status: g.status as "CONNECTED" | "DISCONNECTED",
+          lastSeenAt: g.lastSeenAt
+            ? new Date(g.lastSeenAt).toISOString()
+            : null,
+        }))}
+        onInstall={installOnGateway}
+        skillTitle={dialogSkill?.title ?? ""}
+      />
     </div>
   );
 }
