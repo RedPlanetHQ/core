@@ -1,7 +1,9 @@
 export interface SkillRef {
   id: string;
   title: string;
-  metadata: Record<string, unknown> | null;
+  // Prisma surfaces `metadata` as a JsonValue (scalars, arrays, objects, null).
+  // SkillRef accepts that whole shape and call-sites narrow as needed.
+  metadata: unknown;
 }
 
 export type MessageChannel = "whatsapp" | "email" | "slack" | "telegram";

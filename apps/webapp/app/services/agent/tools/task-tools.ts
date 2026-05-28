@@ -27,7 +27,7 @@ import {
 import { upsertPageSection } from "~/services/coding-task.server";
 import { createEmptyConversation } from "~/services/conversation.server";
 import { logger } from "~/services/logger.service";
-import type { TaskStatus } from "@prisma/client";
+import { Prisma, type TaskStatus } from "@prisma/client";
 import { UserTypeEnum } from "@core/types";
 import { getTaskPhase, setTaskPhaseInMetadata } from "~/services/task.phase";
 import { env } from "~/env.server";
@@ -650,12 +650,12 @@ REPARENTING: Pass newParentId to move a task under a different parent (or null t
 
           if (status) {
             if (isRecurring) {
-              // Recurring tasks: silently map Done to Review, allow other statuses
-              const effectiveStatus = status === "Done" ? "Review" : status;
+              // Recurring tasks: schema only allows Waiting | Review, so no
+              // Done-to-Review mapping is needed here.
               try {
                 await changeTaskStatus(
                   resolvedTaskId,
-                  effectiveStatus as TaskStatus,
+                  status as TaskStatus,
                   workspaceId,
                   userId,
                   "agent",
@@ -727,7 +727,7 @@ REPARENTING: Pass newParentId to move a task under a different parent (or null t
             // create a new one if none exists. Then insert the reason as a
             // userType: User row so the agent's next turn picks it up like
             // a normal user reply and resumes the conversation.
-            let conversationId =
+            let conversationId: string | null =
               task.conversationIds[task.conversationIds.length - 1] ?? null;
 
             if (conversationId) {
@@ -818,7 +818,10 @@ The task's status does NOT change — only the phase metadata. You can continue 
             await prisma.task.update({
               where: { id: currentTaskId },
               data: {
-                metadata: setTaskPhaseInMetadata(task.metadata, "prep"),
+                metadata: setTaskPhaseInMetadata(
+                  task.metadata,
+                  "prep",
+                ) as Prisma.InputJsonValue,
               },
             });
 
@@ -852,7 +855,10 @@ The task's status does NOT change. If your plan involves splitting into subtasks
             await prisma.task.update({
               where: { id: currentTaskId },
               data: {
-                metadata: setTaskPhaseInMetadata(task.metadata, "execute"),
+                metadata: setTaskPhaseInMetadata(
+                  task.metadata,
+                  "execute",
+                ) as Prisma.InputJsonValue,
               },
             });
 

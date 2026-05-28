@@ -42,7 +42,7 @@ export function DocumentEditorView({ document, editable: defaultEditable }: Docu
       },
     },
     onUpdate({ editor: updatedEditor }) {
-      setContent(updatedEditor.storage.markdown.getMarkdown());
+      setContent(updatedEditor.storage.markdown?.getMarkdown() ?? "");
     },
   });
 

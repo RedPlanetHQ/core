@@ -15,7 +15,10 @@ import { createTool } from "@mastra/core/tools";
 
 import { type SkillRef } from "../types";
 import { type ModelConfig } from "~/services/llm-provider.server";
-import { type OrchestratorTools } from "../executors/base";
+import {
+  type OrchestratorTools,
+  type GatewayAgentInfo,
+} from "../executors/base";
 import { type Trigger, type DecisionContext } from "../types/decision-agent";
 import { createThinkAgent } from "./decision";
 import { logger } from "../../logger.service";
@@ -385,12 +388,23 @@ export async function createCoreAgents(
   } = params;
 
   // Load gateways for subagent creation
-  const gateways = executorTools
+  const gateways: GatewayAgentInfo[] = executorTools
     ? await executorTools.getGateways(workspaceId)
-    : await prisma.gateway.findMany({
-        where: { workspaceId },
-        select: { id: true, name: true, status: true, description: true },
-      });
+    : (
+        await prisma.gateway.findMany({
+          where: { workspaceId },
+          select: { id: true, name: true, status: true, description: true },
+        })
+      ).map((g) => ({
+        id: g.id,
+        name: g.name,
+        description: g.description ?? "",
+        baseUrl: "",
+        tools: [],
+        platform: null,
+        hostname: null,
+        status: g.status as "CONNECTED" | "DISCONNECTED",
+      }));
 
   const [reader, writer, { agentList: gatewayAgents }] = await Promise.all([
     createOrchestratorAgent(

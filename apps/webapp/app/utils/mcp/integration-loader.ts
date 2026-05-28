@@ -9,6 +9,8 @@ import {
   type CustomMcpTransportStrategy,
 } from "./custom-mcp-config";
 
+export type { CustomMcpIntegration };
+
 export interface CustomMcpAccount {
   id: string;
   accountId: string;

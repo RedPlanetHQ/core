@@ -6,7 +6,9 @@ import {
 import { useCallback } from "react";
 import { useRevalidator } from "@remix-run/react";
 import { useTypedLoaderData } from "remix-typedjson";
+import type { LoaderData } from "~/utils/loader-data";
 
+import { Prisma } from "@prisma/client";
 import { getWorkspaceId, requireUser } from "~/services/session.server";
 import { prisma } from "~/db.server";
 import {
@@ -127,7 +129,7 @@ export async function action({ request }: ActionFunctionArgs) {
       where: { id: user.id },
       data: {
         onboardingComplete: true,
-        metadata: existingMetadata,
+        metadata: existingMetadata as Prisma.InputJsonValue,
       },
     });
   }
@@ -136,7 +138,9 @@ export async function action({ request }: ActionFunctionArgs) {
 }
 
 export default function OnboardingChat() {
-  const data = useTypedLoaderData<typeof loader>();
+  const data = useTypedLoaderData<typeof loader>() as unknown as LoaderData<
+    typeof loader
+  >;
   const revalidator = useRevalidator();
 
   // After every streamed turn, re-run the loader. If the agent has

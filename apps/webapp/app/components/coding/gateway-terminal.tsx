@@ -97,7 +97,6 @@ export function GatewayTerminal({
         theme: xtermTheme,
         allowTransparency: false,
         scrollback: 5000,
-        overviewRulerWidth: 0,
         minimumContrastRatio: theme === "light" ? 4.5 : 1,
       });
 

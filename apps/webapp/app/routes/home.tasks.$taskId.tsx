@@ -12,6 +12,7 @@ import {
   useNavigation,
 } from "@remix-run/react";
 import { typedjson, useTypedLoaderData } from "remix-typedjson";
+import type { LoaderData } from "~/utils/loader-data";
 import { ClientOnly } from "remix-utils/client-only";
 import { LoaderCircle, Trash2, MessageSquare } from "lucide-react";
 import {
@@ -362,8 +363,8 @@ export async function action({ request, params }: ActionFunctionArgs) {
 // ─── Layout ───────────────────────────────────────────────────────────────────
 
 function TaskDetailLayout() {
-  const { task, hasCoding, runs, integrationAccountMap } =
-    useTypedLoaderData<typeof loader>();
+  const { task, runs, integrationAccountMap } =
+    useTypedLoaderData<typeof loader>() as unknown as LoaderData<typeof loader>;
   const navigate = useNavigate();
   const location = useLocation();
   const navigation = useNavigation();

@@ -90,7 +90,10 @@ export class AnthropicBatchProvider extends BaseBatchProvider {
           const batchResults =
             await this.anthropicClient.messages.batches.results(params.batchId);
 
-          results = batchResults.map((result) => {
+          // Anthropic SDK returns a JSONL decoder; collect to array first.
+          const collected: any[] = [];
+          for await (const r of batchResults) collected.push(r);
+          results = collected.map((result: any) => {
             try {
               if (result.result.type === "succeeded") {
                 const message = result.result.message;

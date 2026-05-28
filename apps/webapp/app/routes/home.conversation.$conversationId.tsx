@@ -1,8 +1,8 @@
 import {
   type ActionFunctionArgs,
   type LoaderFunctionArgs,
-  type MetaFunction,
 } from "@remix-run/server-runtime";
+import { type MetaFunction } from "@remix-run/node";
 import { Memory } from "@mastra/memory";
 import { useParams, useNavigate, useFetcher, Link } from "@remix-run/react";
 
@@ -16,6 +16,7 @@ import { getIntegrationAccounts } from "~/services/integrationAccount.server";
 import { getAvailableModels } from "~/services/llm-provider.server";
 import { ConversationView } from "~/components/conversation";
 import { useTypedLoaderData } from "remix-typedjson";
+import type { LoaderData } from "~/utils/loader-data";
 
 import { toAISdkV5Messages } from "@mastra/ai-sdk/ui";
 
@@ -87,7 +88,7 @@ export default function SingleConversation() {
     integrationAccountMap,
     integrationFrontendMap,
     models,
-  } = useTypedLoaderData<typeof loader>();
+  } = useTypedLoaderData<typeof loader>() as unknown as LoaderData<typeof loader>;
   const { conversationId } = useParams();
 
   if (typeof window === "undefined") return null;

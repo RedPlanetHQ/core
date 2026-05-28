@@ -100,25 +100,29 @@ function getTemporalDateRange(ctx: HandlerContext): {
 
   switch (temporal.type) {
     case "recent":
-      const days = temporal.days;
+      const days = temporal.days ?? 7;
       const startTime = new Date();
       startTime.setDate(startTime.getDate() - days);
       return { startTime };
 
     case "range":
       return {
-        startTime: new Date(temporal.startDate),
-        endTime: new Date(temporal.endDate),
+        startTime: temporal.startDate
+          ? new Date(temporal.startDate)
+          : undefined,
+        endTime: temporal.endDate ? new Date(temporal.endDate) : undefined,
       };
 
     case "before":
       return {
-        endTime: new Date(temporal.endDate),
+        endTime: temporal.endDate ? new Date(temporal.endDate) : undefined,
       };
 
     case "after":
       return {
-        startTime: new Date(temporal.startDate),
+        startTime: temporal.startDate
+          ? new Date(temporal.startDate)
+          : undefined,
       };
 
     case "all":

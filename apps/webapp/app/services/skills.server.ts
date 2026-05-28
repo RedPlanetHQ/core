@@ -1,3 +1,4 @@
+import { Prisma } from "@prisma/client";
 import { prisma } from "~/db.server";
 
 export interface UpdateSkillParams {
@@ -192,7 +193,7 @@ export const updateSkill = async (
         metadata: {
           ...existingMeta,
           ...metadataUpdate,
-        },
+        } as Prisma.InputJsonValue,
       }),
       editedBy: userId,
     },

@@ -31,7 +31,7 @@ export class FolderService {
       return { folders: [] };
     }
 
-    return user.folders as FolderStructure;
+    return user.folders as unknown as FolderStructure;
   }
 
   /**

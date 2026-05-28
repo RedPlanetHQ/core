@@ -37,6 +37,7 @@ export default defineConfig({
       })),
       prismaExtension({
         schema: "prisma/schema.prisma",
+        mode: "legacy",
       }),
     ],
   },

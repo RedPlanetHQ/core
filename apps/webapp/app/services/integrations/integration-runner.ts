@@ -244,7 +244,9 @@ export class IntegrationRunner {
       {
         event: IntegrationEventType.SETUP,
         eventBody,
-        integrationDefinition,
+        integrationDefinition: integrationDefinition as unknown as NonNullable<
+          IntegrationEventPayload["integrationDefinition"]
+        >,
       },
       slug,
     );
@@ -260,7 +262,9 @@ export class IntegrationRunner {
       {
         event: IntegrationEventType.IDENTIFY,
         eventBody: webhookData,
-        integrationDefinition,
+        integrationDefinition: integrationDefinition as unknown as NonNullable<
+          IntegrationEventPayload["integrationDefinition"]
+        >,
       },
       slug,
     );
@@ -276,8 +280,10 @@ export class IntegrationRunner {
       {
         event: IntegrationEventType.GET_TOOLS,
         eventBody: {},
-        config: config || {},
-        integrationDefinition,
+        config: (config || {}) as IntegrationEventPayload["config"],
+        integrationDefinition: integrationDefinition as unknown as NonNullable<
+          IntegrationEventPayload["integrationDefinition"]
+        >,
       },
       slug,
     );
@@ -294,8 +300,13 @@ export class IntegrationRunner {
       {
         event: IntegrationEventType.CALL_TOOL,
         eventBody: { name: toolName, arguments: toolArguments },
-        config: { ...config, timezone: timezone || "UTC" },
-        integrationDefinition,
+        config: {
+          ...config,
+          timezone: timezone || "UTC",
+        } as unknown as IntegrationEventPayload["config"],
+        integrationDefinition: integrationDefinition as unknown as NonNullable<
+          IntegrationEventPayload["integrationDefinition"]
+        >,
       },
       slug,
     );
@@ -311,9 +322,11 @@ export class IntegrationRunner {
       {
         event: IntegrationEventType.PROCESS,
         eventBody: eventData,
-        config: config || {},
-        integrationDefinition,
-        state,
+        config: (config || {}) as IntegrationEventPayload["config"],
+        integrationDefinition: integrationDefinition as unknown as NonNullable<
+          IntegrationEventPayload["integrationDefinition"]
+        >,
+        state: state as Record<string, string> | undefined,
       },
       slug,
     );

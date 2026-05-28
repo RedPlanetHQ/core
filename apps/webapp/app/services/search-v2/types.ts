@@ -375,6 +375,7 @@ export const ASPECT_DEFINITIONS: Record<StatementAspect, string> = {
     "Specific occurrences with timestamps - meetings, milestones, incidents",
   Problem: "Blockers, issues, challenges, obstacles, difficulties",
   Relationship: "Connections between people - who knows whom, team dynamics",
+  Task: "Trackable units of work - todos, action items, deliverables",
 };
 
 /**

@@ -10,6 +10,7 @@ import { Badge } from "~/components/ui/badge";
 import { Button } from "~/components/ui/button";
 import { Plug, Trash2 } from "lucide-react";
 import type { CustomMcpIntegration as McpIntegration } from "~/utils/mcp/custom-mcp-config";
+export type { McpIntegration };
 
 interface CustomMcpCardProps {
   integration: McpIntegration;

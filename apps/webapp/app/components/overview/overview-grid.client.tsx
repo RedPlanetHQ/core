@@ -1,5 +1,9 @@
 import { forwardRef, useImperativeHandle, useState } from "react";
-import GridLayout, { useContainerWidth, type Layout } from "react-grid-layout";
+import GridLayout, {
+  type Layout,
+  type LayoutItem,
+} from "react-grid-layout/legacy";
+import { useContainerWidth } from "react-grid-layout";
 import "react-grid-layout/css/styles.css";
 import type { OverviewCell, WidgetOption } from "./types";
 import { WidgetPicker } from "./widget-picker";
@@ -31,7 +35,7 @@ export const OverviewGrid = forwardRef<OverviewGridHandle, Props>(function Overv
   const [selectedCellId, setSelectedCellId] = useState<string | null>(null);
   const { width, containerRef, mounted } = useContainerWidth();
 
-  const layout: Layout[] = cells.map((cell) => ({
+  const layout: LayoutItem[] = cells.map((cell) => ({
     i: cell.id,
     x: cell.x,
     y: cell.y,
@@ -42,9 +46,9 @@ export const OverviewGrid = forwardRef<OverviewGridHandle, Props>(function Overv
     minH: 1,
   }));
 
-  const handleLayoutChange = (_layout: Layout[]) => {
+  const handleLayoutChange = (newLayout: Layout) => {
     const updated = cells.map((cell) => {
-      const item = _layout.find((l) => l.i === cell.id);
+      const item = newLayout.find((l) => l.i === cell.id);
       if (!item) return cell;
       return { ...cell, x: item.x, y: item.y, w: item.w, h: item.h };
     });
@@ -64,6 +68,7 @@ export const OverviewGrid = forwardRef<OverviewGridHandle, Props>(function Overv
       widgetSlug: null,
       integrationSlug: null,
       integrationAccountId: null,
+      config: null,
     };
     const updated = [...cells, newCell];
     setCells(updated);

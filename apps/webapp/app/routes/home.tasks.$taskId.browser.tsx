@@ -1,6 +1,7 @@
 import { redirect, type LoaderFunctionArgs } from "@remix-run/node";
 import { Outlet, useParams } from "@remix-run/react";
 import { typedjson, useTypedLoaderData } from "remix-typedjson";
+import type { LoaderData } from "~/utils/loader-data";
 import { ClientOnly } from "remix-utils/client-only";
 import { useEffect } from "react";
 import { Globe } from "lucide-react";
@@ -33,7 +34,8 @@ export async function loader({ request, params }: LoaderFunctionArgs) {
 }
 
 function BrowserLayout() {
-  const { sessions } = useTypedLoaderData<typeof loader>();
+  const { sessions } =
+    useTypedLoaderData<typeof loader>() as unknown as LoaderData<typeof loader>;
   const { taskId } = useParams<{ taskId: string }>();
   const { setOpen: setSidebarOpen } = useSidebar();
 

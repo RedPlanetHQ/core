@@ -1,3 +1,4 @@
+import { Prisma } from "@prisma/client";
 import { prisma } from "~/db.server";
 import { createAgent, resolveModelString } from "~/lib/model.server";
 
@@ -41,7 +42,12 @@ export async function saveCustomPersonality(
 
   await prisma.workspace.update({
     where: { id: workspaceId },
-    data: { metadata: { ...metadata, customPersonalities: existing } },
+    data: {
+      metadata: {
+        ...metadata,
+        customPersonalities: existing,
+      } as unknown as Prisma.InputJsonValue,
+    },
   });
 }
 
@@ -63,7 +69,7 @@ export async function deleteCustomPersonality(
       metadata: {
         ...metadata,
         customPersonalities: existing.filter((p) => p.id !== personalityId),
-      },
+      } as unknown as Prisma.InputJsonValue,
     },
   });
 }

@@ -7,6 +7,7 @@ import {
   useRevalidator,
 } from "@remix-run/react";
 import { typedjson, useTypedLoaderData } from "remix-typedjson";
+import type { LoaderData } from "~/utils/loader-data";
 import { ClientOnly } from "remix-utils/client-only";
 import { useCallback, useEffect, useState } from "react";
 import { Terminal, Plus } from "lucide-react";
@@ -64,7 +65,7 @@ function CodingLayout() {
     sessions: initialSessions,
     taskTitle,
     taskDescription,
-  } = useTypedLoaderData<typeof loader>();
+  } = useTypedLoaderData<typeof loader>() as unknown as LoaderData<typeof loader>;
   const { taskId, sessionId } = useParams<{
     taskId: string;
     sessionId?: string;

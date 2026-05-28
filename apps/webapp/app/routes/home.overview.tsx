@@ -9,6 +9,7 @@ import { typedjson, useTypedLoaderData } from "remix-typedjson";
 import { ClientOnly } from "remix-utils/client-only";
 import { LoaderCircle, Plus } from "lucide-react";
 
+import { Prisma } from "@prisma/client";
 import { requireUser, requireWorkpace } from "~/services/session.server";
 import { prisma } from "~/db.server";
 import {
@@ -71,7 +72,12 @@ export async function action({ request }: ActionFunctionArgs) {
     const existingMeta = (existing?.metadata ?? {}) as Record<string, unknown>;
     await prisma.workspace.update({
       where: { id: workspace.id },
-      data: { metadata: { ...existingMeta, overviewLayout: cells } },
+      data: {
+        metadata: {
+          ...existingMeta,
+          overviewLayout: cells,
+        } as unknown as Prisma.InputJsonValue,
+      },
     });
     return json({ ok: true });
   }

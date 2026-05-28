@@ -113,27 +113,38 @@ export function createUIStreamWithApprovals(
     version: "v6",
   });
 
+  type ApprovalChunk = {
+    type?: string;
+    data?: {
+      toolCallId?: string;
+      toolName?: string;
+      input?: unknown;
+      args?: unknown;
+    };
+  };
+
   return mastraStream.pipeThrough(
     new TransformStream({
       async transform(chunk, controller) {
+        const c = chunk as ApprovalChunk;
         if (
-          chunk?.type === "data-tool-call-approval" &&
-          chunk?.data?.toolCallId
+          c?.type === "data-tool-call-approval" &&
+          c?.data?.toolCallId
         ) {
           const approvalId = generateId();
           logger.info(`[conversation] tool-call-approval:`, {
-            toolCallId: chunk.data.toolCallId,
-            toolName: chunk.data.toolName,
+            toolCallId: c.data.toolCallId,
+            toolName: c.data.toolName,
           });
           if (onApprovalDetected) {
-            await onApprovalDetected(chunk.data.toolCallId, approvalId);
+            await onApprovalDetected(c.data.toolCallId, approvalId);
           }
           controller.enqueue({
             type: "tool-approval-request",
             approvalId,
-            toolCallId: chunk.data.toolCallId,
-            toolName: chunk.data.toolName,
-            input: chunk.data.input ?? chunk.data.args,
+            toolCallId: c.data.toolCallId,
+            toolName: c.data.toolName,
+            input: c.data.input ?? c.data.args,
           });
         } else {
           controller.enqueue(chunk);
@@ -159,9 +170,9 @@ export function streamToUIResponse(
         transform(chunk, controller) {
           controller.enqueue(chunk);
         },
-        cancel() {
-          onCancel();
-        },
+        // `cancel` isn't part of the standard Transformer type but the DOM
+        // implementation invokes it when the readable side is cancelled.
+        ...({ cancel: () => onCancel() } as object),
       }),
     );
   }

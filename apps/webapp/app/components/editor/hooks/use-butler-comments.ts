@@ -13,7 +13,7 @@ export function useButlerComments(
       node.forEach((child) => {
         if (!(child instanceof Y.XmlElement)) return;
         if (child.getAttribute("conversationId") === conversationId) {
-          child.setAttribute("resolved", resolved);
+          child.setAttribute("resolved", String(resolved));
         }
         walk(child);
       });

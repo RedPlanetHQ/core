@@ -2,7 +2,7 @@ import { type ChildProcess, type IOType } from "node:child_process";
 import process from "node:process";
 import { type Stream } from "node:stream";
 
-import { type Transport } from "@modelcontextprotocol/sdk/shared/transport";
+import { type Transport } from "@modelcontextprotocol/sdk/shared/transport.js";
 import {
   type JSONRPCMessage,
   JSONRPCMessageSchema,

@@ -1,6 +1,7 @@
 import { json, redirect, type ActionFunctionArgs, type LoaderFunctionArgs } from "@remix-run/node";
 import { useFetcher } from "@remix-run/react";
 import { useTypedLoaderData } from "remix-typedjson";
+import type { LoaderData } from "~/utils/loader-data";
 import { requireUser } from "~/services/session.server";
 import { prisma } from "~/db.server";
 import { OnboardingAgentName } from "~/components/onboarding/onboarding-agent-name";
@@ -57,7 +58,9 @@ export async function action({ request }: ActionFunctionArgs) {
 }
 
 export default function OnboardingName() {
-  const { workspaceId, defaultName, defaultSlug } = useTypedLoaderData<typeof loader>();
+  const { workspaceId, defaultName, defaultSlug } = useTypedLoaderData<
+    typeof loader
+  >() as LoaderData<typeof loader>;
   const fetcher = useFetcher();
 
   const handleComplete = (name: string, slug: string) => {

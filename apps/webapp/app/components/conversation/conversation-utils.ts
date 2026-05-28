@@ -1,4 +1,6 @@
-import type { UIMessagePart } from "ai";
+import type { UIMessagePart, UIDataTypes, UITools } from "ai";
+
+type AnyUIMessagePart = UIMessagePart<UIDataTypes, UITools>;
 
 // ── Mastra data structures ────────────────────────────────────────────────────
 
@@ -84,7 +86,7 @@ export interface AgentToolPart extends ConversationToolPart {
 }
 
 export type ExtendedPart =
-  | UIMessagePart
+  | AnyUIMessagePart
   | StepStartPart
   | DataToolAgentPart
   | AgentToolPart;
@@ -394,12 +396,17 @@ export const findPendingApprovals = (
         // Expand take_action: show only nested tools without results as separate cards
         if (toolName === "take_action" || toolName === "agent-take_action") {
           const nested = getNestedPartsFromOutput(part.output).filter(
-            (np): np is ConversationToolPart =>
-              np.type.includes("tool-") &&
-              np.state !== "output-available" &&
-              np.state !== "output-error" &&
-              np.state !== "output-denied" &&
-              np.state !== "approval-responded",
+            (np): np is ConversationToolPart => {
+              if (np.type === "text") return false;
+              const tool = np as ConversationToolPart;
+              return (
+                tool.type.includes("tool-") &&
+                tool.state !== "output-available" &&
+                tool.state !== "output-error" &&
+                tool.state !== "output-denied" &&
+                tool.state !== "approval-responded"
+              );
+            },
           );
           if (nested.length > 0) {
             // Each nested card borrows the parent approval id
@@ -478,7 +485,7 @@ export const getToolDisplayName = (toolType: string): string => {
  * Mastra streams subagent activity as separate "data-tool-agent" sibling parts
  * instead of nesting them inside the parent tool's output during streaming.
  */
-export const mergeAgentParts = (parts: UIMessagePart[]): ExtendedPart[] => {
+export const mergeAgentParts = (parts: AnyUIMessagePart[]): ExtendedPart[] => {
   const result: ExtendedPart[] = [];
   let lastAgentTool: AgentToolPart | null = null;
 

@@ -33,7 +33,7 @@ export const getIcon = (
       return (
         <div
           className="flex shrink-0 items-center"
-          style={{ fontSize: size * 0.8 }}
+          style={{ fontSize: (size ?? 16) * 0.8 }}
         >
           {iconData.emoji}
         </div>

@@ -10,6 +10,10 @@ interface OnboardingAgentNameProps {
   workspaceId: string;
   onComplete: (name: string, slug: string) => void;
   isSubmitting?: boolean;
+  // Optional "regenerate name" flow used by the modal entry point.
+  onGenerateName?: (currentName: string, previousNames: string[]) => void;
+  generatedName?: string;
+  isGenerating?: boolean;
 }
 
 type AvailabilityState = "idle" | "checking" | "available" | "taken";

@@ -19,7 +19,10 @@ import { ArrowUpRight, Check, Loader2, RotateCcw } from "lucide-react";
 import { Button, buttonVariants } from "../ui";
 import { cn } from "~/lib/utils";
 import { ConversationItem, ConversationTextarea } from "../conversation";
-import { hasNeedsApprovalDeep } from "../conversation/conversation-utils";
+import {
+  hasNeedsApprovalDeep,
+  type ConversationToolPart,
+} from "../conversation/conversation-utils";
 
 interface ConversationPart {
   type: string;
@@ -216,7 +219,7 @@ export function ConversationPopover({
     .find((message) => message.role === "assistant");
 
   const needsApproval = lastAssistant?.parts
-    ? hasNeedsApprovalDeep(lastAssistant.parts)
+    ? hasNeedsApprovalDeep(lastAssistant.parts as ConversationToolPart[])
     : false;
 
   const handleToolApprovalResponse = useCallback(

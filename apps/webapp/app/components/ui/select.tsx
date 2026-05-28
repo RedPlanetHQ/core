@@ -18,7 +18,7 @@ const SelectValue = SelectPrimitive.Value;
 interface SelectTriggerProps extends React.ComponentPropsWithoutRef<
   typeof SelectPrimitive.Trigger
 > {
-  showIcon: boolean;
+  showIcon?: boolean;
 }
 
 const SelectTrigger = React.forwardRef<
