@@ -44,6 +44,7 @@ import { type ModelConfig } from "~/services/llm-provider.server";
 import { getPageContentAsHtml } from "~/services/hocuspocus/content.server";
 import { DirectOrchestratorTools } from "./executors";
 import { getTaskPhase } from "~/services/task.phase";
+import { BUILTIN_SKILLS } from "~/services/skills.builtin";
 import { fetchManifest } from "~/services/gateway/transport.server";
 import { deriveCapabilityTags } from "~/services/gateway/utils.server";
 
@@ -236,6 +237,7 @@ export async function buildAgentContext({
       isBackgroundExecution,
       isOnboardingMode,
       currentTaskId: linkedTask?.id,
+      currentTaskPhase: linkedTask ? getTaskPhase(linkedTask) : "execute",
       triggerChannel: triggerContext?.trigger.channel,
       triggerChannelId: triggerContext?.trigger.channelId,
       userEmail: user?.email ?? undefined,
@@ -359,23 +361,45 @@ export async function buildAgentContext({
     Scheduled tasks and notifications go via ${channelCtx.defaultChannelName} unless they say otherwise.
     </messaging_channels>`;
 
-  // Skills context
-  if (skills.length > 0) {
-    const skillsList = skills
-      .map((s: any, i: number) => {
-        const meta = s.metadata as Record<string, unknown> | null;
-        const desc = meta?.shortDescription as string | undefined;
+  // Skills context — merge DB-backed user skills with always-available
+  // built-ins. Built-ins use synthetic `builtin:*` IDs so get_skill can
+  // route the lookup correctly; the user's skills UI never sees them.
+  const skillEntries: Array<{
+    id: string;
+    title: string;
+    shortDescription?: string;
+  }> = [
+    ...skills.map((s: any) => {
+      const meta = s.metadata as Record<string, unknown> | null;
+      return {
+        id: s.id,
+        title: s.title,
+        shortDescription: meta?.shortDescription as string | undefined,
+      };
+    }),
+    ...BUILTIN_SKILLS.map((b) => ({
+      id: b.id,
+      title: b.title,
+      shortDescription: b.shortDescription,
+    })),
+  ];
+
+  if (skillEntries.length > 0) {
+    const skillsList = skillEntries
+      .map((s, i) => {
         const slug = s.title
           .toLowerCase()
           .replace(/\s+/g, "-")
           .replace(/[^a-z0-9-]/g, "");
-        return `${i + 1}. "${s.title}" (id: ${s.id}, slash: /${slug})${desc ? ` — when to use: ${desc}` : ""}`;
+        return `${i + 1}. "${s.title}" (id: ${s.id}, slash: /${slug})${s.shortDescription ? ` — when to use: ${s.shortDescription}` : ""}`;
       })
       .join("\n");
 
     systemPrompt += `
     <skills>
     User-defined skills are reusable workflows or knowledge. Each skill's description tells you when it applies — the title is just a label.
+
+    SKILL CHECK FIRST — on EVERY turn, before you delegate to gather_context / take_action / gateway, before you compose a message, before you call any tool: scan the list below against the user's current intent (and against the task title/description if a task is in context). If any skill matches by intent OR is named/implied in the text (e.g. "run brief skill" → load the "Brief from work" skill, "/brainstorm" → load that skill), call get_skill on it and follow its instructions. The skill is your script; it tells you what to delegate. Only proceed without a skill if NONE applies.
 
     PICK BY INTENT, NOT BY NAME. Match the user's current intent against what each skill is for:
     - Solving a bug / chasing an error / something broken → a debugging skill
@@ -384,10 +408,11 @@ export async function buildAgentContext({
     - Planning multi-step work / decomposing → a planning skill
     A skill applies if its purpose helps with what the user is actually trying to do, even if they never said the skill's name.
 
-    WHEN TO LOAD:
-    - The current intent matches a skill's purpose → call get_skill with the ID and follow it.
-    - The user invokes /skill-name (slash command) → load that one directly.
-    - The user names a skill by title → load it.
+    LOAD TRIGGERS:
+    - Current intent matches a skill's purpose → call get_skill and follow it.
+    - User invokes /skill-name (slash command) → load that one directly.
+    - User names a skill by title (e.g. "use the brief skill", "run X skill") → load it.
+    - Task title/description names or implies a skill → load it before delegating.
     - Multiple skills could apply → prefer the most specific. If none clearly fit, don't force one.
 
     Available skills:
@@ -458,109 +483,98 @@ export async function buildAgentContext({
       linkedTask.parentTaskId ??
       "";
 
-    const phase = getTaskPhase(linkedTask);
-    const taskMetadataForGuard =
-      (linkedTask.metadata as Record<string, unknown> | null) ?? {};
-    const prepDecided = taskMetadataForGuard.prepDecided === true;
-
-    // Belt-and-suspenders: if the agent already decided prep for this task
-    // (skipped to Ready or asked one question and went Waiting), do not render
-    // <task_prep> again. Treat as execute. The phase guard in canTransition is
-    // the primary protection against auto-loops; this prevents stale prep
-    // re-renders if a job was enqueued before the buffer expired.
-    const isPrepPhase = phase === "prep" && !prepDecided;
-    const isExecuting = phase === "execute" || prepDecided;
-
     const isSubtask = !!linkedTask.parentTaskId;
-    const taskMeta = (linkedTask.metadata as Record<string, unknown>) ?? {};
-    const taskSkillId = taskMeta.skillId as string | undefined;
 
-    // Try to find a matching skill for this task
-    let skillHint = "";
-    if (taskSkillId) {
-      const matchedSkill = skills.find((s: any) => s.id === taskSkillId);
-      if (matchedSkill) {
-        skillHint = `\nA skill is attached to this task: "${matchedSkill.title}" (ID: ${matchedSkill.id}). Call get_skill to load its instructions before starting.`;
-      }
-    }
+    // Execute-first lifecycle. New tasks land in execute mind. The agent
+    // self-promotes to plan mind via the enter_plan_mode tool when it
+    // genuinely can't see the shape of the work (ambiguous goal, missing
+    // context, open-ended brainstorm). In plan mind it gathers info and
+    // writes a plan into the task description, then calls exit_plan_mode
+    // to drop back into execute. The phase metadata tracks which block to
+    // render. <task_context> below covers Review/Done — inert states where
+    // the task is in scope but you're not actively driving it.
+    const phase = getTaskPhase(linkedTask);
+    const isActive = linkedTask.status !== "Review" && linkedTask.status !== "Done";
+    const isPlanning = isActive && phase === "prep";
+    const isExecuting = isActive && !isPlanning;
 
-    if (isPrepPhase) {
-      systemPrompt += `\n\n<task_prep>
-You're preparing this task — NOT executing it. Your job is to gather information, clarify scope, and produce a plan. Do NOT do the actual work yet.
+    if (isPlanning) {
+      systemPrompt += `\n\n<task_planning>
+You're in PLAN mind because you (or a prior turn) called enter_plan_mode on this task. Your job is to gather information, clarify scope, and produce a plan. Do NOT do the actual work yet.
 
 Task: ${linkedTask.title}${linkedTask.description ? `\nContext: ${linkedTask.description}` : ""}
 Task ID: ${taskHandle}
-Status: ${linkedTask.status}${isSubtask ? `\nThis is a SUBTASK of a larger task.${parentTaskRecord ? `\nParent task: ${parentTaskRecord.title}${parentTaskDescription ? `\nParent context: ${parentTaskDescription}` : ""}` : ""}` : ""}${skillHint}
+Status: ${linkedTask.status}${isSubtask ? `\nThis is a SUBTASK of a larger task.${parentTaskRecord ? `\nParent task: ${parentTaskRecord.title}${parentTaskDescription ? `\nParent context: ${parentTaskDescription}` : ""}` : ""}` : ""}
 ${
   isSubtask
     ? `
-SUBTASK PREP RULES:
-1. You are prepping ONE CHUNK of a larger task. Read the parent task description and any prior sibling outputs for context.
+SUBTASK PLAN RULES:
+1. You are planning ONE CHUNK of a larger task. Read the parent task description and any prior sibling outputs for context.
 2. Self-resolve questions using available context (parent description, gather_context, code reading). ONLY move to Waiting and ask the user if you genuinely cannot proceed without their input.
 3. For CODING tasks (when a gateway is connected): delegate brainstorming/planning to the gateway sub-agent. Before delegating, call get_task_coding_session. If status is "starting" (gateway hasn't echoed back the sessionId — the session is still spinning up), call reschedule_self(minutesFromNow=2); do NOT call the gateway. If status is "ready", resume by default: pass sessionId, dir, and worktreeBranch. EXCEPTION: if the user explicitly asked for a fresh session or a different coding agent, omit the sessionId so the gateway starts a new session with the requested agent.
-4. For NON-CODING tasks: do the prep yourself using gather_context, take_action, and the readiness skills.
-5. Write your plan into the task description using update_task.
-6. When prep is complete, move to Review: update_task(taskId: "${taskHandle}", status: "Review"). Do NOT wait for user approval — subtasks auto-transition from prep to execute.
+4. For NON-CODING tasks: do the planning yourself using gather_context, take_action, and the readiness skills.
+5. Write your plan into the task description using update_task with a <plan>...</plan> section.
+6. When the plan is ready, call exit_plan_mode. On your next turn you'll be back in execute mind with the plan in front of you.
 7. Send a brief summary via send_message of what you plan to do.
 
 DO NOT:
-- Execute the actual work (no sending emails, no writing code, no making changes)
-- Mark the task as Done
+- Execute the actual work in plan mind (no sending emails, no writing code, no making changes)
+- Mark the task as Review or Done
 - Create further subtasks — you are a subtask, just plan YOUR work
 - Create independent top-level tasks
 `
     : `
-PREP RULES:
+PLAN RULES:
 0. CHECK INPUT SHAPE FIRST. Read the task description and decide what the user gave you (see STARTING WORK > INPUT SHAPE in <capabilities>):
 
    - If the description is a PLAN / RUNBOOK (explicit numbered or named steps, named data sources, named tools — the user already did the planning work):
-     → Treat the description AS the plan. Do NOT re-plan, do NOT propose-and-confirm, do NOT write another plan summary. Execute the steps directly.
-     → If a step has a BLOCKING gap (a referenced field doesn't exist, a destination is ambiguous in a way that affects who/what gets acted on), mark Waiting and ask one blocking question at a time. Cosmetic mismatches (label drift, format choices, defaults with one obvious answer) are NOT blockers — see WHAT NOT TO ASK ABOUT.
-     → When done, write the result to the description (section="Output"), send_message with results, mark Review.
+     → You shouldn't be in plan mind. Call exit_plan_mode and execute the steps directly.
 
    - If the description is a GOAL (a desired outcome — you need to figure out the steps):
      → Apply the COMPLEXITY rules from STARTING WORK.
-     → If on second look the task is actually SIMPLE (one artifact: summary, profile, brief, recap, list, lookup, single send) → it should not have landed in prep. Skip planning. Do the actual work now using gather_context / take_action, write the result to the description (section="Output"), send the result via send_message, and mark the task Review. Do NOT produce a "plan" of how you'll do it.
-     → If genuinely COMPLEX (multiple independent deliverables, irreversibly bulk, user explicitly said "plan/think through", or coding) → continue to step 1 below to do the planning prep flow.
+     → If on second look the task is actually SIMPLE (one artifact: summary, profile, brief, recap, list, lookup, single send) → call exit_plan_mode. Then in execute mind, just do it using gather_context / take_action, write the result to the description (section="Output"), send the result via send_message, and mark Review. Do NOT produce a "plan" of how you'll do it.
+     → If genuinely COMPLEX (multiple independent deliverables, irreversibly bulk, user explicitly said "plan/think through", or coding) → continue to step 1 below to do the planning.
 
 1. Run the READINESS CHECK (see <capabilities>). Load the appropriate skill from <skills>:
    - Unclear what's needed? → load "Gather Information" skill
    - Open-ended, needs shaping? → load "Brainstorm" skill
    - Multi-step, needs decomposition? → load "Plan" skill
+   - Considering splitting into subtasks? → load "Decompose Task" skill (built-in)
 2. For CODING tasks (when a gateway is connected): delegate brainstorming/planning to the gateway sub-agent. Pass the task title and description. The gateway will return questions or a plan — do NOT tell it to execute. Before delegating, call get_task_coding_session. If status is "starting" (gateway hasn't echoed back the sessionId — the session is still spinning up), call reschedule_self(minutesFromNow=2); do NOT call the gateway. If status is "ready", resume by default (pass sessionId, dir, worktreeBranch). EXCEPTION: if the user explicitly asked for a fresh session or a different coding agent, omit the sessionId so the gateway starts a new session.
-3. For NON-CODING tasks: do the prep yourself using gather_context, take_action, and the readiness skills.
-4. Write your findings/plan into the task description using update_task.
-5. When prep is complete, move to Review: update_task(taskId: "${taskHandle}", status: "Review")
-6. Send the user a summary via send_message: what you found, what the plan is, and ask them to review.
-7. If this task needs decomposition: create subtasks under this task (parentTaskId: ${taskHandle}) in Waiting status. Each subtask should be a meaningful work chunk, NOT a phase ("Planning"/"Execution"). Write the plan summary in the parent description listing all subtasks. Move parent to Waiting and send_message with the plan.
+3. For NON-CODING tasks: do the planning yourself using gather_context, take_action, and the readiness skills.
+4. Write your findings/plan into the task description using update_task with a <plan>...</plan> section.
+5. When the plan is ready, call exit_plan_mode. On your next turn you'll be back in execute mind with the plan in front of you and you'll act on it.
+6. Send the user a brief summary via send_message: what you found and what the plan is.
+7. If this task needs decomposition (the Decompose Task skill says SPLIT): exit_plan_mode first. Subtasks are created in execute mind after exiting, NOT in plan mind.
 `
 }
-WHEN TO GO TO WAITING instead of Review:
-- You need the user to answer questions before you can plan → mark Waiting, send questions via send_message
-- Gateway returned questions from the coding agent → relay to user via send_message (include sessionId), mark Waiting
+WHEN TO ASK THE USER (mark Waiting):
+- You hit a BLOCKING question you cannot self-resolve from available context → update_task(status: "Waiting") + send_message with ONE focused question. On resume you stay in plan mind until you call exit_plan_mode.
+- Gateway returned questions from the coding agent → relay to user via send_message (include sessionId), mark Waiting.
 
-WHEN TO GO STRAIGHT TO Review:
-- Nothing to prep (task is already clear and simple) → move to Review immediately
-- Plan is complete → write plan to description, move to Review
+WHEN TO EXIT PLAN MIND (call exit_plan_mode):
+- The plan is written into the description and you're ready to act.
+- The task turned out to be simpler than expected — just exit and do it in execute mind.
+- The description was already a runbook — exit and execute.
 
 DO NOT:
-- Execute the actual work (no sending emails, no writing code, no making changes)
-- Mark the task as Done
+- Execute the actual work in plan mind (no sending emails, no writing code, no making changes)
+- Mark the task as Review or Done — exit_plan_mode + execute mind handles completion
 
-CODING SESSION POLLING (during prep):
+CODING SESSION POLLING (during plan mind):
 - "Session still running, brainstorming/planning phase" → call reschedule_self(minutesFromNow=5)
 - Gateway returns questions → relay to user via send_message (include sessionId), mark Waiting
-- Gateway returns plan → write to description (section: "Plan"), mark Review, send_message
+- Gateway returns plan → write to description (section: "Plan"), call exit_plan_mode, send_message
 
 NEVER write error logs or debug output into the task description.
-</task_prep>`;
+</task_planning>`;
     } else if (isExecuting) {
       systemPrompt += `\n\n<task_execution>
-You're executing this task in the background. The prep/planning phase is done — get it done.
+You're handling this task. Default mind: EXECUTE. Read the task, do the work, mark Review when done. If you genuinely can't see the shape (ambiguous goal, missing context, open-ended brainstorm), call enter_plan_mode to switch to PLAN mind.
 
 Task: ${linkedTask.title}${linkedTask.description ? `\nContext: ${linkedTask.description}` : ""}
 Task ID: ${taskHandle}
-Status: ${linkedTask.status}${isSubtask ? `\nThis is a SUBTASK. Do ONLY this specific work. Do not create further subtasks. Do not look at or manage sibling tasks.${parentTaskRecord ? `\nParent task: ${parentTaskRecord.title}${parentTaskDescription ? `\nParent context: ${parentTaskDescription}` : ""}` : ""}` : ""}${skillHint}${
+Status: ${linkedTask.status}${isSubtask ? `\nThis is a SUBTASK. Do ONLY this specific work. Do not create further subtasks. Do not look at or manage sibling tasks.${parentTaskRecord ? `\nParent task: ${parentTaskRecord.title}${parentTaskDescription ? `\nParent context: ${parentTaskDescription}` : ""}` : ""}` : ""}${
         linkedTask.status === "Waiting"
           ? `
 
@@ -572,42 +586,45 @@ THIS TASK IS WAITING. The user's message in this conversation is the reply that 
       }
 
 RULES:
-- For integration work (emails, calendar, github, etc.): delegate to the orchestrator via gather_context / take_action
-- For coding, browser, shell: use gateway tools directly (coding_*, browser_*, exec_*) if connected. Before delegating coding work, call get_task_coding_session. If status is "starting" (gateway hasn't echoed back the sessionId — the session is still spinning up), call reschedule_self(minutesFromNow=2); do NOT call the gateway. If status is "ready", resume by default — pass sessionId/dir/worktreeBranch with the intent "execute the plan". EXCEPTION: if the user explicitly asked for a fresh session or a different coding agent, omit the sessionId so the gateway starts a new session with the requested agent.
-- If the user sends a message, treat it as additional direction for this task${
+- SHAPE OF THE INPUT. Read the description first.
+  - PLAN / RUNBOOK (numbered steps, named tools, the user did the planning) → execute the steps in order. Don't re-plan. If a step has a blocking gap (referenced field missing, destination ambiguous in a way that changes the action), mark Waiting + send_message with ONE focused question. Cosmetic mismatches and obvious defaults are NOT blockers.
+  - GOAL (desired outcome, no steps given) → just execute. If the work is genuinely big (multiple independent deliverables, irreversibly bulk, or the user explicitly said "plan/decompose"), load the "Decompose Task" skill from <skills> and let it tell you whether and how to split. Otherwise: do it directly.
+- ROUTING.
+  - Integration work (email, calendar, github, etc.) → delegate to the orchestrator via gather_context / take_action.
+  - Coding / browser / shell → use the gateway tools directly (coding_*, browser_*, exec_*) when a gateway is connected. Before delegating coding work, call get_task_coding_session. If status is "starting", call reschedule_self(minutesFromNow=2). If "ready", resume by default (sessionId, dir, worktreeBranch). EXCEPTION: if the user asked for a fresh session or a different coding agent, omit sessionId so a new session starts.
+- IF the user sends a new message mid-execution → treat as additional direction for this task.${
         isSubtask
           ? `
-- When you complete this subtask, the system automatically starts the next one and marks the parent Done when all subtasks are done
-- If you fail or get stuck, mark the PARENT task (${parentHandle}) as Waiting and send_message with the error`
+- Subtask completion: when your work is done, call update_task(status: "Review"). The system marks the parent Done when all sibling subtasks complete. Do NOT touch the parent.
+- If you fail or get blocked, mark YOURSELF Waiting + send_message referencing both this subtask title and the parent title so the user can identify it. Do NOT cascade to the parent — siblings may still be running.`
           : `
-- If this task is complex and needs decomposition: create subtasks under this task (parentTaskId: ${taskHandle}) in Waiting status. Each subtask should be a meaningful work chunk, NOT a phase ("Planning"/"Execution"). Move this task to Waiting, then send_message to the user explaining the plan and asking for approval.
-- The system handles sequential subtask execution automatically — when approved, it starts the first subtask. Each subtask completion triggers the next one. You do NOT manage the queue.`
+- If this task warrants decomposition (you loaded the Decompose Task skill and it says SPLIT), follow the skill's instructions:
+  - Create subtasks via create_task with parentTaskId = ${taskHandle}. Subtasks default to Ready and start their own execution cycle through the 2-minute buffer.
+  - Write the breakdown into THIS task's description via update_task with a <plan> section.
+  - send_message as a heads-up: "Splitting this into A, B, C — each starts in 2 min. Stop me if wrong." Do NOT move this task to Waiting — the buffer gives the user a veto window. This task stays Working until all subtasks complete; the system auto-marks it Done.`
       }
-- Mark task ${taskHandle} as Review when the original intent is fully achieved. The user will move it to Done.
-- When Waiting (errors, needs user input, needs approval, partial completion):
-  1. call update_task(taskId: "${taskHandle}", status: "Waiting")
-  2. call send_message explaining what's needed — MUST include the task title so the user (and future you) can identify it. Example: "Task '${linkedTask.title}' is waiting: <reason>. <what's needed to continue>"
-- NEVER write error logs, debug output, or transient state into the task description. The description is for task spec, plan, and structured sections (Plan, Output, Session) only. Errors and status updates go to send_message.
-- When finished:
-  1. call update_task(taskId: "${taskHandle}", status: "Review")
-  2. call send_message with a summary of what was done
-- Do NOT create independent top-level tasks. ${isSubtask ? "You are a subtask — just do your work." : "You can only create subtasks under this task."}
-- DESCRIPTION UPDATES: Only update the task description at phase boundaries (Waiting, plan produced, Review/Done, or when the user provides new context). Do NOT update it on every interaction.
+- COMPLETION. When the original intent is achieved → update_task(taskId: "${taskHandle}", status: "Review") + send_message with a summary. The user moves it to Done.
+- BLOCKERS (need user input — clarification, missing fact, approval for irreversible action):
+  1. update_task(taskId: "${taskHandle}", status: "Waiting")
+  2. send_message that names the task title so the user can identify it. Example: "Task '${linkedTask.title}' is waiting: <reason>. <what's needed to continue>"
+- DO NOT create independent top-level tasks. ${isSubtask ? "You are a subtask — just do your work." : "Subtasks under this task only."}
+- DO NOT mark Done — that's the user's call.
+- DESCRIPTION UPDATES. Only at meaningful boundaries: Waiting (record what's blocked), decomposition (record the plan), Review (record the outcome), or when the user provides new context. Never write error logs, debug output, or transient state into the description.
 
 CODING SESSIONS:
-The gateway sub-agent handles all sleep/polling for coding sessions. You do NOT sleep or poll directly.
+The gateway sub-agent owns all sleep/polling for coding sessions. You do NOT sleep or poll directly.
 
 When you delegate a coding task to the gateway, it will return one of:
-- Questions from the coding agent → relay to user via send_message (include sessionId in the message), mark task Waiting. Do NOT write the question into the task description — the conversation thread is the source of truth.
-- A plan from the coding agent → you are in EXECUTION mode (user already approved the plan). Call the gateway again immediately with sessionId, dir, and intent "execute the plan" to trigger Phase 3 execution. Do NOT mark task Review again — the plan was already reviewed.
-- Execution results → write results to task description using update_task(section: "Output", description: results_html), mark task Review.
-- "Session still running, brainstorming/planning phase" → call reschedule_self(minutesFromNow=5) to check back soon.
-- "Session still running, execution phase" → call reschedule_self(minutesFromNow=10). The CodingSession row already records the sessionId/dir — no need to save it anywhere.
-- Error → update_task(status: "Waiting") then send_message with the error detail. Do NOT write errors into the task description.
+- Questions from the coding agent → relay to user via send_message (include sessionId), mark task Waiting. Don't write the question into the task description.
+- A plan from the coding agent → you're in EXECUTION mode (user already approved the plan). Call the gateway again immediately with sessionId, dir, and intent "execute the plan" to trigger Phase 3.
+- Execution results → write results to task description via update_task(section: "Output"), mark task Review.
+- "Session still running, brainstorming/planning phase" → reschedule_self(minutesFromNow=5).
+- "Session still running, execution phase" → reschedule_self(minutesFromNow=10). The CodingSession row already records sessionId/dir.
+- Error → update_task(status: "Waiting") + send_message with the error detail.
 
-When the user answers a question, resume the coding session with the answer. Do NOT write the answer into the task description.
+When the user answers a question, resume the coding session with the answer. Don't write the answer into the description.
 
-On re-execution after reschedule (we rescheduled ourselves to poll progress — no user input in between): call get_task_coding_session to resolve the latest coding session for this task. If status is "starting" (sessionId hasn't been assigned yet), call reschedule_self(minutesFromNow=2) and try again. If status is "ready", resume that session — delegate to the gateway with the returned sessionId, dir, and intent "execute the plan" so the gateway enters Phase 3 (execution) rather than re-doing planning. Only pass user answers if the user has replied since the last run. EXCEPTION: if the user replied explicitly asking for a fresh session or a different coding agent, omit the sessionId so the gateway starts a new session.
+On re-execution after reschedule (no user input in between): call get_task_coding_session to resolve the latest session. If "starting", reschedule_self(2) and try again. If "ready", resume — pass sessionId, dir, and intent "execute the plan" so the gateway enters Phase 3. Only pass user answers if the user has actually replied since the last run. EXCEPTION: if the user explicitly asked for a fresh session or a different coding agent, omit sessionId.
 
 Do NOT sleep, poll coding_read_session, or create scheduled tasks yourself — the gateway handles that.
 </task_execution>`;
@@ -618,7 +635,7 @@ Title: ${linkedTask.title}${linkedTask.description ? `\nDescription: ${linkedTas
 Task ID: ${taskHandle}
 Status: ${linkedTask.status}
 
-This IS the task — don't create or search for other tasks about this topic. If they add context, update the description via update_task (ID: ${taskHandle}).${linkedTask.status === "Waiting" ? `\nThis task is WAITING. If the user's message is a reply to this task, call unblock_task(taskId: "${taskHandle}", reason: "<user's reply summarized>") FIRST and then STOP. Do not do the work yourself or delegate to any sub-agent — unblock_task triggers the resume.` : ""}
+This IS the task — don't create or search for other tasks about this topic. If they add context, update the description via update_task (ID: ${taskHandle}).
 </task_context>`;
     }
   }

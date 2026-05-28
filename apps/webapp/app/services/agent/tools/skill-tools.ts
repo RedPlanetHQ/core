@@ -12,6 +12,10 @@ import { createSkill, updateSkill, getSkill } from "~/services/skills.server";
 import { createAgent, resolveModelString } from "~/lib/model.server";
 import { getConnectedIntegrationAccounts } from "~/services/integrationAccount.server";
 import { SKILL_GENERATOR_SYSTEM_PROMPT } from "~/utils/skill-generator-prompt";
+import {
+  getBuiltinSkill,
+  isBuiltinSkillId,
+} from "~/services/skills.builtin";
 
 /**
  * Get the get_skill tool for the agent
@@ -25,6 +29,15 @@ export function getSkillTool(workspaceId: string): Tool {
     }),
     execute: async ({ skill_id }) => {
       try {
+        // Built-in skills are resolved from a static registry, not Prisma.
+        // They use `builtin:*` IDs that never collide with DB UUIDs.
+        if (isBuiltinSkillId(skill_id)) {
+          const builtin = getBuiltinSkill(skill_id);
+          if (!builtin) return "Skill not found";
+          logger.info(`Core agent: loading builtin skill ${skill_id}`);
+          return `## Skill: ${builtin.title}\n\n${builtin.content}`;
+        }
+
         logger.info(`Core agent: loading skill ${skill_id}`);
         const skill = await prisma.document.findFirst({
           where: { id: skill_id, workspaceId, type: "skill", deleted: null },
