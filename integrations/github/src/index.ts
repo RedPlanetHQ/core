@@ -107,6 +107,8 @@ class GitHubCLI extends IntegrationCLI {
       schedule: {
         frequency: '*/5 * * * *',
       },
+      toolUISupported: true,
+      enableAutoRead: true,
       auth: {
         OAuth2: {
           token_url: 'https://github.com/login/oauth/access_token',

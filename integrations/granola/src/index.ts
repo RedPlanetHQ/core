@@ -69,6 +69,7 @@ class GranolaCLI extends IntegrationCLI {
           server_url: "https://mcp.granola.ai/mcp",
         } as McpAuthParams,
       },
+      enableAutoRead: true,
     };
   }
 }

@@ -1,15 +1,15 @@
-import { callGranolaToolRPC } from './utils';
+import { callGranolaToolRPC } from "./utils";
 
 function getDefaultSyncTime(): string {
   return new Date(Date.now() - 24 * 60 * 60 * 1000).toISOString();
 }
 
 function parseMeetingContent(content: any[]): string {
-  if (!content || content.length === 0) return '';
+  if (!content || content.length === 0) return "";
   return content
-    .filter((c: any) => c.type === 'text')
+    .filter((c: any) => c.type === "text")
     .map((c: any) => c.text)
-    .join('\n');
+    .join("\n");
 }
 
 interface Meeting {
@@ -45,10 +45,10 @@ function parseMeetingDetail(raw: string): Partial<Meeting> {
 
 async function fetchMeetingDetail(
   config: Record<string, any>,
-  meetingId: string,
+  meetingId: string
 ): Promise<Partial<Meeting>> {
   try {
-    const result = await callGranolaToolRPC(config, 'get_meeting', { id: meetingId });
+    const result = await callGranolaToolRPC(config, "get_meeting", { id: meetingId });
     const rawText = parseMeetingContent(result?.content ?? []);
     return parseMeetingDetail(rawText);
   } catch {
@@ -57,9 +57,9 @@ async function fetchMeetingDetail(
 }
 
 function formatMeetingActivity(meeting: Meeting, detail: Partial<Meeting>): string {
-  const title = meeting.title || 'Untitled Meeting';
-  const date = meeting.date ? new Date(meeting.date).toLocaleString() : '';
-  const attendees = (meeting.attendees ?? []).join(', ');
+  const title = meeting.title || "Untitled Meeting";
+  const date = meeting.date ? new Date(meeting.date).toLocaleString() : "";
+  const attendees = (meeting.attendees ?? []).join(", ");
 
   const lines: string[] = [`## Meeting: ${title}`];
 
@@ -68,33 +68,33 @@ function formatMeetingActivity(meeting: Meeting, detail: Partial<Meeting>): stri
 
   const notes = detail.notes ?? meeting.summary;
   if (notes) {
-    lines.push('');
-    lines.push('### Notes');
+    lines.push("");
+    lines.push("### Notes");
     lines.push(notes);
   }
 
   const actionItems = detail.action_items ?? [];
   if (actionItems.length > 0) {
-    lines.push('');
-    lines.push('### Action Items');
+    lines.push("");
+    lines.push("### Action Items");
     for (const item of actionItems) {
       lines.push(`- ${item}`);
     }
   }
 
-  return lines.join('\n');
+  return lines.join("\n");
 }
 
 export async function handleSchedule(
   config: Record<string, any>,
-  state: Record<string, any>,
+  state: Record<string, any>
 ): Promise<any[]> {
   const lastSyncTime = state?.lastSyncTime ?? getDefaultSyncTime();
   const activities: any[] = [];
   let latestMeetingTime = 0;
 
   try {
-    const listResult = await callGranolaToolRPC(config, 'list_meetings', {
+    const listResult = await callGranolaToolRPC(config, "list_meetings", {
       after: lastSyncTime,
     });
 
@@ -111,15 +111,15 @@ export async function handleSchedule(
       const text = formatMeetingActivity(meeting, detail);
 
       activities.push({
-        type: 'activity',
+        type: "activity",
         data: {
           text,
-          sourceURL: meeting.url ?? '',
+          sourceURL: meeting.url ?? "",
         },
       });
     }
   } catch (error: any) {
-    console.error('Granola schedule sync error:', error.message);
+    console.error("Granola schedule sync error:", error.message);
   }
 
   // Only advance lastSyncTime if we actually found meetings (mirrors Gmail behavior)
@@ -129,7 +129,7 @@ export async function handleSchedule(
       : new Date().toISOString();
 
   activities.push({
-    type: 'state',
+    type: "state",
     data: { lastSyncTime: newSyncTime },
   });
 

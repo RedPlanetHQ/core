@@ -19,6 +19,7 @@ import {
   getCodingSessionsForTask,
 } from "~/services/coding/coding-session.server";
 import { getBrowserSessionsForTask } from "~/services/browser/browser-session.server";
+import { resolveTaskId } from "~/services/task.server";
 
 interface GetSessionToolsParams {
   workspaceId: string;
@@ -26,24 +27,28 @@ interface GetSessionToolsParams {
   currentTaskId?: string;
 }
 
-function resolveTaskId(
-  argTaskId: string | undefined,
-  currentTaskId: string | undefined,
-): string | { error: string } {
-  const taskId = argTaskId ?? currentTaskId;
-  if (!taskId) {
-    return {
-      error:
-        "No taskId provided and no current task in context — pass taskId explicitly.",
-    };
-  }
-  return taskId;
-}
-
 export function getSessionTools(
   params: GetSessionToolsParams,
 ): Record<string, Tool> {
   const { workspaceId, currentTaskId } = params;
+
+  // Agent passes displayId (tk-…); currentTaskId is a server-injected UUID.
+  // Either is acceptable; resolveTaskId handles both shapes and scopes the
+  // lookup to this workspace.
+  const resolve = async (
+    argTaskId: string | undefined,
+  ): Promise<string | { error: string }> => {
+    const input = argTaskId ?? currentTaskId;
+    if (!input) {
+      return {
+        error:
+          "No taskId provided and no current task in context — pass taskId explicitly.",
+      };
+    }
+    const uuid = await resolveTaskId(input, workspaceId);
+    if (!uuid) return { error: `Task "${input}" not found in this workspace.` };
+    return uuid;
+  };
 
   return {
     get_task_coding_session: tool({
@@ -54,11 +59,11 @@ export function getSessionTools(
           .string()
           .optional()
           .describe(
-            "Task ID to look up. Defaults to the current task in context when omitted.",
+            "Task displayId to look up (e.g. tk-abcde). Defaults to the current task in context when omitted.",
           ),
       }),
       execute: async ({ taskId }) => {
-        const resolved = resolveTaskId(taskId, currentTaskId);
+        const resolved = await resolve(taskId);
         if (typeof resolved !== "string") return resolved;
 
         const session = await getLastCodingSession(resolved, workspaceId);
@@ -89,11 +94,11 @@ export function getSessionTools(
           .string()
           .optional()
           .describe(
-            "Task ID to look up. Defaults to the current task in context when omitted.",
+            "Task displayId to look up (e.g. tk-abcde). Defaults to the current task in context when omitted.",
           ),
       }),
       execute: async ({ taskId }) => {
-        const resolved = resolveTaskId(taskId, currentTaskId);
+        const resolved = await resolve(taskId);
         if (typeof resolved !== "string") return resolved;
 
         const sessions = await getCodingSessionsForTask(resolved, workspaceId);
@@ -122,11 +127,11 @@ export function getSessionTools(
           .string()
           .optional()
           .describe(
-            "Task ID to look up. Defaults to the current task in context when omitted.",
+            "Task displayId to look up (e.g. tk-abcde). Defaults to the current task in context when omitted.",
           ),
       }),
       execute: async ({ taskId }) => {
-        const resolved = resolveTaskId(taskId, currentTaskId);
+        const resolved = await resolve(taskId);
         if (typeof resolved !== "string") return resolved;
 
         const sessions = await getBrowserSessionsForTask(
