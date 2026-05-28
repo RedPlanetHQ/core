@@ -9,7 +9,6 @@ import {
   getTasks,
   changeTaskStatus,
   deleteTask,
-  confirmTaskActive,
   rescheduleTaskAt,
   getScheduledTasksForWorkspace,
   recalculateTasksForTimezone,
@@ -886,26 +885,6 @@ The task's status does NOT change. If your plan involves splitting into subtasks
           return error instanceof Error
             ? error.message
             : "Failed to delete task";
-        }
-      },
-    }),
-
-    confirm_task: tool({
-      description:
-        "Confirm user wants to keep a scheduled task active. Stops future prompts about turning it off.",
-      inputSchema: z.object({
-        taskId: z
-          .string()
-          .describe("The displayId of the task to confirm (e.g. tk-abcde)"),
-      }),
-      execute: async ({ taskId }) => {
-        try {
-          const resolved = await resolve("Task", taskId);
-          if (typeof resolved !== "string") return resolved.error;
-          await confirmTaskActive(resolved, workspaceId);
-          return "Task confirmed active.";
-        } catch (error) {
-          return "Failed to confirm task.";
         }
       },
     }),

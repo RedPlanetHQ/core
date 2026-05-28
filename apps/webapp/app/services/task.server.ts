@@ -914,20 +914,6 @@ export async function deactivateScheduledTask(taskId: string): Promise<void> {
 }
 
 /**
- * Confirm a scheduled task as active — user wants to keep it.
- */
-export async function confirmTaskActive(
-  taskId: string,
-  workspaceId: string,
-): Promise<void> {
-  await prisma.task.update({
-    where: { id: taskId, workspaceId },
-    data: { confirmedActive: true, unrespondedCount: 0 },
-  });
-  logger.info(`Confirmed task ${taskId} as active`);
-}
-
-/**
  * Reschedule a task to fire at a specific time (for follow-ups).
  */
 export async function rescheduleTaskAt(
