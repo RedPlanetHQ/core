@@ -144,11 +144,16 @@ export async function buildAgentContext({
     !["web", "core", "task"].includes(source)
       ? prisma.task.findMany({
           where: { workspaceId, status: "Waiting" },
-          select: { id: true, title: true, updatedAt: true },
+          select: { id: true, displayId: true, title: true, updatedAt: true },
           orderBy: { updatedAt: "desc" },
           take: 10,
         })
-      : ([] as { id: string; title: string; updatedAt: Date }[]),
+      : ([] as {
+          id: string;
+          displayId: string | null;
+          title: string;
+          updatedAt: Date;
+        }[]),
   ]);
 
   // Exclude reserved defaults (Persona + Watch Rules) from the dynamic
@@ -168,6 +173,7 @@ export async function buildAgentContext({
         where: { id: conversationRecord.asyncJobId },
         select: {
           id: true,
+          displayId: true,
           title: true,
           pageId: true,
           status: true,
@@ -185,7 +191,7 @@ export async function buildAgentContext({
   const parentTaskRecord = linkedTaskRecord?.parentTaskId
     ? await prisma.task.findUnique({
         where: { id: linkedTaskRecord.parentTaskId },
-        select: { id: true, title: true, pageId: true },
+        select: { id: true, displayId: true, title: true, pageId: true },
       })
     : null;
   const parentTaskDescription = parentTaskRecord?.pageId
@@ -422,7 +428,7 @@ export async function buildAgentContext({
     const waitingList = waitingTasks
       .map(
         (t) =>
-          `- "${t.title}" (ID: ${t.id}) — Waiting since ${t.updatedAt.toLocaleString("en-US", { timeZone: timezone, month: "short", day: "numeric", hour: "numeric", minute: "2-digit" })}`,
+          `- "${t.title}" (ID: ${t.displayId ?? t.id}) — Waiting since ${t.updatedAt.toLocaleString("en-US", { timeZone: timezone, month: "short", day: "numeric", hour: "numeric", minute: "2-digit" })}`,
       )
       .join("\n");
     systemPrompt += `
@@ -442,6 +448,16 @@ export async function buildAgentContext({
 
   // Task context (when conversation was created from a task)
   if (linkedTask) {
+    // Agent-facing handles: prefer displayId so tool calls and chatter stay
+    // in the tk-… namespace. Fall back to UUID for older rows that pre-date
+    // the displayId trigger.
+    const taskHandle = linkedTask.displayId ?? linkedTask.id;
+    const parentHandle =
+      parentTaskRecord?.displayId ??
+      parentTaskRecord?.id ??
+      linkedTask.parentTaskId ??
+      "";
+
     const phase = getTaskPhase(linkedTask);
     const taskMetadataForGuard =
       (linkedTask.metadata as Record<string, unknown> | null) ?? {};
@@ -473,7 +489,7 @@ export async function buildAgentContext({
 You're preparing this task — NOT executing it. Your job is to gather information, clarify scope, and produce a plan. Do NOT do the actual work yet.
 
 Task: ${linkedTask.title}${linkedTask.description ? `\nContext: ${linkedTask.description}` : ""}
-Task ID: ${linkedTask.id}
+Task ID: ${taskHandle}
 Status: ${linkedTask.status}${isSubtask ? `\nThis is a SUBTASK of a larger task.${parentTaskRecord ? `\nParent task: ${parentTaskRecord.title}${parentTaskDescription ? `\nParent context: ${parentTaskDescription}` : ""}` : ""}` : ""}${skillHint}
 ${
   isSubtask
@@ -484,7 +500,7 @@ SUBTASK PREP RULES:
 3. For CODING tasks (when a gateway is connected): delegate brainstorming/planning to the gateway sub-agent. Before delegating, call get_task_coding_session. If status is "starting" (gateway hasn't echoed back the sessionId — the session is still spinning up), call reschedule_self(minutesFromNow=2); do NOT call the gateway. If status is "ready", resume by default: pass sessionId, dir, and worktreeBranch. EXCEPTION: if the user explicitly asked for a fresh session or a different coding agent, omit the sessionId so the gateway starts a new session with the requested agent.
 4. For NON-CODING tasks: do the prep yourself using gather_context, take_action, and the readiness skills.
 5. Write your plan into the task description using update_task.
-6. When prep is complete, move to Review: update_task(taskId: "${linkedTask.id}", status: "Review"). Do NOT wait for user approval — subtasks auto-transition from prep to execute.
+6. When prep is complete, move to Review: update_task(taskId: "${taskHandle}", status: "Review"). Do NOT wait for user approval — subtasks auto-transition from prep to execute.
 7. Send a brief summary via send_message of what you plan to do.
 
 DO NOT:
@@ -514,9 +530,9 @@ PREP RULES:
 2. For CODING tasks (when a gateway is connected): delegate brainstorming/planning to the gateway sub-agent. Pass the task title and description. The gateway will return questions or a plan — do NOT tell it to execute. Before delegating, call get_task_coding_session. If status is "starting" (gateway hasn't echoed back the sessionId — the session is still spinning up), call reschedule_self(minutesFromNow=2); do NOT call the gateway. If status is "ready", resume by default (pass sessionId, dir, worktreeBranch). EXCEPTION: if the user explicitly asked for a fresh session or a different coding agent, omit the sessionId so the gateway starts a new session.
 3. For NON-CODING tasks: do the prep yourself using gather_context, take_action, and the readiness skills.
 4. Write your findings/plan into the task description using update_task.
-5. When prep is complete, move to Review: update_task(taskId: "${linkedTask.id}", status: "Review")
+5. When prep is complete, move to Review: update_task(taskId: "${taskHandle}", status: "Review")
 6. Send the user a summary via send_message: what you found, what the plan is, and ask them to review.
-7. If this task needs decomposition: create subtasks under this task (parentTaskId: ${linkedTask.id}) in Waiting status. Each subtask should be a meaningful work chunk, NOT a phase ("Planning"/"Execution"). Write the plan summary in the parent description listing all subtasks. Move parent to Waiting and send_message with the plan.
+7. If this task needs decomposition: create subtasks under this task (parentTaskId: ${taskHandle}) in Waiting status. Each subtask should be a meaningful work chunk, NOT a phase ("Planning"/"Execution"). Write the plan summary in the parent description listing all subtasks. Move parent to Waiting and send_message with the plan.
 `
 }
 WHEN TO GO TO WAITING instead of Review:
@@ -543,13 +559,13 @@ NEVER write error logs or debug output into the task description.
 You're executing this task in the background. The prep/planning phase is done — get it done.
 
 Task: ${linkedTask.title}${linkedTask.description ? `\nContext: ${linkedTask.description}` : ""}
-Task ID: ${linkedTask.id}
+Task ID: ${taskHandle}
 Status: ${linkedTask.status}${isSubtask ? `\nThis is a SUBTASK. Do ONLY this specific work. Do not create further subtasks. Do not look at or manage sibling tasks.${parentTaskRecord ? `\nParent task: ${parentTaskRecord.title}${parentTaskDescription ? `\nParent context: ${parentTaskDescription}` : ""}` : ""}` : ""}${skillHint}${
         linkedTask.status === "Waiting"
           ? `
 
 THIS TASK IS WAITING. The user's message in this conversation is the reply that resumes it.
-- Call unblock_task(taskId: "${linkedTask.id}", reason: "<the user's reply, summarized>") FIRST, then STOP. unblock_task moves the task to Ready and the system re-enqueues execution with the user's reply.
+- Call unblock_task(taskId: "${taskHandle}", reason: "<the user's reply, summarized>") FIRST, then STOP. unblock_task moves the task to Ready and the system re-enqueues execution with the user's reply.
 - Do NOT do the work yourself, delegate to any sub-agent (gateway, gather_context, take_action, etc.), or send a message before unblock_task — the resume handler does that.
 - Exception: if the user's message is clearly NOT a reply to this task (a new unrelated request), ignore the rule above and treat it as new direction.`
           : ""
@@ -562,18 +578,18 @@ RULES:
         isSubtask
           ? `
 - When you complete this subtask, the system automatically starts the next one and marks the parent Done when all subtasks are done
-- If you fail or get stuck, mark the PARENT task (${linkedTask.parentTaskId}) as Waiting and send_message with the error`
+- If you fail or get stuck, mark the PARENT task (${parentHandle}) as Waiting and send_message with the error`
           : `
-- If this task is complex and needs decomposition: create subtasks under this task (parentTaskId: ${linkedTask.id}) in Waiting status. Each subtask should be a meaningful work chunk, NOT a phase ("Planning"/"Execution"). Move this task to Waiting, then send_message to the user explaining the plan and asking for approval.
+- If this task is complex and needs decomposition: create subtasks under this task (parentTaskId: ${taskHandle}) in Waiting status. Each subtask should be a meaningful work chunk, NOT a phase ("Planning"/"Execution"). Move this task to Waiting, then send_message to the user explaining the plan and asking for approval.
 - The system handles sequential subtask execution automatically — when approved, it starts the first subtask. Each subtask completion triggers the next one. You do NOT manage the queue.`
       }
-- Mark task ${linkedTask.id} as Review when the original intent is fully achieved. The user will move it to Done.
+- Mark task ${taskHandle} as Review when the original intent is fully achieved. The user will move it to Done.
 - When Waiting (errors, needs user input, needs approval, partial completion):
-  1. call update_task(taskId: "${linkedTask.id}", status: "Waiting")
+  1. call update_task(taskId: "${taskHandle}", status: "Waiting")
   2. call send_message explaining what's needed — MUST include the task title so the user (and future you) can identify it. Example: "Task '${linkedTask.title}' is waiting: <reason>. <what's needed to continue>"
 - NEVER write error logs, debug output, or transient state into the task description. The description is for task spec, plan, and structured sections (Plan, Output, Session) only. Errors and status updates go to send_message.
 - When finished:
-  1. call update_task(taskId: "${linkedTask.id}", status: "Review")
+  1. call update_task(taskId: "${taskHandle}", status: "Review")
   2. call send_message with a summary of what was done
 - Do NOT create independent top-level tasks. ${isSubtask ? "You are a subtask — just do your work." : "You can only create subtasks under this task."}
 - DESCRIPTION UPDATES: Only update the task description at phase boundaries (Waiting, plan produced, Review/Done, or when the user provides new context). Do NOT update it on every interaction.
@@ -599,10 +615,10 @@ Do NOT sleep, poll coding_read_session, or create scheduled tasks yourself — t
       systemPrompt += `\n\n<task_context>
 This conversation is about a task you're handling:
 Title: ${linkedTask.title}${linkedTask.description ? `\nDescription: ${linkedTask.description}` : ""}
-Task ID: ${linkedTask.id}
+Task ID: ${taskHandle}
 Status: ${linkedTask.status}
 
-This IS the task — don't create or search for other tasks about this topic. If they add context, update the description via update_task (ID: ${linkedTask.id}).${linkedTask.status === "Waiting" ? `\nThis task is WAITING. If the user's message is a reply to this task, call unblock_task(taskId: "${linkedTask.id}", reason: "<user's reply summarized>") FIRST and then STOP. Do not do the work yourself or delegate to any sub-agent — unblock_task triggers the resume.` : ""}
+This IS the task — don't create or search for other tasks about this topic. If they add context, update the description via update_task (ID: ${taskHandle}).${linkedTask.status === "Waiting" ? `\nThis task is WAITING. If the user's message is a reply to this task, call unblock_task(taskId: "${taskHandle}", reason: "<user's reply summarized>") FIRST and then STOP. Do not do the work yourself or delegate to any sub-agent — unblock_task triggers the resume.` : ""}
 </task_context>`;
     }
   }
