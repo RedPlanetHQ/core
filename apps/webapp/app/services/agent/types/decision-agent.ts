@@ -87,8 +87,6 @@ export interface ScheduledTaskTriggerData {
   previousResponses: ResponseSummary[];
   unrespondedCount: number;
   confirmedActive: boolean;
-  skillId?: string;
-  skillName?: string;
   isRecurring?: boolean;
 }
 

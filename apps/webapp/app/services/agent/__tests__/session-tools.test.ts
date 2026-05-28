@@ -7,6 +7,12 @@ vi.mock("~/services/coding/coding-session.server", () => ({
 vi.mock("~/services/browser/browser-session.server", () => ({
   getBrowserSessionsForTask: vi.fn(),
 }));
+// resolveTaskId hits Prisma in the real implementation; the resolver in
+// these tests just passes the agent-supplied id through to the underlying
+// session getters, which is exactly what the test assertions expect.
+vi.mock("~/services/task.server", () => ({
+  resolveTaskId: vi.fn(async (input: string) => input),
+}));
 
 import { getSessionTools } from "~/services/agent/tools/session-tools";
 import {

@@ -179,7 +179,6 @@ export function createReminderTriggerFromDb(reminder: {
   occurrenceCount: number;
   metadata?: Record<string, unknown> | null;
 }): ReminderTrigger {
-  const meta = reminder.metadata;
   const data: ReminderTrigger["data"] = {
     reminderId: reminder.id,
     action: reminder.text,
@@ -188,12 +187,6 @@ export function createReminderTriggerFromDb(reminder: {
     unrespondedCount: reminder.unrespondedCount,
     confirmedActive: reminder.confirmedActive,
   };
-
-  // Attach skill reference if present in reminder metadata
-  if (meta?.skillId) {
-    (data as any).skillId = meta.skillId;
-    (data as any).skillName = meta.skillName || null;
-  }
 
   return {
     type: "reminder_fired",
@@ -253,7 +246,6 @@ export function createTaskTriggerFromDb(task: {
   metadata?: Record<string, unknown> | null;
   schedule?: string | null;
 }): ScheduledTaskTrigger {
-  const meta = task.metadata;
   const data: ScheduledTaskTrigger["data"] = {
     taskId: task.id,
     action: task.description || task.title,
@@ -263,11 +255,6 @@ export function createTaskTriggerFromDb(task: {
     confirmedActive: task.confirmedActive,
     isRecurring: !!task.schedule,
   };
-
-  if (meta?.skillId) {
-    data.skillId = meta.skillId as string;
-    data.skillName = (meta.skillName as string) || undefined;
-  }
 
   return {
     type: "scheduled_task_fired",

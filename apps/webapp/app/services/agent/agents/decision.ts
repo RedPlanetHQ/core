@@ -151,11 +151,10 @@ export async function createThinkAgent(
   },
   skills?: SkillRef[],
 ): Promise<Agent> {
-  // Think only has gather_context (subagent) and get_skill for informed reasoning.
-  // All execution (create_task, send_message, etc.) is done by the core agent
-  // based on the ActionPlan that think returns.
-  const tools: Record<string, any> = {};
-  tools["get_skill"] = getSkillTool(workspaceId);
+  // Think is a skinny decision filter: shouldMessage / silent actions /
+  // follow-ups / task updates. Skills are visible to think for awareness only
+  // ("does the user have a workflow for this?"), but skill selection and
+  // loading live with the butler.
 
   // Load Watch Rules skill in parallel with prompt building
   const watchRulesSkill = await getDefaultSkill(workspaceId, "watch-rules");
@@ -173,8 +172,8 @@ export async function createThinkAgent(
         currentTime,
         timezone,
         triggerContext.userPersona,
-        skills,
         watchRulesSkill?.content ?? undefined,
+        skills,
       )
     : "Analyze triggers and produce structured JSON action plans.";
 
@@ -185,7 +184,7 @@ export async function createThinkAgent(
     model: modelConfig ?? toRouterString(model),
     instructions,
     agents: { gather_context: gatherContextAgent },
-    tools,
+    tools: { get_skill: getSkillTool(workspaceId) },
   });
 
   const mastra = getMastra();

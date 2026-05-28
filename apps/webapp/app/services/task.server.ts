@@ -186,6 +186,38 @@ export async function getTaskById(id: string): Promise<Task | null> {
   return prisma.task.findUnique({ where: { id } });
 }
 
+/**
+ * Resolve a user-facing task identifier to its internal UUID.
+ *
+ * Accepts either a UUID (passed through after a workspace-scoped existence
+ * check) or a `tk-…` displayId (looked up via the `(workspaceId, displayId)`
+ * unique index). Returns null if no task in this workspace matches.
+ *
+ * Agent tools take displayIds from the model and call this at the boundary;
+ * everything downstream keeps working with UUIDs.
+ */
+const UUID_RE =
+  /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+
+export async function resolveTaskId(
+  input: string,
+  workspaceId: string,
+): Promise<string | null> {
+  if (!input) return null;
+  if (UUID_RE.test(input)) {
+    const task = await prisma.task.findFirst({
+      where: { id: input, workspaceId },
+      select: { id: true },
+    });
+    return task?.id ?? null;
+  }
+  const task = await prisma.task.findUnique({
+    where: { workspaceId_displayId: { workspaceId, displayId: input } },
+    select: { id: true },
+  });
+  return task?.id ?? null;
+}
+
 export type TaskWithRelations = Task & {
   subtasks: Pick<Task, "id" | "status" | "source">[];
   parentTask: Pick<Task, "id" | "title"> | null;

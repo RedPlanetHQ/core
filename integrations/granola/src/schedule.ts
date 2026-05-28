@@ -1,15 +1,15 @@
-import { callGranolaToolRPC } from './utils';
+import { callGranolaToolRPC } from "./utils";
 
 function getDefaultSyncTime(): string {
   return new Date(Date.now() - 24 * 60 * 60 * 1000).toISOString();
 }
 
 function parseMeetingContent(content: any[]): string {
-  if (!content || content.length === 0) return '';
+  if (!content || content.length === 0) return "";
   return content
-    .filter((c: any) => c.type === 'text')
+    .filter((c: any) => c.type === "text")
     .map((c: any) => c.text)
-    .join('\n');
+    .join("\n");
 }
 
 interface Meeting {
@@ -33,7 +33,7 @@ function parseMeetingsFromContent(raw: string): Meeting[] {
 
 function createActivityMessage(params: { text: string; sourceURL: string }) {
   return {
-    type: 'activity',
+    type: "activity",
     data: {
       text: params.text,
       sourceURL: params.sourceURL,
@@ -42,7 +42,7 @@ function createActivityMessage(params: { text: string; sourceURL: string }) {
 }
 
 function formatMeetingActivity(meeting: Meeting): string {
-  const title = meeting.title || 'Untitled Meeting';
+  const title = meeting.title || "Untitled Meeting";
   let text = `New meeting added: ${title}`;
   if (meeting.id) text += ` (id: ${meeting.id})`;
   return text;
@@ -50,14 +50,14 @@ function formatMeetingActivity(meeting: Meeting): string {
 
 export async function handleSchedule(
   config: Record<string, any>,
-  state: Record<string, any>,
+  state: Record<string, any>
 ): Promise<any[]> {
   const lastSyncTime = state?.lastSyncTime ?? getDefaultSyncTime();
   const activities: any[] = [];
   let latestMeetingTime = 0;
 
   try {
-    const listResult = await callGranolaToolRPC(config, 'list_meetings', {
+    const listResult = await callGranolaToolRPC(config, "list_meetings", {
       after: lastSyncTime,
     });
 
@@ -73,18 +73,18 @@ export async function handleSchedule(
       activities.push(
         createActivityMessage({
           text: formatMeetingActivity(meeting),
-          sourceURL: meeting.url ?? '',
-        }),
+          sourceURL: meeting.url ?? "",
+        })
       );
     }
   } catch (error: any) {
-    console.error('Granola schedule sync error:', error.message);
+    console.error("Granola schedule sync error:", error.message);
   }
 
   // Only advance lastSyncTime and emit state when meetings were found (mirrors Gmail behavior)
   if (latestMeetingTime > 0) {
     activities.push({
-      type: 'state',
+      type: "state",
       data: { lastSyncTime: new Date(latestMeetingTime + 1000).toISOString() },
     });
   }

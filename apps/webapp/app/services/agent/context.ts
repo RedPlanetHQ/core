@@ -616,19 +616,29 @@ This IS the task — don't create or search for other tasks about this topic. If
       (triggerContext.trigger.data as any)?.isRecurring === true;
 
     systemPrompt += `\n\n<trigger_context>
-A trigger has fired: "${triggerContext.reminderText}"${isTriggerFollowUp ? `\nThis is a FOLLOW-UP trigger. Do NOT create further follow-ups — one level only. If the issue is still unresolved, mark the task Waiting and notify the user.` : ""}${isRecurring ? `\nThis is a RECURRING task. Do NOT update the task description — send results via send_message only. Do NOT mark the task as Done — the system handles the recurring lifecycle automatically. If you need to change status, use Review.` : ""}
+A trigger has fired: "${triggerContext.reminderText}"${isTriggerFollowUp ? `\nThis is a FOLLOW-UP trigger. One follow-up level is the maximum — if the issue is still unresolved, mark the task Waiting and notify the user via send_message.` : ""}${isRecurring ? `\nThis is a RECURRING task. Send results via send_message only and leave the task description untouched. The system handles the recurring lifecycle, so use Review for status changes; the next occurrence is scheduled automatically.` : ""}
 
-1. Call the \`think\` tool FIRST — it will analyze this trigger and return an ActionPlan
-2. Follow the ActionPlan it returns:
-   - Execute any required work (skills, integrations, gather_context, take_action)
-   - If the plan references a skill (skillId in context): call get_skill to load it, then follow the skill's instructions step-by-step
-   - If \`createFollowUps\` contains items: these are RESCHEDULES of the current task, not new tasks. Call \`create_task\` with isFollowUp=true and parentTaskId set to the triggering task's ID.${isTriggerFollowUp ? ` HOWEVER: this trigger is itself a follow-up — IGNORE any createFollowUps. Do not chain follow-ups.` : ""}
-   - If \`updateTasks\` contains items: apply each update via \`update_task\` (status changes, description updates)${isRecurring ? ` — EXCEPT: skip any description updates and skip any status=Done (the system loops recurring tasks automatically)` : ""}
-   - If shouldMessage=true: craft a response summarizing what happened, match the tone specified, be concise. Use \`send_message\` to deliver it.
-   - If shouldMessage=false: do NOT call send_message.
-3. Do NOT create new tasks unless the ActionPlan explicitly says to. The trigger IS already a task — don't duplicate it.
-4. Do NOT use create_task as a way to "deliver" or "send" a message. Use send_message for that.
-5. Don't second-guess the ActionPlan's decision — it already evaluated the trigger
+The \`think\` tool is your decision filter. It tells you whether to speak, what silent actions to take, and what follow-ups to queue. It does NOT compose the message — that's your job, using the skill (when one applies) and fresh data.
+
+**Flow:**
+
+1. Call \`think\` first. It returns an ActionPlan: \`{ shouldMessage, message: { intent, context, tone }, createFollowUps, updateTasks, silentActions, reasoning }\`.
+
+2. If \`shouldMessage\` is true, compose and deliver the message yourself:
+   a. **Pick the skill.** Check \`<task_execution>\` above — if a skill is attached to this task, load it via \`get_skill\` and follow its instructions step-by-step. Otherwise scan \`<skills>\` and load any whose "Use when…" matches the trigger's intent. If nothing fits, compose directly from the trigger text.
+   b. **Gather the data the message needs.** Use \`gather_context\` / \`take_action\` for integrations, memory, web — whatever the skill's recipe (or the trigger) calls for. Fetch fresh; the ActionPlan's \`context\` carries decision flags only, not message content.
+   c. **Compose** the message in the specified tone, matching the user's persona and the channel format. Keep it concise.
+   d. **Deliver** via \`send_message\`. The response the user sees comes from this call — never from echoing the ActionPlan JSON.
+
+3. If \`shouldMessage\` is false, skip \`send_message\` entirely.
+
+4. Apply \`createFollowUps\`${isTriggerFollowUp ? ` (ignore these — this trigger is itself a follow-up; the chain stops here)` : ` by calling \`create_task\` with \`isFollowUp=true\` and \`parentTaskId\` set to the triggering task's ID (these are reschedules of the existing task, not new ones)`}.
+
+5. Apply \`updateTasks\` via \`update_task\`${isRecurring ? ` — except skip description updates and skip \`status: "Done"\` (the system loops recurring tasks automatically)` : ""}.
+
+6. Apply \`silentActions\` (log entries, state updates).
+
+The trigger IS already a task — use the existing taskId for any updates rather than creating a duplicate. Use \`send_message\` for delivery, never \`create_task\`. Trust the ActionPlan's \`shouldMessage\` decision — it has already evaluated the trigger.
 </trigger_context>`;
   }
 
