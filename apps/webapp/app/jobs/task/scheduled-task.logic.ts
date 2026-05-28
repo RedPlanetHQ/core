@@ -31,10 +31,6 @@ import { HttpOrchestratorTools } from "~/services/agent/orchestrator-tools.http"
 import { getPageContentAsHtml } from "~/services/hocuspocus/content.server";
 import { removeTaskItemFromPages } from "~/services/hocuspocus/page-outlinks.server";
 import { enqueueTask } from "~/lib/queue-adapter.server";
-import {
-  getTaskPhase,
-  setTaskPhaseInMetadata,
-} from "~/services/task.phase";
 import { hasCredits } from "~/trigger/utils/utils";
 import { isWorkspaceBYOK } from "~/services/byok.server";
 import type { Task } from "@prisma/client";
@@ -105,43 +101,38 @@ export async function processScheduledTask(
       return { success: true };
     }
 
-    const phase = getTaskPhase(task);
+    // Execute-first lifecycle: phase is agent-driven, not status-driven.
+    // The buffer wake-up only cares about status + schedule.
 
-    const isBufferExpiry =
-      task.status === "Todo" && phase === "prep" && !task.schedule;
+    // 2-minute editing buffer expired on a Ready task (no schedule). Hand
+    // off to the task runner; the agent picks up in execute mind (or plan
+    // mind if it has since self-promoted). Todo is the backlog state and
+    // does not auto-buffer — it has to be promoted to Ready first.
+    const isBufferExpiry = task.status === "Ready" && !task.schedule;
 
-    // Agent-created Ready tasks sit in a 2-min buffer (status=Ready, phase=prep,
-    // no schedule). At expiry, skip prep entirely — the agent already classified
-    // the task as simple+clear and set metadata.prepDecided.
-    const isReadyBufferExpiry =
-      task.status === "Ready" && phase === "prep" && !task.schedule;
+    // Scheduled / recurring task fired while still Todo or Waiting.
+    // The schedule beats the lifecycle — execute with whatever info is
+    // available; the conversation history captures any pre-fire prep.
+    const isScheduledFireDuringWorkup =
+      (task.status === "Todo" || task.status === "Waiting") && !!task.schedule;
 
-    const isScheduledFireDuringPrep =
-      (task.status === "Todo" || task.status === "Waiting") &&
-      phase === "prep" &&
-      !!task.schedule;
-
-    const isNormalFire = task.status === "Ready" && phase === "execute";
+    const isNormalFire = task.status === "Ready" && !!task.schedule;
 
     // Recovery branches for recurring tasks. Without these the task gets
     // stuck and every future wake-up no-ops, silently killing the recurrence.
     //
-    // Working+execute: previous occurrence's pipeline crashed mid-execution
-    //   (machine kill, OOM, deploy) before scheduleNextTaskOccurrence ran.
-    // Review+execute (recurring only): previous occurrence ended in Review
-    //   and the user/system never moved it back to Ready before the next
-    //   scheduled time arrived. Recurring tasks should auto-loop.
-    const isStuckWorking = task.status === "Working" && phase === "execute";
-    const isStuckReview =
-      task.status === "Review" && phase === "execute" && !!task.schedule;
+    // Working: previous occurrence's pipeline crashed mid-execution (machine
+    //   kill, OOM, deploy) before scheduleNextTaskOccurrence ran.
+    // Review (recurring only): previous occurrence ended in Review and the
+    //   user/system never moved it back to Ready before the next scheduled
+    //   time arrived. Recurring tasks should auto-loop.
+    const isStuckWorking = task.status === "Working";
+    const isStuckReview = task.status === "Review" && !!task.schedule;
 
     if (isBufferExpiry) {
-      return await startPrepFromBuffer(task);
+      return await startExecutionFromBuffer(task);
     }
-    if (isReadyBufferExpiry) {
-      return await startExecutionFromReadyBuffer(task);
-    }
-    if (isScheduledFireDuringPrep) {
+    if (isScheduledFireDuringWorkup) {
       return await executeFireOverride(data, task);
     }
     if (isNormalFire || isStuckWorking || isStuckReview) {
@@ -159,7 +150,7 @@ export async function processScheduledTask(
     }
 
     logger.info(
-      `Task ${taskId} wake-up fired in unexpected state (status=${task.status}, phase=${phase}) — no-op`,
+      `Task ${taskId} wake-up fired in unexpected state (status=${task.status}) — no-op`,
     );
     return { success: true };
   } catch (error) {
@@ -179,21 +170,18 @@ export async function processScheduledTask(
 // ============================================================================
 
 /**
- * Buffer-expiry branch: the 2-minute Todo window is up. Clear nextRunAt and
- * hand off to the normal task runner, which runs the agent in prep mode
- * (driven by phase=prep in context.ts).
+ * Buffer expiry: the 2-minute editing window is up. Clear nextRunAt and
+ * hand off to the task runner. The agent picks up in execute mind by
+ * default; if a prior turn called enter_plan_mode (metadata.phase = "prep")
+ * the task_planning block renders instead. Status stays as it was —
+ * Todo or Ready — and the runner flips it to Working when execution starts.
  *
  * Parity with the client-side delete-on-removal in scratchpad-task-item.tsx:
  * if a scratchpad-created task (`source === "daily"`) sits in the editor
  * for the full 2 minutes without ever getting a title or description, drop
- * it and pull its node out of any pages that still reference it instead of
- * starting prep — these are the abandoned `[ ]` lines users typed and
- * walked away from.
- *
- * Sibling: `startExecutionFromReadyBuffer` handles the agent-created Ready
- * buffer expiry — same 2-min window, but skips prep entirely.
+ * it and pull its node out of any pages that still reference it.
  */
-async function startPrepFromBuffer(
+async function startExecutionFromBuffer(
   task: Task,
 ): Promise<ScheduledTaskProcessResult> {
   if (task.source === "daily" && (await isTaskEmpty(task))) {
@@ -239,48 +227,6 @@ async function isTaskEmpty(task: Task): Promise<boolean> {
 }
 
 /**
- * Ready-buffer expiry branch: the 2-minute Ready window is up for an
- * agent-created Ready task. Clear nextRunAt, flip phase to execute, and
- * enqueue for execution. The agent already classified this task as
- * simple+clear (metadata.prepDecided=true), so we skip prep entirely.
- *
- * We bypass changeTaskStatus because status stays "Ready" — only phase
- * changes. Writing directly avoids re-triggering Ready-side enqueue logic
- * (which would double-enqueue).
- *
- * Mirrors the empty-task auto-delete in startPrepFromBuffer for
- * scratchpad-source tasks.
- */
-async function startExecutionFromReadyBuffer(
-  task: Task,
-): Promise<ScheduledTaskProcessResult> {
-  if (task.source === "daily" && (await isTaskEmpty(task))) {
-    logger.info(
-      `Auto-deleting empty scratchpad task ${task.id} at Ready-buffer expiry`,
-    );
-    await removeTaskItemFromPages(task.id);
-    await deleteTask(task.id, task.workspaceId);
-    return { success: true };
-  }
-
-  await prisma.task.update({
-    where: { id: task.id },
-    data: {
-      nextRunAt: null,
-      metadata: setTaskPhaseInMetadata(task.metadata, "execute"),
-    },
-  });
-
-  await enqueueTask({
-    taskId: task.id,
-    workspaceId: task.workspaceId,
-    userId: task.userId,
-  });
-
-  return { success: true };
-}
-
-/**
  * Fire-override branch: the scheduled/recurring time arrived while the task
  * was still in Phase 1. Flip to Working + execute and run the execution
  * pipeline. Any prep conversation already attached stays in conversationIds
@@ -293,10 +239,7 @@ async function executeFireOverride(
 ): Promise<ScheduledTaskProcessResult> {
   const updated = await prisma.task.update({
     where: { id: task.id },
-    data: {
-      status: "Working",
-      metadata: setTaskPhaseInMetadata(task.metadata, "execute"),
-    },
+    data: { status: "Working" },
   });
   return await runExecutionPipeline(data, updated);
 }

@@ -30,7 +30,7 @@ import { createEmptyConversation } from "~/services/conversation.server";
 import { logger } from "~/services/logger.service";
 import type { TaskStatus } from "@prisma/client";
 import { UserTypeEnum } from "@core/types";
-import { getTaskPhase } from "~/services/task.phase";
+import { getTaskPhase, setTaskPhaseInMetadata } from "~/services/task.phase";
 import { env } from "~/env.server";
 import {
   computeNextRun,
@@ -54,6 +54,7 @@ export function getTaskTools(
   channelRecords?: ChannelRecord[],
   currentTaskId?: string,
   source?: string,
+  currentTaskPhase: "prep" | "execute" = "execute",
 ): Record<string, Tool> {
   const minRecurrenceLabel =
     minRecurrenceMinutes >= 60
@@ -178,18 +179,8 @@ FOLLOW-UP: Set isFollowUp=true and parentTaskId to reschedule an existing task.`
             .enum(["Todo", "Waiting", "Ready"])
             .optional()
             .describe(
-              "Initial status, classified by the rules in <capabilities> STARTING WORK. Todo = COMPLEX work (multi-step, decomposable, irreversible bulk). 2-min prep buffer applies. Ready = SIMPLE + CLEAR (single action, well-scoped). 2-min buffer still applies (gives the user a window to add context); execution starts after expiry. Waiting = SIMPLE + UNCLEAR (need one question answered) OR needs explicit user approval. Send_message the question/plan, then unblock_task when answered.",
+              "Initial status. Ready (default for agent-created) = runs after a 2-minute buffer; the user has that window to edit before execution starts. Todo = backlog — the task sits idle and only runs once the user (or unblock_task) moves it to Ready. Waiting = needs explicit user input or approval; send_message the question/plan, then unblock_task when answered.",
             ),
-          skillId: z
-            .string()
-            .optional()
-            .describe(
-              "ID of a skill to attach. When the task fires, the skill is loaded and executed.",
-            ),
-          skillName: z
-            .string()
-            .optional()
-            .describe("Name of the attached skill."),
         }),
         execute: async ({
           title,
@@ -202,8 +193,6 @@ FOLLOW-UP: Set isFollowUp=true and parentTaskId to reschedule an existing task.`
           channel: taskChannel,
           isFollowUp,
           parentTaskId,
-          skillId,
-          skillName,
         }) => {
           try {
             // BACKGROUND CONTEXT GUARD: when invoked from inside a running task,
@@ -278,13 +267,6 @@ FOLLOW-UP: Set isFollowUp=true and parentTaskId to reschedule an existing task.`
                 }
               }
 
-              // Build metadata
-              const metadata: Record<string, unknown> = {};
-              if (skillId) {
-                metadata.skillId = skillId;
-                metadata.skillName = skillName || null;
-              }
-
               const task = await createScheduledTask(workspaceId, userId, {
                 title,
                 description,
@@ -296,7 +278,6 @@ FOLLOW-UP: Set isFollowUp=true and parentTaskId to reschedule an existing task.`
                 endDate: endDate ? new Date(endDate) : null,
                 startDate: startDate ? new Date(startDate) : null,
                 parentTaskId: resolvedParentId ?? null,
-                metadata: Object.keys(metadata).length > 0 ? metadata : null,
               });
 
               let limitInfo = "";
@@ -316,22 +297,15 @@ FOLLOW-UP: Set isFollowUp=true and parentTaskId to reschedule an existing task.`
               return `Created scheduled task: "${title}" (ID: ${task.displayId ?? task.id}).${nextRunInfo}${limitInfo}`;
             }
 
-            // Immediate task (no scheduling)
-            // Subtasks default to Waiting (they sit idle until parent is approved
-            // and the system transitions them to Todo sequentially).
-            // Top-level tasks default to Todo (with 2-min prep buffer).
-            const effectiveStatus =
-              resolvedParentId && !initialStatus ? "Waiting" : undefined;
-
-            // Pass the resolved status directly to createTask. createTask
-            // applies the 2-min buffer for Todo (anyone) and for Ready+agent
-            // (skip-prep path); Waiting (subtask default or agent-requested
-            // approval) lands without a buffer. The old post-create
-            // changeTaskStatus flip is no longer needed for non-subtask
-            // flows.
-            const resolvedStatus = (effectiveStatus ??
-              initialStatus ??
-              "Todo") as TaskStatus;
+            // Immediate task (no scheduling).
+            //
+            // Agent-created tasks default to Ready: the wake-up handler
+            // runs them after a 2-minute buffer (the user's editing
+            // window). Todo is the backlog state — only reached when the
+            // agent or user explicitly parks the task; it does not auto-
+            // schedule a buffer. Subtasks behave the same way — they run
+            // in parallel with siblings under their own Ready buffers.
+            const resolvedStatus = (initialStatus ?? "Ready") as TaskStatus;
 
             const task = await createTask(
               workspaceId,
@@ -356,10 +330,10 @@ FOLLOW-UP: Set isFollowUp=true and parentTaskId to reschedule an existing task.`
             const targetStatus = resolvedStatus;
             const statusNote =
               targetStatus === "Waiting"
-                ? resolvedParentId
-                  ? "Waiting — will run when parent is approved. The task executes in its own thread; do not do its work in the current conversation."
-                  : "Waiting — send_message to user explaining what's needed. Once unblocked, the task executes in its own thread; do not do its work in the current conversation."
-                : `Added to ${targetStatus} (planning). The task will be picked up and executed in its own thread — do NOT do its work in the current conversation; just acknowledge creation and stop.`;
+                ? "Waiting — send_message to user explaining what's needed. Once unblocked, the task executes in its own thread; do not do its work in the current conversation."
+                : resolvedParentId
+                  ? `Added to ${targetStatus}. The subtask runs its own execute cycle through a 2-minute buffer, in parallel with siblings. Do NOT do its work in the current conversation; just acknowledge creation and continue with the parent or stop.`
+                  : `Added to ${targetStatus}. The task will be picked up and executed in its own thread — do NOT do its work in the current conversation; just acknowledge creation and stop.`;
             logger.info(
               `Task ${task.id} created (${targetStatus})${resolvedParentId ? ` subtask of ${resolvedParentId}` : ""}`,
             );
@@ -729,7 +703,7 @@ REPARENTING: Pass newParentId to move a task under a different parent (or null t
     // unblock_task — available in all flows (web chat, channels, etc.)
     ...(source && {
       unblock_task: tool({
-        description: `Approve a Waiting task and move it to Ready (or Todo for prep-phase tasks) so execution can start. Requires a reason explaining why the wait is resolved. The reason is added to the task's conversation as a user reply, so the agent picks it up on its next turn. Only works on tasks currently in Waiting status.`,
+        description: `Approve a Waiting task and move it to Ready so execution can start. Requires a reason explaining why the wait is resolved. The reason is added to the task's conversation as a user reply, so the agent picks it up on its next turn. Only works on tasks currently in Waiting status. If the task was in PLAN mind when it went Waiting, the phase is preserved — the agent resumes in plan mind until it calls exit_plan_mode.`,
         inputSchema: z.object({
           taskId: z
             .string()
@@ -789,21 +763,14 @@ REPARENTING: Pass newParentId to move a task under a different parent (or null t
               },
             });
 
-            // Phase-aware: prep → back to Todo (continue planning),
-            // execute → Ready (auto-enqueues, resumes execution).
-            // EXCEPTION: if task has Waiting subtasks (butler decomposed it),
-            // approval means "start the subtask chain" — go to Ready.
-            const phase = getTaskPhase(task);
-            const waitingSubtaskCount = await prisma.task.count({
-              where: { parentTaskId: resolved, status: "Waiting" },
-            });
-            const hasWaitingSubtasks = waitingSubtaskCount > 0;
-            const targetStatus =
-              phase === "prep" && !hasWaitingSubtasks ? "Todo" : "Ready";
-
+            // Execute-first lifecycle: unblock always targets Ready. The
+            // task's phase metadata (if any) is preserved automatically —
+            // changeTaskStatus no longer touches it. The Ready transition
+            // triggers an immediate enqueue (non-scheduled) or waits for
+            // the schedule (scheduled tasks).
             await changeTaskStatus(
               resolved,
-              targetStatus,
+              "Ready",
               workspaceId,
               userId,
               "user",
@@ -811,6 +778,88 @@ REPARENTING: Pass newParentId to move a task under a different parent (or null t
             return `Task "${task.title}" unblocked and resumed in its own conversation. Tell the user it's being worked on. Do NOT take any further action on this task — it handles itself from here.`;
           } catch (error) {
             return `Failed to unblock task: ${error instanceof Error ? error.message : "Unknown error"}`;
+          }
+        },
+      }),
+    }),
+
+    // enter_plan_mode / exit_plan_mode — phase toggle on the current task.
+    // Only one of the two is registered at a time, based on the current
+    // phase: enter_plan_mode only in execute mind, exit_plan_mode only in
+    // plan mind. Both require a task in scope.
+    ...(currentTaskId && currentTaskPhase === "execute" && {
+      enter_plan_mode: tool({
+        description: `Switch this task into PLAN mind. Call when you can't execute yet because the goal is ambiguous, the shape is undefined, you need to gather information, or the work is open-ended and needs to be sketched out first.
+
+When you call this, you STOP execution for this turn. On your next turn (next user message, next wake-up, or your own reschedule_self), the system prompt will render the PLAN mind block instead of EXECUTE. Use plan mind to gather info, load readiness skills, and write a plan into the task description. When the plan is ready, call exit_plan_mode and you'll be back in execute mind.
+
+The task's status does NOT change — only the phase metadata. The agent remains the owner of this task throughout.`,
+        inputSchema: z.object({
+          reason: z
+            .string()
+            .describe(
+              "Why you can't execute yet — what gap plan mind needs to close (e.g. 'goal is open-ended, need to brainstorm shape', 'need to gather code structure before I can fix this', 'description names entities I don't recognize').",
+            ),
+        }),
+        execute: async ({ reason }) => {
+          try {
+            const task = await getTaskById(currentTaskId);
+            if (!task) return `Task ${currentTaskId} not found.`;
+
+            const currentPhase = getTaskPhase(task);
+            if (currentPhase === "prep") {
+              return "Already in PLAN mind. Continue planning, or call exit_plan_mode when ready.";
+            }
+
+            await prisma.task.update({
+              where: { id: currentTaskId },
+              data: {
+                metadata: setTaskPhaseInMetadata(task.metadata, "prep"),
+              },
+            });
+
+            logger.info(
+              `Task ${currentTaskId} entered PLAN mind: ${reason}`,
+            );
+
+            return `Switched to PLAN mind. STOP this turn — your next turn will render the planning block. Reason recorded: "${reason}". To re-run yourself immediately (background only), call reschedule_self(minutesFromNow=1); otherwise the next user reply or scheduled wake-up resumes you.`;
+          } catch (error) {
+            logger.error("Failed to enter plan mode", { error });
+            return `Failed to enter plan mode: ${error instanceof Error ? error.message : "Unknown error"}`;
+          }
+        },
+      }),
+    }),
+
+    ...(currentTaskId && currentTaskPhase === "prep" && {
+      exit_plan_mode: tool({
+        description: `Switch this task back to EXECUTE mind. Call after you've written the plan into the task description and you're ready to act on it. On your next turn you'll see the execute block again.
+
+The task's status does NOT change. If your plan involves splitting into subtasks, do that AFTER exit_plan_mode, in execute mind. If you need user approval before executing the plan, call update_task(status: "Waiting") + send_message FIRST, then exit_plan_mode — on resume you'll be in execute mind with the user's reply.`,
+        inputSchema: z.object({}),
+        execute: async () => {
+          try {
+            const task = await getTaskById(currentTaskId);
+            if (!task) return `Task ${currentTaskId} not found.`;
+
+            const currentPhase = getTaskPhase(task);
+            if (currentPhase === "execute") {
+              return "Already in EXECUTE mind. Continue executing.";
+            }
+
+            await prisma.task.update({
+              where: { id: currentTaskId },
+              data: {
+                metadata: setTaskPhaseInMetadata(task.metadata, "execute"),
+              },
+            });
+
+            logger.info(`Task ${currentTaskId} exited PLAN mind`);
+
+            return "Switched to EXECUTE mind. STOP this turn — your next turn will render the execute block with the plan you wrote in front of you. To re-run yourself immediately (background only), call reschedule_self(minutesFromNow=1); otherwise the next user reply or scheduled wake-up resumes you.";
+          } catch (error) {
+            logger.error("Failed to exit plan mode", { error });
+            return `Failed to exit plan mode: ${error instanceof Error ? error.message : "Unknown error"}`;
           }
         },
       }),

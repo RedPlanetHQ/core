@@ -21,9 +21,6 @@ import {
 import { updateTaskTitleInPages } from "~/services/hocuspocus/page-outlinks.server";
 import {
   canTransition,
-  getTaskPhase,
-  inferNewPhase,
-  setTaskPhaseInMetadata,
   type TransitionActor,
 } from "~/services/task.phase";
 
@@ -91,31 +88,17 @@ export async function createTask(
   }
 
   const effectiveStatus = options?.status ?? "Todo";
-  // Agent-created Ready tasks (no schedule) are special: the agent already
-  // classified them as simple+clear and skipped prep, but we still want a
-  // 2-min buffer so the user can edit before execution. During the buffer
-  // the task sits in Ready with phase=prep; the wake-up handler flips
-  // phase to execute when it fires.
-  const isAgentCreatedReady =
-    effectiveStatus === "Ready" && options?.actor === "agent";
-  // Initial phase: Todo or Waiting → prep (task needs planning),
-  // agent-created Ready → prep (buffer hasn't fired yet),
-  // everything else → execute (e.g., recurring tasks created in Ready
-  // via createScheduledTask skip prep entirely).
-  const initialPhase =
-    effectiveStatus === "Todo" ||
-    effectiveStatus === "Waiting" ||
-    isAgentCreatedReady
-      ? "prep"
-      : "execute";
 
+  // Execute-first lifecycle: every new task starts in execute mind. We do
+  // NOT write metadata.phase at creation — the absence of phase IS execute
+  // (see getTaskPhase). Only enter_plan_mode writes metadata.phase = "prep"
+  // when the agent self-promotes; exit_plan_mode flips it back to execute.
   const task = await prisma.task.create({
     data: {
       title,
       status: effectiveStatus,
       workspaceId,
       userId,
-      metadata: setTaskPhaseInMetadata(null, initialPhase),
       ...(options?.source && { source: options.source }),
       ...(resolvedParentTaskId && { parentTaskId: resolvedParentTaskId }),
     },
@@ -126,39 +109,20 @@ export async function createTask(
     await setPageContentFromHtml(page.id, description);
   }
 
-  // Buffer wake-up: freshly-created tasks sit for 2 minutes so the user
-  // can edit freely. At expiry, the scheduled-task wake-up handler starts
-  // prep (Todo path) or directly enqueues execution (agent-created Ready
-  // path, see scheduled-task.logic.ts isReadyBufferExpiry branch).
-  // Two cases get the buffer:
-  //   1. Anyone creates a Todo task (existing behavior — prep starts at expiry)
-  //   2. Agent creates a Ready task with no schedule (new — execution starts
-  //      at expiry; the agent already classified it as simple+clear and we
-  //      record that decision via metadata.prepDecided=true so the prep
-  //      invoker never re-enters prep for this task)
+  // Buffer wake-up: a freshly-created Ready task sits for 2 minutes so the
+  // user can edit before execution starts. At expiry, the scheduled-task
+  // wake-up handler enqueues the task for the runner.
+  //
+  // Other statuses skip the buffer:
+  //   - Todo = backlog. The task sits idle until promoted to Ready (which
+  //     applies the buffer through the changeTaskStatus path).
+  //   - Waiting = gated on user input via send_message; should not auto-run.
   // Scheduled/recurring tasks use createScheduledTask and skip this buffer.
-  const needsBuffer = effectiveStatus === "Todo" || isAgentCreatedReady;
-
-  if (needsBuffer) {
+  if (effectiveStatus === "Ready") {
     const nextRunAt = new Date(Date.now() + 2 * 60 * 1000);
     await prisma.task.update({
       where: { id: task.id },
-      data: {
-        nextRunAt,
-        // For agent-created Ready, mark prep decided. Phase stays "prep" —
-        // the wake-up handler in scheduled-task.logic.ts will flip it to
-        // "execute" when the buffer expires. The prepDecided flag is what
-        // the prep invoker reads to short-circuit (Task 6).
-        ...(isAgentCreatedReady && {
-          metadata: setTaskPhaseInMetadata(
-            {
-              ...((task.metadata as Record<string, unknown>) ?? {}),
-              prepDecided: true,
-            },
-            "prep",
-          ),
-        }),
-      },
+      data: { nextRunAt },
     });
     try {
       await enqueueScheduledTask(
@@ -361,24 +325,11 @@ export async function updateTaskStatus(
 }
 
 /**
- * Get the next Todo subtask for a parent, ordered by displayId.
- * Returns null if no Todo subtasks remain.
- */
-export async function getNextBacklogSubtask(
-  parentTaskId: string,
-): Promise<Task | null> {
-  return prisma.task.findFirst({
-    where: { parentTaskId, status: "Waiting" },
-    orderBy: { displayId: "asc" },
-  });
-}
-
-/**
  * Central lifecycle handler for task status changes.
  * - Cancels any queued/executing job when moving away from InProgress
  * - Cancels scheduled jobs when deactivating
- * - Sequential subtask execution: parent Todo enqueues first subtask,
- *   subtask completion enqueues next sibling
+ * - Parallel subtask execution: subtasks default Ready and run independently;
+ *   parent auto-Dones when all subtasks are no longer active
  */
 export async function changeTaskStatus(
   taskId: string,
@@ -390,22 +341,21 @@ export async function changeTaskStatus(
   const current = await prisma.task.findUnique({ where: { id: taskId } });
   if (!current) throw new Error(`Task ${taskId} not found`);
 
-  const currentPhase = getTaskPhase(current);
-  if (!canTransition(current.status, status, currentPhase, actor)) {
+  if (!canTransition(current.status, status, actor)) {
     throw new Error(
-      `Invalid transition: ${current.status} -> ${status} in phase ${currentPhase} by ${actor}`,
+      `Invalid transition: ${current.status} -> ${status} by ${actor}`,
     );
   }
 
-  const newPhase = inferNewPhase(current.status, status, currentPhase);
-  const newMetadata = setTaskPhaseInMetadata(current.metadata, newPhase);
-
+  // Canonical wake-up rule for non-scheduled tasks:
+  //   - Moving to Todo / Waiting / Review parks the task. Clear nextRunAt
+  //     and cancel any pending wake-up so an old buffer doesn't fire late.
+  //   - Moving to Ready gives the task a 2-minute editing buffer; at expiry
+  //     the buffer wake-up enqueues the task for execution.
+  // Scheduled/recurring tasks own their own nextRunAt via
+  // scheduleNextTaskOccurrence — we never touch it from here.
   if (status === "Todo" || status === "Waiting" || status === "Review") {
     await cancelTaskJob(taskId);
-    // Also cancel any pending scheduled wake-up (e.g., the Todo 2-min buffer
-    // wake-up, or a stale one-time scheduled fire). None of these states
-    // should have a pending wake-up. Skip for recurring tasks — their
-    // nextRunAt is owned by scheduleNextTaskOccurrence.
     if (!current.schedule && current.nextRunAt) {
       await removeScheduledTask(taskId);
       await prisma.task.update({
@@ -415,108 +365,53 @@ export async function changeTaskStatus(
     }
   }
 
-  // Unblock resume: when a task moves from Waiting → Todo (prep-phase unblock),
-  // the original 2-min buffer wake-up was already cancelled above. Immediately
-  // enqueue so prep resumes without waiting for a wake-up that will never come.
-  if (
-    status === "Todo" &&
-    current.status === "Waiting" &&
-    !current.schedule
-  ) {
-    await enqueueTask({ taskId, workspaceId, userId });
-  }
-
-  // Auto-start execution when task moves to Ready
-  if (status === "Ready") {
-    // If this transition is skipping ahead of a pending scheduled wake-up
-    // (typical for the Todo+buffer case, or butler/user promoting early), we
-    // must cancel the stale scheduled wake-up and clear nextRunAt — otherwise
-    // the wake-up fires after execution starts and runs the pipeline a second
-    // time. Only do this for non-recurring tasks; recurring tasks own their
-    // nextRunAt via scheduleNextTaskOccurrence.
-    if (!current.schedule && current.nextRunAt) {
+  if (status === "Ready" && !current.schedule) {
+    // Clear any stale wake-up before scheduling the new buffer. Without
+    // this, a leftover wake-up from an earlier Ready stint could still
+    // fire alongside the new one.
+    if (current.nextRunAt) {
       await removeScheduledTask(taskId);
-      await prisma.task.update({
-        where: { id: taskId },
-        data: { nextRunAt: null },
-      });
     }
 
-    // Scheduled/recurring tasks must NOT be enqueued immediately — their
-    // nextRunAt is still valid and the scheduled wake-up will fire at the
-    // right time. Only enqueue non-scheduled tasks right away.
-    if (!current.schedule) {
-      // Check if this task has Waiting subtasks — if so, start the first one
-      // by transitioning it to Todo (which triggers enqueue via the
-      // Waiting→Todo handler above), and move parent to Working.
-      const nextSubtask = await getNextBacklogSubtask(taskId);
-      if (nextSubtask) {
-        await changeTaskStatus(
-          nextSubtask.id,
-          "Todo",
-          workspaceId,
-          userId,
-          "system",
-        );
-        // Parent flips directly to Working/execute (subtask sequencing is its own
-        // engine; parent doesn't need its own prep pass).
-        await prisma.task.update({
-          where: { id: taskId },
-          data: {
-            status: "Working",
-            metadata: setTaskPhaseInMetadata(current.metadata, "execute"),
-          },
-        });
-        return prisma.task.findUniqueOrThrow({ where: { id: taskId } });
-      }
-      // No subtasks — enqueue the task itself (existing behavior)
-      await enqueueTask({ taskId, workspaceId, userId });
+    const nextRunAt = new Date(Date.now() + 2 * 60 * 1000);
+    await prisma.task.update({
+      where: { id: taskId },
+      data: { nextRunAt },
+    });
+    try {
+      await enqueueScheduledTask(
+        { taskId, workspaceId, userId, channel: current.channel ?? "email" },
+        nextRunAt,
+      );
+    } catch (err) {
+      logger.warn("Failed to enqueue 2-min Ready buffer wake-up", {
+        err,
+        taskId,
+      });
     }
   }
 
-  // Subtask completed — trigger next Waiting sibling (sequential flow only),
-  // or auto-complete parent if all done.
-  if (status === "Done") {
-    if (current.parentTaskId) {
-      // Load parent to check if this is sequential flow or cherry-pick
-      const parentTask = await prisma.task.findUnique({
-        where: { id: current.parentTaskId },
-        select: { status: true },
-      });
-
-      // Only trigger next sibling if parent is Working (sequential flow).
-      // If parent is Waiting (not yet approved), this was a cherry-pick — don't cascade.
-      if (parentTask?.status === "Working") {
-        const nextSibling = await getNextBacklogSubtask(current.parentTaskId);
-        if (nextSibling) {
-          // Transition Waiting → Todo triggers enqueue
-          await changeTaskStatus(
-            nextSibling.id,
-            "Todo",
-            workspaceId,
-            userId,
-            "system",
-          );
-        } else {
-          // No more Waiting siblings — check if all subtasks are done
-          const activeSubtasks = await prisma.task.count({
-            where: {
-              parentTaskId: current.parentTaskId,
-              status: { in: ["Todo", "Working", "Waiting"] },
-            },
-          });
-          if (activeSubtasks === 0) {
-            // Parent auto-completion is a system-on-behalf-of-user transition.
-            await changeTaskStatus(
-              current.parentTaskId,
-              "Done",
-              workspaceId,
-              userId,
-              "user",
-            );
-          }
-        }
-      }
+  // Subtask Done — auto-complete parent if no siblings are still active.
+  // In the parallel model there is no "next sibling" to kick off; subtasks
+  // run independently and the parent flips to Done once every child has
+  // left the active set (Todo / Working / Waiting / Ready).
+  if (status === "Done" && current.parentTaskId) {
+    const activeSiblings = await prisma.task.count({
+      where: {
+        parentTaskId: current.parentTaskId,
+        id: { not: taskId },
+        status: { in: ["Todo", "Working", "Waiting", "Ready"] },
+      },
+    });
+    if (activeSiblings === 0) {
+      // Parent auto-completion is a system-on-behalf-of-user transition.
+      await changeTaskStatus(
+        current.parentTaskId,
+        "Done",
+        workspaceId,
+        userId,
+        "user",
+      );
     }
   }
 
@@ -535,19 +430,8 @@ export async function changeTaskStatus(
 
   const task = await prisma.task.update({
     where: { id: taskId },
-    data: { status, metadata: newMetadata },
+    data: { status },
   });
-
-  // Auto-transition: when a SUBTASK moves to Review in prep phase,
-  // skip the user approval gate and move directly to Ready.
-  // The user already approved the parent plan — subtasks execute autonomously.
-  if (
-    status === "Review" &&
-    current.parentTaskId &&
-    currentPhase === "prep"
-  ) {
-    return changeTaskStatus(taskId, "Ready", workspaceId, userId, "system");
-  }
 
   return task;
 }
@@ -563,15 +447,10 @@ export async function markTaskInProcess(
   id: string,
   jobId?: string,
 ): Promise<Task> {
-  const existing = await prisma.task.findUnique({ where: { id } });
-  // Preserve the current phase — prep tasks should stay in prep even while
-  // Working, so the agent context still knows it's planning, not executing.
-  const currentPhase = existing ? getTaskPhase(existing) : "execute";
   return prisma.task.update({
     where: { id },
     data: {
       status: "Working",
-      metadata: setTaskPhaseInMetadata(existing?.metadata ?? null, currentPhase),
       ...(jobId && { jobId }),
     },
   });
@@ -581,12 +460,10 @@ export async function markTaskCompleted(
   id: string,
   result: string,
 ): Promise<Task> {
-  const existing = await prisma.task.findUnique({ where: { id } });
   return prisma.task.update({
     where: { id },
     data: {
       status: "Review",
-      metadata: setTaskPhaseInMetadata(existing?.metadata ?? null, "execute"),
       result,
     },
   });
@@ -737,9 +614,9 @@ export async function createScheduledTask(
     nextRunAt = computeNextRun(data.schedule, timezone, afterTime);
   }
 
-  // Scheduled/recurring tasks skip the prep phase — the user already told us
-  // when to run and (implicitly) what to do. The first execution handles any
-  // clarification in the execution conversation, not a separate prep pass.
+  // Scheduled/recurring tasks land directly in Ready — execute mind is the
+  // implicit default (absence of metadata.phase). The first execution
+  // handles any clarification in the execution conversation.
   const status: TaskStatus = "Ready";
 
   const task = await prisma.task.create({
@@ -759,7 +636,7 @@ export async function createScheduledTask(
       parentTaskId: data.parentTaskId ?? null,
       isActive: true,
       source: data.source ?? "manual",
-      metadata: setTaskPhaseInMetadata(data.metadata ?? null, "execute"),
+      ...(data.metadata && { metadata: data.metadata as never }),
     },
   });
 

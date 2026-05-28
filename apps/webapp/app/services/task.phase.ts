@@ -3,14 +3,20 @@ import type { TaskStatus } from "@prisma/client";
 export type { TaskStatus };
 
 /**
- * A task's phase. Stored in `task.metadata.phase`.
+ * A task's phase — which mind the agent is in when it picks up the task.
  *
- * - "prep"    = Phase 1: butler is preparing the task (Todo ⇄ Waiting → Ready).
- * - "execute" = Phase 2: butler is executing (Ready → Working ⇄ Waiting → Review → Done).
+ * - "execute" = the default. The agent reads the task and does the work.
+ * - "prep"    = the agent self-promoted via the enter_plan_mode tool to
+ *               gather information / shape an open-ended goal. It writes
+ *               a plan into the task description, then calls
+ *               exit_plan_mode to drop back into execute.
  *
- * Phase disambiguates the `Waiting` status, which can legitimately appear in
- * either phase. When the user answers a Waiting question, phase tells the
- * agent whether the answer feeds planning or execution.
+ * Phase is agent-driven, not status-driven. Status transitions do NOT
+ * change phase — that prevents an in-flight plan from being silently
+ * undone by an update_task(status: "Waiting") side-effect.
+ *
+ * Only "prep" is stored in metadata. Absence of `metadata.phase` is
+ * execute.
  */
 export type TaskPhase = "prep" | "execute";
 
@@ -22,14 +28,12 @@ export type TaskPhase = "prep" | "execute";
  */
 export type TransitionActor = "agent" | "user" | "system";
 
-const PHASE_1_STATUSES: TaskStatus[] = ["Todo", "Waiting"];
-
 // ─── Phase storage helpers ──────────────────────────────────────────
 
 /**
- * Read the phase for a task. Phase lives in `task.metadata.phase`. When
- * absent (older tasks created before this feature), we infer from status:
- * Todo/Waiting → prep, everything else → execute.
+ * Read the phase for a task. "prep" is recorded in metadata when the agent
+ * calls enter_plan_mode; everything else (including absence of metadata,
+ * legacy values, and explicit "execute") is execute.
  */
 export function getTaskPhase(task: {
   status: TaskStatus;
@@ -39,23 +43,17 @@ export function getTaskPhase(task: {
     task.metadata && typeof task.metadata === "object"
       ? (task.metadata as Record<string, unknown>)
       : null;
-  const raw = meta?.phase;
-  if (raw === "prep" || raw === "execute") return raw;
-  return inferPhaseFromStatus(task.status);
-}
-
-/**
- * Default phase for a given status when no metadata is present. Matches the
- * backfill rule: Phase 1 statuses are prep, everything else is execute.
- */
-export function inferPhaseFromStatus(status: TaskStatus): TaskPhase {
-  if (status === "Todo" || status === "Waiting") return "prep";
-  return "execute";
+  return meta?.phase === "prep" ? "prep" : "execute";
 }
 
 /**
  * Immutably produce a new metadata object with `phase` set. Caller is
  * responsible for persisting the result (typically via prisma.task.update).
+ *
+ * When `phase === "execute"` the phase key is REMOVED from metadata rather
+ * than set — execute is the implicit default and storing it would just
+ * add noise (and would force every transition to write metadata even when
+ * the phase didn't change).
  */
 export function setTaskPhaseInMetadata(
   existing: unknown,
@@ -65,6 +63,10 @@ export function setTaskPhaseInMetadata(
     existing && typeof existing === "object"
       ? (existing as Record<string, unknown>)
       : {};
+  if (phase === "execute") {
+    const { phase: _phase, ...rest } = base;
+    return rest;
+  }
   return { ...base, phase };
 }
 
@@ -72,63 +74,29 @@ export function setTaskPhaseInMetadata(
 
 /**
  * Decide whether a (from → to) status transition is allowed for the given
- * actor and current phase. Encodes the spec's transition table.
+ * actor. Phase is NOT consulted — status and phase are independent in the
+ * execute-first lifecycle (phase is agent-driven via enter/exit_plan_mode
+ * only).
+ *
+ * Agent-allowed targets: Waiting, Review. Everything else is reserved for
+ * system (runtime promotions, scheduled fires) or user (UI / approval).
  */
 export function canTransition(
   from: TaskStatus,
   to: TaskStatus,
-  phase: TaskPhase,
   actor: TransitionActor,
 ): boolean {
   if (from === to) return true;
 
-  // Deny-list: only block transitions that are genuinely dangerous.
-  // Everything else is allowed — the system and prompts guide correct usage.
-
-  // Working, Done, Todo — never agent-driven. The system manages these
-  // (runtime → Working when execution starts, user → Done, parking → Todo).
+  // Agents may only put a task into Waiting (block, need user input) or
+  // Review (work complete, awaiting user verification). Working / Done /
+  // Todo / Ready are all system- or user-driven in execute-first.
   if (
-    (to === "Working" || to === "Done" || to === "Todo") &&
-    actor === "agent"
+    actor === "agent" &&
+    (to === "Working" || to === "Done" || to === "Todo" || to === "Ready")
   ) {
     return false;
   }
 
-  // Ready — agent may set Ready ONLY during prep. This covers two cases:
-  // (1) butler skips the prep gate for simple+clear tasks (Todo -> Ready),
-  // (2) butler unblocks itself after a Waiting answer (Waiting -> Ready).
-  // Once we've crossed into execute, only system or user can flip back to
-  // Ready (e.g., user approves from Review). This guard is what prevents
-  // an auto-loop: once the agent moves a task to execute, it cannot
-  // promote it back to Ready from execute context.
-  if (to === "Ready" && actor === "agent" && phase !== "prep") {
-    return false;
-  }
-
   return true;
-}
-
-/**
- * Given a validated transition, compute the new `phase` value.
- * Called after canTransition returns true.
- */
-export function inferNewPhase(
-  from: TaskStatus,
-  to: TaskStatus,
-  currentPhase: TaskPhase,
-): TaskPhase {
-  // Any transition TO Ready/Working/Review/Done flips to execute.
-  if (to === "Ready" || to === "Working" || to === "Review" || to === "Done") {
-    return "execute";
-  }
-  // Waiting keeps the current phase (the disambiguation problem — Waiting can
-  // exist in either phase, so we preserve whichever we were in).
-  if (to === "Waiting") {
-    return currentPhase;
-  }
-  // Todo is always prep (only entered fresh; we don't go back to Todo).
-  if (to === "Todo") {
-    return "prep";
-  }
-  return currentPhase;
 }

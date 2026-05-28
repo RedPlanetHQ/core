@@ -251,18 +251,6 @@ FOLLOW-UP REMINDERS:
           .describe(
             "ID of the parent reminder. Required if isFollowUp is true.",
           ),
-        skillId: z
-          .string()
-          .optional()
-          .describe(
-            "ID of a skill to attach to this reminder. When the reminder fires, the skill's instructions will be loaded and executed.",
-          ),
-        skillName: z
-          .string()
-          .optional()
-          .describe(
-            "Name of the attached skill.",
-          ),
       }),
       execute: async ({
         text,
@@ -273,8 +261,6 @@ FOLLOW-UP REMINDERS:
         endDate,
         isFollowUp,
         parentReminderId,
-        skillId,
-        skillName,
       }) => {
         try {
           // Enforce minimum recurrence interval
@@ -346,17 +332,13 @@ FOLLOW-UP REMINDERS:
             `Creating reminder for workspace ${workspaceId}: ${text} (${schedule}, start: ${startDate}, max: ${maxOcc}, end: ${endDate}, followUp: ${isFollowUp}) on ${targetChannelName}${targetChannelId ? ` [channelId: ${targetChannelId}]` : ""}`,
           );
 
-          // Build metadata for follow-ups and skill attachments
+          // Build metadata for follow-ups
           const metadata: Record<string, unknown> = {};
           if (isFollowUp) {
             metadata.isFollowUp = true;
             metadata.parentReminderId = parentReminderId || null;
             metadata.originalSentAt = new Date().toISOString();
             metadata.followUpAction = text;
-          }
-          if (skillId) {
-            metadata.skillId = skillId;
-            metadata.skillName = skillName || null;
           }
 
           const reminder = await addReminder(workspaceId, {
