@@ -33,7 +33,7 @@ const ScratchpadTaskComponent = ({
   const { id } = node.attrs;
   const { parentTaskId } = extension.options ?? {};
 
-  const [status, setStatus] = useState<TaskStatus>("Todo");
+  const [status, setStatus] = useState<TaskStatus>("Ready");
   const [taskMeta, setTaskMeta] = useState<{
     displayId: string | null;
     nextRunAt: string | null;
@@ -51,7 +51,7 @@ const ScratchpadTaskComponent = ({
   const navigate = useNavigate();
 
   const applyTaskData = useCallback((data: any) => {
-    setStatus(data.status ?? "Todo");
+    setStatus(data.status ?? "Ready");
     setTaskMeta({
       displayId: data.displayId ?? null,
       nextRunAt: data.nextRunAt ?? null,
@@ -78,7 +78,11 @@ const ScratchpadTaskComponent = ({
       body: JSON.stringify({
         title: "Untitled task",
         source: "daily",
-        status: "Todo",
+        // Ready triggers the 2-minute editing buffer; if the user walks
+        // away without naming the task, the buffer-expiry handler in
+        // scheduled-task.logic.ts auto-deletes the empty row instead of
+        // executing it (see isTaskEmpty).
+        status: "Ready",
         ...(parentTaskId ? { parentTaskId } : {}),
       }),
     })
