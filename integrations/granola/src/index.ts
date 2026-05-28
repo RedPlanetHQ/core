@@ -64,6 +64,10 @@ class GranolaCLI extends IntegrationCLI {
       description:
         "Sync AI meeting notes and transcripts from Granola into CORE. Access your meetings, summaries, and action items.",
       icon: "granola",
+      schedule: {
+        frequency: "*/15 * * * *",
+      },
+      enableAutoRead: true,
       auth: {
         mcp: {
           server_url: "https://mcp.granola.ai/mcp",
