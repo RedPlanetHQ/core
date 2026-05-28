@@ -18,10 +18,6 @@ interface Meeting {
   date?: string;
   attendees?: string[];
   url?: string;
-  summary?: string;
-  notes?: string;
-  transcript?: string;
-  action_items?: string[];
 }
 
 function parseMeetingsFromContent(raw: string): Meeting[] {
@@ -35,54 +31,31 @@ function parseMeetingsFromContent(raw: string): Meeting[] {
   return [];
 }
 
-function parseMeetingDetail(raw: string): Partial<Meeting> {
-  try {
-    return JSON.parse(raw);
-  } catch {
-    return { notes: raw };
-  }
+function createActivityMessage(params: { text: string; sourceURL: string }) {
+  return {
+    type: 'activity',
+    data: {
+      text: params.text,
+      sourceURL: params.sourceURL,
+    },
+  };
 }
 
-async function fetchMeetingDetail(
-  config: Record<string, any>,
-  meetingId: string,
-): Promise<Partial<Meeting>> {
-  try {
-    const result = await callGranolaToolRPC(config, 'get_meeting', { id: meetingId });
-    const rawText = parseMeetingContent(result?.content ?? []);
-    return parseMeetingDetail(rawText);
-  } catch {
-    return {};
-  }
-}
-
-function formatMeetingActivity(meeting: Meeting, detail: Partial<Meeting>): string {
+function formatMeetingActivity(meeting: Meeting): string {
   const title = meeting.title || 'Untitled Meeting';
   const date = meeting.date ? new Date(meeting.date).toLocaleString() : '';
   const attendees = (meeting.attendees ?? []).join(', ');
 
-  const lines: string[] = [`## Meeting: ${title}`];
+  const parts: string[] = [`Meeting in Granola: "${title}"`];
 
-  if (date) lines.push(`**Date:** ${date}`);
-  if (attendees) lines.push(`**Attendees:** ${attendees}`);
+  if (meeting.id) parts.push(`meeting_id: ${meeting.id}`);
+  if (attendees) parts.push(`attendees: ${attendees}`);
 
-  const notes = detail.notes ?? meeting.summary;
-  if (notes) {
-    lines.push('');
-    lines.push('### Notes');
-    lines.push(notes);
-  }
+  let text = parts[0];
+  if (parts.length > 1) text += ` (${parts.slice(1).join(', ')})`;
+  if (date) text += ` at ${date}`;
 
-  const actionItems = detail.action_items ?? [];
-  if (actionItems.length > 0) {
-    lines.push('');
-    lines.push('### Action Items');
-    for (const item of actionItems) {
-      lines.push(`- ${item}`);
-    }
-  }
-
-  return lines.join('\n');
+  return text;
 }
 
 export async function handleSchedule(
@@ -107,31 +80,24 @@ export async function handleSchedule(
         latestMeetingTime = meetingTime;
       }
 
-      const detail = meeting.id ? await fetchMeetingDetail(config, meeting.id) : {};
-      const text = formatMeetingActivity(meeting, detail);
-
-      activities.push({
-        type: 'activity',
-        data: {
-          text,
+      activities.push(
+        createActivityMessage({
+          text: formatMeetingActivity(meeting),
           sourceURL: meeting.url ?? '',
-        },
-      });
+        }),
+      );
     }
   } catch (error: any) {
     console.error('Granola schedule sync error:', error.message);
   }
 
-  // Only advance lastSyncTime if we actually found meetings (mirrors Gmail behavior)
-  const newSyncTime =
-    latestMeetingTime > 0
-      ? new Date(latestMeetingTime + 1000).toISOString()
-      : new Date().toISOString();
-
-  activities.push({
-    type: 'state',
-    data: { lastSyncTime: newSyncTime },
-  });
+  // Only advance lastSyncTime and emit state when meetings were found (mirrors Gmail behavior)
+  if (latestMeetingTime > 0) {
+    activities.push({
+      type: 'state',
+      data: { lastSyncTime: new Date(latestMeetingTime + 1000).toISOString() },
+    });
+  }
 
   return activities;
 }
