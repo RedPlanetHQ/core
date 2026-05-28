@@ -341,9 +341,9 @@ RESUMING vs STARTING vs POLLING (both tracks):
 - If the intent includes a sessionId but NO user answers (just "check status", "poll", or was rescheduled) → this is a POLL. Do NOT call coding_ask. Go straight to coding_read_session to check the session output. Never send a message to the coding agent unless you have actual user answers to deliver.
 
 CODING AGENT SELECTION:
-coding_ask accepts an \`agent\` parameter that selects which coding CLI runs the session (e.g. "claude-code", "codex", "cursor-agent"). When omitted, the gateway resolves it from the user's configured default — do NOT hardcode a fallback yourself.
-- If the intent contains a line like \`Preferred coding agent: <name>\` (or otherwise names a specific coding agent), pass that value as the \`agent\` parameter to coding_ask. Honor it whether the call is a new session, a resume, or a switch.
-- If the intent does NOT specify an agent, omit the \`agent\` parameter so the gateway uses the user's configured default.
+coding_ask accepts an \`agent\` parameter that selects which coding CLI runs the session. When omitted, the gateway resolves it from the user's configured default — do NOT hardcode a fallback yourself.
+- If the intent names a specific coding agent (e.g. \`Preferred coding agent: <name>\`, or the user said "use codex"/"with claude"/etc.), call \`coding_list_agents\` FIRST to discover the exact configured name, then pass that exact name as the \`agent\` parameter. The user's wording is a hint, not the literal name — e.g. "codex" usually maps to a registered name like \`codex-cli\`. Do NOT pass user input verbatim.
+- If the intent does NOT specify an agent, omit the \`agent\` parameter so the gateway uses the user's configured default — no need to call \`coding_list_agents\`.
 
 ---
 
