@@ -241,19 +241,19 @@ async function processUserEvents(
 
           switch (event.type) {
             case 'pr':
-              title = `${username} created PR #${event.number}: ${event.title}`;
+              title = `${username} created PR #${event.number} in ${event.repository?.full_name}: ${event.title}`;
               break;
             case 'issue':
-              title = `${username} created issue #${event.number}: ${event.title}`;
+              title = `${username} created issue #${event.number} in ${event.repository?.full_name}: ${event.title}`;
               break;
             case 'pr_comment':
-              title = `${username} commented on PR #${event.number}: ${event.title}`;
+              title = `${username} commented on PR #${event.number} in ${event.repository?.full_name}: ${event.title}`;
               break;
             case 'issue_comment':
-              title = `${username} commented on issue #${event.number}: ${event.title}`;
+              title = `${username} commented on issue #${event.number} in ${event.repository?.full_name}: ${event.title}`;
               break;
             case 'self_assigned_issue':
-              title = `${username} assigned themselves to issue #${event.number}: ${event.title}`;
+              title = `${username} assigned themselves to issue #${event.number} in ${event.repository?.full_name}: ${event.title}`;
               break;
             default:
               title = `GitHub activity: ${event.title || 'Unknown'}`;
