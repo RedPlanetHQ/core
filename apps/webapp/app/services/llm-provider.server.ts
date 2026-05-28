@@ -446,6 +446,7 @@ export async function resolveApiKeyForWorkspace(
  * Duplicated from model.server.ts to avoid circular imports.
  */
 function inferProviderFromModelId(modelId: string): string {
+  if (env.CHAT_PROVIDER === "ollama") return "ollama";
   if (
     modelId.startsWith("gpt-") ||
     modelId.startsWith("o3") ||
@@ -523,13 +524,24 @@ export async function resolveModelConfig(
   modelString: string,
   workspaceId: string | null | undefined,
 ): Promise<ResolvedModelConfig> {
-  const { toRouterString, getProvider } = await import("~/lib/model.server");
+  const { toRouterString, getProvider, getModel } = await import("~/lib/model.server");
 
   const providerType = getProvider(modelString);
   const { apiKey, isBYOK } = await resolveApiKeyForWorkspace(
     workspaceId,
     providerType,
   );
+
+  // Mastra's router has no local-Ollama provider (only ollama-cloud), so a local
+  // Ollama needs a concrete AI SDK model instance built with its base URL — the
+  // same path createAgent/getModel uses — instead of a router string that fails.
+  if (providerType === "ollama") {
+    return {
+      modelConfig: getModel(modelString) as unknown as ModelConfig,
+      isBYOK,
+    };
+  }
+
   const routerString = toRouterString(modelString) as `${string}/${string}`;
 
   if (isBYOK && apiKey) {
