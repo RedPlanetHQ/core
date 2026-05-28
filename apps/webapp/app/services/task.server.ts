@@ -243,9 +243,23 @@ export async function getTaskFull(
 
 export async function getTasks(
   workspaceId: string,
-  options?: { status?: TaskStatus; isScheduled?: boolean },
+  options?: {
+    status?: TaskStatus;
+    isScheduled?: boolean;
+    createdAfter?: Date;
+    createdBefore?: Date;
+    dueAfter?: Date;
+    dueBefore?: Date;
+  },
 ): Promise<TaskWithRelations[]> {
-  const { status, isScheduled } = options ?? {};
+  const {
+    status,
+    isScheduled,
+    createdAfter,
+    createdBefore,
+    dueAfter,
+    dueBefore,
+  } = options ?? {};
 
   const scheduledFilter =
     isScheduled === true
@@ -262,11 +276,33 @@ export async function getTasks(
           }
         : {};
 
+  const createdAtFilter =
+    createdAfter || createdBefore
+      ? {
+          createdAt: {
+            ...(createdAfter && { gte: createdAfter }),
+            ...(createdBefore && { lte: createdBefore }),
+          },
+        }
+      : {};
+
+  const dueAtFilter =
+    dueAfter || dueBefore
+      ? {
+          nextRunAt: {
+            ...(dueAfter && { gte: dueAfter }),
+            ...(dueBefore && { lte: dueBefore }),
+          },
+        }
+      : {};
+
   return prisma.task.findMany({
     where: {
       workspaceId,
       ...(status && { status }),
       ...scheduledFilter,
+      ...createdAtFilter,
+      ...dueAtFilter,
     },
     orderBy: { createdAt: "desc" },
     include: {
@@ -1053,12 +1089,37 @@ export async function rescheduleTaskAt(
  */
 export async function getScheduledTasksForWorkspace(
   workspaceId: string,
+  options?: {
+    createdAfter?: Date;
+    createdBefore?: Date;
+    dueAfter?: Date;
+    dueBefore?: Date;
+  },
 ): Promise<Task[]> {
+  const { createdAfter, createdBefore, dueAfter, dueBefore } = options ?? {};
+
+  // nextRunAt must be non-null AND fall inside the requested range when one
+  // is provided. Combine both conditions into a single Prisma filter.
+  const nextRunAtFilter: Record<string, unknown> = { not: null };
+  if (dueAfter) nextRunAtFilter.gte = dueAfter;
+  if (dueBefore) nextRunAtFilter.lte = dueBefore;
+
+  const createdAtFilter =
+    createdAfter || createdBefore
+      ? {
+          createdAt: {
+            ...(createdAfter && { gte: createdAfter }),
+            ...(createdBefore && { lte: createdBefore }),
+          },
+        }
+      : {};
+
   return prisma.task.findMany({
     where: {
       workspaceId,
       isActive: true,
-      nextRunAt: { not: null },
+      nextRunAt: nextRunAtFilter,
+      ...createdAtFilter,
     },
     orderBy: { createdAt: "desc" },
   });

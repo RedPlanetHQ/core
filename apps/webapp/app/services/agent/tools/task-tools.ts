@@ -7,7 +7,6 @@ import {
   updateScheduledTask,
   getTaskById,
   getTasks,
-  searchTasks,
   changeTaskStatus,
   deleteTask,
   confirmTaskActive,
@@ -423,7 +422,7 @@ FOLLOW-UP: Set isFollowUp=true and parentTaskId to reschedule an existing task.`
 
     list_tasks: tool({
       description:
-        "List tasks with their current status. Use type filter to see scheduled/recurring tasks separately.",
+        "List tasks with their current status. Use type filter to see scheduled/recurring tasks separately. Date filters narrow by createdAt (when the task was created) or dueAt (when a scheduled task next fires). All dates are ISO 8601 (YYYY-MM-DD or full ISO datetime). Use this to find tasks by topic — there is no keyword search; list all and pick the matching one yourself.",
       inputSchema: z.object({
         status: z
           .enum([
@@ -443,14 +442,56 @@ FOLLOW-UP: Set isFollowUp=true and parentTaskId to reschedule an existing task.`
           .describe(
             "Filter by type: 'immediate' (no schedule), 'scheduled' (one-time), 'recurring'. Default: all.",
           ),
+        createdAfter: z
+          .string()
+          .optional()
+          .describe(
+            "ISO 8601 date — only return tasks created on or after this date (e.g. '2026-05-01').",
+          ),
+        createdBefore: z
+          .string()
+          .optional()
+          .describe(
+            "ISO 8601 date — only return tasks created on or before this date.",
+          ),
+        dueAfter: z
+          .string()
+          .optional()
+          .describe(
+            "ISO 8601 date — only return tasks scheduled to fire on or after this date (applies to scheduled/recurring tasks via nextRunAt).",
+          ),
+        dueBefore: z
+          .string()
+          .optional()
+          .describe(
+            "ISO 8601 date — only return tasks scheduled to fire on or before this date.",
+          ),
       }),
-      execute: async ({ status, type }) => {
+      execute: async ({
+        status,
+        type,
+        createdAfter,
+        createdBefore,
+        dueAfter,
+        dueBefore,
+      }) => {
         try {
+          const parseDate = (input: string | undefined): Date | undefined => {
+            if (!input) return undefined;
+            const d = new Date(input);
+            return Number.isNaN(d.getTime()) ? undefined : d;
+          };
+          const dateOpts = {
+            createdAfter: parseDate(createdAfter),
+            createdBefore: parseDate(createdBefore),
+            dueAfter: parseDate(dueAfter),
+            dueBefore: parseDate(dueBefore),
+          };
+
           let tasks;
 
           if (type === "scheduled" || type === "recurring") {
-            // Get active scheduled tasks
-            tasks = await getScheduledTasksForWorkspace(workspaceId);
+            tasks = await getScheduledTasksForWorkspace(workspaceId, dateOpts);
             if (type === "recurring") {
               tasks = tasks.filter(
                 (t) =>
@@ -460,16 +501,16 @@ FOLLOW-UP: Set isFollowUp=true and parentTaskId to reschedule an existing task.`
               tasks = tasks.filter((t) => t.maxOccurrences === 1);
             }
           } else if (type === "immediate") {
-            tasks = await getTasks(
-              workspaceId,
-              status as TaskStatus | undefined,
-            );
+            tasks = await getTasks(workspaceId, {
+              status: status as TaskStatus | undefined,
+              ...dateOpts,
+            });
             tasks = tasks.filter((t) => !t.schedule && !t.nextRunAt);
           } else {
-            tasks = await getTasks(
-              workspaceId,
-              status as TaskStatus | undefined,
-            );
+            tasks = await getTasks(workspaceId, {
+              status: status as TaskStatus | undefined,
+              ...dateOpts,
+            });
           }
 
           if (tasks.length === 0) return "No tasks found.";
@@ -495,37 +536,6 @@ FOLLOW-UP: Set isFollowUp=true and parentTaskId to reschedule an existing task.`
           return lines.join("\n");
         } catch (error) {
           return "Failed to list tasks.";
-        }
-      },
-    }),
-
-    search_tasks: tool({
-      description: `Find an existing task by keyword. Use when the user is referring to a task that already exists and you need to locate it. Searches across task titles and descriptions.`,
-      inputSchema: z.object({
-        query: z
-          .string()
-          .describe(
-            "Search keyword to match against task title and description",
-          ),
-      }),
-      execute: async ({ query }) => {
-        try {
-          const tasks = await searchTasks(workspaceId, query);
-          if (tasks.length === 0) return "No matching tasks found.";
-          const lines = await Promise.all(
-            tasks.map(async (t, i) => {
-              let info = `${i + 1}. [${t.status}] ${t.title}`;
-              if (t.pageId) {
-                const html = await getPageContentAsHtml(t.pageId);
-                if (html) info += ` — ${html.substring(0, 100)}`;
-              }
-              info += ` (ID: ${t.displayId ?? t.id})`;
-              return info;
-            }),
-          );
-          return lines.join("\n");
-        } catch (error) {
-          return "Failed to search tasks.";
         }
       },
     }),
