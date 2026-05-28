@@ -52,7 +52,7 @@ const { action, loader } = createActionApiRoute(
       const queueResponse = await addToQueue(
         ingestData,
         authentication.userId,
-        authentication.workspaceId,
+        authentication.workspaceId as string,
         activity.id,
       );
 

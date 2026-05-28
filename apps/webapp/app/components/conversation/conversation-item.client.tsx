@@ -19,7 +19,7 @@ import { ToolApprovalPanel } from "./tool-approval-panel.client";
 
 interface AIConversationItemProps {
   message: UIMessage;
-  createdAt?: string;
+  createdAt?: string | Date;
   addToolApprovalResponse: ChatAddToolApproveResponseFunction;
   setToolArgOverride: (
     toolCallId: string,

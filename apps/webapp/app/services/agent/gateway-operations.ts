@@ -103,7 +103,7 @@ USE THIS TOOL to offload tasks like:
           idempotentHint: false,
           destructiveHint: true,
         },
-      } satisfies GatewayMCPTool;
+      } as GatewayMCPTool;
     }),
   );
 

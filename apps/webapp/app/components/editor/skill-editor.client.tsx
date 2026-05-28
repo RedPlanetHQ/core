@@ -75,8 +75,13 @@ export const SkillEditor = forwardRef<SkillEditorHandle, SkillEditorProps>(
       transport: new DefaultChatTransport({
         api: "/api/v1/skills/generate",
         prepareSendMessagesRequest({ messages: msgs }) {
-          const lastUser = msgs.findLast((m: any) => m.role === "user");
-          const prompt = lastUser?.parts?.[0]?.text ?? lastUser?.content ?? "";
+          const lastUser = [...msgs].reverse().find(
+            (m: any) => m.role === "user",
+          );
+          const prompt =
+            (lastUser?.parts as any)?.[0]?.text ??
+            (lastUser as any)?.content ??
+            "";
           return {
             body: {
               prompt,
@@ -95,9 +100,11 @@ export const SkillEditor = forwardRef<SkillEditorHandle, SkillEditorProps>(
 
     const isGeneratingDesc = status === "streaming" || status === "submitted";
     const completion =
-      messages
-        .findLast((m) => m.role === "assistant")
-        ?.parts?.find((p: any) => p.type === "text")?.text ?? "";
+      ((
+        [...messages]
+          .reverse()
+          .find((m: any) => m.role === "assistant") as any
+      )?.parts?.find((p: any) => p.type === "text")?.text as string) ?? "";
 
     const editor = useEditor({
       extensions: [
@@ -112,7 +119,7 @@ export const SkillEditor = forwardRef<SkillEditorHandle, SkillEditorProps>(
         },
       },
       onUpdate: ({ editor: ed }) => {
-        setContentMarkdown(ed.storage.markdown.getMarkdown() ?? "");
+        setContentMarkdown(ed.storage.markdown?.getMarkdown() ?? "");
       },
     });
 
@@ -121,7 +128,7 @@ export const SkillEditor = forwardRef<SkillEditorHandle, SkillEditorProps>(
       if (completion) {
         editor?.commands.setContent(completion);
         setContentMarkdown(
-          editor?.storage.markdown.getMarkdown() ?? completion,
+          editor?.storage.markdown?.getMarkdown() ?? completion,
         );
       }
     }, [completion, editor]);
@@ -137,7 +144,7 @@ export const SkillEditor = forwardRef<SkillEditorHandle, SkillEditorProps>(
     const handleGenerateDesc = () => {
       if (!descIntent.trim()) return;
       existingDescRef.current = (
-        editor?.storage.markdown.getMarkdown() ?? ""
+        editor?.storage.markdown?.getMarkdown() ?? ""
       ).trim();
       sendMessage({ text: descIntent.trim() });
     };
@@ -157,7 +164,7 @@ export const SkillEditor = forwardRef<SkillEditorHandle, SkillEditorProps>(
         return;
       }
 
-      const content = editor?.storage.markdown.getMarkdown();
+      const content = editor?.storage.markdown?.getMarkdown();
 
       if (!content?.trim()) {
         toast({ title: "Description is required", variant: "destructive" });

@@ -29,6 +29,7 @@ import { getProgressUpdateTool } from "../tools/utils-tools";
 import { getSkillTool } from "../tools/skill-tools";
 import { truncateToolResult } from "../tools/truncate-result";
 import { type SkillRef } from "../types";
+import type { ModelConfig } from "~/services/llm-provider.server";
 
 // Types for gateway tools (matches schema in database)
 interface GatewayTool {

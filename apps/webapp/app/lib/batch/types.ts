@@ -1,4 +1,4 @@
-import { type CoreMessage } from "ai";
+import { type ModelMessage as CoreMessage } from "ai";
 import { z } from "zod";
 
 export type BatchStatus = "pending" | "processing" | "completed" | "failed" | "cancelled";

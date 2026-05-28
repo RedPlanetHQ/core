@@ -1,8 +1,9 @@
 {
-  "exclude": [],
+  "exclude": ["prisma/migrations/**/*.ts"],
   "include": [
     "remix.env.d.ts",
     "global.d.ts",
+    "tiptap-augment.d.ts",
     "**/*.ts",
     "**/*.tsx",
     "tailwind.config.js",
@@ -30,7 +31,8 @@
     "baseUrl": ".",
     "paths": {
       "~/*": ["./app/*"],
-      "@/*": ["./*"]
+      "@/*": ["./*"],
+      "tinykeys": ["./node_modules/tinykeys/dist/tinykeys.d.ts"]
     },
     "noEmit": true
   }

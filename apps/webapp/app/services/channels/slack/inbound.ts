@@ -181,7 +181,12 @@ export async function parseSlackDMEvent(
   // Fallback: match by bot_user_id from authorizations (covers manual channels
   // where user_id is not set, single-user workspaces)
   if (!channel) {
-    channel = await findChannelByAuthorization(eventBody);
+    // The signature takes a slack user id; pass the bot_user_id from
+    // authorizations if available, otherwise fall back to the sender.
+    const botUserId =
+      (eventBody as { authorizations?: Array<{ user_id?: string }> })
+        .authorizations?.[0]?.user_id ?? slackUserId;
+    channel = await findChannelByAuthorization(botUserId);
   }
 
   if (!channel) {

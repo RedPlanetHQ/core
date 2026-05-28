@@ -88,7 +88,7 @@ const { action } = createHybridActionApiRoute(
             {
               error: "Invalid request body",
               code: "validation_error",
-              details: validationResult.error.errors,
+              details: validationResult.error.issues,
             },
             { status: 400 },
           );
@@ -143,7 +143,7 @@ const { action } = createHybridActionApiRoute(
           {
             error: "Invalid request body",
             code: "validation_error",
-            details: validationResult.error.errors,
+            details: validationResult.error.issues,
           },
           { status: 400 },
         );

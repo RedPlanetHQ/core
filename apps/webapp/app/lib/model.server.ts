@@ -435,7 +435,7 @@ export async function makeStructuredModelCall<T extends z.ZodType>(
 
     const tokenUsage = toTokenUsage(result.usage);
     logTokenUsage(`Structured/${complexity.toUpperCase()}`, model, tokenUsage);
-    return { object: result.object, usage: tokenUsage };
+    return { object: result.object as z.infer<T>, usage: tokenUsage };
   } catch (error) {
     // Fallback: try to recover JSON from error text
     const rawText = extractTextFromError(error);

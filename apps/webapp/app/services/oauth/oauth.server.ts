@@ -311,7 +311,7 @@ export async function getRedirectURL(
     const uniqueId = Date.now().toString(36);
 
     // Generate PKCE code_verifier if PKCE is not disabled
-    const usePkce = !template.disable_pkce;
+    const usePkce = !(template as { disable_pkce?: boolean }).disable_pkce;
     const codeVerifier = usePkce ? generateCodeVerifier() : undefined;
 
     session[uniqueId] = {

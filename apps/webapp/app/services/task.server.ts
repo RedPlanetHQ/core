@@ -502,7 +502,12 @@ export async function getTaskTree(taskId: string): Promise<TaskAncestor[]> {
   let currentId: string | null = taskId;
 
   while (currentId) {
-    const task = await prisma.task.findUnique({
+    const task: {
+      id: string;
+      displayId: string | null;
+      title: string;
+      parentTaskId: string | null;
+    } | null = await prisma.task.findUnique({
       where: { id: currentId },
       select: { id: true, displayId: true, title: true, parentTaskId: true },
     });

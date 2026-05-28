@@ -37,7 +37,8 @@ init();
  * Automatically tracks all errors to telemetry
  */
 export const handleError = Sentry.wrapHandleErrorWithSentry(
-  (error, { request }): { request: any } => {
+  (error: unknown, args: { request: unknown }): void => {
+    const request = args.request as Request;
     // Don't track 404s or aborted requests as errors
     if (
       error instanceof Response &&

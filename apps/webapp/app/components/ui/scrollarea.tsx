@@ -11,7 +11,7 @@ interface ScrollAreaProps
 // Add this custom hook above the ScrollArea component
 function useScrollRestoration(
   id: string | undefined,
-  ref: React.RefObject<HTMLDivElement>,
+  ref: React.RefObject<HTMLDivElement | null>,
 ) {
   React.useEffect(() => {
     const element = ref.current as any;

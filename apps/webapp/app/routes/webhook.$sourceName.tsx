@@ -48,7 +48,7 @@ export async function action({ request, params }: ActionFunctionArgs) {
       integrationAccountId,
       eventBody:
         typeof eventBody === "object"
-          ? JSON.stringify(eventBody).substring(0, 200)
+          ? JSON.stringify(eventBody as any).substring(0, 200)
           : eventBody,
     });
 
@@ -59,10 +59,10 @@ export async function action({ request, params }: ActionFunctionArgs) {
     }
 
     // Slack DM or @mention → respond immediately, process async
-    if (sourceName === "slack" && isSlackDMOrMention(eventBody)) {
+    if (sourceName === "slack" && isSlackDMOrMention(eventBody as any)) {
       void (async () => {
         try {
-          const result = await parseSlackDMEvent(eventBody);
+          const result = await parseSlackDMEvent(eventBody as any);
           if (result.message) {
             await handleChannelMessage("slack", result.message);
           }
@@ -116,7 +116,7 @@ export async function loader({ request, params }: LoaderFunctionArgs) {
 
     logger.debug(`Webhook GET request for ${sourceName}`, {
       integrationAccountId,
-      eventBody: JSON.stringify(eventBody).substring(0, 200),
+      eventBody: JSON.stringify(eventBody as any).substring(0, 200),
     });
 
     // Check if the event is a URL verification challenge (Slack)

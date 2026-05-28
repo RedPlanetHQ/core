@@ -145,6 +145,7 @@ export async function processPersonaGeneration(
   _addToQueue: (
     body: z.infer<typeof IngestBodyRequest>,
     userId: string,
+    workspaceId: string,
     activityId?: string,
     ingestionQueueId?: string,
   ) => Promise<{ id?: string }>,

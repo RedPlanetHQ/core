@@ -15,7 +15,7 @@ export function safeJsonParse(json?: string): unknown {
 export function safeJsonZodParse<T>(
   schema: z.Schema<T>,
   json: string,
-): z.SafeParseReturnType<unknown, T> | undefined {
+): ReturnType<z.ZodType<T>["safeParse"]> | undefined {
   const parsed = safeJsonParse(json);
 
   if (parsed === null) {
@@ -51,7 +51,7 @@ export async function safeBodyFromResponse<T>(
 export async function safeParseBodyFromResponse<T>(
   response: Response,
   schema: z.Schema<T>,
-): Promise<z.SafeParseReturnType<unknown, T> | undefined> {
+): Promise<ReturnType<z.ZodType<T>["safeParse"]> | undefined> {
   try {
     const unknownJson = await response.json();
 

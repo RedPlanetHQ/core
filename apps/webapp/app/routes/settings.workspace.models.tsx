@@ -5,6 +5,7 @@ import {
 } from "@remix-run/node";
 import { useLoaderData, useFetcher } from "@remix-run/react";
 import { useState } from "react";
+import { Prisma } from "@prisma/client";
 import { requireUser } from "~/services/session.server";
 import { prisma } from "~/db.server";
 import { SettingSection } from "~/components/setting-section";
@@ -133,7 +134,7 @@ export const action = async ({ request }: ActionFunctionArgs) => {
         metadata: {
           ...metadata,
           modelConfig: { ...currentConfig, [useCase]: { modelId } },
-        },
+        } as Prisma.InputJsonValue,
       },
     });
 
@@ -553,7 +554,7 @@ export default function ModelsSettings() {
 
   const modelsByProvider = models.reduce(
     (acc, model) => {
-      const providerLabel = model.provider.label ?? model.provider.type;
+      const providerLabel = model.provider.name ?? model.provider.type;
       if (!acc[providerLabel]) acc[providerLabel] = [];
       acc[providerLabel].push({
         id: model.id,

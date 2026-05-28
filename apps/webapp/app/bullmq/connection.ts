@@ -21,7 +21,9 @@ export function getRedisConnection() {
     password: process.env.REDIS_PASSWORD,
     maxRetriesPerRequest: null, // Required for BullMQ
     enableReadyCheck: false, // Required for BullMQ
-    autoPipelining: true, // Coalesce concurrent commands to avoid ENOBUFS under burst load
+    // Coalesce concurrent commands to avoid ENOBUFS under burst load.
+    // Not in the RedisOptions type but supported at runtime.
+    ...({ autoPipelining: true } as object),
   };
 
   // Add TLS configuration if not disabled

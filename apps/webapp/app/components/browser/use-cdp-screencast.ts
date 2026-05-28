@@ -34,7 +34,7 @@ export interface ScreencastApi {
   /** Error string when `status === "error"`. */
   errorMsg: string;
   /** Attach to the canvas the hook should render frames into. */
-  canvasRef: React.RefObject<HTMLCanvasElement>;
+  canvasRef: React.RefObject<HTMLCanvasElement | null>;
   /** Current URL of the attached page (updated as the page navigates). */
   pageUrl: string;
   /** Page nav controls — backed by Chromium CDP commands. No-op until running. */
@@ -193,7 +193,7 @@ export function useCdpScreencast({
         // eslint-disable-next-line no-console
         console.log("[cdp-viewer] setDiscoverTargets ack");
         const { targetInfos } = await cdp.send<{
-          targetInfos: Array<{ targetId: string; type: string }>;
+          targetInfos: Array<{ targetId: string; type: string; url?: string }>;
         }>("Target.getTargets");
         // eslint-disable-next-line no-console
         console.log(

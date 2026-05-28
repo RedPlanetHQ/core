@@ -1,5 +1,6 @@
 export interface Node {
   uuid: string;
+  name?: string;
   summary?: string;
   labels?: string[];
   attributes?: Record<string, any>;
@@ -25,6 +26,7 @@ export interface RawTriplet {
 export interface GraphNode extends Node {
   id: string;
   value: string;
+  name?: string;
   primaryLabel?: string;
   clusterId?: string; // Add cluster information
 }

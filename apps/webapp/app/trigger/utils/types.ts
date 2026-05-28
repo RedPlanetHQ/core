@@ -1,5 +1,5 @@
 import { type ActionStatusEnum } from "@core/types";
-import { type CoreMessage } from "ai";
+import { type ModelMessage as CoreMessage } from "ai";
 import { z } from "zod";
 
 // Define types for the MCP tool schema

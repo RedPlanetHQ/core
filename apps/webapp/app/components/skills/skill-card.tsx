@@ -42,7 +42,7 @@ export function SkillCard({ skill }: SkillCardProps) {
 
   const getDescription = (): string => {
     if (skill.metadata?.shortDescription) {
-      return skill.metadata.shortDescription;
+      return String(skill.metadata.shortDescription);
     }
 
     return isLong

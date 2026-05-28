@@ -20,9 +20,9 @@ import { getUserSession } from "../session.server";
 
 import { safeJsonParse } from "~/utils/json";
 
-type AnyZodSchema =
-  | z.ZodFirstPartySchemaTypes
-  | z.ZodDiscriminatedUnion<any, any>;
+// Zod v4: ZodFirstPartySchemaTypes lost runtime methods like safeParse.
+// Use ZodTypeAny (alias of ZodType) which retains the legacy API.
+type AnyZodSchema = z.ZodTypeAny;
 
 type ApiKeyRouteBuilderOptions<
   TParamsSchema extends AnyZodSchema | undefined = undefined,
@@ -37,14 +37,14 @@ type ApiKeyRouteBuilderOptions<
   corsStrategy?: "all" | "none";
   findResource: (
     params: TParamsSchema extends
-      | z.ZodFirstPartySchemaTypes
-      | z.ZodDiscriminatedUnion<any, any>
+      | z.ZodTypeAny
+      | never
       ? z.infer<TParamsSchema>
       : undefined,
     authentication: ApiAuthenticationResultSuccess,
     searchParams: TSearchParamsSchema extends
-      | z.ZodFirstPartySchemaTypes
-      | z.ZodDiscriminatedUnion<any, any>
+      | z.ZodTypeAny
+      | never
       ? z.infer<TSearchParamsSchema>
       : undefined,
   ) => Promise<TResource | undefined>;
@@ -54,18 +54,18 @@ type ApiKeyRouteBuilderOptions<
     resource: (
       resource: NonNullable<TResource>,
       params: TParamsSchema extends
-        | z.ZodFirstPartySchemaTypes
-        | z.ZodDiscriminatedUnion<any, any>
+        | z.ZodTypeAny
+      | never
         ? z.infer<TParamsSchema>
         : undefined,
       searchParams: TSearchParamsSchema extends
-        | z.ZodFirstPartySchemaTypes
-        | z.ZodDiscriminatedUnion<any, any>
+        | z.ZodTypeAny
+      | never
         ? z.infer<TSearchParamsSchema>
         : undefined,
       headers: THeadersSchema extends
-        | z.ZodFirstPartySchemaTypes
-        | z.ZodDiscriminatedUnion<any, any>
+        | z.ZodTypeAny
+      | never
         ? z.infer<THeadersSchema>
         : undefined,
     ) => AuthorizationResources;
@@ -80,18 +80,18 @@ type ApiKeyHandlerFunction<
   TResource = never,
 > = (args: {
   params: TParamsSchema extends
-    | z.ZodFirstPartySchemaTypes
-    | z.ZodDiscriminatedUnion<any, any>
+    | z.ZodTypeAny
+      | never
     ? z.infer<TParamsSchema>
     : undefined;
   searchParams: TSearchParamsSchema extends
-    | z.ZodFirstPartySchemaTypes
-    | z.ZodDiscriminatedUnion<any, any>
+    | z.ZodTypeAny
+      | never
     ? z.infer<TSearchParamsSchema>
     : undefined;
   headers: THeadersSchema extends
-    | z.ZodFirstPartySchemaTypes
-    | z.ZodDiscriminatedUnion<any, any>
+    | z.ZodTypeAny
+      | never
     ? z.infer<THeadersSchema>
     : undefined;
   authentication: ApiAuthenticationResultSuccess;
@@ -345,23 +345,23 @@ type ApiKeyActionHandlerFunction<
   TBodySchema extends AnyZodSchema | undefined = undefined,
 > = (args: {
   params: TParamsSchema extends
-    | z.ZodFirstPartySchemaTypes
-    | z.ZodDiscriminatedUnion<any, any>
+    | z.ZodTypeAny
+      | never
     ? z.infer<TParamsSchema>
     : undefined;
   searchParams: TSearchParamsSchema extends
-    | z.ZodFirstPartySchemaTypes
-    | z.ZodDiscriminatedUnion<any, any>
+    | z.ZodTypeAny
+      | never
     ? z.infer<TSearchParamsSchema>
     : undefined;
   headers: THeadersSchema extends
-    | z.ZodFirstPartySchemaTypes
-    | z.ZodDiscriminatedUnion<any, any>
+    | z.ZodTypeAny
+      | never
     ? z.infer<THeadersSchema>
     : undefined;
   body: TBodySchema extends
-    | z.ZodFirstPartySchemaTypes
-    | z.ZodDiscriminatedUnion<any, any>
+    | z.ZodTypeAny
+      | never
     ? z.infer<TBodySchema>
     : undefined;
   authentication: ApiAuthenticationResultSuccess;
@@ -694,23 +694,23 @@ type HybridActionHandlerFunction<
   TBodySchema extends AnyZodSchema | undefined = undefined,
 > = (args: {
   params: TParamsSchema extends
-    | z.ZodFirstPartySchemaTypes
-    | z.ZodDiscriminatedUnion<any, any>
+    | z.ZodTypeAny
+      | never
     ? z.infer<TParamsSchema>
     : undefined;
   searchParams: TSearchParamsSchema extends
-    | z.ZodFirstPartySchemaTypes
-    | z.ZodDiscriminatedUnion<any, any>
+    | z.ZodTypeAny
+      | never
     ? z.infer<TSearchParamsSchema>
     : undefined;
   headers: THeadersSchema extends
-    | z.ZodFirstPartySchemaTypes
-    | z.ZodDiscriminatedUnion<any, any>
+    | z.ZodTypeAny
+      | never
     ? z.infer<THeadersSchema>
     : undefined;
   body: TBodySchema extends
-    | z.ZodFirstPartySchemaTypes
-    | z.ZodDiscriminatedUnion<any, any>
+    | z.ZodTypeAny
+      | never
     ? z.infer<TBodySchema>
     : undefined;
   authentication: HybridAuthenticationResult;
@@ -974,14 +974,14 @@ type HybridLoaderRouteBuilderOptions<
   corsStrategy?: "all" | "none";
   findResource: (
     params: TParamsSchema extends
-      | z.ZodFirstPartySchemaTypes
-      | z.ZodDiscriminatedUnion<any, any>
+      | z.ZodTypeAny
+      | never
       ? z.infer<TParamsSchema>
       : undefined,
     authentication: HybridAuthenticationResult,
     searchParams: TSearchParamsSchema extends
-      | z.ZodFirstPartySchemaTypes
-      | z.ZodDiscriminatedUnion<any, any>
+      | z.ZodTypeAny
+      | never
       ? z.infer<TSearchParamsSchema>
       : undefined,
   ) => Promise<TResource | undefined>;
@@ -991,18 +991,18 @@ type HybridLoaderRouteBuilderOptions<
     resource: (
       resource: NonNullable<TResource>,
       params: TParamsSchema extends
-        | z.ZodFirstPartySchemaTypes
-        | z.ZodDiscriminatedUnion<any, any>
+        | z.ZodTypeAny
+      | never
         ? z.infer<TParamsSchema>
         : undefined,
       searchParams: TSearchParamsSchema extends
-        | z.ZodFirstPartySchemaTypes
-        | z.ZodDiscriminatedUnion<any, any>
+        | z.ZodTypeAny
+      | never
         ? z.infer<TSearchParamsSchema>
         : undefined,
       headers: THeadersSchema extends
-        | z.ZodFirstPartySchemaTypes
-        | z.ZodDiscriminatedUnion<any, any>
+        | z.ZodTypeAny
+      | never
         ? z.infer<THeadersSchema>
         : undefined,
     ) => AuthorizationResources;
@@ -1017,18 +1017,18 @@ type HybridLoaderHandlerFunction<
   TResource = never,
 > = (args: {
   params: TParamsSchema extends
-    | z.ZodFirstPartySchemaTypes
-    | z.ZodDiscriminatedUnion<any, any>
+    | z.ZodTypeAny
+      | never
     ? z.infer<TParamsSchema>
     : undefined;
   searchParams: TSearchParamsSchema extends
-    | z.ZodFirstPartySchemaTypes
-    | z.ZodDiscriminatedUnion<any, any>
+    | z.ZodTypeAny
+      | never
     ? z.infer<TSearchParamsSchema>
     : undefined;
   headers: THeadersSchema extends
-    | z.ZodFirstPartySchemaTypes
-    | z.ZodDiscriminatedUnion<any, any>
+    | z.ZodTypeAny
+      | never
     ? z.infer<THeadersSchema>
     : undefined;
   authentication: HybridAuthenticationResult;

@@ -22,6 +22,7 @@ import {
 } from "~/services/widgets.server";
 import { WidgetContext } from "~/components/editor/extensions/widget-node-extension";
 import { useLocalCommonState } from "~/hooks/use-local-state";
+import { Prisma } from "@prisma/client";
 import { prisma } from "~/db.server";
 import type { OverviewCell } from "~/components/overview/types";
 import { LayoutGrid } from "lucide-react";
@@ -89,7 +90,12 @@ export async function action({ request }: ActionFunctionArgs) {
     const existingMeta = (existing?.metadata ?? {}) as Record<string, unknown>;
     await prisma.workspace.update({
       where: { id: workspace.id },
-      data: { metadata: { ...existingMeta, dailyWidgetLayout: cells } },
+      data: {
+        metadata: {
+          ...existingMeta,
+          dailyWidgetLayout: cells,
+        } as unknown as Prisma.InputJsonValue,
+      },
     });
     return json({ ok: true });
   }
@@ -186,9 +192,19 @@ export default function DailyRoute() {
             minSize="25%"
             collapsible
             collapsedSize={0}
-            onCollapse={() => setPanelOpen(false)}
             onResize={(size) => {
-              localStorage.setItem(STORAGE_SIZE_KEY, String(size));
+              // react-resizable-panels v4 removed onCollapse; detect collapse
+              // by checking the resized size and route it through the same
+              // setPanelOpen path.
+              const percent =
+                typeof size === "object" && size !== null
+                  ? (size as { percentage?: number }).percentage ?? 0
+                  : Number(size);
+              if (percent === 0) {
+                setPanelOpen(false);
+                return;
+              }
+              localStorage.setItem(STORAGE_SIZE_KEY, String(percent));
             }}
           >
             <ClientOnly fallback={null}>

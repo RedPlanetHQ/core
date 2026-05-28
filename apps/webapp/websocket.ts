@@ -33,18 +33,22 @@ export function setupWebSocket(server: Server): void {
   server.on("upgrade", (req, socket, head) => {
     const url = new URL(req.url!, `http://${req.headers.host}`);
 
+    // Node's upgrade event surfaces `socket` as a Duplex, but the WebSocket
+    // server expects a net.Socket. Cast — the underlying object is correct.
+    const netSocket = socket as unknown as import("net").Socket;
+
     if (url.pathname.startsWith("/collab")) {
-      collabWss.handleUpgrade(req, socket, head, (ws) => {
+      collabWss.handleUpgrade(req, netSocket, head, (ws) => {
         hocuspocus.handleConnection(ws, req);
       });
       return;
     }
 
-    if (tryHandleBrowserCdpUpgrade(req, socket, head, browserCdpWss)) {
+    if (tryHandleBrowserCdpUpgrade(req, netSocket, head, browserCdpWss)) {
       return;
     }
 
-    if (tryHandleXtermUpgrade(req, socket, head, xtermWss)) {
+    if (tryHandleXtermUpgrade(req, netSocket, head, xtermWss)) {
       return;
     }
 

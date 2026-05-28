@@ -43,7 +43,7 @@ export async function storeOutlinks(
       select: { outlinks: true },
     });
 
-    const currentIds = ((page?.outlinks ?? []) as Outlink[])
+    const currentIds = ((page?.outlinks ?? []) as unknown as Outlink[])
       .map((o) => o.id)
       .sort();
     const newIds = taskIds.slice().sort();

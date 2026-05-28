@@ -212,7 +212,9 @@ export async function addReminder(
         maxOccurrences: data.maxOccurrences ?? null,
         occurrenceCount: 0,
         endDate: data.endDate ?? null,
-        metadata: data.metadata ?? undefined,
+        metadata: (data.metadata ?? undefined) as
+          | Prisma.InputJsonValue
+          | undefined,
       },
     });
 

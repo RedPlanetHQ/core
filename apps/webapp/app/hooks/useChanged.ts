@@ -6,7 +6,7 @@ export function useChanged<T extends { id: string }>(
   action: (item: T | undefined) => void,
   sendInitialUndefined = true
 ) {
-  const previousItemId = useRef<string | undefined>();
+  const previousItemId = useRef<string | undefined>(undefined);
   const item = getItem();
 
   //when the value changes, call the action

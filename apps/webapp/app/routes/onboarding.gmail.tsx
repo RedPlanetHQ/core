@@ -6,6 +6,7 @@ import {
 } from "@remix-run/node";
 import { useFetcher } from "@remix-run/react";
 import { useTypedLoaderData } from "remix-typedjson";
+import type { LoaderData } from "~/utils/loader-data";
 import { requireUser } from "~/services/session.server";
 import { updateUser } from "~/models/user.server";
 import { getIntegrationAccountBySlugAndUser } from "~/services/integrationAccount.server";
@@ -74,7 +75,7 @@ export async function action({ request }: ActionFunctionArgs) {
 
 export default function OnboardingGmail() {
   const { gmailOAuthUrl, defaultName, redirectTo } =
-    useTypedLoaderData<typeof loader>();
+    useTypedLoaderData<typeof loader>() as unknown as LoaderData<typeof loader>;
   const fetcher = useFetcher();
 
   return (
@@ -104,12 +105,13 @@ export default function OnboardingGmail() {
           >
             skip
           </Button>
-          {gmailOAuthUrl?.redirectURL && (
+          {(gmailOAuthUrl as { redirectURL?: string } | null)?.redirectURL && (
             <Button
               size="lg"
               variant="secondary"
               onClick={() => {
-                window.location.href = gmailOAuthUrl.redirectURL;
+                window.location.href = (gmailOAuthUrl as { redirectURL: string })
+                  .redirectURL;
               }}
             >
               Connect Gmail

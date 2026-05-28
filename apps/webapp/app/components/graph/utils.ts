@@ -13,7 +13,7 @@ export function toGraphNode(node: Node): GraphNode {
 
   return {
     id: node.uuid,
-    value: node.name,
+    value: node.name ?? node.uuid,
     uuid: node.uuid,
     name: node.name,
     createdAt: node.createdAt,

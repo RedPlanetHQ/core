@@ -77,7 +77,7 @@ export function getMessageTools(
                 workspaceId,
                 isActive: true,
               },
-            })) as typeof channelRecord;
+            })) as unknown as typeof channelRecord;
           }
 
           // 2. Try trigger's channel name/type
@@ -89,7 +89,7 @@ export function getMessageTools(
                 OR: [{ name: triggerChannel }, { type: triggerChannel }],
               },
               orderBy: { isDefault: "desc" },
-            })) as typeof channelRecord;
+            })) as unknown as typeof channelRecord;
           }
 
           // 3. Fall back to user's default channel
@@ -99,7 +99,7 @@ export function getMessageTools(
             if (defaultCh) {
               channelRecord = (await prisma.channel.findFirst({
                 where: { id: defaultCh.id, isActive: true },
-              })) as typeof channelRecord;
+              })) as unknown as typeof channelRecord;
             }
           }
 
@@ -114,8 +114,13 @@ export function getMessageTools(
           // ---------------------------------------------------------------
           // Resolve replyTo
           // ---------------------------------------------------------------
-          const config = (channelRecord.config ?? {}) as Record<string, string>;
-          const channelType = channelRecord.type;
+          const cr = channelRecord as {
+            id: string;
+            type: string;
+            config: Record<string, string>;
+          };
+          const config = (cr.config ?? {}) as Record<string, string>;
+          const channelType = cr.type;
           let replyTo: string;
 
           if (channelType === "slack") {
@@ -134,7 +139,7 @@ export function getMessageTools(
           const handler = getChannel(channelType);
           const metadata: Record<string, string> = {
             workspaceId,
-            channelId: channelRecord.id,
+            channelId: cr.id,
           };
 
           if (channelType === "email" && subject) {
@@ -143,7 +148,7 @@ export function getMessageTools(
 
           logger.info(`[send_message] Sending ${channelType} message`, {
             replyTo,
-            channelId: channelRecord.id,
+            channelId: cr.id,
             messageLength: message.length,
             preview: message.slice(0, 100),
           });

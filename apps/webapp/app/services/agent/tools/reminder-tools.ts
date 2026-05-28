@@ -7,6 +7,7 @@
 
 import { tool, type Tool } from "ai";
 import { z } from "zod";
+import { Prisma } from "@prisma/client";
 import { DateTime } from "luxon";
 import {
   addReminder,
@@ -349,7 +350,10 @@ FOLLOW-UP REMINDERS:
             maxOccurrences: maxOcc,
             endDate: endDate ? new Date(endDate) : null,
             startDate: startDate ? new Date(startDate) : null,
-            metadata: Object.keys(metadata).length > 0 ? metadata : undefined,
+            metadata:
+              Object.keys(metadata).length > 0
+                ? (metadata as Prisma.InputJsonValue)
+                : undefined,
           });
 
           let limitInfo = "";

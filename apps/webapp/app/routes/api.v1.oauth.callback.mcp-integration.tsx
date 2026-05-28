@@ -79,6 +79,7 @@ export async function loader({ request }: LoaderFunctionArgs) {
 
     await scheduler({
       integrationAccountId: setupResult?.account?.id as string,
+      admin: false,
     });
 
     logger.info(`MCP integration OAuth completed for ${integrationDefinition.name}`);

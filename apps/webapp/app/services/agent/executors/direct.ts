@@ -81,6 +81,7 @@ export class DirectOrchestratorTools extends OrchestratorTools {
         id: gw.id,
         name: gw.name,
         description: gw.description || `Gateway: ${gw.name}`,
+        baseUrl: (gw as { baseUrl?: string }).baseUrl ?? "",
         // Tool names aren't cached on the row anymore; live-fetch happens
         // when the agent is created.
         tools: [],

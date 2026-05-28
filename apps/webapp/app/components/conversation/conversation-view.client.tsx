@@ -17,6 +17,7 @@ import {
   collectApprovalRequests,
   hasNeedsApprovalDeep,
   mergeAgentParts,
+  type ConversationToolPart,
 } from "./conversation-utils";
 import { ChatContextProvider } from "./chat-context";
 import {
@@ -30,7 +31,7 @@ interface ConversationHistory {
   userType: string;
   message: string;
   parts: any;
-  createdAt?: string;
+  createdAt?: string | Date;
 }
 
 interface ConversationViewProps {
@@ -308,7 +309,7 @@ export function ConversationView({
     .find((m) => m.role === "assistant") as UIMessage | undefined;
 
   const needsApproval = lastAssistant?.parts
-    ? hasNeedsApprovalDeep(lastAssistant.parts)
+    ? hasNeedsApprovalDeep(lastAssistant.parts as ConversationToolPart[])
     : false;
 
   // Deep-scan the last assistant message for all suspended tool calls.
