@@ -43,18 +43,8 @@ function createActivityMessage(params: { text: string; sourceURL: string }) {
 
 function formatMeetingActivity(meeting: Meeting): string {
   const title = meeting.title || 'Untitled Meeting';
-  const date = meeting.date ? new Date(meeting.date).toLocaleString() : '';
-  const attendees = (meeting.attendees ?? []).join(', ');
-
-  const parts: string[] = [`Meeting in Granola: "${title}"`];
-
-  if (meeting.id) parts.push(`meeting_id: ${meeting.id}`);
-  if (attendees) parts.push(`attendees: ${attendees}`);
-
-  let text = parts[0];
-  if (parts.length > 1) text += ` (${parts.slice(1).join(', ')})`;
-  if (date) text += ` at ${date}`;
-
+  let text = `New meeting added: ${title}`;
+  if (meeting.id) text += ` (id: ${meeting.id})`;
   return text;
 }
 
