@@ -135,7 +135,10 @@ export function SelectionBubble({ editor, parentTaskId }: SelectionBubbleProps) 
           body: JSON.stringify({
             title,
             source: "daily",
-            status: "Todo",
+            // Same convention as scratchpad-task-item: Ready triggers the
+            // 2-minute editing buffer; the buffer-expiry handler auto-
+            // deletes empty Untitled tasks.
+            status: "Ready",
             ...(description && { description }),
             ...(parentTaskId && { parentTaskId }),
           }),
