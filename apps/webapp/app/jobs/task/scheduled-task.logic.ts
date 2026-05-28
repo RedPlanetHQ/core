@@ -57,17 +57,22 @@ export interface ScheduledTaskProcessResult {
 // ============================================================================
 
 /**
- * Process a scheduled-task wake-up. After the two-phase lifecycle refactor,
- * wake-ups serve three distinct purposes and we branch on `(status, phase)`:
+ * Process a scheduled-task wake-up. In the execute-first lifecycle the
+ * dispatch is purely status-driven (phase metadata controls prompt
+ * rendering, not wake-up routing). Wake-ups serve three purposes:
  *
- * 1. **Buffer expiry** — task is Todo + prep with no recurring schedule. The
- *    2-minute edit buffer is over; hand the task off to the normal task
- *    runner so butler can start prep.
- * 2. **Normal fire** — task is Ready + execute. The scheduled/recurring time
- *    arrived; execute via the CASE pipeline.
- * 3. **Fire-override** — task is Todo/Waiting + prep AND has a recurring
- *    schedule (or was scheduled). The schedule fires before prep completed;
- *    execute with whatever info is available (flipping status to Working).
+ * 1. **Buffer expiry** — task is Ready with no schedule. The 2-minute
+ *    editing buffer is over; hand off to the task runner, which flips
+ *    status to Working and invokes the agent (execute mind by default,
+ *    or plan mind if `metadata.phase === "prep"`).
+ * 2. **Normal fire** — task is Ready with a schedule. The scheduled /
+ *    recurring time arrived; execute via the CASE pipeline.
+ * 3. **Fire-override** — task is Todo or Waiting AND has a schedule. The
+ *    schedule fires while the task is still parked or blocked; execute
+ *    with whatever info is available (flipping status to Working).
+ *
+ * Stuck-state recovery branches catch Working + Review on recurring
+ * tasks (previous occurrence crashed or never looped back).
  *
  * Any other state is a stale wake-up and we no-op.
  */

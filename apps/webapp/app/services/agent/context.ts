@@ -532,7 +532,7 @@ PLAN RULES:
 
    - If the description is a GOAL (a desired outcome — you need to figure out the steps):
      → Apply the COMPLEXITY rules from STARTING WORK.
-     → If on second look the task is actually SIMPLE (one artifact: summary, profile, brief, recap, list, lookup, single send) → call exit_plan_mode. Then in execute mind, just do it using gather_context / take_action, write the result to the description (section="Output"), send the result via send_message, and mark Review. Do NOT produce a "plan" of how you'll do it.
+     → If on second look the task is actually SIMPLE (one artifact: summary, profile, brief, recap, list, lookup, single send) → call exit_plan_mode. Then in execute mind, just do it using gather_context / take_action, write the result to the description via update_task with `<outcome>...</outcome>` HTML, send the result via send_message, and mark Review. Do NOT produce a "plan" of how you'll do it.
      → If genuinely COMPLEX (multiple independent deliverables, irreversibly bulk, user explicitly said "plan/think through", or coding) → continue to step 1 below to do the planning.
 
 1. Run the READINESS CHECK (see <capabilities>). Load the appropriate skill from <skills>:
@@ -564,7 +564,7 @@ DO NOT:
 CODING SESSION POLLING (during plan mind):
 - "Session still running, brainstorming/planning phase" → call reschedule_self(minutesFromNow=5)
 - Gateway returns questions → relay to user via send_message (include sessionId), mark Waiting
-- Gateway returns plan → write to description (section: "Plan"), call exit_plan_mode, send_message
+- Gateway returns plan → write to description via update_task with `<plan>...</plan>` HTML, call exit_plan_mode, send_message
 
 NEVER write error logs or debug output into the task description.
 </task_planning>`;
@@ -599,7 +599,7 @@ RULES:
 - If you fail or get blocked, mark YOURSELF Waiting + send_message referencing both this subtask title and the parent title so the user can identify it. Do NOT cascade to the parent — siblings may still be running.`
           : `
 - If this task warrants decomposition (you loaded the Decompose Task skill and it says SPLIT), follow the skill's instructions:
-  - Create subtasks via create_task with parentTaskId = ${taskHandle}. Subtasks default to Ready and start their own execution cycle through the 2-minute buffer.
+  - Create subtasks via create_task with parentTaskId = ${taskHandle}. Subtasks default to Ready and start their own execution cycle through the editing buffer.
   - Write the breakdown into THIS task's description via update_task with a <plan> section.
   - send_message as a heads-up: "Splitting this into A, B, C — each starts in 2 min. Stop me if wrong." Do NOT move this task to Waiting — the buffer gives the user a veto window. This task stays Working until all subtasks complete; the system auto-marks it Done.`
       }
@@ -617,7 +617,7 @@ The gateway sub-agent owns all sleep/polling for coding sessions. You do NOT sle
 When you delegate a coding task to the gateway, it will return one of:
 - Questions from the coding agent → relay to user via send_message (include sessionId), mark task Waiting. Don't write the question into the task description.
 - A plan from the coding agent → you're in EXECUTION mode (user already approved the plan). Call the gateway again immediately with sessionId, dir, and intent "execute the plan" to trigger Phase 3.
-- Execution results → write results to task description via update_task(section: "Output"), mark task Review.
+- Execution results → write results to task description via update_task with `<outcome>...</outcome>` HTML, mark task Review.
 - "Session still running, brainstorming/planning phase" → reschedule_self(minutesFromNow=5).
 - "Session still running, execution phase" → reschedule_self(minutesFromNow=10). The CodingSession row already records sessionId/dir.
 - Error → update_task(status: "Waiting") + send_message with the error detail.
