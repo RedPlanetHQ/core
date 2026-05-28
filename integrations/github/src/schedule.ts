@@ -25,10 +25,10 @@ function createActivityMessage(params: GitHubActivityCreateParams) {
 }
 
 /**
- * Gets default sync time (24 hours ago)
+ * Gets default sync time (7 days ago) used on first-ever run
  */
 function getDefaultSyncTime(): string {
-  return new Date(Date.now() - 24 * 60 * 60 * 1000).toISOString();
+  return new Date(Date.now() - 7 * 24 * 60 * 60 * 1000).toISOString();
 }
 
 /**
@@ -216,12 +216,9 @@ async function processUserEvents(
   let page = 1;
   let hasMorePages = true;
 
-  console.log('Processing user events');
-
   while (hasMorePages) {
     try {
       const userEvents = await getUserEvents(username, page, accessToken, lastUserEventTime);
-      console.log('User events', userEvents);
 
       if (!userEvents || userEvents.length === 0) {
         hasMorePages = false;
@@ -238,22 +235,24 @@ async function processUserEvents(
         try {
           let title = '';
           const sourceURL = event.html_url || '';
+          const repo = event.repository?.full_name;
+          const repoStr = repo ? ` in ${repo}` : '';
 
           switch (event.type) {
             case 'pr':
-              title = `${username} created PR #${event.number} in ${event.repository?.full_name}: ${event.title}`;
+              title = `${username} created PR #${event.number}${repoStr}: ${event.title}`;
               break;
             case 'issue':
-              title = `${username} created issue #${event.number} in ${event.repository?.full_name}: ${event.title}`;
+              title = `${username} created issue #${event.number}${repoStr}: ${event.title}`;
               break;
             case 'pr_comment':
-              title = `${username} commented on PR #${event.number} in ${event.repository?.full_name}: ${event.title}`;
+              title = `${username} commented on PR #${event.number}${repoStr}: ${event.title}`;
               break;
             case 'issue_comment':
-              title = `${username} commented on issue #${event.number} in ${event.repository?.full_name}: ${event.title}`;
+              title = `${username} commented on issue #${event.number}${repoStr}: ${event.title}`;
               break;
             case 'self_assigned_issue':
-              title = `${username} assigned themselves to issue #${event.number} in ${event.repository?.full_name}: ${event.title}`;
+              title = `${username} assigned themselves to issue #${event.number}${repoStr}: ${event.title}`;
               break;
             default:
               title = `GitHub activity: ${event.title || 'Unknown'}`;
@@ -268,8 +267,6 @@ async function processUserEvents(
               }),
             );
           }
-
-          console.log('Activities', activities);
         } catch (error) {
           // Silently ignore errors to prevent stdout pollution
         }
@@ -336,7 +333,6 @@ export async function handleSchedule(
 
     // Process user events if we have a username
     if (settings.username) {
-      console.log('Processing user events');
       try {
         const userEventActivities = await processUserEvents(
           settings.username,
