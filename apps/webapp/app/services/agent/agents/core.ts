@@ -57,13 +57,6 @@ interface CreateCoreToolsParams {
   isOnboardingMode?: boolean;
   /** Task ID when running as a background task (for reschedule_self tool) */
   currentTaskId?: string;
-  /**
-   * Phase of the linked task at agent-build time. Controls which of
-   * enter_plan_mode / exit_plan_mode is registered so the agent only sees
-   * the relevant transition. Defaults to "execute" when no task is in
-   * scope (the tools are then conditional on currentTaskId anyway).
-   */
-  currentTaskPhase?: "prep" | "execute";
   /** Channel name from trigger's reminder config (for send_message tool) */
   triggerChannel?: string;
   /** Channel ID from trigger's reminder config (for send_message tool) */
@@ -122,7 +115,6 @@ export async function createCoreTools(
     isBackgroundExecution,
     isOnboardingMode,
     currentTaskId,
-    currentTaskPhase,
     triggerChannel,
     triggerChannelId,
     userEmail,
@@ -212,7 +204,6 @@ export async function createCoreTools(
         channelCtx.channels,
         currentTaskId,
         source,
-        currentTaskPhase,
       );
 
   // Message tools (only in trigger or background task contexts — NOT in webapp
