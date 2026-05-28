@@ -146,7 +146,8 @@ export async function seedMorningBriefForWorkspaces(
 
       // 4) Create the daily 9am scheduled task. The agent picks up the
       // Morning Brief skill by intent at run time — no explicit skillId
-      // attachment needed (see <task_prep>/<task_execution> SKILL CHECK rule).
+      // attachment needed (the agent picks it up via the global <skills>
+      // SKILL CHECK rule when the task title/description matches).
       const task = await createScheduledTask(workspaceId, userId, {
         title: "Morning brief",
         schedule: "FREQ=DAILY;BYHOUR=9",

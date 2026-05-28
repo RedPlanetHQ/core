@@ -131,9 +131,9 @@ export async function createWorkspace(
     });
     if (morningBriefSkill) {
       // Agent picks up the Morning Brief skill by intent at run time — no
-      // explicit skillId attachment needed (see <task_prep>/<task_execution>
-      // SKILL CHECK rule). We still do the lookup above just to gate on the
-      // skill being installed for this workspace before seeding the task.
+      // explicit skillId attachment needed (the global <skills> SKILL CHECK
+      // rule matches the task title/description). The lookup above is just
+      // a gate to skip seeding when the skill isn't installed yet.
       await createScheduledTask(workspace.id, input.userId, {
         title: "Morning brief",
         schedule: "FREQ=DAILY;BYHOUR=9",

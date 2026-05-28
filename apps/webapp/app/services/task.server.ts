@@ -394,13 +394,16 @@ export async function changeTaskStatus(
   // Subtask Done — auto-complete parent if no siblings are still active.
   // In the parallel model there is no "next sibling" to kick off; subtasks
   // run independently and the parent flips to Done once every child has
-  // left the active set (Todo / Working / Waiting / Ready).
+  // reached its terminal state. Review counts as non-terminal because the
+  // user still has to move Review → Done — if we treated Review as finished
+  // here, the parent could auto-Done while a sibling is still awaiting
+  // user verification.
   if (status === "Done" && current.parentTaskId) {
     const activeSiblings = await prisma.task.count({
       where: {
         parentTaskId: current.parentTaskId,
         id: { not: taskId },
-        status: { in: ["Todo", "Working", "Waiting", "Ready"] },
+        status: { in: ["Todo", "Working", "Waiting", "Ready", "Review"] },
       },
     });
     if (activeSiblings === 0) {

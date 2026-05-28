@@ -106,13 +106,14 @@ export function getTaskTools(
       description: `Create a new CORE internal task. Tasks can be immediate (work items) or scheduled (reminders, recurring checks).
 NOTE: This is for CORE's own task system. If the user asks to create a task in an external tool (Todoist, Asana, Linear, Jira, etc.), do NOT use this — delegate to the orchestrator via take_action instead.
 
-BACKGROUND CONTEXT RULE: when called from inside a running task (prep or execute, i.e. <task_prep> or <task_execution> is in your system prompt), parentTaskId is MANDATORY — pass the current task's ID. You can only create SUBTASKS in background, never top-level tasks. Top-level task creation is reserved for the foreground chat agent. This prevents background runs from spawning unrelated work.
+BACKGROUND CONTEXT RULE: when called from inside a running task (i.e. <task_planning> or <task_execution> is in your system prompt), parentTaskId is MANDATORY — pass the current task's ID. You can only create SUBTASKS in background, never top-level tasks. Top-level task creation is reserved for the foreground chat agent. This prevents background runs from spawning unrelated work.
 
-BEFORE CREATING: Always call search_tasks first. If a matching task already exists in Todo/Working, reuse it instead of creating a duplicate.
+BEFORE CREATING: call list_tasks (filter by status Todo or Working) and scan the titles — if a matching task already exists, reuse it instead of creating a duplicate. There is no keyword search; list-and-pick.
 
 IMMEDIATE TASK (no scheduling):
-- Default status is Todo — use for active work items, planning, and tracked tasks.
-- Pass status="Waiting" for approval-gated work — send_message explaining the plan, wait for user to approve.
+- Default status is Ready — the task buffers briefly, then executes. Use this for any work the user delegated to you that should run.
+- Pass status="Todo" only when you want to PARK the task without running it (e.g. a backlog item the user said "later" to). Todo does NOT auto-buffer; promote to Ready (via UI or unblock_task) to start.
+- Pass status="Waiting" for approval-gated work — send_message explaining the plan, wait for user to approve. The user's reply triggers unblock_task → Ready → buffer + execute.
 
 SCHEDULED TASK (one-time, fires at a specific time):
 - Pass title + schedule (RRule) + maxOccurrences=1
@@ -179,7 +180,7 @@ FOLLOW-UP: Set isFollowUp=true and parentTaskId to reschedule an existing task.`
             .enum(["Todo", "Waiting", "Ready"])
             .optional()
             .describe(
-              "Initial status. Ready (default for agent-created) = runs after a 2-minute buffer; the user has that window to edit before execution starts. Todo = backlog — the task sits idle and only runs once the user (or unblock_task) moves it to Ready. Waiting = needs explicit user input or approval; send_message the question/plan, then unblock_task when answered.",
+              "Initial status. Ready (default for agent-created) = runs after a brief editing buffer; the user has that window to edit before execution starts. Todo = backlog — the task sits idle and only runs once the user (or unblock_task) moves it to Ready. Waiting = needs explicit user input or approval; send_message the question/plan, then unblock_task when answered.",
             ),
         }),
         execute: async ({
@@ -300,7 +301,7 @@ FOLLOW-UP: Set isFollowUp=true and parentTaskId to reschedule an existing task.`
             // Immediate task (no scheduling).
             //
             // Agent-created tasks default to Ready: the wake-up handler
-            // runs them after a 2-minute buffer (the user's editing
+            // runs them after a brief editing buffer (the user's editing
             // window). Todo is the backlog state — only reached when the
             // agent or user explicitly parks the task; it does not auto-
             // schedule a buffer. Subtasks behave the same way — they run
@@ -332,7 +333,7 @@ FOLLOW-UP: Set isFollowUp=true and parentTaskId to reschedule an existing task.`
               targetStatus === "Waiting"
                 ? "Waiting — send_message to user explaining what's needed. Once unblocked, the task executes in its own thread; do not do its work in the current conversation."
                 : resolvedParentId
-                  ? `Added to ${targetStatus}. The subtask runs its own execute cycle through a 2-minute buffer, in parallel with siblings. Do NOT do its work in the current conversation; just acknowledge creation and continue with the parent or stop.`
+                  ? `Added to ${targetStatus}. The subtask runs its own execute cycle through its own editing buffer, in parallel with siblings. Do NOT do its work in the current conversation; just acknowledge creation and continue with the parent or stop.`
                   : `Added to ${targetStatus}. The task will be picked up and executed in its own thread — do NOT do its work in the current conversation; just acknowledge creation and stop.`;
             logger.info(
               `Task ${task.id} created (${targetStatus})${resolvedParentId ? ` subtask of ${resolvedParentId}` : ""}`,
