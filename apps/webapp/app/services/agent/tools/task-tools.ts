@@ -54,7 +54,6 @@ export function getTaskTools(
   channelRecords?: ChannelRecord[],
   currentTaskId?: string,
   source?: string,
-  currentTaskPhase: "prep" | "execute" = "execute",
 ): Record<string, Tool> {
   const minRecurrenceLabel =
     minRecurrenceMinutes >= 60
@@ -785,16 +784,21 @@ REPARENTING: Pass newParentId to move a task under a different parent (or null t
     }),
 
     // enter_plan_mode / exit_plan_mode — phase toggle on the current task.
-    // Only one of the two is registered at a time, based on the current
-    // phase: enter_plan_mode only in execute mind, exit_plan_mode only in
-    // plan mind. Both require a task in scope.
-    ...(currentTaskId && currentTaskPhase === "execute" && {
+    // Both are always registered when a task is in scope; the tool body is
+    // idempotent (no-op when called in the matching phase). The agent flips
+    // mind WITHIN the same turn — there's no forced turn boundary. The
+    // current turn's prompt still reflects the pre-flip phase, but the
+    // tool's response message tells the agent to adopt the new mental
+    // model immediately. The next prompt build (next user message, next
+    // scheduled wake-up, or an explicit reschedule_self / update_task)
+    // will render the matching block.
+    ...(currentTaskId && {
       enter_plan_mode: tool({
         description: `Switch this task into PLAN mind. Call when you can't execute yet because the goal is ambiguous, the shape is undefined, you need to gather information, or the work is open-ended and needs to be sketched out first.
 
-When you call this, you STOP execution for this turn. On your next turn (next user message, next wake-up, or your own reschedule_self), the system prompt will render the PLAN mind block instead of EXECUTE. Use plan mind to gather info, load readiness skills, and write a plan into the task description. When the plan is ready, call exit_plan_mode and you'll be back in execute mind.
+Plan mind is for gathering info, loading readiness skills (Gather Information / Brainstorm / Plan / Decompose Task), and writing a plan into the task description via update_task with <plan>...</plan> HTML. When the plan is ready, call exit_plan_mode and act on it.
 
-The task's status does NOT change — only the phase metadata. The agent remains the owner of this task throughout.`,
+The task's status does NOT change — only the phase metadata. You can continue working in the same turn after this call.`,
         inputSchema: z.object({
           reason: z
             .string()
@@ -823,20 +827,18 @@ The task's status does NOT change — only the phase metadata. The agent remains
               `Task ${currentTaskId} entered PLAN mind: ${reason}`,
             );
 
-            return `Switched to PLAN mind. STOP this turn — your next turn will render the planning block. Reason recorded: "${reason}". To re-run yourself immediately (background only), call reschedule_self(minutesFromNow=1); otherwise the next user reply or scheduled wake-up resumes you.`;
+            return `Now in PLAN mind. Reason recorded: "${reason}". Continue in this turn: load the readiness skill that fits the gap, gather context, write your plan into the description with <plan>...</plan> HTML via update_task, then call exit_plan_mode and act on the plan.`;
           } catch (error) {
             logger.error("Failed to enter plan mode", { error });
             return `Failed to enter plan mode: ${error instanceof Error ? error.message : "Unknown error"}`;
           }
         },
       }),
-    }),
 
-    ...(currentTaskId && currentTaskPhase === "prep" && {
       exit_plan_mode: tool({
-        description: `Switch this task back to EXECUTE mind. Call after you've written the plan into the task description and you're ready to act on it. On your next turn you'll see the execute block again.
+        description: `Switch this task back to EXECUTE mind. Call after you've written the plan into the task description and you're ready to act on it. You can continue working in the same turn — the next prompt build will render the execute block.
 
-The task's status does NOT change. If your plan involves splitting into subtasks, do that AFTER exit_plan_mode, in execute mind. If you need user approval before executing the plan, call update_task(status: "Waiting") + send_message FIRST, then exit_plan_mode — on resume you'll be in execute mind with the user's reply.`,
+The task's status does NOT change. If your plan involves splitting into subtasks, do that AFTER exit_plan_mode. If you need user approval before executing the plan, call update_task(status: "Waiting") + send_message FIRST.`,
         inputSchema: z.object({}),
         execute: async () => {
           try {
@@ -857,7 +859,7 @@ The task's status does NOT change. If your plan involves splitting into subtasks
 
             logger.info(`Task ${currentTaskId} exited PLAN mind`);
 
-            return "Switched to EXECUTE mind. STOP this turn — your next turn will render the execute block with the plan you wrote in front of you. To re-run yourself immediately (background only), call reschedule_self(minutesFromNow=1); otherwise the next user reply or scheduled wake-up resumes you.";
+            return "Now in EXECUTE mind. Continue in this turn: act on the plan you wrote into the description.";
           } catch (error) {
             logger.error("Failed to exit plan mode", { error });
             return `Failed to exit plan mode: ${error instanceof Error ? error.message : "Unknown error"}`;

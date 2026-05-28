@@ -237,7 +237,6 @@ export async function buildAgentContext({
       isBackgroundExecution,
       isOnboardingMode,
       currentTaskId: linkedTask?.id,
-      currentTaskPhase: linkedTask ? getTaskPhase(linkedTask) : "execute",
       triggerChannel: triggerContext?.trigger.channel,
       triggerChannelId: triggerContext?.trigger.channelId,
       userEmail: user?.email ?? undefined,
