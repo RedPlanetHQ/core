@@ -1,6 +1,6 @@
 {
   "name": "@core/ynab",
-  "version": "0.1.2",
+  "version": "0.1.4",
   "description": "YNAB integration for CORE",
   "main": "./bin/index.js",
   "module": "./bin/index.mjs",
@@ -36,7 +36,7 @@
     ]
   },
   "dependencies": {
-    "@redplanethq/sdk": "0.1.9",
+    "@redplanethq/sdk": "0.1.21",
     "axios": "^1.7.9",
     "commander": "^12.0.0",
     "zod": "^3.22.4",

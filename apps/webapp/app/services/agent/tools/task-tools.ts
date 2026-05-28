@@ -16,6 +16,7 @@ import {
   recalculateTasksForTimezone,
   getTaskTree,
   reparentTask,
+  resolveTaskId,
 } from "~/services/task.server";
 import {
   findOrCreateTaskPage,
@@ -72,6 +73,18 @@ export function getTaskTools(
   const channelNames = channelRecords?.length
     ? channelRecords.map((ch) => ch.name)
     : null;
+
+  // Agent tools speak displayIds (tk-xxxxx). Resolve to UUID at the boundary;
+  // everything downstream still uses UUIDs. Returns the UUID string or an
+  // error string the tool can return verbatim to the model.
+  const resolve = async (
+    label: string,
+    input: string,
+  ): Promise<string | { error: string }> => {
+    const uuid = await resolveTaskId(input, workspaceId);
+    if (!uuid) return { error: `${label} "${input}" not found in this workspace.` };
+    return uuid;
+  };
 
   const channelSchema =
     channelNames && channelNames.length > 0
@@ -159,7 +172,9 @@ FOLLOW-UP: Set isFollowUp=true and parentTaskId to reschedule an existing task.`
           parentTaskId: z
             .string()
             .optional()
-            .describe("ID of the parent task. Required if isFollowUp is true."),
+            .describe(
+              "displayId of the parent task (e.g. tk-abcde). Required if isFollowUp is true.",
+            ),
           status: z
             .enum(["Todo", "Waiting", "Ready"])
             .optional()
@@ -200,9 +215,18 @@ FOLLOW-UP: Set isFollowUp=true and parentTaskId to reschedule an existing task.`
               return "create_task in background context requires parentTaskId — only subtask creation is permitted from inside a running task. If you need a top-level task, the user must create it from the foreground chat.";
             }
 
+            // Resolve the agent-supplied parent displayId to its UUID once;
+            // downstream code paths all expect UUIDs.
+            let resolvedParentId: string | undefined;
+            if (parentTaskId) {
+              const resolved = await resolve("Parent task", parentTaskId);
+              if (typeof resolved !== "string") return resolved.error;
+              resolvedParentId = resolved;
+            }
+
             // Follow-up: reschedule the parent task
-            if (isFollowUp && parentTaskId) {
-              const parentTask = await getTaskById(parentTaskId);
+            if (isFollowUp && resolvedParentId) {
+              const parentTask = await getTaskById(resolvedParentId);
               if (!parentTask) return "Parent task not found.";
 
               if (!schedule) return "Schedule is required for follow-up.";
@@ -212,7 +236,7 @@ FOLLOW-UP: Set isFollowUp=true and parentTaskId to reschedule an existing task.`
               if (!followUpNextRun) return "Could not compute follow-up time.";
 
               await rescheduleTaskAt(
-                parentTaskId,
+                resolvedParentId,
                 workspaceId,
                 followUpNextRun,
               );
@@ -272,7 +296,7 @@ FOLLOW-UP: Set isFollowUp=true and parentTaskId to reschedule an existing task.`
                   maxOccurrences && maxOccurrences > 0 ? maxOccurrences : null,
                 endDate: endDate ? new Date(endDate) : null,
                 startDate: startDate ? new Date(startDate) : null,
-                parentTaskId: parentTaskId ?? null,
+                parentTaskId: resolvedParentId ?? null,
                 metadata: Object.keys(metadata).length > 0 ? metadata : null,
               });
 
@@ -290,7 +314,7 @@ FOLLOW-UP: Set isFollowUp=true and parentTaskId to reschedule an existing task.`
                 ? ` Next: ${task.nextRunAt.toLocaleString()}`
                 : "";
 
-              return `Created scheduled task: "${title}" (ID: ${task.id}).${nextRunInfo}${limitInfo}`;
+              return `Created scheduled task: "${title}" (ID: ${task.displayId ?? task.id}).${nextRunInfo}${limitInfo}`;
             }
 
             // Immediate task (no scheduling)
@@ -298,7 +322,7 @@ FOLLOW-UP: Set isFollowUp=true and parentTaskId to reschedule an existing task.`
             // and the system transitions them to Todo sequentially).
             // Top-level tasks default to Todo (with 2-min prep buffer).
             const effectiveStatus =
-              parentTaskId && !initialStatus ? "Waiting" : undefined;
+              resolvedParentId && !initialStatus ? "Waiting" : undefined;
 
             // Pass the resolved status directly to createTask. createTask
             // applies the 2-min buffer for Todo (anyone) and for Ready+agent
@@ -318,7 +342,7 @@ FOLLOW-UP: Set isFollowUp=true and parentTaskId to reschedule an existing task.`
               {
                 actor: "agent",
                 status: resolvedStatus,
-                ...(parentTaskId && { parentTaskId }),
+                ...(resolvedParentId && { parentTaskId: resolvedParentId }),
               },
             );
             if (description) {
@@ -329,18 +353,18 @@ FOLLOW-UP: Set isFollowUp=true and parentTaskId to reschedule an existing task.`
               );
               await setPageContentFromHtml(page.id, description);
             }
-            const label = parentTaskId ? "subtask" : "task";
+            const label = resolvedParentId ? "subtask" : "task";
             const targetStatus = resolvedStatus;
             const statusNote =
               targetStatus === "Waiting"
-                ? parentTaskId
+                ? resolvedParentId
                   ? "Waiting — will run when parent is approved. The task executes in its own thread; do not do its work in the current conversation."
                   : "Waiting — send_message to user explaining what's needed. Once unblocked, the task executes in its own thread; do not do its work in the current conversation."
                 : `Added to ${targetStatus} (planning). The task will be picked up and executed in its own thread — do NOT do its work in the current conversation; just acknowledge creation and stop.`;
             logger.info(
-              `Task ${task.id} created (${targetStatus})${parentTaskId ? ` subtask of ${parentTaskId}` : ""}`,
+              `Task ${task.id} created (${targetStatus})${resolvedParentId ? ` subtask of ${resolvedParentId}` : ""}`,
             );
-            return `${label} created: "${title}" (ID: ${task.id}). ${statusNote} Link: ${env.APP_ORIGIN}/home/tasks?taskId=${task.id}`;
+            return `${label} created: "${title}" (ID: ${task.displayId ?? task.id}). ${statusNote} Link: ${env.APP_ORIGIN}/home/tasks?taskId=${task.id}`;
           } catch (error) {
             logger.error("Failed to create task", { error });
             return `Failed to create task: ${error instanceof Error ? error.message : "Unknown error"}`;
@@ -351,11 +375,16 @@ FOLLOW-UP: Set isFollowUp=true and parentTaskId to reschedule an existing task.`
     get_task: tool({
       description: `Get full details of a task including its complete description. Use before updating a task so you can see what's already there and merge new context into it.`,
       inputSchema: z.object({
-        taskId: z.string().describe("The task ID"),
+        taskId: z
+          .string()
+          .describe("The task displayId (e.g. tk-abcde or tk-abcde.1)"),
       }),
       execute: async ({ taskId }) => {
         try {
-          const task = await getTaskById(taskId);
+          const resolved = await resolve("Task", taskId);
+          if (typeof resolved !== "string") return resolved.error;
+
+          const task = await getTaskById(resolved);
           if (!task) return `Task ${taskId} not found.`;
 
           // Read description from linked page (HTML)
@@ -369,7 +398,7 @@ FOLLOW-UP: Set isFollowUp=true and parentTaskId to reschedule an existing task.`
             `Title: ${task.title}`,
             `Status: ${task.status}`,
             `Description: ${description}`,
-            `ID: ${task.id}`,
+            `ID: ${task.displayId ?? task.id}`,
             `Created: ${task.createdAt}`,
           ];
 
@@ -459,7 +488,7 @@ FOLLOW-UP: Set isFollowUp=true and parentTaskId to reschedule an existing task.`
                 info +=
                   remaining === 1 ? " [one-time]" : ` [${remaining} left]`;
               }
-              info += ` (ID: ${t.id})`;
+              info += ` (ID: ${t.displayId ?? t.id})`;
               return info;
             }),
           );
@@ -490,7 +519,7 @@ FOLLOW-UP: Set isFollowUp=true and parentTaskId to reschedule an existing task.`
                 const html = await getPageContentAsHtml(t.pageId);
                 if (html) info += ` — ${html.substring(0, 100)}`;
               }
-              info += ` (ID: ${t.id})`;
+              info += ` (ID: ${t.displayId ?? t.id})`;
               return info;
             }),
           );
@@ -517,7 +546,9 @@ Anything outside these tags is silently dropped — the user's prose elsewhere o
 
 REPARENTING: Pass newParentId to move a task under a different parent (or null to make it a root task). This deletes the task and recreates it under the new parent — the task gets a new displayId. Subtasks are also deleted.`,
       inputSchema: z.object({
-        taskId: z.string().describe("The task ID"),
+        taskId: z
+          .string()
+          .describe("The task displayId (e.g. tk-abcde or tk-abcde.1)"),
         status: z
           .enum(["Waiting", "Review"])
           .optional()
@@ -552,7 +583,7 @@ REPARENTING: Pass newParentId to move a task under a different parent (or null t
           .string()
           .optional()
           .describe(
-            "Move task under a new parent (UUID). Deletes and recreates the task with a new displayId. Omit if not reparenting.",
+            "Move task under a new parent (displayId, e.g. tk-abcde). Deletes and recreates the task with a new displayId. Omit if not reparenting.",
           ),
       }),
       execute: async ({
@@ -569,19 +600,25 @@ REPARENTING: Pass newParentId to move a task under a different parent (or null t
         newParentId,
       }) => {
         try {
+          const resolvedTaskId = await resolve("Task", taskId);
+          if (typeof resolvedTaskId !== "string") return resolvedTaskId.error;
+
           // Reparent: delete + recreate under new parent (requires a non-null string)
           if (typeof newParentId === "string") {
+            const resolvedNewParent = await resolve("New parent", newParentId);
+            if (typeof resolvedNewParent !== "string")
+              return resolvedNewParent.error;
             const newTask = await reparentTask(
-              taskId,
-              newParentId,
+              resolvedTaskId,
+              resolvedNewParent,
               workspaceId,
               userId,
             );
-            return `Task reparented. New ID: ${newTask.id}, displayId: ${(newTask as { displayId?: string | null }).displayId ?? "pending"}.`;
+            return `Task reparented. New displayId: ${(newTask as { displayId?: string | null }).displayId ?? "pending"}.`;
           }
 
           // Fetch task once for recurring check and reuse
-          const currentTask = await getTaskById(taskId);
+          const currentTask = await getTaskById(resolvedTaskId);
           const isRecurring = !!currentTask?.schedule;
 
           // Handle scheduling updates
@@ -592,7 +629,7 @@ REPARENTING: Pass newParentId to move a task under a different parent (or null t
             endDate !== undefined ||
             updateChannel !== undefined
           ) {
-            await updateScheduledTask(taskId, workspaceId, {
+            await updateScheduledTask(resolvedTaskId, workspaceId, {
               title,
               // Never update description for recurring tasks — it pollutes the
               // next run's context. Results go via send_message.
@@ -621,11 +658,11 @@ REPARENTING: Pass newParentId to move a task under a different parent (or null t
               }
             }
             if (title) {
-              await updateTask(taskId, { title }, false);
+              await updateTask(resolvedTaskId, { title }, false);
             }
           } else if (isRecurring && title) {
             // Recurring tasks: allow title updates only (no description)
-            await updateTask(taskId, { title }, false);
+            await updateTask(resolvedTaskId, { title }, false);
           }
 
           if (status) {
@@ -634,7 +671,7 @@ REPARENTING: Pass newParentId to move a task under a different parent (or null t
               const effectiveStatus = status === "Done" ? "Review" : status;
               try {
                 await changeTaskStatus(
-                  taskId,
+                  resolvedTaskId,
                   effectiveStatus as TaskStatus,
                   workspaceId,
                   userId,
@@ -647,7 +684,7 @@ REPARENTING: Pass newParentId to move a task under a different parent (or null t
             } else {
               try {
                 await changeTaskStatus(
-                  taskId,
+                  resolvedTaskId,
                   status as TaskStatus,
                   workspaceId,
                   userId,
@@ -684,7 +721,9 @@ REPARENTING: Pass newParentId to move a task under a different parent (or null t
       unblock_task: tool({
         description: `Approve a Waiting task and move it to Ready (or Todo for prep-phase tasks) so execution can start. Requires a reason explaining why the wait is resolved. The reason is added to the task's conversation as a user reply, so the agent picks it up on its next turn. Only works on tasks currently in Waiting status.`,
         inputSchema: z.object({
-          taskId: z.string().describe("The ID of the waiting task"),
+          taskId: z
+            .string()
+            .describe("The displayId of the waiting task (e.g. tk-abcde)"),
           reason: z
             .string()
             .describe(
@@ -693,7 +732,10 @@ REPARENTING: Pass newParentId to move a task under a different parent (or null t
         }),
         execute: async ({ taskId, reason }) => {
           try {
-            const task = await getTaskById(taskId);
+            const resolved = await resolve("Task", taskId);
+            if (typeof resolved !== "string") return resolved.error;
+
+            const task = await getTaskById(resolved);
             if (!task) return `Task ${taskId} not found.`;
             if (task.status !== "Waiting")
               return `Task is not Waiting (current status: ${task.status}). Only Waiting tasks can be approved.`;
@@ -743,14 +785,14 @@ REPARENTING: Pass newParentId to move a task under a different parent (or null t
             // approval means "start the subtask chain" — go to Ready.
             const phase = getTaskPhase(task);
             const waitingSubtaskCount = await prisma.task.count({
-              where: { parentTaskId: taskId, status: "Waiting" },
+              where: { parentTaskId: resolved, status: "Waiting" },
             });
             const hasWaitingSubtasks = waitingSubtaskCount > 0;
             const targetStatus =
               phase === "prep" && !hasWaitingSubtasks ? "Todo" : "Ready";
 
             await changeTaskStatus(
-              taskId,
+              resolved,
               targetStatus,
               workspaceId,
               userId,
@@ -768,11 +810,15 @@ REPARENTING: Pass newParentId to move a task under a different parent (or null t
       description:
         "Delete a task permanently. Use when user wants to cancel a task or scheduled item.",
       inputSchema: z.object({
-        taskId: z.string().describe("The ID of the task to delete"),
+        taskId: z
+          .string()
+          .describe("The displayId of the task to delete (e.g. tk-abcde)"),
       }),
       execute: async ({ taskId }) => {
         try {
-          await deleteTask(taskId, workspaceId);
+          const resolved = await resolve("Task", taskId);
+          if (typeof resolved !== "string") return resolved.error;
+          await deleteTask(resolved, workspaceId);
           return "Task deleted.";
         } catch (error) {
           return error instanceof Error
@@ -786,11 +832,15 @@ REPARENTING: Pass newParentId to move a task under a different parent (or null t
       description:
         "Confirm user wants to keep a scheduled task active. Stops future prompts about turning it off.",
       inputSchema: z.object({
-        taskId: z.string().describe("The ID of the task to confirm"),
+        taskId: z
+          .string()
+          .describe("The displayId of the task to confirm (e.g. tk-abcde)"),
       }),
       execute: async ({ taskId }) => {
         try {
-          await confirmTaskActive(taskId, workspaceId);
+          const resolved = await resolve("Task", taskId);
+          if (typeof resolved !== "string") return resolved.error;
+          await confirmTaskActive(resolved, workspaceId);
           return "Task confirmed active.";
         } catch (error) {
           return "Failed to confirm task.";
@@ -801,11 +851,17 @@ REPARENTING: Pass newParentId to move a task under a different parent (or null t
     get_task_tree: tool({
       description: `Get the full ancestor chain for a task, from root down to the task itself. Use this to understand the hierarchy context — e.g. which epic/parent a task belongs to. Returns each ancestor's displayId and title in order.`,
       inputSchema: z.object({
-        taskId: z.string().describe("The task ID to get the tree for"),
+        taskId: z
+          .string()
+          .describe(
+            "The displayId of the task to get the tree for (e.g. tk-abcde)",
+          ),
       }),
       execute: async ({ taskId }) => {
         try {
-          const tree = await getTaskTree(taskId);
+          const resolved = await resolve("Task", taskId);
+          if (typeof resolved !== "string") return resolved.error;
+          const tree = await getTaskTree(resolved);
           if (tree.length === 0) return `Task ${taskId} not found.`;
           return tree
             .map((t, i) => {
