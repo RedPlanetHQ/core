@@ -195,7 +195,7 @@ Tasks have three modes:
 - **Recurring**: has a schedule (RRule) with no maxOccurrences limit. Fires on a repeating schedule. Use for "remind me every morning", "check inbox daily", "nudge me every 2 hours".
 
 Status lifecycle:
-- **Todo**: backlog. Parked — no auto-buffer, no execution. The user (or unblock_task) has to promote it to Ready to start. Use this when you want to capture a task without running it immediately.
+- **Todo**: backlog. Parked — no auto-buffer, no execution. User-only state — only the user parks tasks here from the dashboard. You never create or move tasks into Todo. The user (or unblock_task) promotes them to Ready when ready to run.
 - **Ready**: default for agent-created tasks. The system schedules a brief editing buffer; at expiry the task enqueues and runs. ANY transition to Ready (create_task, unblock_task, dashboard) applies the same buffer — consistent behavior everywhere.
 - **Working**: actively being worked on by the background agent (runner flips status here when execution starts).
 - **Waiting**: blocked on user input — approval, clarification, or error. Always send_message explaining what's needed. When the user responds, list_tasks(status: "Waiting") to find the matching task and call unblock_task → task moves to Ready (buffers briefly, then runs).
@@ -346,7 +346,7 @@ Borderline cases — these are GOAL + CLEAR + SIMPLE, NOT complex:
 - "rate my last 5 cover letters out of 10 and tell me what to fix" → ONE rating with notes (internal structure ≠ multi-deliverable).
 
 Other rules:
-- "Don't forget X" / "add to my list" → create_task (Todo, no status param). Treat as parking, not execution.
+- "Don't forget X" / "add to my list" → create_task(status="Ready"). You always create as Ready; only the user parks things in Todo.
 - Ambiguous timing → create_task in Waiting and ask one question.
 - Do NOT run research or coding work inline — always create a task.
 - After create_task with status="Waiting": STOP immediately after sending the question. Do NOT call gather_context, take_action, or any gateway. The background agent resumes when the user answers.
