@@ -1,9 +1,9 @@
 {
   "name": "@core/github",
-  "version": "0.1.13",
+  "version": "0.1.15",
   "description": "github extension for CORE",
-  "main": "./bin/index.js",
-  "module": "./bin/index.mjs",
+  "main": "./dist/index.js",
+  "module": "./dist/index.mjs",
   "type": "module",
   "files": [
     "github",
@@ -11,7 +11,7 @@
     "dist"
   ],
   "bin": {
-    "github": "./bin/index.js"
+    "github": "./dist/index.js"
   },
   "exports": {
     "./widgets": {
@@ -25,7 +25,7 @@
   },
   "scripts": {
     "build": "pnpm run build:cli && pnpm run build:frontend",
-    "build:cli": "rimraf bin && bun build src/index.ts --outfile bin/index.js --target node --minify",
+    "build:cli": "rimraf dist && bun build src/index.ts --outfile dist/index.js --target node --minify",
     "build:frontend": "tsup",
     "dev:frontend": "tsup --watch",
     "lint": "eslint --ext js,ts,tsx backend/ frontend/ --fix",

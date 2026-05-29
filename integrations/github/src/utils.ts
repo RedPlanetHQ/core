@@ -67,18 +67,33 @@ export async function getUserEvents(
       return itemDate >= sinceDate;
     };
 
+    // Search API items expose `repository_url` (e.g. https://api.github.com/repos/owner/repo)
+    // but no `repository` object. Derive `repository.full_name` so downstream code can
+    // read it the same way as the notifications endpoint.
+    const repoFromUrl = (url?: string) =>
+      url ? url.replace('https://api.github.com/repos/', '') : undefined;
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    const withRepo = (item: any) => {
+      const fullName = repoFromUrl(item.repository_url);
+      return fullName
+        ? { ...item, repository: { ...(item.repository || {}), full_name: fullName } }
+        : item;
+    };
+
     // Return simplified results - combine PRs, issues, commented items, and self-assigned issues
     const results = [
       // eslint-disable-next-line @typescript-eslint/no-explicit-any
-      ...(prsResponse?.items || []).filter(filterBySince).map((item: any) => ({ ...item, type: 'pr' })),
+      ...(prsResponse?.items || [])
+        .filter(filterBySince)
+        .map((item: any) => ({ ...withRepo(item), type: 'pr' })),
       ...(issuesResponse?.items || [])
         // eslint-disable-next-line @typescript-eslint/no-explicit-any
         .filter((item: any) => !item.pull_request && filterBySince(item))
         // eslint-disable-next-line @typescript-eslint/no-explicit-any
-        .map((item: any) => ({ ...item, type: 'issue' })),
+        .map((item: any) => ({ ...withRepo(item), type: 'issue' })),
       // eslint-disable-next-line @typescript-eslint/no-explicit-any
       ...(commentsResponse?.items || []).filter(filterBySince).map((item: any) => ({
-        ...item,
+        ...withRepo(item),
         type: item.pull_request ? 'pr_comment' : 'issue_comment',
       })),
       // Add self-assigned issues, but only if not already present in issuesResponse
@@ -87,11 +102,14 @@ export async function getUserEvents(
         .filter((item: any) => {
           // Only include if not already in issuesResponse (by id) and passes since filter
           // eslint-disable-next-line @typescript-eslint/no-explicit-any
-          return !(issuesResponse?.items || []).some((issue: any) => issue.id === item.id) && filterBySince(item);
+          return (
+            !(issuesResponse?.items || []).some((issue: any) => issue.id === item.id) &&
+            filterBySince(item)
+          );
         })
         // eslint-disable-next-line @typescript-eslint/no-explicit-any
         .map((item: any) => ({
-          ...item,
+          ...withRepo(item),
           type: 'self_assigned_issue',
         })),
     ];
