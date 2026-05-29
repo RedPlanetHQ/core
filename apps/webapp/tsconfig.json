@@ -31,8 +31,7 @@
     "baseUrl": ".",
     "paths": {
       "~/*": ["./app/*"],
-      "@/*": ["./*"],
-      "tinykeys": ["./node_modules/tinykeys/dist/tinykeys.d.ts"]
+      "@/*": ["./*"]
     },
     "noEmit": true
   }

@@ -1,6 +1,6 @@
 import * as React from "react";
 import { useHotkeys } from "react-hotkeys-hook";
-import { tinykeys } from "tinykeys";
+import { tinykeys } from "~/lib/tinykeys";
 
 import {
   Sidebar,

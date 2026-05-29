@@ -1,6 +1,6 @@
 import React from "react";
 import { Plus, X } from "lucide-react";
-import { tinykeys } from "tinykeys";
+import { tinykeys } from "~/lib/tinykeys";
 import { cn } from "~/lib/utils";
 import { useDesktopTabs } from "./tabs-context";
 import { Button } from "../ui";
