@@ -15,6 +15,7 @@ import { MCPSessionManager } from "~/utils/mcp/session-manager";
 import { TransportManager } from "~/utils/mcp/transport-manager";
 import { callMemoryTool, memoryTools } from "~/utils/mcp/memory";
 import { reminderTools, callReminderTool } from "~/utils/mcp/reminder";
+import { skillTools, callSkillTool } from "~/utils/mcp/skill";
 import { logger } from "~/services/logger.service";
 import { type Response, type Request } from "express";
 import { ensureBillingInitialized } from "./billing.server";
@@ -88,6 +89,9 @@ async function createMcpServer(
 
     // Add reminder tools
     tools = tools.concat(reminderTools as any);
+
+    // Add skill tools
+    tools = tools.concat(skillTools as any);
 
     return {
       tools,
@@ -164,6 +168,12 @@ async function createMcpServer(
     if (reminderToolNames.includes(name)) {
       const timezone = await getUserTimezone(userId);
       return await callReminderTool(name, args, workspaceId, timezone);
+    }
+
+    // Handle skill tools
+    const skillToolNames = ["list_skills", "get_skill"];
+    if (skillToolNames.includes(name)) {
+      return await callSkillTool(name, args, workspaceId);
     }
 
     throw new Error(`Unknown tool: ${name}`);
