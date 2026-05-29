@@ -1,5 +1,5 @@
 import { embed, type ModelMessage } from "ai";
-import { type z } from "zod";
+import { z } from "zod";
 import {
   createOpenAI,
   type OpenAIResponsesProviderOptions,
@@ -50,10 +50,26 @@ export interface AvailableModel {
 // ---------------------------------------------------------------------------
 
 /**
+ * ollama-ai-provider-v2 posts to `${baseURL}/chat` and expects the base to end
+ * in `/api` (its own default is http://localhost:11434/api). OLLAMA_URL is the
+ * bare host (the embedding path appends `/v1`), so add `/api` here for the
+ * chat/completions provider. Idempotent.
+ */
+function toOllamaApiBase(url: string): string {
+  const base = url.replace(/\/+$/, "");
+  return base.endsWith("/api") ? base : `${base}/api`;
+}
+
+/**
  * Infer provider from a bare model ID (no "/" prefix).
  * Falls back to default chat provider from DB cache.
  */
 function inferProvider(modelId: string): string {
+  // Model IDs like `mistral-7b` or `deepseek-r1` are ambiguous — pullable via Ollama
+  // or callable against the hosted provider. When CHAT_PROVIDER=ollama is explicitly
+  // set, env wins over prefix so bare IDs go local. Use `<provider>/<model>` router
+  // strings to force hosted routing in an Ollama-default deploy
+  if (getDefaultChatProviderType() === "ollama") return "ollama";
   if (modelId.startsWith("gpt-") || modelId.startsWith("o3") || modelId.startsWith("o4"))
     return "openai";
   if (modelId.startsWith("claude-")) return "anthropic";
@@ -126,7 +142,7 @@ export const getModel = (takeModel?: string) => {
     if (!modelId) {
       throw new Error("No chat model configured for Ollama.");
     }
-    const ollama = createOllama({ baseURL: ollamaUrl });
+    const ollama = createOllama({ baseURL: toOllamaApiBase(ollamaUrl) });
     return ollama(modelId);
   }
 
@@ -260,7 +276,7 @@ export function createAgent(
   // BYOK Ollama: apiKey field carries the base URL (Ollama has no API key).
   if (options?.apiKey && provider === "ollama") {
     const modelId = getModelId(modelString);
-    const ollama = createOllama({ baseURL: options.apiKey });
+    const ollama = createOllama({ baseURL: toOllamaApiBase(options.apiKey) });
     return new Agent({
       id: `model-call-${modelString}`,
       name: `Model Call (${modelString})`,
@@ -454,6 +470,26 @@ export async function makeStructuredModelCall<T extends z.ZodType>(
   }
 }
 
+/**
+ * Render a Zod schema as a JSON Schema string for the prompt. Self-hosted/proxy
+ * models don't get strict structured output, so they otherwise guess key names
+ * from the prompt's prose examples (e.g. emitting `subject`/`object`/`fact_text`
+ * instead of the schema's `source`/`target`/`fact`). Showing the exact JSON
+ * Schema makes them use the right keys. Falls back to "" if conversion fails.
+ */
+function schemaInstruction(schema: z.ZodType): string {
+  try {
+    const jsonSchema = z.toJSONSchema(schema, { io: "output" });
+    return (
+      "\n\nThe object MUST conform EXACTLY to this JSON Schema — use these property " +
+      "names verbatim and do not rename, add, or omit keys:\n" +
+      JSON.stringify(jsonSchema)
+    );
+  } catch {
+    return "";
+  }
+}
+
 async function structuredCallWithTolerantParsing<T extends z.ZodType>(
   schema: T,
   messages: ModelMessage[],
@@ -461,10 +497,12 @@ async function structuredCallWithTolerantParsing<T extends z.ZodType>(
   temperature?: number,
   apiKey?: string,
 ): Promise<{ object: z.infer<T>; usage: any }> {
+  const schemaHint = schemaInstruction(schema);
   const jsonPreamble =
     "Return ONLY a single valid JSON object that matches the requested schema. " +
     "Do not wrap it in Markdown fences. Do not include extra text. " +
-    "Include every required key; use null for nullable fields; use [] for empty arrays.";
+    "Include every required key; use null for nullable fields; use [] for empty arrays." +
+    schemaHint;
 
   const agentOpts = apiKey ? { apiKey } : undefined;
   const agent = createAgent(modelString, jsonPreamble, undefined, agentOpts);
@@ -483,7 +521,8 @@ async function structuredCallWithTolerantParsing<T extends z.ZodType>(
   const repairAgent = createAgent(
     modelString,
     "You are a JSON repair assistant. Convert the user's content into a single valid JSON object. " +
-    "Return ONLY the JSON object, with no Markdown fences and no extra text.",
+      "Return ONLY the JSON object, with no Markdown fences and no extra text." +
+      schemaHint,
     undefined,
     agentOpts,
   );
