@@ -317,20 +317,47 @@ const { loader, action } = createHybridActionApiRoute(
       modelConfig,
     });
 
-    const subagents: Record<string, Agent> = {
+    const baseSubagents: Record<string, Agent> = {
       gather_context: gatherContextAgent,
       take_action: takeActionAgent,
     };
     for (const gw of gatewayAgents) {
-      subagents[gw.id] = gw;
+      baseSubagents[gw.id] = gw;
     }
+
+    // Sub-agent clone — same prompt + same delegated subagents as the parent.
+    // Registered in Mastra's `agents: {}` so the LLM invokes it via native
+    // delegation (UI streams it as a `data-tool-agent` nested tree, identical
+    // to gateway sub-agents). The clone does NOT see itself in its own
+    // subagents map — no recursive self-spawning.
+    const cloneAgent = new Agent({
+      id: "core-clone-agent",
+      name: "Core Clone",
+      model: modelConfig as any,
+      instructions: systemPrompt,
+      agents: baseSubagents,
+    });
+    cloneAgent.__registerMastra(mastra);
+
+    const parentSubagents: Record<string, Agent> = {
+      ...baseSubagents,
+      core_clone: cloneAgent,
+    };
+
+    // Tell the parent how to reach the clone. Appended after buildAgentContext
+    // so the rest of the prompt assembly stays untouched.
+    const parentSystemPrompt = `${systemPrompt}
+
+<sub_agent>
+You have a sub-agent called \`core_clone\` — a fresh copy of yourself with the same tools and delegated agents. It starts with a clean context (only sees what you put in the call), so use it to fan out self-contained sub-tasks: parallel investigations, bounded actions, isolated chunks of research. NOT a substitute for gather_context / take_action / gateways — use those for normal integration / coding / browsing work. Keep delegations focused; pass everything the clone needs in the intent (it does NOT see this conversation).
+</sub_agent>`;
 
     const agent = new Agent({
       id: "core-agent",
       name: "Core Agent",
       model: modelConfig as any,
-      instructions: systemPrompt,
-      agents: subagents,
+      instructions: parentSystemPrompt,
+      agents: parentSubagents,
       // ask_user must be a direct agent tool (not in toolsets) so Mastra's
       // requireApproval middleware applies correctly on approveToolCall.
       // In "full" permission mode, skip ask_user entirely — it has requireApproval:true

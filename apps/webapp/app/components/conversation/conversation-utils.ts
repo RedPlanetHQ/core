@@ -449,6 +449,7 @@ export const getToolDisplayName = (toolType: string): string => {
     "agent-gather_context": "Gather Context",
     "agent-take_action": "Take Action",
     "agent-think": "Think",
+    "agent-core_clone": "Sub-agent",
   };
 
   if (displayNameMap[name]) {
