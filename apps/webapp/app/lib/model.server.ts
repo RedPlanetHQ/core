@@ -65,8 +65,16 @@ function toOllamaApiBase(url: string): string {
  * Falls back to default chat provider from DB cache.
  */
 function inferProvider(modelId: string): string {
+  // Model IDs like `mistral-7b` or `deepseek-r1` are ambiguous — pullable via Ollama
+  // or callable against the hosted provider. When CHAT_PROVIDER=ollama is explicitly
+  // set, env wins over prefix so bare IDs go local. Use `<provider>/<model>` router
+  // strings to force hosted routing in an Ollama-default deploy.
   if (getDefaultChatProviderType() === "ollama") return "ollama";
-  if (modelId.startsWith("gpt-") || modelId.startsWith("o3") || modelId.startsWith("o4"))
+  if (
+    modelId.startsWith("gpt-") ||
+    modelId.startsWith("o3") ||
+    modelId.startsWith("o4")
+  )
     return "openai";
   if (modelId.startsWith("claude-")) return "anthropic";
   if (modelId.startsWith("gemini-")) return "google";
@@ -74,7 +82,11 @@ function inferProvider(modelId: string): string {
     return "bedrock";
   if (modelId.startsWith("openrouter/")) return "openrouter";
   if (modelId.startsWith("deepseek-")) return "deepseek";
-  if (modelId.startsWith("mistral-") || modelId.startsWith("open-mistral-") || modelId.startsWith("open-mixtral-"))
+  if (
+    modelId.startsWith("mistral-") ||
+    modelId.startsWith("open-mistral-") ||
+    modelId.startsWith("open-mixtral-")
+  )
     return "mistral";
   if (modelId.startsWith("grok-")) return "xai";
   if (modelId.startsWith("groq/")) return "groq";
@@ -104,7 +116,8 @@ export function getProvider(modelString: string): string {
  * Extract bare model ID from a router string.
  */
 function getModelId(modelString: string): string {
-  if (modelString.includes("/")) return modelString.split("/").slice(1).join("/");
+  if (modelString.includes("/"))
+    return modelString.split("/").slice(1).join("/");
   return modelString;
 }
 
@@ -147,11 +160,15 @@ export const getModel = (takeModel?: string) => {
     const azureConfig = getProviderConfig("azure");
     const baseURL = azureConfig.baseUrl;
     if (!baseURL) {
-      throw new Error("Azure provider selected but AZURE_BASE_URL is not configured.");
+      throw new Error(
+        "Azure provider selected but AZURE_BASE_URL is not configured.",
+      );
     }
     const apiKey = resolveApiKey("azure");
     if (!apiKey) {
-      throw new Error("Azure provider selected but AZURE_API_KEY is not configured.");
+      throw new Error(
+        "Azure provider selected but AZURE_API_KEY is not configured.",
+      );
     }
     const azureClient = createAzure({ baseURL, apiKey });
     return azureClient(modelId);
@@ -162,9 +179,7 @@ export const getModel = (takeModel?: string) => {
   if (provider === "openai" && openaiConfig.baseUrl) {
     const openaiKey = resolveApiKey("openai");
     if (!openaiKey) {
-      throw new Error(
-        "OpenAI proxy configured but OPENAI_API_KEY is missing.",
-      );
+      throw new Error("OpenAI proxy configured but OPENAI_API_KEY is missing.");
     }
     const openaiClient = createOpenAI({
       baseURL: openaiConfig.baseUrl,
@@ -232,7 +247,11 @@ function toTokenUsage(usage: any): TokenUsage | undefined {
   };
 }
 
-function logTokenUsage(prefix: string, model: string, tokenUsage: TokenUsage | undefined) {
+function logTokenUsage(
+  prefix: string,
+  model: string,
+  tokenUsage: TokenUsage | undefined,
+) {
   if (!tokenUsage) return;
   logger.log(
     `[${prefix}] ${model} - Tokens: ${tokenUsage.totalTokens} (prompt: ${tokenUsage.promptTokens}, completion: ${tokenUsage.completionTokens}${tokenUsage.cachedInputTokens ? `, cached: ${tokenUsage.cachedInputTokens}` : ""})`,
@@ -257,7 +276,9 @@ export function createAgent(
     const modelId = getModelId(modelString);
     const baseURL = options.baseUrl ?? getProviderConfig("azure").baseUrl;
     if (!baseURL) {
-      throw new Error("Azure BYOK requires a base URL (e.g. https://<resource>.openai.azure.com/openai/v1).");
+      throw new Error(
+        "Azure BYOK requires a base URL (e.g. https://<resource>.openai.azure.com/openai/v1).",
+      );
     }
     const azureClient = createAzure({ baseURL, apiKey: options.apiKey });
     return new Agent({
@@ -295,7 +316,11 @@ export function createAgent(
   }
 
   // Server-level Ollama/Azure/proxy: use direct AI SDK model instance
-  if (provider === "ollama" || provider === "azure" || (provider === "openai" && openaiConfig.baseUrl)) {
+  if (
+    provider === "ollama" ||
+    provider === "azure" ||
+    (provider === "openai" && openaiConfig.baseUrl)
+  ) {
     return new Agent({
       id: `model-call-${modelString}`,
       name: `Model Call (${modelString})`,
@@ -330,8 +355,15 @@ export async function makeModelCall(
   workspaceId?: string,
   useCase: UseCase = "chat",
 ) {
-  const { modelId: model, apiKey, isBYOK, baseUrl } = await resolveModelForWorkspace(workspaceId, useCase, complexity);
-  logger.info(`[${useCase}/${complexity}] model: ${model}${isBYOK ? " (BYOK)" : ""}`);
+  const {
+    modelId: model,
+    apiKey,
+    isBYOK,
+    baseUrl,
+  } = await resolveModelForWorkspace(workspaceId, useCase, complexity);
+  logger.info(
+    `[${useCase}/${complexity}] model: ${model}${isBYOK ? " (BYOK)" : ""}`,
+  );
 
   const providerOptions = buildOpenAIProviderOptions(
     model,
@@ -339,7 +371,9 @@ export async function makeModelCall(
     reasoningEffort,
   );
 
-  const agentOptions = apiKey ? { apiKey, ...(baseUrl && { baseUrl }) } : undefined;
+  const agentOptions = apiKey
+    ? { apiKey, ...(baseUrl && { baseUrl }) }
+    : undefined;
   const agent = createAgent(model, undefined, undefined, agentOptions);
 
   if (stream) {
@@ -393,7 +427,8 @@ function tryParseJsonFromText(raw: string): unknown | undefined {
 function needsTolerantParsing(): boolean {
   const openaiConfig = getProviderConfig("openai");
   const apiMode = openaiConfig.apiMode ?? "responses";
-  const isProxyChatMode = apiMode === "chat_completions" && !!openaiConfig.baseUrl;
+  const isProxyChatMode =
+    apiMode === "chat_completions" && !!openaiConfig.baseUrl;
   const isOllama = getDefaultChatProviderType() === "ollama";
   return isProxyChatMode || isOllama;
 }
@@ -407,7 +442,11 @@ export async function makeStructuredModelCall<T extends z.ZodType>(
   workspaceId?: string,
   useCase: UseCase = "chat",
 ): Promise<{ object: z.infer<T>; usage: TokenUsage | undefined }> {
-  const { modelId: model, apiKey, baseUrl } = await resolveModelForWorkspace(workspaceId, useCase, complexity);
+  const {
+    modelId: model,
+    apiKey,
+    baseUrl,
+  } = await resolveModelForWorkspace(workspaceId, useCase, complexity);
   logger.info(`[Structured/${useCase}/${complexity}] model: ${model}`);
 
   const providerOptions = buildOpenAIProviderOptions(
@@ -415,7 +454,9 @@ export async function makeStructuredModelCall<T extends z.ZodType>(
     cacheKey || `structured-${complexity}`,
   );
 
-  const agentApiOptions = apiKey ? { apiKey, ...(baseUrl && { baseUrl }) } : undefined;
+  const agentApiOptions = apiKey
+    ? { apiKey, ...(baseUrl && { baseUrl }) }
+    : undefined;
 
   // Proxy/Ollama: manual JSON extraction (no structured output support)
   if (needsTolerantParsing()) {
@@ -439,7 +480,10 @@ export async function makeStructuredModelCall<T extends z.ZodType>(
       structuredOutput: {
         schema,
         providerOptions: providerOptions
-          ? { ...providerOptions, openai: { ...providerOptions.openai, strictJsonSchema: false } }
+          ? {
+              ...providerOptions,
+              openai: { ...providerOptions.openai, strictJsonSchema: false },
+            }
           : undefined,
       },
       ...(temperature !== undefined && { temperature }),
@@ -455,10 +499,17 @@ export async function makeStructuredModelCall<T extends z.ZodType>(
     const validated = parsed ? schema.safeParse(parsed) : undefined;
 
     if (validated?.success) {
-      logger.warn("[Structured] Tolerant output repair: recovered JSON from non-strict model output.", { model, complexity });
+      logger.warn(
+        "[Structured] Tolerant output repair: recovered JSON from non-strict model output.",
+        { model, complexity },
+      );
       const usage = extractUsageFromError(error);
       const tokenUsage = toTokenUsage(usage);
-      logTokenUsage(`Structured/${complexity.toUpperCase()}`, model, tokenUsage);
+      logTokenUsage(
+        `Structured/${complexity.toUpperCase()}`,
+        model,
+        tokenUsage,
+      );
       return { object: validated.data, usage: tokenUsage };
     }
 
@@ -503,9 +554,12 @@ async function structuredCallWithTolerantParsing<T extends z.ZodType>(
   const agentOpts = apiKey ? { apiKey } : undefined;
   const agent = createAgent(modelString, jsonPreamble, undefined, agentOpts);
 
-  const textResult = await agent.generate(messages as any, {
-    ...(temperature !== undefined && { temperature }),
-  } as any);
+  const textResult = await agent.generate(
+    messages as any,
+    {
+      ...(temperature !== undefined && { temperature }),
+    } as any,
+  );
 
   const parsed = tryParseJsonFromText(textResult.text);
   const validated = parsed ? schema.safeParse(parsed) : undefined;
@@ -529,9 +583,14 @@ async function structuredCallWithTolerantParsing<T extends z.ZodType>(
   );
 
   const repairedParsed = tryParseJsonFromText(repairResult.text);
-  const repairedValidated = repairedParsed ? schema.safeParse(repairedParsed) : undefined;
+  const repairedValidated = repairedParsed
+    ? schema.safeParse(repairedParsed)
+    : undefined;
   if (repairedValidated?.success) {
-    return { object: repairedValidated.data, usage: repairResult.usage ?? textResult.usage };
+    return {
+      object: repairedValidated.data,
+      usage: repairResult.usage ?? textResult.usage,
+    };
   }
 
   const err = new Error(
@@ -545,14 +604,21 @@ async function structuredCallWithTolerantParsing<T extends z.ZodType>(
 function extractTextFromError(error: unknown): string {
   const getText = (value: unknown): string | undefined => {
     if (!value || typeof value !== "object") return undefined;
-    return typeof (value as any).text === "string" ? (value as any).text : undefined;
+    return typeof (value as any).text === "string"
+      ? (value as any).text
+      : undefined;
   };
   const getCause = (value: unknown): unknown => {
     if (!value || typeof value !== "object") return undefined;
     return (value as any).cause;
   };
 
-  return getText(error) || getText(getCause(error)) || getText(getCause(getCause(error))) || "";
+  return (
+    getText(error) ||
+    getText(getCause(error)) ||
+    getText(getCause(getCause(error))) ||
+    ""
+  );
 }
 
 function extractUsageFromError(error: unknown): any {
@@ -578,7 +644,11 @@ export async function resolveModelString(
   complexity: ModelComplexity = "medium",
   workspaceId?: string,
 ): Promise<string> {
-  const { modelId } = await resolveModelForWorkspace(workspaceId, useCase, complexity);
+  const { modelId } = await resolveModelForWorkspace(
+    workspaceId,
+    useCase,
+    complexity,
+  );
   return modelId;
 }
 
@@ -591,7 +661,9 @@ async function getEmbeddingModel() {
 
   if (!embeddingInfo) {
     // Fallback: use OpenAI text-embedding-3-small via router
-    return new ModelRouterEmbeddingModel("openai/text-embedding-3-small" as any);
+    return new ModelRouterEmbeddingModel(
+      "openai/text-embedding-3-small" as any,
+    );
   }
 
   const { modelId, providerType } = embeddingInfo;
@@ -617,9 +689,7 @@ async function getEmbeddingModel() {
   if (providerType === "openai" && providerConfig.baseUrl) {
     const openaiKey = resolveApiKey("openai");
     if (!openaiKey) {
-      throw new Error(
-        "OpenAI proxy configured but OPENAI_API_KEY is missing.",
-      );
+      throw new Error("OpenAI proxy configured but OPENAI_API_KEY is missing.");
     }
     return new ModelRouterEmbeddingModel({
       providerId: "openai",
@@ -650,11 +720,12 @@ export async function getEmbedding(text: string) {
       const { embedding } = await embed({
         model: embeddingModel,
         value: textForEmbedding,
-        ...(targetDim && embeddingProviderType === "google" && {
-          providerOptions: {
-            google: { outputDimensionality: targetDim },
-          },
-        }),
+        ...(targetDim &&
+          embeddingProviderType === "google" && {
+            providerOptions: {
+              google: { outputDimensionality: targetDim },
+            },
+          }),
       });
       lastEmbedding = embedding;
 
