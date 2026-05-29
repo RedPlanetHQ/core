@@ -2,7 +2,7 @@
   "name": "tauri",
   "version": "0.1.0",
   "scripts": {
-    "dev": "tauri dev",
+    "dev-tauri": "tauri dev",
     "build": "tauri build",
     "tauri": "tauri"
   },
