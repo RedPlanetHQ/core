@@ -45,6 +45,7 @@ import { getPageContentAsHtml } from "~/services/hocuspocus/content.server";
 import { DirectOrchestratorTools } from "./executors";
 import { getTaskPhase } from "~/services/task.phase";
 import { BUILTIN_SKILLS } from "~/services/skills.builtin";
+import { getDefaultSkill } from "~/services/skills.server";
 import { fetchManifest } from "~/services/gateway/transport.server";
 import { deriveCapabilityTags } from "~/services/gateway/utils.server";
 
@@ -158,10 +159,14 @@ export async function buildAgentContext({
   ]);
 
   // Exclude reserved defaults (Persona + Watch Rules) from the dynamic
-  // skills list — those have separate injection paths (personality blocks +
-  // decision agent). Other default skills (Morning Brief, etc.) stay in the
-  // list so the agent can discover them via <skills> and call get_skill, and
-  // so the scheduled-task skillHint lookup below can resolve them.
+  // skills list — those have separate injection paths:
+  //   - Persona is rendered inline into the personality block.
+  //   - Watch Rules is loaded by the decision agent (decision.ts) and pinned
+  //     into the butler's <trigger_context> by skill ID (see below) so it
+  //     gets fetched via get_skill on every trigger turn.
+  // Other default skills (Morning Brief, etc.) stay in the list so the agent
+  // can discover them via <skills> and call get_skill, and so the
+  // scheduled-task skillHint lookup below can resolve them.
   const skills = allSkills.filter((s) => {
     const meta = s.metadata as Record<string, unknown> | null;
     const skillType = meta?.skillType as string | undefined;
@@ -647,28 +652,39 @@ This IS the task — don't create or search for other tasks about this topic. If
     const isRecurring =
       (triggerContext.trigger.data as any)?.isRecurring === true;
 
+    // Resolve the Watch Rules skill ID so the butler can load the user's
+    // current surfacing policy via get_skill. Single source of truth: the
+    // DB-backed skill. The decision agent loads the same skill on its side.
+    const watchRulesSkill = await getDefaultSkill(workspaceId, "watch-rules");
+    const watchRulesLoadStep = watchRulesSkill?.id
+      ? `\n\n2. **Load Watch Rules and follow them.** Call \`get_skill\` with \`skill_id: "${watchRulesSkill.id}"\` and follow the directives in the returned content. Watch Rules govern TWO independent decisions for this trigger:\n   - Whether to ping the user (\`send_message\`). Use the ActionPlan's \`shouldMessage\` — \`think\` already evaluated Watch Rules to produce it.\n   - Whether to record a Live finds suggestion in today's scratchpad (\`update_scratchpad\`). These are independent — Watch Rules may call for a scratchpad write even when \`shouldMessage\` is false, and vice versa. For trigger flows, Watch Rules override anything in <capabilities> about scratchpad use.\n`
+      : "";
+
     systemPrompt += `\n\n<trigger_context>
 A trigger has fired: "${triggerContext.reminderText}"${isTriggerFollowUp ? `\nThis is a FOLLOW-UP trigger. One follow-up level is the maximum — if the issue is still unresolved, mark the task Waiting and notify the user via send_message.` : ""}${isRecurring ? `\nThis is a RECURRING task. Send results via send_message only and leave the task description untouched. The system handles the recurring lifecycle, so use Review for status changes; the next occurrence is scheduled automatically.` : ""}
+
+**Surfacing ≠ acting on the underlying item.** A trigger is the system noticing something — your job is to *surface* it per Watch Rules (notify + scratchpad), not to take the irreversible action on the user's behalf. For an inbound customer email, that means flagging it and queuing a suggestion; do NOT draft and send a reply unless the user asked you to. Do NOT end the turn by asking the user "should I do A or B?" — make the surfacing call from Watch Rules and stop.
 
 The \`think\` tool is your decision filter. It tells you whether to speak, what silent actions to take, and what follow-ups to queue. It does NOT compose the message — that's your job, using the skill (when one applies) and fresh data.
 
 **Flow:**
 
-1. Call \`think\` first. It returns an ActionPlan: \`{ shouldMessage, message: { intent, context, tone }, createFollowUps, updateTasks, silentActions, reasoning }\`.
-
-2. If \`shouldMessage\` is true, compose and deliver the message yourself:
-   a. **Pick the skill.** Check \`<task_execution>\` above — if a skill is attached to this task, load it via \`get_skill\` and follow its instructions step-by-step. Otherwise scan \`<skills>\` and load any whose "Use when…" matches the trigger's intent. If nothing fits, compose directly from the trigger text.
+1. Call \`think\` first. It returns an ActionPlan: \`{ shouldMessage, message: { intent, context, tone }, createFollowUps, updateTasks, silentActions, reasoning }\`.${watchRulesLoadStep}
+3. If \`shouldMessage\` is true, compose and deliver the message yourself:
+   a. **Pick the skill by intent.** Match the trigger's intent against the "Use when…" descriptions in \`<skills>\` and load the best fit via \`get_skill\`. If nothing fits, compose directly from the trigger text.
    b. **Gather the data the message needs.** Use \`gather_context\` / \`take_action\` for integrations, memory, web — whatever the skill's recipe (or the trigger) calls for. Fetch fresh; the ActionPlan's \`context\` carries decision flags only, not message content.
    c. **Compose** the message in the specified tone, matching the user's persona and the channel format. Keep it concise.
    d. **Deliver** via \`send_message\`. The response the user sees comes from this call — never from echoing the ActionPlan JSON.
 
-3. If \`shouldMessage\` is false, skip \`send_message\` entirely.
+4. If Watch Rules call for a scratchpad entry (Live finds), call \`update_scratchpad\` using the HTML structure the rules specify. Do this whether or not you also messaged.
 
-4. Apply \`createFollowUps\`${isTriggerFollowUp ? ` (ignore these — this trigger is itself a follow-up; the chain stops here)` : ` by calling \`create_task\` with \`isFollowUp=true\` and \`parentTaskId\` set to the triggering task's ID (these are reschedules of the existing task, not new ones)`}.
+5. If \`shouldMessage\` is false AND Watch Rules don't call for a scratchpad write, skip both — handle silently.
 
-5. Apply \`updateTasks\` via \`update_task\`${isRecurring ? ` — except skip description updates and skip \`status: "Done"\` (the system loops recurring tasks automatically)` : ""}.
+6. Apply \`createFollowUps\`${isTriggerFollowUp ? ` (ignore these — this trigger is itself a follow-up; the chain stops here)` : ` by calling \`create_task\` with \`isFollowUp=true\` and \`parentTaskId\` set to the triggering task's ID (these are reschedules of the existing task, not new ones)`}.
 
-6. Apply \`silentActions\` (log entries, state updates).
+7. Apply \`updateTasks\` via \`update_task\`${isRecurring ? ` — except skip description updates and skip \`status: "Done"\` (the system loops recurring tasks automatically)` : ""}.
+
+8. Apply \`silentActions\` (log entries, state updates).
 
 The trigger IS already a task — use the existing taskId for any updates rather than creating a duplicate. Use \`send_message\` for delivery, never \`create_task\`. Trust the ActionPlan's \`shouldMessage\` decision — it has already evaluated the trigger.
 </trigger_context>`;
