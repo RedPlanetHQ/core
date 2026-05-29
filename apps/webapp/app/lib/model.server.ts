@@ -65,6 +65,10 @@ function toOllamaApiBase(url: string): string {
  * Falls back to default chat provider from DB cache.
  */
 function inferProvider(modelId: string): string {
+  // Model IDs like `mistral-7b` or `deepseek-r1` are ambiguous — pullable via Ollama
+  // or callable against the hosted provider. When CHAT_PROVIDER=ollama is explicitly
+  // set, env wins over prefix so bare IDs go local. Use `<provider>/<model>` router
+  // strings to force hosted routing in an Ollama-default deploy
   if (getDefaultChatProviderType() === "ollama") return "ollama";
   if (modelId.startsWith("gpt-") || modelId.startsWith("o3") || modelId.startsWith("o4"))
     return "openai";
