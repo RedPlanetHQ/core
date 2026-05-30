@@ -208,7 +208,7 @@ export function bootstrapFromEnv(): string[] {
 			`  ${printRawKey}`,
 			'',
 			'Paste this (with your gateway URL) into the webapp:',
-			'  Settings → Gateways → New gateway',
+			'  Sidebar → Gateways → New gateway',
 			'',
 			'Set COREBRAIN_GATEWAY_SECURITY_KEY env var to provide your own.',
 			'='.repeat(64),

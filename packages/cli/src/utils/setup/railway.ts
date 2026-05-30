@@ -251,7 +251,7 @@ export async function setupRailwayGateway(): Promise<RailwaySetupResult | {cance
 				`Railway service running at ${baseUrl}.`,
 				`Security key: ${chalk.yellow(securityKey)}`,
 				'',
-				'Register later via Settings → Gateways → Register.',
+				'Register later via Sidebar → Gateways → Register.',
 			].join('\n'),
 			'Not registered',
 		);

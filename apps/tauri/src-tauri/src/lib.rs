@@ -372,7 +372,7 @@ fn maybe_notify_gateway_setup<R: tauri::Runtime>(app: &tauri::AppHandle<R>) {
     }
 
     let title = "Set up your CORE gateway";
-    let body = "CORE needs a local gateway to run coding sessions and tools on this Mac. Open CORE → Settings → Gateway to register one.";
+    let body = "CORE needs a local gateway to run coding sessions and tools on this Mac. Open CORE → Sidebar → Gateways → New gateway to register one.";
 
     let result = n.builder().title(title).body(body).show();
 

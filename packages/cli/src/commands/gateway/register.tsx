@@ -122,7 +122,7 @@ export async function runRegister(opts: RegisterOptions): Promise<RegisterResult
 			`${chalk.bold('baseUrl:')}     ${baseUrl}`,
 			`${chalk.bold('securityKey:')} ${chalk.yellow(securityKey)}`,
 			'',
-			chalk.dim('Paste baseUrl + securityKey into CORE → Settings → Gateways.'),
+			chalk.dim('Paste baseUrl + securityKey into CORE → Sidebar → Gateways → New gateway.'),
 			chalk.dim('This is the ONLY time the raw key is shown — it is not stored locally.'),
 		].join('\n'),
 		'Gateway registered',
