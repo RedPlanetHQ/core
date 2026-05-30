@@ -246,7 +246,7 @@ export async function setupDockerGateway(): Promise<DockerSetupResult | {cancell
 		p.note(
 			[
 				`Container running at ${localUrl} (public: ${publicBaseUrl}).`,
-				'Register later via Settings → Gateways in the webapp,',
+				'Register later via Sidebar → Gateways → Register in the webapp,',
 				`or with the security key in ${composeDir}/.env:`,
 				`  ${chalk.yellow(securityKey)}`,
 			].join('\n'),
