@@ -35,9 +35,9 @@
 
 # AI Operating System to build your own Jarvis.
 
-Not a chatbot you open. An AI that is always on, always watching.
-Name it. Shape it. Connect it to everything you use. Reach it however you work.
-Open source, self-hosted, yours forever.
+An always-on AI that watches your screen, your apps, and your AI tools. Speaks back to you through your AirPods in a voice you chose. Remembers everything across them. Acts on your behalf when you let it, asks first when you do not.
+
+Name it. Shape it. Connect it to everything you use. Reach it however you work. Open source, self-hosted, yours forever.
 
 <p align="center">
     <a href="https://getcore.me">
@@ -68,73 +68,123 @@ Watch CORE take a plain-text task, gather context from GitHub and memory, plan t
 
 ---
 
-## Always watching. Always ready.
+## The Jarvis loop
 
-Most AI tools wait to be asked. CORE watches.
+CORE is not a single agent. It is the operating system that runs the loop around your agents.
 
-Connect it to your apps and it monitors activity across all of them. An email arrives from a client, a GitHub issue gets assigned, a Sentry alert fires, a meeting ends. CORE sees it, checks your memory and the skills you have set, and either handles it or surfaces it for your judgment. You do not trigger it. It notices on its own.
+```
+   ┌─────────────────────────────────────────────────────────────────┐
+   │                                                                 │
+   │   Watch  →  Memory  →  Skills  →  Toolkit  →  Gateway  →  You   │
+   │                                                                 │
+   └─────────────────────────────────────────────────────────────────┘
+```
 
-Install the CORE plugin in Claude Code, Codex, or Cursor and your agent conversations get watched too. Context discussed, decisions made, code written, all of it feeds the memory knowledge graph. The next task CORE picks up already knows what happened in your last session.
+1. **Watch.** Webhooks from connected apps, polling where webhooks do not exist, macOS accessibility APIs sampling your screen every few seconds, and your conversations inside Claude Code, Codex, and Cursor. CORE sees what is happening across your tools and your life.
 
-When it acts, it acts directly. It can reply to emails, update Linear issues, file GitHub PRs, send Slack messages, run terminal commands, drive a browser, and spawn a Claude Code or Codex session from any interface. Send a WhatsApp message from the airport and CORE can have a coding session running and a PR open before you board.
+2. **Memory.** Everything CORE sees flows into a temporal knowledge graph. Preferences, decisions, project context, who said what when. Every future task starts with this loaded.
 
-You decide where it acts on its own and where it waits for your call. Handle Sentry alerts automatically but always ask before merging. Approve a plan before a coding session starts. Require confirmation before any email goes out. The level of autonomy is yours to set, per task, per app, per action.
+3. **Skills and watch rules.** Your custom instructions decide what CORE does when something happens. "If an investor emails, draft a reply and ping me on Slack for review." "If Sentry fires, investigate first, then propose a fix." 100+ built-in, or write your own.
 
----
+4. **Toolkit.** 1000+ actions across 50+ apps through one MCP endpoint. Gmail, Calendar, GitHub, Linear, Slack, Notion, Sentry, Todoist, and more.
 
-## Four ways to reach it
+5. **Gateway.** Hard work goes to specialists. CORE does not write code itself, it spawns a Claude Code or Codex session. It does not drive a browser itself, it spawns a browser agent. It does not run terminal commands itself, it shells out. CORE orchestrates.
 
-A chatbot has one interface. An OS has many.
+6. **Surfaces.** Results come back where you are. Voice in your AirPods, a Slack ping, a WhatsApp message, a Telegram reply, an email, or a row on your scratchpad.
 
-**Voice.** Press Ctrl+Option on Mac and say what needs doing. CORE runs it in the background without breaking your flow.
-
-**Scratchpad.** Open your daily page and write `[ ] Fix the auth bug from issue #47`. CORE picks it up within 3 minutes, loads context from your repo and memory, and drafts a plan.
-
-**Messaging.** WhatsApp, Slack, Telegram. Send a task from the airport, from your phone, from bed. CORE has your full context regardless of where the message comes from.
-
-**Chat.** Open the dashboard and talk directly, like any assistant. When you want a back-and-forth before delegating.
-
-One AI, four surfaces, the same memory and context behind all of them.
+That is the loop. Every section below is just one part of it expanded.
 
 ---
 
-## Make it yours
+## Two modes of working with it
 
-Give it a name. Choose how it speaks. Set the rules it follows everywhere.
+**Real-time voice and chat.** Press `Ctrl+Option` and talk. CORE listens, runs the request, and answers back through your AirPods in the ElevenLabs voice you configured. Conversational, interruptible, fast. Open the chat dashboard for the same back-and-forth in text. "How does my calendar look today?" Hear the answer in seconds.
 
-Pick from five built-in personalities — TARS's dry efficiency, Alfred's loyal formality, Hudson's warm practicality — or write your own. The personality carries into every task it runs, every plan it drafts, every message it sends on your behalf.
+**Async tasks.** Write `[ ] Book my flights to SF for the YC dinner` in your scratchpad, send a WhatsApp message, or fire a webhook from anywhere. CORE picks it up within three minutes, gathers context from memory and connected apps, drafts a plan, asks for approval if you required it, runs the work in the background, and pings you back on your preferred channel when it is done or stuck.
 
-Choose its voice for spoken interactions. From then on, it sounds and behaves like the AI you configured, across every interface.
+Both modes share the same memory, skills, and toolkit. One AI, two flavors of attention.
+
+---
+
+## What "always watching" actually means
+
+- **Webhooks** on connected apps (Gmail, GitHub, Sentry, Linear, Slack, and more) for instant reaction.
+- **Polling** for integrations without webhooks, so coverage does not drop.
+- **Screen capture via macOS accessibility APIs**, sampling text content every few seconds so CORE remembers what you were working on and can recall it later. Toggle per app, or off entirely.
+- **Cross-agent context.** Install the CORE plugin inside Claude Code, Codex, or Cursor and CORE remembers those conversations too. The next task already knows what your last Claude Code session decided.
+
+You decide what CORE watches and what it ignores, per app, per surface, per rule. Self-host the full stack if you want the data to never leave your machine.
 
 ---
 
 ## CORE in action
 
-### Say it, come back to a PR.
+### Voice in, voice out.
+
+*Press Ctrl+Option, speak:* "What is on my calendar tomorrow, and is anything in conflict with my flight?"
+
+CORE checks Google Calendar, cross-references your travel plans from memory, and speaks the answer back through your AirPods.
+
+### Voice triggers a coding session in the background.
 
 *Press Ctrl+Option, speak:* "Fix the race condition in the checkout flow from issue #312."
 
-CORE loads the issue, pulls related commits and Slack threads, drafts a plan, and runs a Claude Code session. You come back to a diff. You were never at your desk.
+CORE drafts a plan, spawns a Claude Code session on your gateway, runs it on Railway, and pings you on Slack when the PR is ready. You were never at your desk.
 
-### Write it at night, review it in the morning.
+### Watch rules turn inbound email into a draft.
 
-*Scratchpad:* `[ ] Work through tonight's backlog starting at 11pm`
+*A new email from an investor lands.* Your watch rule says: draft a reply in my tone using project context from memory, send the draft to Slack for review, never send the actual email without my approval. CORE wakes, drafts, posts to Slack, waits.
 
-CORE pulls from Linear, GitHub, and memory, prioritizes, and works through it while you sleep. Smooth runs are waiting for your review. Stuck sessions come back with one tight question, not a stalled tab.
+### Summarize and follow up, no code required.
 
-### Message it from anywhere.
+*WhatsApp from the airport:* "Summarize my last three customer calls and draft follow-ups."
 
-*WhatsApp from the airport:* "Ship the auth refactor."
+CORE pulls transcripts from Fireflies, reads them, drafts a personalized follow-up email per customer using your tone from memory, and asks you to approve each one.
 
-CORE already knows the branch, the context, and your preferences. It is running in Railway. It kicks off the session before you board.
+### Build a tracker from scratch.
+
+*Voice:* "Build me a talent acquisition tracker by reading the shared Google Calendars of my hiring managers."
+
+CORE asks a clarifying question or two by voice, then spawns a Claude Code session through the gateway. Comes back with a working tracker and a dashboard widget you can view inside CORE.
 
 ### Investigate alerts before they become incidents.
 
 *Sentry fires at 2am.* CORE investigates, pulls related traces and prior incidents from memory, proposes a fix, and pings you on Slack: "Issue #847, fix proposed, awaiting your review." You approve from your phone.
 
-### Get a brief that already knows your week.
+### A brief that already knows your week.
 
 *Recurring task, every morning at 8am.* CORE pulls from email, GitHub, Linear, and Slack, surfaces what actually needs attention, skips what does not, and turns follow-ups into tasks automatically.
+
+---
+
+## How it becomes yours
+
+Day 1, CORE knows nothing about you. By day 30, it remembers your investors, your projects, your tone, your preferences on testing, your favorite channels, and who you usually email after a sales call. By day 90, it acts like a person who has been with you for a year.
+
+Memory grows from three sources: your direct conversations with CORE, your sessions inside Claude Code, Codex, and Cursor via the plugin, and ambient observation from connected apps and screen capture.
+
+You shape the agent further:
+
+- **Name and personality.** Pick from five built-ins (TARS's dry efficiency, Alfred's loyal formality, Hudson's warm practicality, and more) or write your own. Personality is not just text tone, it shapes how CORE plans, prioritizes, and pushes back.
+- **Voice.** Configure any ElevenLabs voice for spoken interactions. From then on, CORE sounds like the AI you want.
+- **Skills and watch rules.** Custom instructions that fire in context. "Always check Linear before estimating effort." "Never send an email without my review." "Post a Slack summary when a task completes."
+
+CORE at t=10 is a generic assistant. CORE at t=100 is yours.
+
+---
+
+## Why this is an OS, not just another agent
+
+An operating system does not compute your math. It schedules processes, manages memory, and routes work to the right binary. CORE works the same way:
+
+- **Coding work** goes to Claude Code or Codex via the gateway.
+- **Browser work** goes to a headless browser agent.
+- **Terminal work** runs as a shell process on your machine, Docker, or Railway.
+- **App actions** go through MCP connectors.
+- **Long-running watchers** sit as background subscribers.
+- **Memory, skills, and personality** are the shared substrate every process reads from.
+
+CORE is the kernel. You bring the apps (skills, connectors, agents). The base prompt, the loop, the surfaces, and the memory are tuned for one job: personal assistant, chief of staff, butler. It is not a generic agent framework like LangChain. It is shaped to operate as you. That is why we call it an OS for building your own Jarvis.
 
 ---
 
@@ -144,9 +194,12 @@ CORE already knows the branch, the context, and your preferences. It is running 
 |---|---|
 | **Memory** | Temporal knowledge graph across every tool and conversation. Preferences, decisions, goals, and directives, so every task starts with context loaded. |
 | **Tasks** | One-shot or recurring work units with your spec, CORE's plan, live state, and a dedicated chat thread. Each task can spawn coding, browser, or terminal sessions. |
-| **Connectors** | 50+ apps through one MCP endpoint, plus webhook triggers for proactive automation. GitHub, Linear, Jira, Slack, Gmail, Calendar, Sentry, Notion, Todoist, and more. |
-| **Skills** | Reusable instructions that fire automatically based on context. For example: "always pull related Linear issues before planning a fix," "run tests before opening a PR," or "post a Slack summary when a task completes." 100+ built-in, or write your own. |
-| **Gateway** | Runs Claude Code, Codex, browser agents, and terminal commands on your machine or in Docker and Railway, so CORE keeps working when your laptop is closed. |
+| **Skills and watch rules** | Reusable instructions that fire automatically based on context. 100+ built-in, or write your own. |
+| **Toolkit** | 1000+ actions across 50+ apps through one MCP endpoint, plus webhook triggers for proactive automation. |
+| **Gateway** | Runs Claude Code, Codex, browser agents, and terminal commands on your machine, in Docker, or on Railway, so CORE keeps working when your laptop is closed. |
+| **Voice** | Whisper in, ElevenLabs out. Push to talk via Ctrl+Option. Configurable voice and personality. |
+| **Widgets** | Dashboards generated for tasks. Visualize outputs, track recurring work, manage what CORE built for you. |
+| **Surfaces** | Voice, scratchpad, chat, WhatsApp, Slack, Telegram, email, API. Same memory and context behind all of them. |
 | **Model agnostic** | Bring your own provider: Anthropic, OpenAI, or open-weight models. Self-host the full stack for full isolation. |
 
 ---
@@ -156,12 +209,15 @@ CORE already knows the branch, the context, and your preferences. It is running 
 | | CORE | OpenClaw | Hermes Agent | Devin / Copilot |
 |---|:---:|:---:|:---:|:---:|
 | Multiple interfaces (voice, scratchpad, chat, messaging) | ✅ | Partial | ❌ | ❌ |
+| Bidirectional voice (speak in, speak back) | ✅ | ❌ | ❌ | ❌ |
 | Persistent memory across tasks | ✅ | ❌ | ✅ | ❌ |
+| Cross-agent memory (Claude Code, Codex, Cursor) | ✅ | ❌ | ❌ | ❌ |
 | Delegates to coding agents (Claude Code, Codex) | ✅ | ❌ | ❌ | ✅ |
 | Structured task planning with human approval | ✅ | ❌ | ❌ | Partial |
 | Custom name, personality, and voice | ✅ | ❌ | ❌ | ❌ |
 | 50+ app connectors | ✅ | Partial | Partial | ❌ |
 | Terminal and browser access via gateway | ✅ | ✅ | ✅ | ✅ |
+| Watch rules and proactive automation | ✅ | ❌ | Partial | ❌ |
 | Human-in-loop by default | ✅ | ❌ | ❌ | ❌ |
 | Open source and self-hostable | ✅ | ✅ | ✅ | ❌ |
 
@@ -217,15 +273,15 @@ corebrain gateway setup
 
 ## Docs
 
-- [**Memory**](https://docs.getcore.me/memory/overview) - Temporal knowledge graph, fact classification, intent-driven retrieval
-- [**Scratchpad**](https://docs.getcore.me/concepts/scratchpad) - The daily surface where tasks and ideas start
-- [**Tasks**](https://docs.getcore.me/concepts/tasks) - Plans, state, recurring work, and task-scoped context
-- [**Toolkit**](https://docs.getcore.me/concepts/toolkit) - 1000+ actions across 50+ apps via MCP
-- [**CORE Agent**](https://docs.getcore.me/concepts/meta-agent) - Triggers, memory, tools, and execution
-- [**Gateway**](https://docs.getcore.me/access-core/overview) - WhatsApp, Slack, Telegram, email, web, and API access
-- [**Skills**](https://docs.getcore.me/skills/overview) - Reusable instructions for repeatable workflows
-- [**Self-hosting**](https://docs.getcore.me/self-hosting/setup) - Full deployment guide
-- [**Changelog**](https://docs.getcore.me/opensource/changelog) - What has shipped
+- [**Memory**](https://docs.getcore.me/memory/overview): Temporal knowledge graph, fact classification, intent-driven retrieval
+- [**Scratchpad**](https://docs.getcore.me/concepts/scratchpad): The daily surface where tasks and ideas start
+- [**Tasks**](https://docs.getcore.me/concepts/tasks): Plans, state, recurring work, and task-scoped context
+- [**Toolkit**](https://docs.getcore.me/concepts/toolkit): 1000+ actions across 50+ apps via MCP
+- [**CORE Agent**](https://docs.getcore.me/concepts/meta-agent): Triggers, memory, tools, and execution
+- [**Gateway**](https://docs.getcore.me/access-core/overview): WhatsApp, Slack, Telegram, email, web, and API access
+- [**Skills**](https://docs.getcore.me/skills/overview): Reusable instructions for repeatable workflows
+- [**Self-hosting**](https://docs.getcore.me/self-hosting/setup): Full deployment guide
+- [**Changelog**](https://docs.getcore.me/opensource/changelog): What has shipped
 
 ---
 
@@ -253,9 +309,9 @@ We are building CORE in public.
 
 We share the roadmap and architectural decisions openly because the hardest problems in building a personal OS are best solved with the people using it. Star the repo, self-host it, share what you build, and open issues for what is broken or missing.
 
-- [Discord](https://discord.gg/YGUZcvDjUa) - questions, ideas, show-and-tell
-- [Contributing docs](https://docs.getcore.me/opensource/contributing) - how to contribute to CORE
-- [`good-first-issue`](https://github.com/RedPlanetHQ/core/labels/good-first-issue) - start here
+- [Discord](https://discord.gg/YGUZcvDjUa): questions, ideas, show-and-tell
+- [Contributing docs](https://docs.getcore.me/opensource/contributing): how to contribute to CORE
+- [`good-first-issue`](https://github.com/RedPlanetHQ/core/labels/good-first-issue): start here
 
 <a href="https://github.com/RedPlanetHQ/core/graphs/contributors">
   <img src="https://contrib.rocks/image?repo=RedPlanetHQ/core" />
