@@ -9,10 +9,12 @@
  *
  * Three operations:
  *   1. seedMorningBriefForWorkspaces — for each workspaceId:
- *        - Ensure the "Morning Brief" Document (skill) exists
- *        - Create a daily 9am scheduled task pointing at it (idempotent —
- *          skips if a task with metadata.kind="morning_brief_daily" already
- *          exists for that workspace)
+ *        - Create a daily 9am morning brief scheduled task if missing, with
+ *          MORNING_BRIEF_TASK_DESCRIPTION as its description.
+ *        - If the task already exists but has no description (legacy seeds
+ *          that relied on the now-deprecated "Morning Brief" skill), write
+ *          the description into its page. Tasks with non-empty descriptions
+ *          are left alone.
  *
  *   2. replaceWatchRulesForWorkspaces — for each workspaceId:
  *        - Hard-delete existing Watch Rules Document(s)
@@ -45,6 +47,11 @@
  */
 
 import { prisma } from "~/db.server";
+import {
+  getPageContentAsHtml,
+  setPageContentFromHtml,
+} from "~/services/hocuspocus/content.server";
+import { MORNING_BRIEF_TASK_DESCRIPTION } from "~/services/morning-brief";
 import { DEFAULT_SKILL_DEFINITIONS } from "~/services/skills.defaults";
 import { createSkill } from "~/services/skills.server";
 import { createScheduledTask } from "~/services/task.server";
@@ -66,28 +73,24 @@ interface BackfillResult {
 }
 
 /**
- * For each workspace: ensure the Morning Brief skill exists, then create a
- * daily 9am scheduled task pointing at it. Idempotent — re-running this is
- * safe.
+ * For each workspace: ensure a daily 9am Morning Brief scheduled task exists
+ * AND that its description carries the current MORNING_BRIEF_TASK_DESCRIPTION
+ * prompt. The skill document is no longer required — the brief prompt lives
+ * directly in the task's page so the agent has it on every firing.
+ *
+ * Behavior:
+ *   - No task yet → create one with the description.
+ *   - Task exists but has no description (legacy seeds) → write description.
+ *   - Task exists with a description → leave it alone (user may have
+ *     customized; safer to skip than overwrite).
  */
 export async function seedMorningBriefForWorkspaces(
   workspaceIds: string[],
 ): Promise<BackfillResult[]> {
-  const morningBriefDef = DEFAULT_SKILL_DEFINITIONS.find(
-    (d) => d.skillType === "morning-brief",
-  );
-  if (!morningBriefDef) {
-    throw new Error(
-      "Morning Brief skill definition not found in DEFAULT_SKILL_DEFINITIONS. " +
-        "Was skills.defaults.ts modified?",
-    );
-  }
-
   const results: BackfillResult[] = [];
 
   for (const workspaceId of workspaceIds) {
     try {
-      // 1) Owner user — needed for skill + task creation.
       const ownerMembership = await prisma.userWorkspace.findFirst({
         where: { workspaceId, isActive: true },
         orderBy: { createdAt: "asc" },
@@ -103,68 +106,65 @@ export async function seedMorningBriefForWorkspaces(
       }
       const userId = ownerMembership.userId;
 
-      // 2) Ensure the Morning Brief skill exists for this workspace.
-      let skill = await prisma.document.findFirst({
-        where: {
-          workspaceId,
-          type: "skill",
-          deleted: null,
-          metadata: { path: ["skillType"], equals: "morning-brief" },
-        },
-        select: { id: true, title: true },
-      });
-
-      if (!skill) {
-        const created = await createSkill(workspaceId, userId, {
-          title: morningBriefDef.title,
-          content: morningBriefDef.content,
-          source: "system",
-          metadata: {
-            skillType: morningBriefDef.skillType,
-            shortDescription: morningBriefDef.shortDescription,
-          },
-        });
-        skill = { id: created.id, title: created.title };
-      }
-
-      // 3) Skip if a daily morning brief task already exists for this workspace.
       const existing = await prisma.task.findFirst({
         where: {
           workspaceId,
           metadata: { path: ["kind"], equals: "morning_brief_daily" },
         },
-        select: { id: true },
+        select: { id: true, pageId: true },
       });
-      if (existing) {
+
+      if (!existing) {
+        const task = await createScheduledTask(workspaceId, userId, {
+          title: "Morning brief",
+          description: MORNING_BRIEF_TASK_DESCRIPTION,
+          schedule: "FREQ=DAILY;BYHOUR=9",
+          maxOccurrences: null,
+          metadata: {
+            kind: "morning_brief_daily",
+          },
+        });
+        results.push({
+          workspaceId,
+          status: "seeded",
+          reason: `task id=${task.id} (created with description)`,
+        });
+        logger.info(
+          `[backfill-morning-brief] Created morning brief task for ${workspaceId} (task=${task.id})`,
+        );
+        continue;
+      }
+
+      if (!existing.pageId) {
         results.push({
           workspaceId,
           status: "skipped",
-          reason: `morning brief task already exists (id=${existing.id})`,
+          reason: `task ${existing.id} has no pageId; description not written`,
         });
         continue;
       }
 
-      // 4) Create the daily 9am scheduled task. The agent picks up the
-      // Morning Brief skill by intent at run time — no explicit skillId
-      // attachment needed (the agent picks it up via the global <skills>
-      // SKILL CHECK rule when the task title/description matches).
-      const task = await createScheduledTask(workspaceId, userId, {
-        title: "Morning brief",
-        schedule: "FREQ=DAILY;BYHOUR=9",
-        maxOccurrences: null,
-        metadata: {
-          kind: "morning_brief_daily",
-        },
-      });
-
-      results.push({
-        workspaceId,
-        status: "seeded",
-        reason: `task id=${task.id}`,
-      });
-      logger.info(
-        `[backfill-morning-brief] Seeded morning brief task for ${workspaceId} (task=${task.id})`,
-      );
+      const currentHtml = (await getPageContentAsHtml(existing.pageId)) ?? "";
+      if (currentHtml.trim().length === 0) {
+        await setPageContentFromHtml(
+          existing.pageId,
+          MORNING_BRIEF_TASK_DESCRIPTION,
+        );
+        results.push({
+          workspaceId,
+          status: "seeded",
+          reason: `task ${existing.id} description backfilled`,
+        });
+        logger.info(
+          `[backfill-morning-brief] Wrote description for ${workspaceId} (task=${existing.id})`,
+        );
+      } else {
+        results.push({
+          workspaceId,
+          status: "skipped",
+          reason: `task ${existing.id} already has a description`,
+        });
+      }
     } catch (err) {
       results.push({
         workspaceId,
