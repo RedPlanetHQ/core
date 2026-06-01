@@ -93,15 +93,31 @@ pub fn install<R: Runtime>(app: &AppHandle<R>) -> Result<(), String> {
     Ok(())
 }
 
-/// Show the voice panel without taking focus. The Tauri window-level
-/// `window.show()` call ends up routing through the swizzled NSPanel,
-/// but going through the panel handle gives us the order-front-regardless
-/// semantics we want (no activation, no app switch).
+/// Show the voice panel without taking focus.
+///
+/// Belt-and-suspenders, mirroring `hide`: call BOTH the WebviewWindow's
+/// `show()` AND the swizzled NSPanel's `show()` + `order_front_regardless`.
+/// `hide` deliberately calls both because either alone has been observed
+/// to no-op on high-level panels, and the asymmetric old "panel.show()
+/// only" path produced a regression where the second invocation after a
+/// hide left the pill invisible (the panel reported `isVisible=true` but
+/// the underlying `WebviewWindow` was still hidden from the prior
+/// `window.hide()`, so nothing actually rendered).
 pub fn show<R: Runtime>(app: &AppHandle<R>) {
+    if let Some(window) = app.get_webview_window(VOICE_PANEL_LABEL) {
+        match window.show() {
+            Ok(()) => log::info!("[voice_panel] WebviewWindow.show() ok"),
+            Err(e) => log::warn!("[voice_panel] WebviewWindow.show() failed: {e}"),
+        }
+    } else {
+        log::warn!("[voice_panel] show: webview window missing");
+    }
+
     match app.get_webview_panel(VOICE_PANEL_LABEL) {
         Ok(panel) => {
             panel.order_front_regardless();
             panel.show();
+            log::info!("[voice_panel] panel.show() called");
         }
         Err(_) => log::warn!("[voice_panel] show: panel not registered yet"),
     }
