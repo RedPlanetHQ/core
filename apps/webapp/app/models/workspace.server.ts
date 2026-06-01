@@ -8,6 +8,7 @@ import { LabelService } from "~/services/label.server";
 import { createSkill } from "~/services/skills.server";
 import { DEFAULT_SKILL_DEFINITIONS } from "~/services/skills.defaults";
 import { READINESS_SKILL_DEFINITIONS } from "~/services/skills.readiness";
+import { MORNING_BRIEF_TASK_DESCRIPTION } from "~/services/morning-brief";
 import { createScheduledTask } from "~/services/task.server";
 
 interface CreateWorkspaceDto {
@@ -118,36 +119,19 @@ export async function createWorkspace(
   // Seed the daily Morning Brief scheduled task (fires 9am in user's local
   // timezone — defaults to UTC until the user updates it via set_timezone,
   // which calls recalculateTasksForTimezone to shift the nextRunAt).
+  // The full brief prompt lives in the task description (see
+  // MORNING_BRIEF_TASK_DESCRIPTION) — no separate skill document required.
   try {
-    const morningBriefSkill = await prisma.document.findFirst({
-      where: {
-        workspaceId: workspace.id,
-        metadata: {
-          path: ["skillType"],
-          equals: "morning-brief",
-        },
+    await createScheduledTask(workspace.id, input.userId, {
+      title: "Morning brief",
+      description: MORNING_BRIEF_TASK_DESCRIPTION,
+      schedule: "FREQ=DAILY;BYHOUR=9",
+      maxOccurrences: null,
+      metadata: {
+        kind: "morning_brief_daily",
       },
-      select: { id: true, title: true },
     });
-    if (morningBriefSkill) {
-      // Agent picks up the Morning Brief skill by intent at run time — no
-      // explicit skillId attachment needed (the global <skills> SKILL CHECK
-      // rule matches the task title/description). The lookup above is just
-      // a gate to skip seeding when the skill isn't installed yet.
-      await createScheduledTask(workspace.id, input.userId, {
-        title: "Morning brief",
-        schedule: "FREQ=DAILY;BYHOUR=9",
-        maxOccurrences: null,
-        metadata: {
-          kind: "morning_brief_daily",
-        },
-      });
-      logger.info(`Seeded morning brief task for workspace ${workspace.id}`);
-    } else {
-      logger.warn(
-        `Morning brief skill not found for workspace ${workspace.id}; task not seeded`,
-      );
-    }
+    logger.info(`Seeded morning brief task for workspace ${workspace.id}`);
   } catch (e) {
     logger.error(`Error seeding morning brief task: ${e}`);
   }
