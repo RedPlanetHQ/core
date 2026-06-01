@@ -61,7 +61,12 @@ func stderrLog(_ msg: String) {
 
 final class VoiceController: NSObject, AVSpeechSynthesizerDelegate {
     private let recognizer = SFSpeechRecognizer(locale: Locale(identifier: "en-US"))
-    private let audioEngine = AVAudioEngine()
+    /// `var` rather than `let` because if a pinned device can't actually
+    /// be driven by AVAudioEngine (some Bluetooth headsets fail to start
+    /// with `kAudioUnitErr_FormatNotSupported` / -10868) the cleanest way
+    /// to reset the AUHAL's device override is to drop the engine and
+    /// build a fresh one. See `installTapAndStartEngine` for the fallback.
+    private var audioEngine = AVAudioEngine()
     private var request: SFSpeechAudioBufferRecognitionRequest?
     private var task: SFSpeechRecognitionTask?
     private let synthesizer = AVSpeechSynthesizer()
@@ -144,6 +149,13 @@ final class VoiceController: NSObject, AVSpeechSynthesizerDelegate {
     override init() {
         super.init()
         synthesizer.delegate = self
+        installConfigChangeObserver()
+    }
+
+    private func installConfigChangeObserver() {
+        if let obs = configChangeObserver {
+            NotificationCenter.default.removeObserver(obs)
+        }
         configChangeObserver = NotificationCenter.default.addObserver(
             forName: .AVAudioEngineConfigurationChange,
             object: audioEngine,
@@ -548,7 +560,13 @@ final class VoiceController: NSObject, AVSpeechSynthesizerDelegate {
     /// subsequent stops — so on the route-change path we MUST call
     /// `AudioUnitUninitialize` first or the property set silently fails
     /// with `kAudioUnitErr_Initialized` (-10851) and the pin is lost.
-    /// The AU gets re-initialized when `audioEngine.prepare()` runs.
+    ///
+    /// We then explicitly re-initialize the AU before returning. Leaving
+    /// it uninitialized makes `inputNode.outputFormat(forBus: 0)` return
+    /// a stale/default format that doesn't match what the bus will
+    /// validate against when the tap installs — which throws an
+    /// uncaught `com.apple.coreaudio.avfaudio` "Failed to create tap due
+    /// to format mismatch" NSException and crashes the helper.
     private func applyPinnedInputDevice() {
         guard pinnedInputDeviceID != AudioDeviceID(kAudioObjectUnknown) else {
             return
@@ -576,6 +594,11 @@ final class VoiceController: NSObject, AVSpeechSynthesizerDelegate {
         } else {
             stderrLog("input pinned to device id=\(dev)")
         }
+
+        let initStatus = AudioUnitInitialize(auInput)
+        if initStatus != noErr {
+            stderrLog("AudioUnitInitialize after pin failed status=\(initStatus) (0x\(String(initStatus, radix: 16)))")
+        }
     }
 
     /// Install the input tap with the device's *current* format, build a
@@ -587,9 +610,42 @@ final class VoiceController: NSObject, AVSpeechSynthesizerDelegate {
     /// can rely on the configuration-change notification to retry.
     @discardableResult
     private func installTapAndStartEngine() -> Bool {
+        if installTapAndStartEngineOnce() {
+            return true
+        }
+        // First attempt failed. Most common cause we've seen in the
+        // wild is `kAudioUnitErr_FormatNotSupported` (-10868) when the
+        // pinned device is a Bluetooth headset that advertises a
+        // 48 kHz/Float32 stream but actually only supports lower rates
+        // for input (AirPods in HFP/SCO mode). The cleanest way to
+        // drop the AUHAL's device override is to rebuild the engine —
+        // a fresh AVAudioEngine doesn't carry the prior CurrentDevice
+        // pin. We lose mid-session route-swap protection for this
+        // session, but that's strictly better than refusing to listen.
+        guard pinnedInputDeviceID != AudioDeviceID(kAudioObjectUnknown) else {
+            emitError("audio engine failed to start — no device pin to drop")
+            return false
+        }
+        stderrLog("first start attempt failed — rebuilding engine without device pin and retrying")
+        pinnedInputDeviceID = AudioDeviceID(kAudioObjectUnknown)
+        audioEngine.inputNode.removeTap(onBus: 0)
+        if audioEngine.isRunning {
+            audioEngine.stop()
+        }
+        audioEngine = AVAudioEngine()
+        installConfigChangeObserver()
+        if installTapAndStartEngineOnce() {
+            return true
+        }
+        emitError("audio engine failed to start even after dropping device pin")
+        return false
+    }
+
+    @discardableResult
+    private func installTapAndStartEngineOnce() -> Bool {
         let inputNode = audioEngine.inputNode
-        let inputFormat = inputNode.outputFormat(forBus: 0)
-        stderrLog("input format: \(inputFormat)")
+        let reportedFormat = inputNode.outputFormat(forBus: 0)
+        stderrLog("input format (reported): \(reportedFormat)")
         stderrLog("recognition format: \(recognitionFormat)")
 
         // During a route change (headphones plugging in/out, AirPods
@@ -597,29 +653,49 @@ final class VoiceController: NSObject, AVSpeechSynthesizerDelegate {
         // Installing a tap with that crashes; building a converter from it
         // returns nil and silently drops audio. Bail out — the
         // configuration-change observer will fire again with a real format.
-        guard inputFormat.sampleRate > 0, inputFormat.channelCount > 0 else {
-            stderrLog("input format invalid (sr=\(inputFormat.sampleRate) ch=\(inputFormat.channelCount)) — deferring tap install to next config change")
+        guard reportedFormat.sampleRate > 0, reportedFormat.channelCount > 0 else {
+            stderrLog("input format invalid (sr=\(reportedFormat.sampleRate) ch=\(reportedFormat.channelCount)) — deferring tap install to next config change")
             return false
         }
 
-        converter = AVAudioConverter(from: inputFormat, to: recognitionFormat)
-        if converter == nil {
-            stderrLog("AVAudioConverter init FAILED for these formats")
-        }
-        let conv = converter
+        // Pass `nil` for the tap format rather than a pre-queried
+        // `outputFormat(forBus:)`. After `AudioUnitUninitialize` +
+        // `AudioUnitSetProperty(CurrentDevice)` — particularly when the
+        // active device is a Bluetooth headset (AirPods et al.) — the
+        // value `outputFormat(forBus:)` returns can be a "preferred"
+        // format that doesn't actually match the bus's internal current
+        // format, and `installTap` then throws the uncaught
+        // `com.apple.coreaudio.avfaudio` "format mismatch" NSException
+        // that crashes the helper. With `nil`, AVAudioEngine uses
+        // whatever format the node has at install time and the two are
+        // guaranteed to agree. We build the converter lazily from
+        // `inputBuffer.format` on the first delivered buffer so the
+        // converter always reflects the device's *actual* output.
+        converter = nil
         let recogFormat = recognitionFormat
         inputNode.removeTap(onBus: 0)
         var bufferCount = 0
-        inputNode.installTap(onBus: 0, bufferSize: 1024, format: inputFormat) { [weak self] inputBuffer, _ in
+        inputNode.installTap(onBus: 0, bufferSize: 1024, format: nil) { [weak self] inputBuffer, _ in
             guard let self else { return }
             bufferCount &+= 1
             if bufferCount == 1 {
-                stderrLog("first audio buffer received (\(inputBuffer.frameLength) frames, \(inputBuffer.format.channelCount)ch)")
+                stderrLog("first audio buffer received (\(inputBuffer.frameLength) frames, \(inputBuffer.format.channelCount)ch, \(Int(inputBuffer.format.sampleRate))Hz)")
             } else if bufferCount % 200 == 0 {
                 stderrLog("audio buffers delivered: \(bufferCount)")
             }
 
-            guard let conv else {
+            // First buffer in this tap → build (or rebuild) the converter
+            // against the format we actually see, not the one the node
+            // reported pre-install. Subsequent buffers reuse it unless the
+            // format changes (route change should tear down the tap, but
+            // be defensive — converters are cheap to rebuild).
+            if self.converter == nil || self.converter?.inputFormat != inputBuffer.format {
+                self.converter = AVAudioConverter(from: inputBuffer.format, to: recogFormat)
+                if self.converter == nil {
+                    stderrLog("AVAudioConverter init FAILED for input=\(inputBuffer.format) → \(recogFormat)")
+                }
+            }
+            guard let conv = self.converter else {
                 self.request?.append(inputBuffer)
                 return
             }
@@ -661,7 +737,13 @@ final class VoiceController: NSObject, AVSpeechSynthesizerDelegate {
             stderrLog("audio engine started, running=\(audioEngine.isRunning)")
             return true
         } catch {
-            emitError("audio engine failed: \(error.localizedDescription)")
+            // Logged but not surfaced as a user-visible error — the
+            // caller (`installTapAndStartEngine`) may still recover via
+            // the engine-rebuild fallback. Once that fallback runs and
+            // also fails, the eventual `return false` chain leaves the
+            // panel in an idle state and a subsequent press will retry
+            // from scratch.
+            stderrLog("audio engine failed to start: \(error.localizedDescription)")
             return false
         }
     }
@@ -728,10 +810,11 @@ final class VoiceController: NSObject, AVSpeechSynthesizerDelegate {
 
     func speak(_ text: String) {
         let utterance = AVSpeechUtterance(string: text)
-        // Default rate (0.5) feels noticeably slow. 0.55 is a natural
-        // conversation pace without sounding rushed; AVSpeechUtterance
-        // accepts 0.0–1.0 (Slow…Default…Fast).
-        utterance.rate = 0.55
+        // AVSpeechUtterance accepts 0.0–1.0 (Slow…Default…Fast); 0.5 is
+        // Apple's documented default. We sit slightly below it so spoken
+        // replies stay legible during multi-sentence progress narration
+        // — easier to follow than a brisk 0.55, and still natural.
+        utterance.rate = 0.48
         if let voice = preferredVoice() {
             utterance.voice = voice
         }

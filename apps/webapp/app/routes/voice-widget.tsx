@@ -105,30 +105,6 @@ export default function VoiceWidget() {
     expandedRef.current = expanded;
   }, [expanded]);
 
-  // ── Layout preview: visit /voice-widget?preview=1 to see the pill +
-  //    partial-transcript bubble without holding the chord. Cycles
-  //    through a few sample lines so you can sanity-check wrap, max
-  //    width, and how it sits under the pill. Removable in production.
-  useEffect(() => {
-    if (typeof window === "undefined") return;
-    const params = new URLSearchParams(window.location.search);
-    if (params.get("preview") !== "1") return;
-    const samples = [
-      "hey",
-      "hey butler, what's on my calendar",
-      "hey butler, can you remind me to call mom at seven",
-      "hey butler, can you remind me to call mom at seven and also check what's on my calendar tomorrow morning",
-    ];
-    let i = 0;
-    setStatus("listening");
-    setPartialText(samples[0]);
-    const id = setInterval(() => {
-      i = (i + 1) % samples.length;
-      setPartialText(samples[i]);
-    }, 2000);
-    return () => clearInterval(id);
-  }, []);
-
   // ── Make the host html/body transparent so the pill / rounded panel
   //    has no surrounding solid frame. Scoped to this route via cleanup.
   useEffect(() => {
@@ -218,8 +194,18 @@ export default function VoiceWidget() {
 
     unsubs.push(
       tauriListen("voice:tts-ended", () => {
-        console.log("[voice-widget] tts-ended → scheduling auto-hide");
         ttsActiveRef.current = false;
+        // Stream still flowing (subagent mid-work between progress
+        // beats, or main reply not yet complete). Stay in "thinking"
+        // and do NOT arm the hide timer — the end-of-stream path
+        // schedules the hide once sendTurn drops inFlightRef.
+        if (inFlightRef.current) {
+          console.log("[voice-widget] tts-ended (stream in flight) → stay thinking");
+          setStatus("thinking");
+          clearHideTimer();
+          return;
+        }
+        console.log("[voice-widget] tts-ended → scheduling auto-hide");
         setStatus("idle");
         scheduleAutoHide();
       }),
@@ -331,6 +317,20 @@ export default function VoiceWidget() {
       // actively reading the conversation.
       if (expandedRef.current) {
         console.log("[voice-widget] auto-hide skipped (expanded)");
+        return;
+      }
+      // Any sign of pending work (open SSE stream, queued/active TTS)
+      // means the pill should stay visible as "thinking" / "speaking".
+      // The end-of-stream / end-of-TTS paths re-arm this timer once the
+      // refs clear.
+      if (inFlightRef.current || ttsActiveRef.current) {
+        console.log(
+          "[voice-widget] auto-hide skipped (inFlight=" +
+            (inFlightRef.current ? "1" : "0") +
+            " ttsActive=" +
+            (ttsActiveRef.current ? "1" : "0") +
+            ")",
+        );
         return;
       }
       console.log("[voice-widget] auto-hide firing → voice_hide_panel");
@@ -446,7 +446,6 @@ export default function VoiceWidget() {
         await speakSentence(tail);
       } else if (!ttsActiveRef.current) {
         setStatus("idle");
-        scheduleAutoHide();
       }
     } else {
       // Text-mode reply rendered to screen; no TTS, no auto-hide
@@ -455,9 +454,16 @@ export default function VoiceWidget() {
     }
 
     inFlightRef.current = null;
+    // Re-arm auto-hide: scheduleAutoHide calls during the stream
+    // no-op'd while inFlightRef was set, so the panel could otherwise
+    // stay open forever once the last TTS chunk finished.
+    if (currentTurnModeRef.current === "voice" && !ttsActiveRef.current) {
+      scheduleAutoHide();
+    }
   }
 
   function handleStreamEvent(event: any) {
+    console.log(event);
     if (event.type === "text-delta" && typeof event.delta === "string") {
       appendAssistantText(event.delta);
     } else if (event.type === "text" && typeof event.text === "string") {
@@ -556,8 +562,15 @@ export default function VoiceWidget() {
           // Queue drained — surface the same end-of-speech transition the
           // Swift helper emits, so scheduleAutoHide / status updates run.
           ttsActiveRef.current = false;
-          setStatus("idle");
-          scheduleAutoHide();
+          // Mirror the tts-ended gate: stream still flowing → stay
+          // visible as "thinking" and don't arm the hide timer.
+          if (inFlightRef.current) {
+            setStatus("thinking");
+            clearHideTimer();
+          } else {
+            setStatus("idle");
+            scheduleAutoHide();
+          }
         }
       });
       audio.addEventListener("error", () => {
