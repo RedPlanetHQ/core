@@ -13,7 +13,7 @@ export const MORNING_BRIEF_TASK_DESCRIPTION = `<h2>Morning Brief — Daily 9am</
 
 <p><strong>Goal:</strong> Generate a daily Morning Brief by fetching Gmail (GitHub and Calendar to come), then:</p>
 <ol>
-  <li>Send the brief to Slack.</li>
+  <li>Send the brief to the default channel.</li>
   <li>Update today's scratchpad with the relevant action items and context.</li>
 </ol>
 
@@ -21,7 +21,7 @@ export const MORNING_BRIEF_TASK_DESCRIPTION = `<h2>Morning Brief — Daily 9am</
 <ol>
   <li>Fetch Gmail. (GitHub + Calendar are skipped for now — add them later without changing the structure.)</li>
   <li>Formulate one consolidated brief (single output).</li>
-  <li>Send the brief over Slack (human-readable summary).</li>
+  <li>Send the brief to the default channel (human-readable summary).</li>
   <li>Update today's scratchpad (structured, durable record; action-oriented).</li>
 </ol>
 
