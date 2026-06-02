@@ -574,8 +574,10 @@ fn position_inbox_window<R: tauri::Runtime>(
     sw: f64,
     _sh: f64,
 ) {
+    // Mirror the voice widget's inset + width so the pill lines up
+    // visually with where the voice HUD appears during Ctrl+Option.
     let inset: f64 = 24.0;
-    let win_w: f64 = 220.0;
+    let win_w: f64 = 360.0;
     let target_x = sx + sw - win_w - inset;
     let target_y = sy + inset;
     if let Err(e) = window.set_position(LogicalPosition::new(target_x, target_y)) {
@@ -861,11 +863,14 @@ pub fn run() {
                     resolve_webview_url("/inbox-pill"),
                 )
                 .title("Inbox")
-                // 220×48 matches the voice-widget pill geometry —
-                // the actual pill is ~28px tall with breathing room.
-                // position_inbox_window() places this at top-right of
-                // the active screen on every show.
-                .inner_size(220.0, 48.0)
+                // 360×320 matches the voice-widget — the pill sits at
+                // the top of the window and the rest of the area is
+                // transparent so the summary card has room to render
+                // underneath while the catchup is being spoken,
+                // mirroring the partial-transcript card in
+                // voice-widget. position_inbox_window() pins this to
+                // top-right of the active screen on every show.
+                .inner_size(360.0, 320.0)
                 .resizable(false)
                 .decorations(false)
                 .transparent(true)
