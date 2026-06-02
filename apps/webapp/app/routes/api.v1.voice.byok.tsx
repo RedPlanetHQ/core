@@ -4,7 +4,7 @@
  *   POST   { apiKey } → store encrypted on workspace metadata
  *   DELETE              → wipe it
  *
- * The proxy at /api/v1/voice-tts then prefers the workspace key over
+ * The proxy at /api/v1/voice/tts then prefers the workspace key over
  * the server-wide ELEVENLABS_API_KEY env var.
  */
 

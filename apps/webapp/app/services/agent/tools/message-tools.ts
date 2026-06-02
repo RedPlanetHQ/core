@@ -29,6 +29,9 @@ interface GetMessageToolsParams {
   triggerChannel?: string;
   /** Channel ID from the trigger's reminder config */
   triggerChannelId?: string | null;
+  /** Task this send_message is happening inside (if any) — recorded on the
+   *  inbox row so the summariser can say "task X is in review". */
+  currentTaskId?: string;
 }
 
 // ---------------------------------------------------------------------------
@@ -45,6 +48,7 @@ export function getMessageTools(
     userPhoneNumber,
     triggerChannel,
     triggerChannelId,
+    currentTaskId,
   } = params;
 
   return {
@@ -178,6 +182,27 @@ export function getMessageTools(
           } catch (mirrorError) {
             logger.warn("[send_message] Failed to mirror to channel conversation", {
               error: mirrorError,
+            });
+          }
+
+          // ---------------------------------------------------------------
+          // Inbox: every agent send_message lands in a per-user bucket
+          // that drives the pill. Clicking the pill summarises and clears
+          // these rows.
+          // ---------------------------------------------------------------
+          try {
+            await prisma.voiceInboxMessage.create({
+              data: {
+                userId,
+                workspaceId,
+                taskId: currentTaskId ?? null,
+                message,
+                channelType,
+              },
+            });
+          } catch (inboxError) {
+            logger.warn("[send_message] Failed to write inbox row", {
+              error: inboxError,
             });
           }
 

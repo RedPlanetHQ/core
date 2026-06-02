@@ -702,7 +702,7 @@ REPARENTING: Pass newParentId to move a task under a different parent (or null t
     // unblock_task — available in all flows (web chat, channels, etc.)
     ...(source && {
       unblock_task: tool({
-        description: `Approve a Waiting task and move it to Ready so execution can start. Requires a reason explaining why the wait is resolved. The reason is added to the task's conversation as a user reply, so the agent picks it up on its next turn. Only works on tasks currently in Waiting status. If the task was in PLAN mind when it went Waiting, the phase is preserved — the agent resumes in plan mind until it calls exit_plan_mode.`,
+        description: `Approve a Waiting task so execution can resume. Requires a reason explaining why the wait is resolved. The reason is appended to the task's conversation as the user's reply, and the task is enqueued immediately — the agent picks it up on its next turn and decides the new status itself. The task's status and phase are left untouched, so a task that went Waiting from PLAN mind resumes in plan mind. Only works on tasks currently in Waiting status.`,
         inputSchema: z.object({
           taskId: z
             .string()
@@ -762,18 +762,12 @@ REPARENTING: Pass newParentId to move a task under a different parent (or null t
               },
             });
 
-            // Execute-first lifecycle: unblock always targets Ready. The
-            // task's phase metadata (if any) is preserved automatically —
-            // changeTaskStatus no longer touches it. The Ready transition
-            // triggers an immediate enqueue (non-scheduled) or waits for
-            // the schedule (scheduled tasks).
-            await changeTaskStatus(
-              resolved,
-              "Ready",
-              workspaceId,
-              userId,
-              "user",
-            );
+            // Enqueue the task right away — don't touch its status. The
+            // worker will flip it to Working via markTaskInProcess when it
+            // picks the job up, and the agent decides where to go next
+            // (Waiting / Review) from there. Phase metadata is preserved
+            // because we never call changeTaskStatus.
+            await enqueueTask({ taskId: resolved, workspaceId, userId });
             return `Task "${task.title}" unblocked and resumed in its own conversation. Tell the user it's being worked on. Do NOT take any further action on this task — it handles itself from here.`;
           } catch (error) {
             return `Failed to unblock task: ${error instanceof Error ? error.message : "Unknown error"}`;

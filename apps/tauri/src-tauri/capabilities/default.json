@@ -2,7 +2,7 @@
   "$schema": "../gen/schemas/desktop-schema.json",
   "identifier": "default",
   "description": "Local dev permissions",
-  "windows": ["main", "voice"],
+  "windows": ["main", "voice", "inbox"],
   "permissions": [
     "core:default",
     "shell:allow-open",

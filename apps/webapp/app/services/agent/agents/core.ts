@@ -221,6 +221,7 @@ export async function createCoreTools(
           userPhoneNumber,
           triggerChannel,
           triggerChannelId,
+          currentTaskId,
         })
       : {};
 

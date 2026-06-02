@@ -35,6 +35,7 @@ import {
 } from "~/models/personality.server";
 import { cn } from "~/lib/utils";
 import { VoiceSection } from "~/components/voice";
+import type { STTProviderId } from "~/components/voice";
 
 const PRONOUN_OPTIONS: { id: PronounType; label: string; honorific: string }[] =
   [
@@ -68,6 +69,11 @@ export const loader = async ({ request }: LoaderFunctionArgs) => {
   const ttsProvider: "apple" | "elevenlabs" =
     persistedProvider === "elevenlabs" ? "elevenlabs" : "apple";
 
+  const persistedSttProvider = userMetadata?.sttProvider as string | undefined;
+  const sttProvider: STTProviderId =
+    persistedSttProvider === "apple" ? "apple" : "elevenlabs";
+  const sttLanguage = (userMetadata?.sttLanguage as string | undefined) ?? "";
+
   const elevenLabsVoiceId =
     (userMetadata?.elevenLabsVoiceId as string | undefined) ?? "";
   const customPersonalities = await getCustomPersonalities(user.workspaceId);
@@ -79,6 +85,8 @@ export const loader = async ({ request }: LoaderFunctionArgs) => {
     personalityOptions: PERSONALITY_OPTIONS,
     customPersonality: customPersonalities[0] ?? null,
     ttsProvider,
+    sttProvider,
+    sttLanguage,
     elevenLabsVoiceId,
     hasElevenLabs,
     workspaceHasOwnKey,
@@ -148,6 +156,33 @@ export const action = async ({ request }: ActionFunctionArgs) => {
     return json({ success: true });
   }
 
+  if (intent === "updateSttProvider") {
+    const raw = formData.get("sttProvider") as string;
+    const sttProvider = raw === "apple" ? "apple" : "elevenlabs";
+    const currentMetadata = (user.metadata as Record<string, unknown>) || {};
+    await prisma.user.update({
+      where: { id: user.id },
+      data: { metadata: { ...currentMetadata, sttProvider } },
+    });
+    return json({ success: true });
+  }
+
+  if (intent === "updateSttLanguage") {
+    const { isValidSTTLanguage } = await import(
+      "~/components/voice/stt-languages"
+    );
+    const sttLanguage = (formData.get("sttLanguage") as string) ?? "";
+    if (sttLanguage !== "" && !isValidSTTLanguage(sttLanguage)) {
+      return json({ error: "Invalid language" }, { status: 400 });
+    }
+    const currentMetadata = (user.metadata as Record<string, unknown>) || {};
+    await prisma.user.update({
+      where: { id: user.id },
+      data: { metadata: { ...currentMetadata, sttLanguage } },
+    });
+    return json({ success: true });
+  }
+
   if (intent === "updateElevenLabsVoice") {
     const elevenLabsVoiceId =
       (formData.get("elevenLabsVoiceId") as string) ?? "";
@@ -202,6 +237,8 @@ export default function AgentSettings() {
     personalityOptions,
     customPersonality,
     ttsProvider,
+    sttProvider,
+    sttLanguage,
     elevenLabsVoiceId,
     hasElevenLabs,
     workspaceHasOwnKey,
@@ -377,9 +414,10 @@ export default function AgentSettings() {
         <ClientOnly>
           {() => (
             <VoiceSection
+              sttProvider={sttProvider}
+              sttLanguage={sttLanguage}
               ttsProvider={ttsProvider}
               elevenLabsVoiceId={elevenLabsVoiceId}
-              hasElevenLabs={hasElevenLabs}
               workspaceHasOwnKey={workspaceHasOwnKey}
             />
           )}

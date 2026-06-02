@@ -8,7 +8,8 @@ import { useEditor, EditorContent } from "@tiptap/react";
 import { useCallback, useEffect, useRef, useState } from "react";
 import { cn } from "~/lib/utils";
 import { Button } from "../ui";
-import { LoaderCircle } from "lucide-react";
+import { Switch } from "../ui/switch";
+import { AudioLines, LoaderCircle } from "lucide-react";
 import { useSubmit } from "@remix-run/react";
 import {
   Select,
@@ -21,6 +22,8 @@ import {
   createSkillSlashCommand,
   SkillSlashPluginKey,
 } from "./slash-command-extension";
+import { VoiceComposer } from "~/components/voice/voice-composer";
+import type { STTProviderId } from "~/components/voice/stt-providers";
 
 export interface LLMModel {
   id: string;
@@ -49,6 +52,19 @@ interface ConversationTextareaProps {
   leftActions?: React.ReactNode;
   rightActions?: React.ReactNode;
   skills?: Array<{ id: string; title: string }>;
+  /**
+   * Show the voice mode switch in the composer. When toggled on,
+   * the editor area is replaced by a VAD-driven voice composer.
+   * Default: true. Pass false for compact contexts (e.g. inline
+   * reply popovers) where swapping in a full voice UI is awkward.
+   */
+  enableVoiceMode?: boolean;
+  /** Override the runtime default STT provider. */
+  voiceProvider?: STTProviderId;
+  /** Controlled voice mode — pair with `onVoiceModeChange`. If omitted,
+   *  the textarea manages its own internal voice mode state. */
+  voiceMode?: boolean;
+  onVoiceModeChange?: (next: boolean) => void;
 }
 
 export function ConversationTextarea({
@@ -68,8 +84,18 @@ export function ConversationTextarea({
   rightActions,
   className,
   skills,
+  enableVoiceMode = true,
+  voiceProvider,
+  voiceMode: voiceModeProp,
+  onVoiceModeChange,
 }: ConversationTextareaProps) {
   const [text, setText] = useState(defaultValue ?? "");
+  const [internalVoiceMode, setInternalVoiceMode] = useState(false);
+  const voiceMode = voiceModeProp ?? internalVoiceMode;
+  const setVoiceMode = (next: boolean) => {
+    if (onVoiceModeChange) onVoiceModeChange(next);
+    else setInternalVoiceMode(next);
+  };
   const submit = useSubmit();
 
   // Use a ref so the keyboard handler always sees current values without stale closures
@@ -172,6 +198,28 @@ export function ConversationTextarea({
 
   const showModelSelector = models && models.length > 1 && onModelChange;
 
+  // Voice mode swap: the entire composer body (editor + Chat button)
+  // is replaced by a VAD-driven voice composer. The conversation
+  // history above the composer stays exactly as it is.
+  if (voiceMode) {
+    return (
+      <VoiceComposer
+        enabled={!disabled}
+        provider={voiceProvider}
+        isAssistantReplying={isLoading || isStopping}
+        onTranscript={(t) => {
+          // Send the transcript through the same path Enter / Chat use,
+          // so the hosting page (ConversationView etc.) doesn't need to
+          // know voice mode exists.
+          if (!t.trim() || disabled) return;
+          onConversationCreated?.(t);
+        }}
+        onClose={() => setVoiceMode(false)}
+        className={className}
+      />
+    );
+  }
+
   return (
     <div className="bg-background-3 rounded-xl">
       <EditorContent
@@ -206,6 +254,25 @@ export function ConversationTextarea({
           )}
         </div>
         <div className="flex items-center gap-1">
+          {enableVoiceMode && (
+            <label
+              className={cn(
+                "text-muted-foreground flex h-8 cursor-pointer items-center gap-1.5 rounded px-2 text-xs",
+                "hover:text-foreground transition-colors",
+              )}
+              title="Voice mode"
+            >
+              <AudioLines size={13} />
+              <Switch
+                size="sm"
+                checked={false}
+                onCheckedChange={(v) => {
+                  if (v && !disabled) setVoiceMode(true);
+                }}
+                aria-label="Voice mode"
+              />
+            </label>
+          )}
           {rightActions}
           <Button
             variant="secondary"

@@ -25,6 +25,7 @@ import {
   type PermissionMode,
 } from "./permission-mode-selector.client";
 import { cn } from "~/lib/utils";
+import { useStreamingTTS } from "~/hooks/use-streaming-tts";
 
 interface ConversationHistory {
   id: string;
@@ -54,6 +55,10 @@ interface ConversationViewProps {
    *  has called complete_onboarding, the next loader run sees the flag
    *  and redirects to /home/daily. */
   onStreamComplete?: () => void;
+  /** Initial voice mode on mount — typically driven by the `?voice=1`
+   *  URL search param so the state carries through the
+   *  ConversationNew → create → redirect flow. */
+  initialVoiceMode?: boolean;
 }
 
 export function ConversationView({
@@ -67,6 +72,7 @@ export function ConversationView({
   models: modelsProp = [],
   hideFirstUserMessage = false,
   onStreamComplete,
+  initialVoiceMode = false,
 }: ConversationViewProps) {
   // Local mirror of the loader-provided status — stays fresh across stop/
   // completion events without needing a route revalidation.
@@ -105,6 +111,13 @@ export function ConversationView({
   const selectedModelRef = useRef<string | undefined>(selectedModelId);
   selectedModelRef.current = selectedModelId;
 
+  // Voice mode lives in ConversationView (not the textarea) so the
+  // server-bound chat transport can flip the request mode and the
+  // streaming-TTS hook can read the same flag.
+  const [voiceMode, setVoiceMode] = useState(initialVoiceMode);
+  const voiceModeRef = useRef(voiceMode);
+  voiceModeRef.current = voiceMode;
+
   const handleModelChange = (modelId: string) => {
     setSelectedModelId(modelId);
   };
@@ -129,10 +142,8 @@ export function ConversationView({
     setIsStopping(false);
   }, [conversationId]);
 
-  const [permissionMode, setPermissionMode] = useLocalCommonState<PermissionMode>(
-    "conversationPermissionMode",
-    "full",
-  );
+  const [permissionMode, setPermissionMode] =
+    useLocalCommonState<PermissionMode>("conversationPermissionMode", "full");
   const permissionModeRef = useRef<PermissionMode>(permissionMode ?? "full");
   permissionModeRef.current = permissionMode ?? "full";
   // toolCallId → { approved, ...argOverrides }
@@ -200,7 +211,14 @@ export function ConversationView({
 
         if (hasApprovals) {
           return {
-            body: { messages, needsApproval: true, id, toolArgOverrides, permissionMode },
+            body: {
+              messages,
+              needsApproval: true,
+              id,
+              toolArgOverrides,
+              permissionMode,
+              mode: voiceModeRef.current ? "voice" : "text",
+            },
           };
         }
 
@@ -211,6 +229,7 @@ export function ConversationView({
             toolArgOverrides,
             modelId: selectedModelRef.current,
             permissionMode,
+            mode: voiceModeRef.current ? "voice" : "text",
           },
         };
       },
@@ -308,6 +327,19 @@ export function ConversationView({
     .reverse()
     .find((m) => m.role === "assistant") as UIMessage | undefined;
 
+  // Accumulated plain-text rendering of the latest assistant message
+  // — feeds the streaming TTS hook so each completed sentence can be
+  // spoken as the model emits it.
+  const lastAssistantText = lastAssistant
+    ? extractAssistantText(lastAssistant.parts as any[])
+    : "";
+  const isChatStreaming = status === "streaming" || status === "submitted";
+  useStreamingTTS({
+    enabled: voiceMode,
+    text: lastAssistantText,
+    isStreaming: isChatStreaming,
+  });
+
   const needsApproval = lastAssistant?.parts
     ? hasNeedsApprovalDeep(lastAssistant.parts as ConversationToolPart[])
     : false;
@@ -345,95 +377,117 @@ export function ConversationView({
 
   return (
     <ChatContextProvider sendMessage={sendTextMessage}>
-    <div
-      className={cn(
-        "flex h-full w-full flex-col justify-end overflow-hidden py-4 pb-12 lg:pb-4",
-        className,
-      )}
-    >
       <div
-        ref={scrollContainerRef}
-        className="flex grow flex-col items-center overflow-y-auto"
+        className={cn(
+          "flex h-full w-full flex-col justify-end overflow-hidden py-4 pb-12 lg:pb-4",
+          className,
+        )}
       >
-        <div className="flex w-full max-w-[90ch] flex-col pb-4">
-          {messages.map((message: UIMessage, i: number) => {
-            // Onboarding: the very first user message is a seed
-            // instruction we keep in history (so the agent sees it)
-            // but don't render in the UI.
-            if (
-              hideFirstUserMessage &&
-              i === 0 &&
-              message.role === "user"
-            ) {
-              return null;
-            }
-            return (
-              <div
-                key={i}
-                ref={(el) => {
-                  messageRefs.current[i] = el;
-                }}
-              >
-                <ConversationItem
-                  message={message}
-                  createdAt={history[i]?.createdAt}
-                  addToolApprovalResponse={handleToolApprovalResponse}
-                  setToolArgOverride={setToolArgOverride}
-                  isChatBusy={status === "streaming" || status === "submitted"}
-                  integrationAccountMap={integrationAccountMap}
-                  integrationFrontendMap={integrationFrontendMap}
-                />
-              </div>
-            );
-          })}
-          {/* Spacer while streaming or until user scrolls back to bottom */}
-          {(status === "streaming" || status === "submitted" || keepSpacer) && (
-            <div style={{ height: spacerHeight, flexShrink: 0 }} />
-          )}
+        <div
+          ref={scrollContainerRef}
+          className="flex grow flex-col items-center overflow-y-auto"
+        >
+          <div className="flex w-full max-w-[90ch] flex-col pb-4">
+            {messages.map((message: UIMessage, i: number) => {
+              // Onboarding: the very first user message is a seed
+              // instruction we keep in history (so the agent sees it)
+              // but don't render in the UI.
+              if (hideFirstUserMessage && i === 0 && message.role === "user") {
+                return null;
+              }
+              return (
+                <div
+                  key={i}
+                  ref={(el) => {
+                    messageRefs.current[i] = el;
+                  }}
+                >
+                  <ConversationItem
+                    message={message}
+                    createdAt={history[i]?.createdAt}
+                    addToolApprovalResponse={handleToolApprovalResponse}
+                    setToolArgOverride={setToolArgOverride}
+                    isChatBusy={
+                      status === "streaming" || status === "submitted"
+                    }
+                    integrationAccountMap={integrationAccountMap}
+                    integrationFrontendMap={integrationFrontendMap}
+                  />
+                </div>
+              );
+            })}
+            {/* Spacer while streaming or until user scrolls back to bottom */}
+            {(status === "streaming" ||
+              status === "submitted" ||
+              keepSpacer) && (
+              <div style={{ height: spacerHeight, flexShrink: 0 }} />
+            )}
+          </div>
         </div>
-      </div>
 
-      <div className="flex w-full shrink-0 flex-col items-center">
-        <div ref={composerRef} className="w-full max-w-[90ch] px-4">
-          <ThinkingIndicator
-            isLoading={
-              status === "streaming" ||
-              status === "submitted" ||
-              conversationStatus === "running"
-            }
-          />
-          <ConversationTextarea
-            className="pt-4"
-            isLoading={
-              status === "streaming" ||
-              status === "submitted" ||
-              conversationStatus === "running"
-            }
-            isStopping={isStopping}
-            disabled={needsApproval}
-            onConversationCreated={(message) => {
-              if (message) sendMessage({ text: message });
-            }}
-            stop={handleStop}
-            models={modelsProp}
-            selectedModelId={selectedModelId}
-            onModelChange={handleModelChange}
-            skills={skillsFetcher.data?.skills}
-            rightActions={
-              <PermissionModeSelector
-                value={permissionMode ?? "full"}
-                onChange={setPermissionMode}
-                disabled={
+        <div className="flex w-full shrink-0 flex-col items-center">
+          <div ref={composerRef} className="w-full max-w-[90ch] px-4">
+            {!voiceMode && (
+              <ThinkingIndicator
+                isLoading={
                   status === "streaming" ||
                   status === "submitted" ||
                   conversationStatus === "running"
                 }
               />
-            }
-          />
+            )}
+            <ConversationTextarea
+              className="pt-4"
+              isLoading={
+                status === "streaming" ||
+                status === "submitted" ||
+                conversationStatus === "running"
+              }
+              isStopping={isStopping}
+              disabled={needsApproval}
+              onConversationCreated={(message) => {
+                if (message) sendMessage({ text: message });
+              }}
+              stop={handleStop}
+              models={modelsProp}
+              selectedModelId={selectedModelId}
+              onModelChange={handleModelChange}
+              skills={skillsFetcher.data?.skills}
+              voiceMode={voiceMode}
+              onVoiceModeChange={setVoiceMode}
+              rightActions={
+                <PermissionModeSelector
+                  value={permissionMode ?? "full"}
+                  onChange={setPermissionMode}
+                  disabled={
+                    status === "streaming" ||
+                    status === "submitted" ||
+                    conversationStatus === "running"
+                  }
+                />
+              }
+            />
+          </div>
         </div>
       </div>
-    </div>
     </ChatContextProvider>
   );
+}
+
+/**
+ * Walk an assistant UIMessage's parts and concatenate every plain
+ * text fragment. Tool-call parts and other non-text shapes are
+ * skipped so the TTS hook only speaks the human-facing prose.
+ */
+function extractAssistantText(parts: unknown[] | undefined): string {
+  if (!Array.isArray(parts)) return "";
+  let out = "";
+  for (const p of parts) {
+    if (!p || typeof p !== "object") continue;
+    const part = p as { type?: string; text?: unknown };
+    if (part.type === "text" && typeof part.text === "string") {
+      out += part.text;
+    }
+  }
+  return out;
 }

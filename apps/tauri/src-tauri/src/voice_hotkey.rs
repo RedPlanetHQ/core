@@ -287,6 +287,14 @@ fn capture_frontmost() -> VoiceInvokePayload {
 ///      Spaces" being on.
 ///   2. `NSScreen.mainScreen` — works only when separate-spaces is on.
 ///   3. The first entry of `NSScreen.screens` as a last resort.
+/// Public safe wrapper — callers outside this module need the
+/// currently-active screen frame for positioning their own panels
+/// (the inbox pill, etc.) on demand without waiting for the next
+/// active-screen-change event.
+pub fn current_active_screen_frame() -> ScreenFrame {
+    unsafe { active_screen_frame() }
+}
+
 unsafe fn active_screen_frame() -> ScreenFrame {
     let main_screen: *mut Object = msg_send![class!(NSScreen), mainScreen];
     let mut frame = ns_rect_of(main_screen);

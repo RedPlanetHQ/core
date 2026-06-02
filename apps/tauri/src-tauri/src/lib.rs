@@ -10,6 +10,8 @@ mod speech;
 mod voice_hotkey;
 #[cfg(target_os = "macos")]
 mod voice_panel;
+#[cfg(target_os = "macos")]
+mod inbox_panel;
 mod coding_config;
 
 use std::collections::HashSet;
@@ -559,6 +561,60 @@ fn reposition_voice_window<R: tauri::Runtime>(app: &tauri::AppHandle<R>, payload
     position_voice_window(&window, frame.x, frame.y, frame.width, frame.height);
 }
 
+/// Mirror of `position_voice_window` for the inbox pill. Same top-right
+/// inset so the pill sits exactly where the voice widget appears
+/// during a Ctrl+Option turn — they never overlap visually because
+/// the voice widget hides itself a second after the turn ends, and
+/// the inbox pill hides itself after the summary finishes speaking.
+#[cfg(target_os = "macos")]
+fn position_inbox_window<R: tauri::Runtime>(
+    window: &tauri::WebviewWindow<R>,
+    sx: f64,
+    sy: f64,
+    sw: f64,
+    _sh: f64,
+) {
+    let inset: f64 = 24.0;
+    let win_w: f64 = 220.0;
+    let target_x = sx + sw - win_w - inset;
+    let target_y = sy + inset;
+    if let Err(e) = window.set_position(LogicalPosition::new(target_x, target_y)) {
+        log::warn!("[inbox] set_position failed: {e}");
+    }
+}
+
+#[cfg(target_os = "macos")]
+fn reposition_inbox_window<R: tauri::Runtime>(app: &tauri::AppHandle<R>, payload: &str) {
+    let Some(window) = app.get_webview_window("inbox") else {
+        return;
+    };
+    if !window.is_visible().unwrap_or(false) {
+        return;
+    }
+    #[derive(Deserialize)]
+    struct ScreenFrameDe {
+        x: f64,
+        y: f64,
+        width: f64,
+        height: f64,
+    }
+    let Ok(frame) = serde_json::from_str::<ScreenFrameDe>(payload) else {
+        return;
+    };
+    position_inbox_window(&window, frame.x, frame.y, frame.width, frame.height);
+}
+
+/// Place the inbox pill at top-right of the active screen. Exposed
+/// to inbox_panel so the command lives next to its siblings.
+#[cfg(target_os = "macos")]
+pub fn position_inbox_top_right_now<R: tauri::Runtime>(app: &tauri::AppHandle<R>) {
+    let Some(window) = app.get_webview_window("inbox") else {
+        return;
+    };
+    let frame = voice_hotkey::current_active_screen_frame();
+    position_inbox_window(&window, frame.x, frame.y, frame.width, frame.height);
+}
+
 
 #[cfg(target_os = "macos")]
 fn handle_voice_invoke<R: tauri::Runtime>(
@@ -721,6 +777,10 @@ pub fn run() {
         speech::voice_get_voice,
         voice_panel::voice_hide_panel,
         voice_panel::voice_make_panel_key,
+        inbox_panel::inbox_show_panel,
+        inbox_panel::inbox_hide_panel,
+        inbox_panel::inbox_make_panel_key,
+        inbox_panel::inbox_position_top_right,
         get_current_screen_text,
     ]);
 
@@ -789,6 +849,35 @@ pub fn run() {
                 .accept_first_mouse(true)
                 .devtools(true)
                 .build()?;
+
+                // Inbox pill window — small floating badge that surfaces
+                // unread VoiceInboxMessage rows. Same URL resolution as
+                // main + voice so cookies (session) are shared, which
+                // is how the React poller authenticates without us
+                // having to plumb the PAT through Rust.
+                let _inbox_window = WebviewWindowBuilder::new(
+                    app,
+                    "inbox",
+                    resolve_webview_url("/inbox-pill"),
+                )
+                .title("Inbox")
+                // 220×48 matches the voice-widget pill geometry —
+                // the actual pill is ~28px tall with breathing room.
+                // position_inbox_window() places this at top-right of
+                // the active screen on every show.
+                .inner_size(220.0, 48.0)
+                .resizable(false)
+                .decorations(false)
+                .transparent(true)
+                .always_on_top(true)
+                .skip_taskbar(true)
+                .visible(false)
+                .focused(false)
+                .shadow(false)
+                .visible_on_all_workspaces(true)
+                .accept_first_mouse(true)
+                .devtools(true)
+                .build()?;
             }
 
             // Voice widget — install global double-tap-Option hotkey and
@@ -806,6 +895,10 @@ pub fn run() {
                     log::warn!("[voice_panel] install failed: {e}");
                 }
 
+                if let Err(e) = inbox_panel::install(app.handle()) {
+                    log::warn!("[inbox_panel] install failed: {e}");
+                }
+
                 let voice_app = app.handle().clone();
                 let _id = app.listen("voice:invoke", move |event| {
                     log::info!("[voice] voice:invoke received");
@@ -821,12 +914,13 @@ pub fn run() {
                 });
 
                 // When the user switches to an app on a different screen,
-                // reposition the voice window to that screen's top-right
-                // — but only if it's currently visible.
+                // reposition both floating panels to that screen's
+                // top-right — but only if they're currently visible.
                 let follow_app = app.handle().clone();
                 let _follow_id = app.listen("voice:active-screen-changed", move |event| {
                     let payload = event.payload();
                     reposition_voice_window(&follow_app, payload);
+                    reposition_inbox_window(&follow_app, payload);
                 });
 
                 // Hold-end (Ctrl+Option released): forward to the widget so it

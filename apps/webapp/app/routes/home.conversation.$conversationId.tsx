@@ -33,6 +33,9 @@ export async function loader({ params, request }: LoaderFunctionArgs) {
     user.workspaceId,
   )) as string;
 
+  const initialVoiceMode =
+    new URL(request.url).searchParams.get("voice") === "1";
+
   const [conversation, integrationAccounts, allModels] = await Promise.all([
     getConversationAndHistory(params.conversationId as string, user.id),
     getIntegrationAccounts(user.id, workspaceId),
@@ -52,7 +55,12 @@ export async function loader({ params, request }: LoaderFunctionArgs) {
     }));
 
   if (!conversation) {
-    return { conversation: null, integrationAccountMap: {}, models };
+    return {
+      conversation: null,
+      integrationAccountMap: {},
+      models,
+      initialVoiceMode,
+    };
   }
 
   if (conversation.unread) {
@@ -73,6 +81,7 @@ export async function loader({ params, request }: LoaderFunctionArgs) {
     integrationAccountMap,
     integrationFrontendMap,
     models,
+    initialVoiceMode,
   };
 }
 
@@ -88,6 +97,7 @@ export default function SingleConversation() {
     integrationAccountMap,
     integrationFrontendMap,
     models,
+    initialVoiceMode,
   } = useTypedLoaderData<typeof loader>() as unknown as LoaderData<typeof loader>;
   const { conversationId } = useParams();
 
@@ -129,6 +139,7 @@ export default function SingleConversation() {
         models={models}
         autoRegenerate
         hideFirstUserMessage={conversation.source === "onboarding"}
+        initialVoiceMode={initialVoiceMode}
       />
     </div>
   );

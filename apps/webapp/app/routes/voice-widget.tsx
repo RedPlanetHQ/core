@@ -391,7 +391,7 @@ export default function VoiceWidget() {
     spokenProgressRef.current.clear();
 
     try {
-      const response = await fetch("/api/v1/voice-turn", {
+      const response = await fetch("/api/v1/voice/turn", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         credentials: "include",
@@ -535,7 +535,7 @@ export default function VoiceWidget() {
   async function speakSentence(text: string) {
     if (!isTauri()) return;
     try {
-      const res = await fetch("/api/v1/voice-tts", {
+      const res = await fetch("/api/v1/voice/tts", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         credentials: "include",
