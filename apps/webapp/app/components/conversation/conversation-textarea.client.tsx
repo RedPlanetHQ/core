@@ -19,6 +19,7 @@ import {
 } from "../ui/select";
 import {
   createSkillSlashCommand,
+  SkillMention,
   SkillSlashPluginKey,
 } from "./slash-command-extension";
 
@@ -97,6 +98,7 @@ export function ConversationTextarea({
         includeChildren: true,
       }),
       History,
+      SkillMention,
       createSkillSlashCommand(skillsRef),
     ],
     immediatelyRender: false,
