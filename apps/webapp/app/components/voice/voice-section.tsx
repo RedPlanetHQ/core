@@ -1,106 +1,64 @@
 /**
- * Voice settings section.
+ * Voice settings — single section that hosts both Voice input (STT)
+ * and Voice output (TTS) sub-blocks.
  *
- * Routes between provider-specific pickers based on the user's chosen
- * `ttsProvider`. Designed to grow: adding a new provider is a matter of
- * (1) declaring it in providers.ts, (2) writing a `<{Id}Picker />`
- * component, and (3) registering it in PICKER_BY_PROVIDER below.
+ * Both sub-blocks render in browser and Tauri. Each one filters its
+ * own provider list to whatever can actually run in the current
+ * runtime (Apple needs the Swift helper, ElevenLabs needs a BYOK key).
  *
- * Tauri-only: returns null in the regular webapp because Apple TTS
- * runs through the local Swift helper.
+ * Adding a new provider doesn't touch this file — drop it into the
+ * STT or TTS registry (providers.ts / stt-providers.ts) and register
+ * its picker in the relevant sub-section.
  */
 
-import { useFetcher } from "@remix-run/react";
-
-import {
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectValue,
-} from "~/components/ui/select";
-import { isTauri } from "~/lib/tauri.client";
-
-import { ApplePicker } from "./apple-picker";
-import { ElevenLabsPicker } from "./elevenlabs-picker";
-import { TTS_PROVIDERS, type TTSProviderId } from "./providers";
+import { ElevenLabsKeyInput } from "./elevenlabs-key-input";
+import { STTSection } from "./stt-section";
+import { TTSSection } from "./tts-section";
+import type { STTProviderId } from "./stt-providers";
+import type { TTSProviderId } from "./providers";
 
 interface VoiceSectionProps {
+  sttProvider: STTProviderId;
+  sttLanguage: string;
   ttsProvider: TTSProviderId;
   elevenLabsVoiceId: string;
-  /** True when ELEVENLABS_API_KEY is set on the server OR the workspace BYOK is set. */
-  hasElevenLabs: boolean;
   /** True when the workspace has its own (BYOK) ElevenLabs key. */
   workspaceHasOwnKey: boolean;
 }
 
-const PICKER_BY_PROVIDER: Record<TTSProviderId, React.ComponentType<any>> = {
-  apple: ApplePicker,
-  elevenlabs: ElevenLabsPicker,
-};
-
 export function VoiceSection({
+  sttProvider,
+  sttLanguage,
   ttsProvider,
   elevenLabsVoiceId,
-  hasElevenLabs,
   workspaceHasOwnKey,
 }: VoiceSectionProps) {
-  const providerFetcher = useFetcher();
-
-  // Voice features are local-helper-backed (Apple) and/or downstream of
-  // a Tauri webview lifecycle (mic, AX context). The page is hidden in
-  // the plain webapp.
-  if (!isTauri()) return null;
-
-  const persistedProvider =
-    (providerFetcher.formData?.get("ttsProvider")?.toString() as
-      | TTSProviderId
-      | undefined) ?? ttsProvider;
-
-  // Always offer every registered provider. A provider that isn't yet
-  // configured (e.g. ElevenLabs with no key) renders its own setup UI
-  // — that's how the user gets *to* configuration in the first place.
-  const currentProvider: TTSProviderId = persistedProvider;
-
-  function handleProviderChange(next: TTSProviderId) {
-    providerFetcher.submit(
-      { intent: "updateTtsProvider", ttsProvider: next },
-      { method: "POST" },
-    );
-  }
-
-  const Picker = PICKER_BY_PROVIDER[currentProvider];
-  const pickerProps =
-    currentProvider === "elevenlabs"
-      ? { voiceId: elevenLabsVoiceId, workspaceHasOwnKey }
-      : {};
+  // The single workspace ElevenLabs key powers both STT (Scribe) and
+  // TTS — render the input once at the bottom whenever either provider
+  // is ElevenLabs. Hidden entirely when neither uses it.
+  const needsElevenLabsKey =
+    sttProvider === "elevenlabs" || ttsProvider === "elevenlabs";
 
   return (
     <div className="mb-8">
       <h2 className="text-md flex items-center gap-2">Voice</h2>
-      <p className="text-muted-foreground mb-3 text-sm">
-        How butler sounds when speaking your replies aloud.
+      <p className="text-muted-foreground mb-4 text-sm">
+        Configure how butler listens and how it speaks back.
       </p>
 
-      <div className="flex max-w-md flex-col gap-3">
-        <Select
-          value={currentProvider}
-          onValueChange={(v) => handleProviderChange(v as TTSProviderId)}
-        >
-          <SelectTrigger>
-            <SelectValue />
-          </SelectTrigger>
-          <SelectContent>
-            {TTS_PROVIDERS.map((p) => (
-              <SelectItem key={p.id} value={p.id}>
-                {p.label}{" "}
-                <span className="text-muted-foreground">— {p.tagline}</span>
-              </SelectItem>
-            ))}
-          </SelectContent>
-        </Select>
+      <div className="flex max-w-md flex-col gap-6">
+        <STTSection sttProvider={sttProvider} sttLanguage={sttLanguage} />
 
-        <Picker {...pickerProps} />
+        <TTSSection
+          ttsProvider={ttsProvider}
+          elevenLabsVoiceId={elevenLabsVoiceId}
+        />
+
+        {needsElevenLabsKey && (
+          <div className="border-border border-t pt-4">
+            <ElevenLabsKeyInput workspaceHasOwnKey={workspaceHasOwnKey} />
+          </div>
+        )}
       </div>
     </div>
   );

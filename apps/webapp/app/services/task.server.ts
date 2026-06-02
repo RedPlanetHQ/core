@@ -5,7 +5,6 @@ import {
   cancelTaskJob,
   removeScheduledTask,
   enqueueScheduledTask,
-  enqueueTask,
 } from "~/lib/queue-adapter.server";
 import {
   computeNextRun,
@@ -350,8 +349,9 @@ export async function changeTaskStatus(
   // Canonical wake-up rule for non-scheduled tasks:
   //   - Moving to Todo / Waiting / Review parks the task. Clear nextRunAt
   //     and cancel any pending wake-up so an old buffer doesn't fire late.
-  //   - Moving to Ready gives the task a 2-minute editing buffer; at expiry
-  //     the buffer wake-up enqueues the task for execution.
+  //   - Moving to Ready with an existing pending wake-up leaves it alone
+  //     (let it fire on its original schedule).
+  //   - Otherwise moving to Ready gives a 2-minute editing buffer.
   // Scheduled/recurring tasks own their own nextRunAt via
   // scheduleNextTaskOccurrence — we never touch it from here.
   if (status === "Todo" || status === "Waiting" || status === "Review") {
@@ -366,28 +366,28 @@ export async function changeTaskStatus(
   }
 
   if (status === "Ready" && !current.schedule) {
-    // Clear any stale wake-up before scheduling the new buffer. Without
-    // this, a leftover wake-up from an earlier Ready stint could still
-    // fire alongside the new one.
     if (current.nextRunAt) {
-      await removeScheduledTask(taskId);
-    }
-
-    const nextRunAt = new Date(Date.now() + 2 * 60 * 1000);
-    await prisma.task.update({
-      where: { id: taskId },
-      data: { nextRunAt },
-    });
-    try {
-      await enqueueScheduledTask(
-        { taskId, workspaceId, userId, channel: current.channel ?? "email" },
-        nextRunAt,
-      );
-    } catch (err) {
-      logger.warn("Failed to enqueue 2-min Ready buffer wake-up", {
-        err,
-        taskId,
+      // A wake-up is already pending — let it fire at its scheduled time
+      // instead of cancelling it and resetting the 2-min buffer.
+    } else {
+      // Fresh Ready transition: give the user a 2-min editing buffer
+      // before execution starts.
+      const nextRunAt = new Date(Date.now() + 2 * 60 * 1000);
+      await prisma.task.update({
+        where: { id: taskId },
+        data: { nextRunAt },
       });
+      try {
+        await enqueueScheduledTask(
+          { taskId, workspaceId, userId, channel: current.channel ?? "email" },
+          nextRunAt,
+        );
+      } catch (err) {
+        logger.warn("Failed to enqueue 2-min Ready buffer wake-up", {
+          err,
+          taskId,
+        });
+      }
     }
   }
 

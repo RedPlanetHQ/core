@@ -85,8 +85,12 @@ export async function action({ request }: ActionFunctionArgs) {
 
   if (conversationId) {
     const modelId = submission.value.modelId;
-    const url = modelId
-      ? `/home/conversation/${conversationId}?modelId=${encodeURIComponent(modelId)}`
+    const params = new URLSearchParams();
+    if (modelId) params.set("modelId", modelId);
+    if (submission.value.voiceMode) params.set("voice", "1");
+    const qs = params.toString();
+    const url = qs
+      ? `/home/conversation/${conversationId}?${qs}`
       : `/home/conversation/${conversationId}`;
     return redirect(url);
   }

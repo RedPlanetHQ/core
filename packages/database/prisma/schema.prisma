@@ -915,6 +915,26 @@ model User {
   Gateway                   Gateway[]
   VoiceAspect               VoiceAspect[]
   VoiceAspectEmbedding      VoiceAspectEmbedding[]
+  VoiceInboxMessage         VoiceInboxMessage[]
+}
+
+model VoiceInboxMessage {
+  id          String   @id @default(uuid())
+  createdAt   DateTime @default(now())
+
+  user   User   @relation(fields: [userId], references: [id], onDelete: Cascade)
+  userId String
+
+  workspace   Workspace? @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+  workspaceId String?
+
+  task   Task?   @relation(fields: [taskId], references: [id], onDelete: SetNull)
+  taskId String?
+
+  message     String
+  channelType String?
+
+  @@index([userId, createdAt])
 }
 
 model UserUsage {
@@ -1060,6 +1080,7 @@ model Workspace {
   llmProviders            LLMProvider[]
   codingSessions          CodingSession[]
   browserSessions         BrowserSession[]
+  voiceInboxMessages      VoiceInboxMessage[]
 
   taskRootCounter Int @default(0)
 }
@@ -1124,6 +1145,8 @@ model Task {
 
   codingSessions  CodingSession[]
   browserSessions BrowserSession[]
+
+  voiceInboxMessages VoiceInboxMessage[]
 
   @@unique([workspaceId, displayId])
   @@index([workspaceId])

@@ -2,7 +2,9 @@ import { useState, useRef, useCallback, useEffect } from "react";
 import { useLocalCommonState } from "~/hooks/use-local-state";
 import { Form, useFetcher, useSubmit } from "@remix-run/react";
 import { cn } from "~/lib/utils";
-import { ArrowUp, EyeOff } from "lucide-react";
+import { ArrowUp, AudioLines, EyeOff } from "lucide-react";
+import { Switch } from "../ui/switch";
+import { VoiceComposer } from "~/components/voice/voice-composer";
 import { Document } from "@tiptap/extension-document";
 import HardBreak from "@tiptap/extension-hard-break";
 import { History } from "@tiptap/extension-history";
@@ -69,6 +71,7 @@ export const ConversationNew = ({
   const [content, setContent] = useState(defaultMessage ?? "");
   const [title, setTitle] = useState(defaultMessage ?? "");
   const [incognito, setIncognito] = useState(false);
+  const [voiceMode, setVoiceMode] = useState(false);
   const defaultModelId = models.find((m) => m.isDefault)?.id ?? models[0]?.id;
   const [selectedModelId, setSelectedModelId] = useLocalCommonState<
     string | undefined
@@ -100,13 +103,18 @@ export const ConversationNew = ({
           title: messageContent,
           incognito,
           modelId: selectedModelId ?? "",
+          // Carry voice mode through the create-and-redirect step. The
+          // server action appends ?voice=1 to the redirect URL when
+          // this is true so the next page (ConversationView) starts
+          // straight in voice mode.
+          voiceMode,
         },
         { action: "/home/conversation", method: "post" },
       );
       setContent("");
       setTitle("");
     },
-    [incognito, selectedModelId],
+    [incognito, selectedModelId, voiceMode],
   );
 
   useEffect(() => {
@@ -248,65 +256,94 @@ export const ConversationNew = ({
           </div>
 
           {/* Input */}
-          <div className="bg-background-3 rounded-xl">
-            <EditorContent
-              editor={editor}
-              className="max-h-[200px] min-h-[48px] w-full overflow-auto px-4 pt-4 text-base"
+          {voiceMode ? (
+            <VoiceComposer
+              enabled
+              onTranscript={(text) => {
+                // Submitting a transcript creates the conversation
+                // just like Enter / the Chat button.
+                if (!text.trim()) return;
+                doSubmit(text);
+              }}
+              onClose={() => setVoiceMode(false)}
             />
-            <div className="flex items-center justify-between px-2 pb-2 pt-1">
-              <div className="flex items-center gap-1">
-                <Button
-                  type="button"
-                  variant={incognito ? "secondary" : "ghost"}
-                  size="sm"
-                  onClick={() => setIncognito((v) => !v)}
-                  title={
-                    incognito
-                      ? "Incognito on — not saved to memory"
-                      : "Incognito off"
-                  }
-                  className="gap-1.5"
-                >
-                  <EyeOff size={13} />
-                  {incognito && <span>Incognito</span>}
-                </Button>
-                {showModelSelector && (
-                  <Select
-                    value={selectedModelId}
-                    onValueChange={setSelectedModelId}
+          ) : (
+            <div className="bg-background-3 rounded-xl">
+              <EditorContent
+                editor={editor}
+                className="max-h-[200px] min-h-[48px] w-full overflow-auto px-4 pt-4 text-base"
+              />
+              <div className="flex items-center justify-between px-2 pb-2 pt-1">
+                <div className="flex items-center gap-1">
+                  <Button
+                    type="button"
+                    variant={incognito ? "secondary" : "ghost"}
+                    size="sm"
+                    onClick={() => setIncognito((v) => !v)}
+                    title={
+                      incognito
+                        ? "Incognito on — not saved to memory"
+                        : "Incognito off"
+                    }
+                    className="gap-1.5"
                   >
-                    <SelectTrigger className="h-8 w-auto min-w-[110px] border-0 bg-transparent text-xs shadow-none focus:ring-0">
-                      <SelectValue placeholder="Select model" />
-                    </SelectTrigger>
-                    <SelectContent>
-                      {models.map((model) => (
-                        <SelectItem
-                          key={model.id}
-                          value={model.id}
-                          className="text-xs"
-                        >
-                          <span className="font-medium">{model.label}</span>
-                          <span className="text-muted-foreground ml-1 capitalize">
-                            · {model.provider}
-                          </span>
-                        </SelectItem>
-                      ))}
-                    </SelectContent>
-                  </Select>
-                )}
+                    <EyeOff size={13} />
+                    {incognito && <span>Incognito</span>}
+                  </Button>
+                  {showModelSelector && (
+                    <Select
+                      value={selectedModelId}
+                      onValueChange={setSelectedModelId}
+                    >
+                      <SelectTrigger className="h-8 w-auto min-w-[110px] border-0 bg-transparent text-xs shadow-none focus:ring-0">
+                        <SelectValue placeholder="Select model" />
+                      </SelectTrigger>
+                      <SelectContent>
+                        {models.map((model) => (
+                          <SelectItem
+                            key={model.id}
+                            value={model.id}
+                            className="text-xs"
+                          >
+                            <span className="font-medium">{model.label}</span>
+                            <span className="text-muted-foreground ml-1 capitalize">
+                              · {model.provider}
+                            </span>
+                          </SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
+                  )}
+                </div>
+                <div className="flex items-center gap-2">
+                  <label
+                    className="text-muted-foreground hover:text-foreground flex h-8 cursor-pointer items-center gap-1.5 rounded px-2 text-xs transition-colors"
+                    title="Voice mode"
+                  >
+                    <AudioLines size={13} />
+                    <Switch
+                      size="sm"
+                      checked={false}
+                      onCheckedChange={(v) => {
+                        if (v) setVoiceMode(true);
+                      }}
+                      aria-label="Voice mode"
+                    />
+                  </label>
+                  <Button
+                    type="button"
+                    variant="secondary"
+                    className="gap-1 rounded"
+                    onClick={handleSubmitClick}
+                    disabled={!content.trim()}
+                  >
+                    <ArrowUp size={16} />
+                    {incognito ? "Incognito Chat" : "Chat"}
+                  </Button>
+                </div>
               </div>
-              <Button
-                type="button"
-                variant="secondary"
-                className="gap-1 rounded"
-                onClick={handleSubmitClick}
-                disabled={!content.trim()}
-              >
-                <ArrowUp size={16} />
-                {incognito ? "Incognito Chat" : "Chat"}
-              </Button>
             </div>
-          </div>
+          )}
         </div>
       </div>
     </Form>

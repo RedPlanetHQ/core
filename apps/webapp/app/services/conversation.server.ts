@@ -20,6 +20,9 @@ export const CreateConversationSchema = z.object({
   panelMode: z
     .preprocess((v) => v === "true" || v === true, z.boolean())
     .optional(),
+  voiceMode: z
+    .preprocess((v) => v === "true" || v === true, z.boolean())
+    .optional(),
   parts: z
     .array(
       z.object({

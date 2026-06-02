@@ -12,7 +12,7 @@
  *      (e.g. `openai-picker.tsx` exporting `OpenAIPicker`).
  *   3. Register it in `voice-section.tsx`'s `PICKER_BY_PROVIDER` map.
  *   4. If it needs server-side proxying, add a route under
- *      /api/v1/voice-tts/{provider} (or extend the existing one to
+ *      /api/v1/voice/tts/{provider} (or extend the existing one to
  *      branch on the user's chosen provider).
  */
 
@@ -27,6 +27,8 @@ export interface TTSProviderSpec {
   isLocal: boolean;
   /** Workspace can store its own API key (BYOK) for this provider. */
   byokSupported: boolean;
+  /** Only available inside the Tauri desktop app (needs a native helper). */
+  requiresTauri: boolean;
 }
 
 export const TTS_PROVIDERS: readonly TTSProviderSpec[] = [
@@ -36,6 +38,7 @@ export const TTS_PROVIDERS: readonly TTSProviderSpec[] = [
     tagline: "local, free, offline",
     isLocal: true,
     byokSupported: false,
+    requiresTauri: true,
   },
   {
     id: "elevenlabs",
@@ -43,6 +46,7 @@ export const TTS_PROVIDERS: readonly TTSProviderSpec[] = [
     tagline: "cloud, paid, natural",
     isLocal: false,
     byokSupported: true,
+    requiresTauri: false,
   },
 ] as const;
 

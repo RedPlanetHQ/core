@@ -5,7 +5,7 @@
   "remote": {
     "urls": ["https://app.getcore.me"]
   },
-  "windows": ["main", "voice"],
+  "windows": ["main", "voice", "inbox"],
   "permissions": [
     "core:default",
     "shell:allow-open",

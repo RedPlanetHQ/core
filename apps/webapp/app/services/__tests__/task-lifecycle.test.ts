@@ -193,8 +193,9 @@ describe("createTask — buffer wake-up", () => {
     );
     const after = Date.now();
 
-    // Ready always gets the buffer — the rule is unified across all paths
-    // (createTask, changeTaskStatus, unblock_task). Actor doesn't matter.
+    // Fresh-create Ready always gets the 2-min editing buffer. Actor
+    // doesn't matter. (unblock_task is a separate path — it enqueues
+    // directly without touching the task's status.)
     expect(task.status).toBe("Ready");
     expect(task.nextRunAt).toBeTruthy();
     const nextRunMs = task.nextRunAt!.getTime();
@@ -1009,6 +1010,41 @@ describe("changeTaskStatus — butler restrictions", () => {
       "user",
     );
     expect(updated.status).toBe("Done");
+  });
+
+  it("→ Ready with existing nextRunAt leaves the wake-up in place", async () => {
+    // Idempotent Ready transition (e.g. user re-clicks, or a Working → Ready
+    // bounce): we don't reset the buffer. The existing wake-up stays.
+    const existingRunAt = new Date(Date.now() + 90 * 1000);
+    const task = await prisma.task.create({
+      data: {
+        workspaceId: TEST_WORKSPACE_ID,
+        userId: TEST_USER_ID,
+        title: "Already buffered",
+        status: "Ready",
+        metadata: { phase: "execute" },
+        nextRunAt: existingRunAt,
+        isActive: true,
+      },
+    });
+
+    removeScheduledTaskMock.mockClear();
+    enqueueTaskMock.mockClear();
+    enqueueScheduledTaskMock.mockClear();
+
+    const updated = await changeTaskStatus(
+      task.id,
+      "Ready",
+      TEST_WORKSPACE_ID,
+      TEST_USER_ID,
+      "user",
+    );
+
+    expect(updated.status).toBe("Ready");
+    expect(updated.nextRunAt?.getTime()).toBe(existingRunAt.getTime());
+    expect(removeScheduledTaskMock).not.toHaveBeenCalled();
+    expect(enqueueTaskMock).not.toHaveBeenCalled();
+    expect(enqueueScheduledTaskMock).not.toHaveBeenCalled();
   });
 });
 

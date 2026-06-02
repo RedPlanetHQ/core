@@ -133,6 +133,9 @@ const ChatRequestSchema = z.object({
     .optional(),
   source: z.string().default("core"),
   modelId: z.string().optional(),
+  /** "voice" engages spoken-mechanics prompt rails (concise replies,
+   *  no markdown, etc.) — fed straight into buildAgentContext. */
+  mode: z.enum(["voice", "text"]).optional(),
 });
 
 const normalizeParts = (parts: any[] | undefined) =>
@@ -315,6 +318,7 @@ const { loader, action } = createHybridActionApiRoute(
       conversationId: body.id,
       interactive: body.permissionMode !== "full",
       modelConfig,
+      mode: body.mode,
     });
 
     const subagents: Record<string, Agent> = {
