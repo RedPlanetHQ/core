@@ -65,6 +65,10 @@ export default function InboxPill() {
   const [count, setCount] = useState(0);
   const [status, setStatus] = useState<PillStatus>("idle");
   const [error, setError] = useState<string | null>(null);
+  // Currently-spoken catchup text — rendered under the stop pill so
+  // the user can read along while butler speaks (mirrors the partial
+  // transcript card in the voice-widget).
+  const [summary, setSummary] = useState<string>("");
   const [theme] = useTheme();
   const isDark = theme === Theme.DARK;
 
@@ -117,6 +121,7 @@ export default function InboxPill() {
         if (speakPhaseRef.current !== "playing") return;
         speakPhaseRef.current = "none";
         setStatus("idle");
+        setSummary("");
         void hidePanel();
       });
     })();
@@ -220,16 +225,17 @@ export default function InboxPill() {
       });
       if (!res.ok) throw new Error(`summarise ${res.status}`);
       const data = (await res.json()) as SummariseResponse;
-      const summary = data.summary?.trim();
+      const summaryText = data.summary?.trim() ?? "";
 
       setCount(0);
 
-      if (!summary) {
+      if (!summaryText) {
         setStatus("idle");
         void hidePanel();
         return;
       }
 
+      setSummary(summaryText);
       setStatus("speaking");
       if (isTauri()) {
         try {
@@ -237,12 +243,13 @@ export default function InboxPill() {
           // tts-started arrives before the JS resolves, the listener
           // already sees "pending" and can flip to "playing".
           speakPhaseRef.current = "pending";
-          await tauriInvoke("voice_speak", { text: summary });
+          await tauriInvoke("voice_speak", { text: summaryText });
         } catch (err) {
           // eslint-disable-next-line no-console
           console.warn("[inbox-pill] voice_speak failed", err);
           speakPhaseRef.current = "none";
           setStatus("idle");
+          setSummary("");
           void hidePanel();
         }
       } else {
@@ -269,6 +276,7 @@ export default function InboxPill() {
       }
     }
     setStatus("idle");
+    setSummary("");
     void hidePanel();
   }
 
@@ -289,6 +297,8 @@ export default function InboxPill() {
 
   // While speaking, swap the pill for a stop control — same shape and
   // chrome, just a stop glyph instead of the flickering grid + count.
+  // The catchup text renders underneath in the same style as the
+  // voice-widget's partial transcript card.
   if (status === "speaking") {
     return (
       <div className="flex h-screen w-screen flex-col items-end gap-1 p-2">
@@ -304,6 +314,14 @@ export default function InboxPill() {
           </span>
           Stop
         </button>
+        {summary && (
+          <div
+            className="border-border bg-background-3 text-foreground max-w-[320px] rounded-lg border px-2.5 py-1.5 text-xs leading-snug shadow-md"
+            aria-live="polite"
+          >
+            {summary}
+          </div>
+        )}
       </div>
     );
   }
