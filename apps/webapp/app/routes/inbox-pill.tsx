@@ -287,6 +287,8 @@ export default function InboxPill() {
   function finishSpeak() {
     speakPhaseRef.current = "none";
     clearAudio();
+    // Catchup is over — let poll-driven liveness resume.
+    busyRef.current = false;
     setStatus("idle");
     setSummary("");
     void hidePanel();
@@ -369,6 +371,14 @@ export default function InboxPill() {
 
   async function handleClick() {
     if (status !== "idle") return;
+    // Keep busyRef true through the ENTIRE catchup — including the
+    // long tail while Swift / cloud audio is still playing back —
+    // not just the summarise fetch. Pollers fire-and-forget at any
+    // time; if busyRef were released as soon as voice_speak's IPC
+    // write resolved, a kick-driven poll could land mid-speech, see
+    // the server count is already 0, and hide the panel before
+    // butler finishes. finishSpeak / handleStop / the error paths
+    // are responsible for releasing it.
     busyRef.current = true;
     setError(null);
     setStatus("summarising");
@@ -395,6 +405,7 @@ export default function InboxPill() {
       setCount(0);
 
       if (!summaryText) {
+        busyRef.current = false;
         setStatus("idle");
         void hidePanel();
         return;
@@ -404,11 +415,12 @@ export default function InboxPill() {
       setStatus("speaking");
       await speakSummary(summaryText);
     } catch (err) {
+      busyRef.current = false;
       setStatus("error");
       setError(err instanceof Error ? err.message : String(err));
-    } finally {
-      busyRef.current = false;
     }
+    // No finally — finishSpeak / handleStop release busyRef at the
+    // legitimate end of the catchup.
   }
 
   async function handleStop() {
@@ -426,6 +438,7 @@ export default function InboxPill() {
         // ignore — Swift may have already finished
       }
     }
+    busyRef.current = false;
     setStatus("idle");
     setSummary("");
     void hidePanel();
