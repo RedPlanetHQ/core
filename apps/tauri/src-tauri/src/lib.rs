@@ -12,6 +12,8 @@ mod voice_hotkey;
 mod voice_panel;
 #[cfg(target_os = "macos")]
 mod inbox_panel;
+#[cfg(target_os = "macos")]
+mod inbox_poller;
 mod coding_config;
 
 use std::collections::HashSet;
@@ -127,7 +129,7 @@ fn save_screen_context_settings(settings: &ScreenContextSettings) {
 // Dev mode (`debug_assertions`) always uses Tauri's bundled `devUrl` —
 // runtime override only kicks in for release builds.
 
-fn read_frontend_url() -> Option<String> {
+pub fn read_frontend_url() -> Option<String> {
     let path = corebrain_config_path()?;
     let raw = std::fs::read_to_string(&path).ok()?;
     let json: serde_json::Value = serde_json::from_str(&raw).ok()?;
@@ -677,6 +679,28 @@ fn handle_voice_invoke<R: tauri::Runtime>(
         return;
     };
 
+    // Yield the floor to Ctrl+Option: if the inbox pill is mid-catchup,
+    // stop its speech and hide it so the voice widget owns audio
+    // + the top-right screen real estate. The React side reacts to the
+    // resulting voice:tts-ended event from Swift didCancel and cleans
+    // up its own state (status -> idle, summary cleared).
+    if let Some(inbox_window) = app.get_webview_window(inbox_panel::INBOX_PANEL_LABEL) {
+        if inbox_window.is_visible().unwrap_or(false) {
+            log::info!("[voice] inbox pill is up — cancelling speech + hiding before voice invoke");
+            // Cancel any in-flight Swift speech (catchup readout).
+            if let Some(state) = app.try_state::<speech::SharedSpeech>() {
+                if let Ok(mut proc) = state.lock() {
+                    let _ = speech::send_command(
+                        app,
+                        &mut proc,
+                        serde_json::json!({"cmd": "cancel_speech"}),
+                    );
+                }
+            }
+            inbox_panel::hide(app);
+        }
+    }
+
     log::info!(
         "[voice] showing voice window (page_text_len={})",
         text.as_deref().map(str::len).unwrap_or(0)
@@ -903,6 +927,12 @@ pub fn run() {
                 if let Err(e) = inbox_panel::install(app.handle()) {
                     log::warn!("[inbox_panel] install failed: {e}");
                 }
+
+                // Server-driven count poller — runs on a native thread
+                // so macOS WKWebView timer throttling doesn't keep us
+                // from surfacing new inbox rows when the pill window
+                // has been hidden for a while.
+                inbox_poller::install(app.handle().clone(), auth.clone());
 
                 let voice_app = app.handle().clone();
                 let _id = app.listen("voice:invoke", move |event| {
