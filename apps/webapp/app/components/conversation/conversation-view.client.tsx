@@ -244,12 +244,23 @@ export function ConversationView({
 
   stopRef.current = stop;
 
+  // Auto-fire the initial regenerate when we land on a conversation that
+  // only has the seed user message. `sendAutomaticallyWhen` from the AI
+  // SDK doesn't help here — it's only consulted after another chat action
+  // completes (approval response, tool output, end of stream), never on
+  // mount. React 18 StrictMode also double-mounts effects in dev, so a
+  // plain useEffect fires regenerate() twice. The ref guard makes it
+  // idempotent without rejecting the second StrictMode pass via
+  // unmount-cleanup tricks.
+  const autoRegenerateFiredRef = useRef(false);
   useEffect(() => {
+    if (autoRegenerateFiredRef.current) return;
     if (
       autoRegenerate &&
       history.length === 1 &&
       conversationStatus !== "running"
     ) {
+      autoRegenerateFiredRef.current = true;
       regenerate();
     }
   }, []);
@@ -334,11 +345,29 @@ export function ConversationView({
     ? extractAssistantText(lastAssistant.parts as any[])
     : "";
   const isChatStreaming = status === "streaming" || status === "submitted";
-  useStreamingTTS({
+  const tts = useStreamingTTS({
     enabled: voiceMode,
     text: lastAssistantText,
     isStreaming: isChatStreaming,
   });
+
+  // VAD → TTS barge-in wiring. Duck the moment we hear audio; restore
+  // if the turn turned out to be noise (ElevenLabs `(background music)`
+  // / `(wind)` events); flush when it was real speech so the next
+  // assistant reply doesn't overlap the last one.
+  const handleVoiceSpeechOnset = useCallback(() => {
+    tts.duck();
+  }, [tts]);
+  const handleVoiceTurnResult = useCallback(
+    ({ text }: { text: string; containedEvents: boolean }) => {
+      if (text) {
+        tts.flush();
+      } else {
+        tts.restore();
+      }
+    },
+    [tts],
+  );
 
   const needsApproval = lastAssistant?.parts
     ? hasNeedsApprovalDeep(lastAssistant.parts as ConversationToolPart[])
@@ -455,6 +484,8 @@ export function ConversationView({
               skills={skillsFetcher.data?.skills}
               voiceMode={voiceMode}
               onVoiceModeChange={setVoiceMode}
+              onVoiceSpeechOnset={handleVoiceSpeechOnset}
+              onVoiceTurnResult={handleVoiceTurnResult}
               rightActions={
                 <PermissionModeSelector
                   value={permissionMode ?? "full"}

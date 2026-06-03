@@ -47,6 +47,19 @@ export const FlickeringGrid: React.FC<FlickeringGridProps> = ({
   const [isInView, setIsInView] = useState(false);
   const [canvasSize, setCanvasSize] = useState({ width: 0, height: 0 });
 
+  // Hot props read inside the rAF loop. Keeping them in refs means
+  // updating flickerChance / maxOpacity / color on every audio level
+  // tick does NOT re-run the setup effect (which would otherwise cancel
+  // the animation, resize the canvas, and re-randomize `squares` from
+  // Math.random() — that's what was making the grid visibly vanish
+  // while the user was speaking).
+  const flickerChanceRef = useRef(flickerChance);
+  const maxOpacityRef = useRef(maxOpacity);
+  const textMaxOpacityRef = useRef(textMaxOpacity);
+  flickerChanceRef.current = flickerChance;
+  maxOpacityRef.current = maxOpacity;
+  textMaxOpacityRef.current = textMaxOpacity;
+
   const buildTextMask = useCallback(
     (
       canvasWidth: number,
@@ -87,6 +100,11 @@ export const FlickeringGrid: React.FC<FlickeringGridProps> = ({
     };
     return toRGBA(color);
   }, [color]);
+  // Same trick for color: callers flip between "primary" and a neutral
+  // tone based on speaking state — we don't want that to cancel the
+  // animation loop.
+  const memoizedColorRef = useRef(memoizedColor);
+  memoizedColorRef.current = memoizedColor;
 
   const setupCanvas = useCallback(
     (canvas: HTMLCanvasElement, width: number, height: number) => {
@@ -116,42 +134,40 @@ export const FlickeringGrid: React.FC<FlickeringGridProps> = ({
         }
       }
 
+      const initMaxOp = maxOpacityRef.current;
+      const initTextMaxOp = textMaxOpacityRef.current;
       const squares = new Float32Array(cols * rows);
       for (let i = 0; i < squares.length; i++) {
         const inText = textSquares[i] === 1;
         squares[i] =
           inText && staticText
-            ? textMaxOpacity * 0.85 + Math.random() * (textMaxOpacity * 0.15)
-            : Math.random() * (inText ? textMaxOpacity : maxOpacity);
+            ? initTextMaxOp * 0.85 + Math.random() * (initTextMaxOp * 0.15)
+            : Math.random() * (inText ? initTextMaxOp : initMaxOp);
       }
 
       return { cols, rows, squares, dpr, textSquares };
     },
-    [
-      squareSize,
-      gridGap,
-      maxOpacity,
-      textMaxOpacity,
-      buildTextMask,
-      staticText,
-    ],
+    [squareSize, gridGap, buildTextMask, staticText],
   );
 
   const updateSquares = useCallback(
     (squares: Float32Array, deltaTime: number, textSquares?: Uint8Array) => {
+      const flicker = flickerChanceRef.current;
+      const maxOp = maxOpacityRef.current;
+      const textMaxOp = textMaxOpacityRef.current;
       for (let i = 0; i < squares.length; i++) {
-        if (Math.random() < flickerChance * deltaTime) {
+        if (Math.random() < flicker * deltaTime) {
           const inText = textSquares ? textSquares[i] === 1 : false;
           if (inText) {
-            const floor = textMaxOpacity * 0.8;
-            squares[i] = floor + Math.random() * (textMaxOpacity - floor);
+            const floor = textMaxOp * 0.8;
+            squares[i] = floor + Math.random() * (textMaxOp - floor);
           } else {
-            squares[i] = Math.random() * maxOpacity;
+            squares[i] = Math.random() * maxOp;
           }
         }
       }
     },
-    [flickerChance, maxOpacity, textMaxOpacity],
+    [],
   );
 
   const drawGrid = useCallback(
@@ -163,8 +179,9 @@ export const FlickeringGrid: React.FC<FlickeringGridProps> = ({
       rows: number,
       squares: Float32Array,
       dpr: number,
-      textSquares?: Uint8Array,
+      _textSquares?: Uint8Array,
     ) => {
+      const color = memoizedColorRef.current;
       ctx.clearRect(0, 0, width, height);
       ctx.fillStyle = "transparent";
       ctx.fillRect(0, 0, width, height);
@@ -173,7 +190,7 @@ export const FlickeringGrid: React.FC<FlickeringGridProps> = ({
         for (let j = 0; j < rows; j++) {
           const idx = i * rows + j;
           const opacity = squares[idx];
-          ctx.fillStyle = `${memoizedColor}${opacity})`;
+          ctx.fillStyle = `${color}${opacity})`;
           ctx.fillRect(
             i * (squareSize + gridGap) * dpr,
             j * (squareSize + gridGap) * dpr,
@@ -183,7 +200,7 @@ export const FlickeringGrid: React.FC<FlickeringGridProps> = ({
         }
       }
     },
-    [memoizedColor, squareSize, gridGap],
+    [squareSize, gridGap],
   );
 
   useEffect(() => {

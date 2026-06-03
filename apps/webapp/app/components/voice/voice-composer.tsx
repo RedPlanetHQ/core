@@ -24,7 +24,11 @@ import { Button } from "~/components/ui";
 import { FlickeringGrid } from "~/components/ui/flickering-grid";
 import { ToastAction } from "~/components/ui/toast";
 import { useToast } from "~/hooks/use-toast";
-import { useVoiceVad, type VoiceVadStatus } from "~/hooks/use-voice-vad";
+import {
+  useVoiceVad,
+  type VoiceVadStatus,
+  type VoiceVadTurnResult,
+} from "~/hooks/use-voice-vad";
 import { cn } from "~/lib/utils";
 
 import type { STTProviderId } from "./stt-providers";
@@ -44,6 +48,18 @@ interface VoiceComposerProps {
    * user gets visual feedback even before audio playback lands.
    */
   isAssistantReplying?: boolean;
+  /**
+   * Fires the moment VAD detects audio crossing the speech threshold —
+   * before we know whether it's real speech or noise. Host should use
+   * this to duck any active TTS playback for instant barge-in feedback.
+   */
+  onSpeechOnset?: () => void;
+  /**
+   * Fires once per finished turn. Host uses this to decide whether to
+   * restore ducked TTS (events-only / empty) or flush it (real speech
+   * — a new assistant turn is about to replace the current one).
+   */
+  onTurnResult?: (result: VoiceVadTurnResult) => void;
   /** Override the runtime default STT provider. */
   provider?: STTProviderId;
   className?: string;
@@ -54,6 +70,8 @@ export function VoiceComposer({
   onTranscript,
   onClose,
   isAssistantReplying = false,
+  onSpeechOnset,
+  onTurnResult,
   provider,
   className,
 }: VoiceComposerProps) {
@@ -66,6 +84,8 @@ export function VoiceComposer({
     enabled,
     provider,
     onTranscript,
+    onSpeechOnset,
+    onTurnResult,
     onError: (err) => {
       if (err.code === "needs-config") {
         setNeedsConfig(true);

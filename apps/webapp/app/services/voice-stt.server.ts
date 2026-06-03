@@ -27,6 +27,29 @@ export interface STTResult {
   text: string;
   /** ISO 639-1 language code if the provider returned one. */
   language?: string | null;
+  /**
+   * True if the provider returned non-speech audio-event tags (e.g.
+   * `(background music)`, `(wind)`) that we stripped from `text`.
+   * Lets callers distinguish "user said nothing, just noise" from
+   * "user said nothing at all" so they can suppress false barge-ins.
+   */
+  containedEvents?: boolean;
+}
+
+/**
+ * ElevenLabs Scribe inlines non-speech audio events as `(music)`,
+ * `(wind)`, `(background music)`, `(applause)`, etc. when
+ * `tag_audio_events` is on (the default). They aren't speech, so we
+ * strip them before returning — otherwise the LLM sees the user
+ * "saying" `(background music)`.
+ */
+function stripAudioEventTags(raw: string): {
+  text: string;
+  containedEvents: boolean;
+} {
+  if (!raw) return { text: "", containedEvents: false };
+  const stripped = raw.replace(/\([^)]*\)/g, "").replace(/\s+/g, " ").trim();
+  return { text: stripped, containedEvents: stripped !== raw.trim() };
 }
 
 export interface STTProvider {
@@ -93,8 +116,13 @@ const elevenLabsProvider: STTProvider = {
       language_code?: string;
     } | null;
 
-    const text = data?.text?.trim() ?? "";
-    return { text, language: data?.language_code ?? null };
+    const raw = data?.text ?? "";
+    const { text, containedEvents } = stripAudioEventTags(raw);
+    return {
+      text,
+      language: data?.language_code ?? null,
+      containedEvents,
+    };
   },
 };
 

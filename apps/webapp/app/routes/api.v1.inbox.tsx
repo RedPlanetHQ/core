@@ -1,12 +1,13 @@
 /**
- * Inbox — read the per-user bucket of agent send_message outputs.
+ * Inbox — read the per-user bucket of unchecked agent send_message outputs.
  *
  *   GET /api/v1/inbox?limit=20
  *     → { count, items: [{ id, message, taskId, channelType, createdAt }] }
  *
  * Drives the pill: `count` is the badge number, `items` lets the UI show a
- * peek list before the user clicks. Clearing happens on the summarise call
- * (api.v1.inbox.summarise), not here — this endpoint is read-only.
+ * peek list before the user clicks. The summarise route stamps `checked`
+ * instead of deleting, so this endpoint filters `checked IS NULL` to surface
+ * only what's still unread.
  */
 
 import { json, type LoaderFunctionArgs } from "@remix-run/node";
@@ -36,10 +37,15 @@ export async function loader({ request }: LoaderFunctionArgs) {
   const limit = parsed.data.limit ?? 20;
   const userId = auth.userId;
 
+  // Only unchecked rows count toward the badge. Summarise stamps
+  // `checked` instead of deleting so historical rows live in the
+  // same table — they just don't show up here.
+  const where = { userId, checked: null } as const;
+
   const [count, items] = await Promise.all([
-    prisma.voiceInboxMessage.count({ where: { userId } }),
+    prisma.voiceInboxMessage.count({ where }),
     prisma.voiceInboxMessage.findMany({
-      where: { userId },
+      where,
       orderBy: { createdAt: "desc" },
       take: limit,
       select: {

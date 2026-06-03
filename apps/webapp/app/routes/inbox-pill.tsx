@@ -58,12 +58,11 @@ interface SummariseResponse {
   count: number;
 }
 
-// Rust has its own native-thread poller in `inbox_poller.rs` that
-// drives show/hide and emits `inbox:kick` whenever the count flips.
-// We keep this fallback interval for the case where Rust auth isn't
-// set up yet (no PAT) — but at a much longer cadence so it doesn't
-// race with the Rust poll. macOS WKWebView throttling of hidden
-// timers means this fallback can't be relied on for liveness anyway.
+// Liveness now flows from the foreground sidebar pill: it polls
+// /api/v1/inbox every 20s with healthy timers and emits `inbox:kick`
+// over Tauri events whenever the count changes. We listen for that
+// and re-fetch. This interval is the cold fallback in case the main
+// window isn't mounted; we keep it long so it doesn't race the kick.
 const POLL_INTERVAL_MS = 60_000;
 
 export default function InboxPill() {
@@ -79,6 +78,16 @@ export default function InboxPill() {
 
   const visibleRef = useRef(false);
   const busyRef = useRef(false);
+  // Mirror of `status` so poll callbacks (closure-bound) can check the
+  // latest value without restarting the polling effect.
+  const statusRef = useRef<PillStatus>("idle");
+
+  // Audio element for ElevenLabs playback. The voice_speak Swift path
+  // is fire-and-forget; this handle lets the stop button pause cloud
+  // playback and lets the "ended" event clean up state without
+  // waiting on Swift's tts-ended bridge.
+  const audioRef = useRef<HTMLAudioElement | null>(null);
+  const audioUrlRef = useRef<string | null>(null);
   // Tracks the lifecycle of *our* speech so a stray `voice:tts-ended`
   // (from the main window's streaming TTS, a previous cancel, or a
   // racy Swift didCancel) doesn't hide the pill mid-speech.
@@ -148,6 +157,16 @@ export default function InboxPill() {
 
     async function pollOnce() {
       if (busyRef.current) return;
+      // Don't poll-and-reconcile while a catchup is mid-flight. The
+      // server count is already 0 the instant /api/v1/inbox/summarise
+      // stamps the rows checked, so any poll between then and
+      // tts-ended would see 0 and (via syncPanelVisibility / 401
+      // handling / 401 race) try to hide the panel while butler is
+      // still speaking. syncPanelVisibility has its own status gate
+      // as a backstop, but skipping the fetch altogether is cheaper
+      // and removes the race surface entirely.
+      const phase = statusRef.current;
+      if (phase === "summarising" || phase === "speaking") return;
       try {
         const res = await fetch("/api/v1/inbox?limit=20", {
           credentials: "include",
@@ -202,6 +221,18 @@ export default function InboxPill() {
 
   async function syncPanelVisibility(shouldShow: boolean) {
     if (!isTauri()) return;
+    // Critical race guard: server count drops to zero the instant we
+    // POST /api/v1/inbox/summarise. The sidebar pill notices that
+    // change ~20s later and fires `inbox:kick`; the resulting re-poll
+    // sees count=0 and (without this gate) would hide the panel
+    // while butler is still reading the catchup out loud. So while
+    // we're mid-catchup, we honor "show" but ignore "hide". The
+    // tts-ended / audio.ended paths hide the panel explicitly when
+    // playback actually finishes.
+    if (!shouldShow) {
+      const s = statusRef.current;
+      if (s === "summarising" || s === "speaking") return;
+    }
     if (shouldShow === visibleRef.current) return;
     visibleRef.current = shouldShow;
     try {
@@ -227,6 +258,112 @@ export default function InboxPill() {
       await tauriInvoke("inbox_hide_panel");
     } catch {
       // ignore
+    }
+  }
+
+  // Mirror status into a ref every render so the poll closure can read
+  // it without re-binding. Drives the catchup-active hide gate in
+  // syncPanelVisibility.
+  useEffect(() => {
+    statusRef.current = status;
+  }, [status]);
+
+  function clearAudio() {
+    const a = audioRef.current;
+    audioRef.current = null;
+    if (a) {
+      try {
+        a.pause();
+      } catch {
+        // ignore
+      }
+    }
+    if (audioUrlRef.current) {
+      URL.revokeObjectURL(audioUrlRef.current);
+      audioUrlRef.current = null;
+    }
+  }
+
+  function finishSpeak() {
+    speakPhaseRef.current = "none";
+    clearAudio();
+    setStatus("idle");
+    setSummary("");
+    void hidePanel();
+  }
+
+  /**
+   * Speak the catchup. Tries the cloud TTS proxy first
+   * (`/api/v1/voice/tts`) so ElevenLabs gets used when the user has
+   * configured a key. Falls back to the local Swift voice
+   * (`voice_speak`) if the route 204s (Apple-saved provider, no key,
+   * etc.) or if anything in the cloud path fails.
+   */
+  async function speakSummary(text: string) {
+    // Phase tracking — same gate as before for the Swift path. The
+    // cloud path manages its own audio.ended handler so it doesn't
+    // need the phase flip to fire "playing" via voice:tts-started.
+    speakPhaseRef.current = "pending";
+
+    try {
+      const res = await fetch("/api/v1/voice/tts", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        credentials: "include",
+        body: JSON.stringify({ text }),
+      });
+
+      if (res.status === 204 || !res.ok) {
+        // No cloud provider available (or it errored). Fall back to
+        // the Swift voice.
+        await speakViaSwift(text);
+        return;
+      }
+
+      const blob = await res.blob();
+      const url = URL.createObjectURL(blob);
+      audioUrlRef.current = url;
+      const audio = new Audio(url);
+      audioRef.current = audio;
+      // The Swift bridge listens for voice:tts-started → playing →
+      // tts-ended → hide. For the browser audio path, we skip that
+      // dance and ride the <audio> element's own events.
+      speakPhaseRef.current = "playing";
+
+      audio.addEventListener("ended", () => {
+        if (audioRef.current !== audio) return;
+        finishSpeak();
+      });
+      audio.addEventListener("error", () => {
+        if (audioRef.current !== audio) return;
+        // Cloud playback failed mid-stream — try Swift as a salvage.
+        clearAudio();
+        void speakViaSwift(text).catch(() => finishSpeak());
+      });
+
+      await audio.play();
+    } catch (err) {
+      // eslint-disable-next-line no-console
+      console.warn("[inbox-pill] cloud TTS failed, falling back to Swift", err);
+      await speakViaSwift(text);
+    }
+  }
+
+  async function speakViaSwift(text: string) {
+    speakPhaseRef.current = "pending";
+    if (!isTauri()) {
+      // Browser dev preview — silent fallback.
+      setStatus("idle");
+      setSummary("");
+      void hidePanel();
+      return;
+    }
+    try {
+      await tauriInvoke("voice_speak", { text });
+    } catch (err) {
+      // eslint-disable-next-line no-console
+      console.warn("[inbox-pill] voice_speak failed", err);
+      finishSpeak();
     }
   }
 
@@ -265,24 +402,7 @@ export default function InboxPill() {
 
       setSummary(summaryText);
       setStatus("speaking");
-      if (isTauri()) {
-        try {
-          // Mark our speak BEFORE invoking — that way if Swift's
-          // tts-started arrives before the JS resolves, the listener
-          // already sees "pending" and can flip to "playing".
-          speakPhaseRef.current = "pending";
-          await tauriInvoke("voice_speak", { text: summaryText });
-        } catch (err) {
-          // eslint-disable-next-line no-console
-          console.warn("[inbox-pill] voice_speak failed", err);
-          speakPhaseRef.current = "none";
-          setStatus("idle");
-          setSummary("");
-          void hidePanel();
-        }
-      } else {
-        setStatus("idle");
-      }
+      await speakSummary(summaryText);
     } catch (err) {
       setStatus("error");
       setError(err instanceof Error ? err.message : String(err));
@@ -296,6 +416,9 @@ export default function InboxPill() {
     // Take ownership of the upcoming tts-ended event so the listener
     // doesn't double-hide after our manual cancel.
     speakPhaseRef.current = "none";
+    // Stop both possible playback paths. Audio first so we silence
+    // the user immediately; Swift cancel is best-effort.
+    clearAudio();
     if (isTauri()) {
       try {
         await tauriInvoke("voice_cancel_speech");
@@ -363,7 +486,7 @@ export default function InboxPill() {
 
       {status === "speaking" && summary && (
         <div
-          className="border-border bg-background-3 text-foreground max-h-[200px] max-w-[320px] overflow-y-auto rounded-lg border px-2.5 py-1.5 text-xs leading-snug shadow-md"
+          className="border-border bg-background-3 text-foreground max-h-[100px] max-w-[320px] overflow-y-auto rounded-lg border px-2.5 py-1.5 leading-snug shadow-md"
           aria-live="polite"
         >
           {summary}

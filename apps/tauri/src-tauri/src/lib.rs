@@ -12,8 +12,6 @@ mod voice_hotkey;
 mod voice_panel;
 #[cfg(target_os = "macos")]
 mod inbox_panel;
-#[cfg(target_os = "macos")]
-mod inbox_poller;
 mod coding_config;
 
 use std::collections::HashSet;
@@ -887,14 +885,14 @@ pub fn run() {
                     resolve_webview_url("/inbox-pill"),
                 )
                 .title("Inbox")
-                // 360×240 — wide enough for the voice-widget look,
-                // tall enough for the pill (~28px) + a 200px capped
-                // summary card + 12px padding. Anything taller
-                // reserves a click-blocking dead zone on screen even
-                // though the visible content stops short. The summary
-                // card itself is the actual height limit — see
-                // inbox-pill.tsx for the max-h-[200px] cap.
-                .inner_size(360.0, 240.0)
+                // 360×160 — pill (~28px) + 100px-capped scrollable
+                // summary card + 16px padding. Tight enough that the
+                // window doesn't reserve a click-blocking dead zone
+                // under the visible content. The summary card itself
+                // caps height at 100px with overflow-y-auto, so
+                // longer catchups scroll inside the card instead of
+                // pushing the window taller.
+                .inner_size(360.0, 160.0)
                 .resizable(false)
                 .decorations(false)
                 .transparent(true)
@@ -928,11 +926,12 @@ pub fn run() {
                     log::warn!("[inbox_panel] install failed: {e}");
                 }
 
-                // Server-driven count poller — runs on a native thread
-                // so macOS WKWebView timer throttling doesn't keep us
-                // from surfacing new inbox rows when the pill window
-                // has been hidden for a while.
-                inbox_poller::install(app.handle().clone(), auth.clone());
+                // Liveness for the hidden inbox webview comes from the
+                // sidebar pill running in the main webapp window: when
+                // its cookie-authed poll sees the inbox count change,
+                // it emits an `inbox:kick` Tauri event that this
+                // window listens for and re-fetches. Cheap, no Rust
+                // poller, no auth plumbing.
 
                 let voice_app = app.handle().clone();
                 let _id = app.listen("voice:invoke", move |event| {

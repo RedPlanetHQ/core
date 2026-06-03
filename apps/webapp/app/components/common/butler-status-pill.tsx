@@ -10,6 +10,7 @@ import {
 import { useFetcher } from "@remix-run/react";
 import { Theme, useTheme } from "remix-themes";
 import { cn } from "~/lib/utils";
+import { tauriEmit } from "~/lib/tauri.client";
 import type {
   ButlerActivityState,
   ButlerActivitySummary,
@@ -140,6 +141,27 @@ export function ButlerStatusPill() {
       }
     };
   }, [inboxFetcher]);
+
+  // Liveness bridge for the Mac inbox pill (a hidden Tauri webview,
+  // whose own JS timers macOS aggressively throttles): whenever this
+  // foreground sidebar poll observes the count change, fire an
+  // `inbox:kick` Tauri event. The inbox-pill webview listens for it
+  // and re-fetches immediately. No-op outside Tauri.
+  const lastCountForKickRef = React.useRef<number | null>(null);
+  React.useEffect(() => {
+    const next = inboxFetcher.data?.count;
+    if (next === undefined) return;
+    const prev = lastCountForKickRef.current;
+    lastCountForKickRef.current = next;
+    if (prev === null) {
+      // First reading — kick anyway so the inbox window reconciles
+      // with what we just observed instead of relying on its own
+      // possibly-stale state.
+      void tauriEmit("inbox:kick", next);
+      return;
+    }
+    if (prev !== next) void tauriEmit("inbox:kick", next);
+  }, [inboxFetcher.data?.count]);
 
   // Tear down any playing audio if the component unmounts.
   React.useEffect(() => () => stopPlayback(), []);

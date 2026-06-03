@@ -28,3 +28,12 @@ export async function tauriListen<T>(
   const unlisten = await listen<T>(event, handler as any);
   return unlisten;
 }
+
+export async function tauriEmit(
+  event: string,
+  payload?: unknown,
+): Promise<void> {
+  if (!isTauri()) return;
+  const { emit } = await import("@tauri-apps/api/event");
+  await emit(event, payload);
+}

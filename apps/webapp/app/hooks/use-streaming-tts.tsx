@@ -16,11 +16,13 @@
  * (a new assistant message replaces the previous one).
  */
 
-import { useEffect, useRef } from "react";
+import { useCallback, useEffect, useRef } from "react";
 
 import { isTauri, tauriInvoke } from "~/lib/tauri.client";
 
 const SENTENCE_BOUNDARY = /([.!?])\s/;
+const DUCKED_VOLUME = 0.15;
+const RESTORED_VOLUME = 1.0;
 
 export interface UseStreamingTTSOptions {
   enabled: boolean;
@@ -34,17 +36,33 @@ export interface UseStreamingTTSOptions {
   isStreaming: boolean;
 }
 
+export interface UseStreamingTTSReturn {
+  /** Lower playback volume on the active + queued audio. Used for VAD
+   *  barge-in: instant feedback that we're listening, without dropping
+   *  the assistant turn for a cough or a passing siren. */
+  duck: () => void;
+  /** Restore full volume. Called when the turn turns out to be noise. */
+  restore: () => void;
+  /** Drop the queue and stop whatever is playing. Called when the user
+   *  actually said something — the next assistant turn replaces it. */
+  flush: () => void;
+}
+
 export function useStreamingTTS({
   enabled,
   text,
   isStreaming,
-}: UseStreamingTTSOptions): void {
+}: UseStreamingTTSOptions): UseStreamingTTSReturn {
   const consumedRef = useRef(0);
   // The actual text we've seen so far. Lets us detect a "new message
   // started" condition (text got shorter) and reset.
   const seenRef = useRef("");
   const queueRef = useRef<HTMLAudioElement[]>([]);
   const activeRef = useRef<HTMLAudioElement | null>(null);
+  // Current playback volume — persists across the audio elements the
+  // queue keeps minting so a duck during sentence N stays ducked when
+  // sentence N+1 starts.
+  const volumeRef = useRef<number>(RESTORED_VOLUME);
   const enabledRef = useRef(enabled);
   enabledRef.current = enabled;
   // Tracks the previous value of `enabled` across renders so we can
@@ -114,6 +132,7 @@ export function useStreamingTTS({
       if (!enabledRef.current) return;
       const url = URL.createObjectURL(blob);
       const audio = new Audio(url);
+      audio.volume = volumeRef.current;
       audio.addEventListener("ended", () => {
         URL.revokeObjectURL(url);
         if (activeRef.current === audio) {
@@ -213,6 +232,47 @@ export function useStreamingTTS({
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [text, isStreaming, enabled]);
+
+  // Imperative handles for the host. VAD-driven barge-in uses these:
+  // duck on speech onset, restore if it was just noise, flush if it
+  // was real speech (the new assistant turn will replace this one).
+  const applyVolume = (v: number) => {
+    volumeRef.current = v;
+    if (activeRef.current) {
+      try {
+        activeRef.current.volume = v;
+      } catch {
+        // ignore
+      }
+    }
+    for (const a of queueRef.current) {
+      try {
+        a.volume = v;
+      } catch {
+        // ignore
+      }
+    }
+  };
+
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  const duck = useCallback(() => {
+    applyVolume(DUCKED_VOLUME);
+  }, []);
+
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  const restore = useCallback(() => {
+    applyVolume(RESTORED_VOLUME);
+  }, []);
+
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  const flushHandle = useCallback(() => {
+    flush();
+    cancelLocalSpeech();
+    // Re-arm volume — next assistant message should be at full volume.
+    volumeRef.current = RESTORED_VOLUME;
+  }, []);
+
+  return { duck, restore, flush: flushHandle };
 }
 
 function safeIsTauri(): boolean {

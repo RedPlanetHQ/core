@@ -38,7 +38,7 @@ const { loader, action } = createHybridActionApiRoute(
     const mode = body.mode ?? "voice";
 
     const items = await prisma.voiceInboxMessage.findMany({
-      where: { userId },
+      where: { userId, checked: null },
       orderBy: { createdAt: "asc" },
       include: { task: { select: { title: true, displayId: true } } },
     });
@@ -55,8 +55,12 @@ const { loader, action } = createHybridActionApiRoute(
       .join("\n");
     const summary = await summarize({ text: rendered, mode });
 
-    await prisma.voiceInboxMessage.deleteMany({
+    // Stamp instead of delete: the rows stay around as a history of
+    // what the user has been caught up on. Only unstamped rows are
+    // surfaced by the badge / next summarise pass.
+    await prisma.voiceInboxMessage.updateMany({
       where: { id: { in: items.map((i) => i.id) } },
+      data: { checked: new Date() },
     });
 
     return json({ summary, count: items.length });

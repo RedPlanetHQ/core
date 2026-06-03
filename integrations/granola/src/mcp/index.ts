@@ -1,6 +1,8 @@
 import { Client } from '@modelcontextprotocol/sdk/client/index.js';
 import { StreamableHTTPClientTransport } from '@modelcontextprotocol/sdk/client/streamableHttp.js';
 
+import { ensureFreshToken } from '../utils';
+
 const GRANOLA_MCP_URL = 'https://mcp.granola.ai/mcp';
 
 interface MCPTool {
@@ -38,10 +40,12 @@ async function createMCPClient(accessToken: string): Promise<Client> {
   return client;
 }
 
-export async function getTools(config?: Record<string, string>): Promise<MCPTool[]> {
+export async function getTools(config?: Record<string, any>): Promise<MCPTool[]> {
   if (!config?.access_token) {
     return [];
   }
+
+  await ensureFreshToken(config);
 
   let client: Client | null = null;
 
@@ -68,8 +72,10 @@ export async function getTools(config?: Record<string, string>): Promise<MCPTool
 export async function callTool(
   name: string,
   args: Record<string, any>,
-  credentials: Record<string, string>,
+  credentials: Record<string, any>,
 ): Promise<MCPToolCallResult> {
+  await ensureFreshToken(credentials);
+
   let client: Client | null = null;
 
   try {

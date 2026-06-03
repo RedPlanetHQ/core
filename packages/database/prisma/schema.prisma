@@ -919,8 +919,12 @@ model User {
 }
 
 model VoiceInboxMessage {
-  id          String   @id @default(uuid())
-  createdAt   DateTime @default(now())
+  id        String    @id @default(uuid())
+  createdAt DateTime  @default(now())
+  /// When the user heard a catchup that included this row. Rows where
+  /// `checked IS NULL` are unread; the summarise route stamps NOW()
+  /// instead of deleting so we keep a history of what was caught up.
+  checked   DateTime?
 
   user   User   @relation(fields: [userId], references: [id], onDelete: Cascade)
   userId String

@@ -64,6 +64,8 @@ export async function loader({ request }: LoaderFunctionArgs) {
           refresh_token: result.refreshToken,
           expires_in: result.expiresIn,
           token_type: result.tokenType,
+          client_id: result.clientId,
+          client_secret: result.clientSecret,
         },
         oauthParams: { redirect_uri: MCP_CALLBACK_URL },
       },

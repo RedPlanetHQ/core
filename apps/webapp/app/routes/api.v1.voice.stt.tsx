@@ -9,7 +9,10 @@
  * the client produces the transcript locally and skips the network.
  *
  * Responses:
- *   200 { text, language }              → success
+ *   200 { text, language, containedEvents } → success. `text` is the
+ *        cleaned transcript with non-speech audio-event tags (e.g.
+ *        "(background music)") stripped; `containedEvents` is true
+ *        when such tags were present.
  *   401                                  → unauth
  *   412 { error: "needs-config", provider } → no API key configured
  *   502                                  → upstream provider error
@@ -96,7 +99,11 @@ export const action = async ({ request }: ActionFunctionArgs) => {
       language: effectiveLanguage,
     });
     return new Response(
-      JSON.stringify({ text: result.text, language: result.language ?? null }),
+      JSON.stringify({
+        text: result.text,
+        language: result.language ?? null,
+        containedEvents: result.containedEvents ?? false,
+      }),
       {
         status: 200,
         headers: {

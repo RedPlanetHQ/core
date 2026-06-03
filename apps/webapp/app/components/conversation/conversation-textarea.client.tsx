@@ -24,6 +24,7 @@ import {
 } from "./slash-command-extension";
 import { VoiceComposer } from "~/components/voice/voice-composer";
 import type { STTProviderId } from "~/components/voice/stt-providers";
+import type { VoiceVadTurnResult } from "~/hooks/use-voice-vad";
 
 export interface LLMModel {
   id: string;
@@ -65,6 +66,10 @@ interface ConversationTextareaProps {
    *  the textarea manages its own internal voice mode state. */
   voiceMode?: boolean;
   onVoiceModeChange?: (next: boolean) => void;
+  /** Fires when VAD detects speech onset — host ducks active TTS. */
+  onVoiceSpeechOnset?: () => void;
+  /** Fires once per finished turn — host restores or flushes TTS. */
+  onVoiceTurnResult?: (result: VoiceVadTurnResult) => void;
 }
 
 export function ConversationTextarea({
@@ -88,6 +93,8 @@ export function ConversationTextarea({
   voiceProvider,
   voiceMode: voiceModeProp,
   onVoiceModeChange,
+  onVoiceSpeechOnset,
+  onVoiceTurnResult,
 }: ConversationTextareaProps) {
   const [text, setText] = useState(defaultValue ?? "");
   const [internalVoiceMode, setInternalVoiceMode] = useState(false);
@@ -207,6 +214,8 @@ export function ConversationTextarea({
         enabled={!disabled}
         provider={voiceProvider}
         isAssistantReplying={isLoading || isStopping}
+        onSpeechOnset={onVoiceSpeechOnset}
+        onTurnResult={onVoiceTurnResult}
         onTranscript={(t) => {
           // Send the transcript through the same path Enter / Chat use,
           // so the hosting page (ConversationView etc.) doesn't need to

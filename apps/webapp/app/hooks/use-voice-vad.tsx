@@ -42,11 +42,32 @@ export interface VoiceVadError {
   provider: STTProviderId;
 }
 
+export interface VoiceVadTurnResult {
+  /** Cleaned transcript — empty if the turn contained only noise. */
+  text: string;
+  /** True if the provider returned non-speech audio-event tags. */
+  containedEvents: boolean;
+}
+
 export interface UseVoiceVadOptions {
   enabled: boolean;
+  /** Fires only for non-empty cleaned transcripts. */
   onTranscript: (text: string) => void;
   onError?: (err: VoiceVadError) => void;
   provider?: STTProviderId;
+  /**
+   * Fires when audio crosses the speech threshold (waiting → recording).
+   * Use this for instant barge-in feedback like ducking TTS playback,
+   * before we know whether the turn is real speech or just noise.
+   */
+  onSpeechOnset?: () => void;
+  /**
+   * Fires once per finished turn with the cleaned transcript and an
+   * `containedEvents` flag. Lets callers decide what to do for
+   * events-only turns — e.g. restore ducked TTS without sending a
+   * message.
+   */
+  onTurnResult?: (result: VoiceVadTurnResult) => void;
   /** RMS above this triggers "speech onset". 0 – 1, default 0.025. */
   speechThreshold?: number;
   /** RMS below this counts as silence. 0 – 1, default 0.012. */
@@ -77,6 +98,8 @@ export function useVoiceVad({
   onTranscript,
   onError,
   provider,
+  onSpeechOnset,
+  onTurnResult,
   speechThreshold = DEFAULTS.speechThreshold,
   silenceThreshold = DEFAULTS.silenceThreshold,
   silenceMs = DEFAULTS.silenceMs,
@@ -96,8 +119,12 @@ export function useVoiceVad({
   // Latest callbacks, so the rAF loop never closes over stale fns.
   const onTranscriptRef = useRef(onTranscript);
   const onErrorRef = useRef(onError);
+  const onSpeechOnsetRef = useRef(onSpeechOnset);
+  const onTurnResultRef = useRef(onTurnResult);
   onTranscriptRef.current = onTranscript;
   onErrorRef.current = onError;
+  onSpeechOnsetRef.current = onSpeechOnset;
+  onTurnResultRef.current = onTurnResult;
 
   // Live state used by the rAF loop. We mirror status into a ref so
   // transitions can be made without re-running the giant setup effect.
@@ -183,7 +210,10 @@ export function useVoiceVad({
         chunks = [];
 
         // Too short → drop and reset; don't bother the STT route.
+        // Surface it as an empty turn result so the host can restore
+        // any TTS it ducked at speech onset.
         if (elapsed < minRecordingMs || blob.size === 0) {
+          onTurnResultRef.current?.({ text: "", containedEvents: false });
           setStatusBoth("waiting");
           return;
         }
@@ -204,6 +234,9 @@ export function useVoiceVad({
           if (cancelled) return;
 
           if (!res.ok) {
+            // Bubble an empty turn result before failing so the host
+            // can restore any ducked TTS.
+            onTurnResultRef.current?.({ text: "", containedEvents: false });
             if (res.status === 412) {
               const body = (await safeJson(res)) as
                 | { message?: string }
@@ -223,13 +256,22 @@ export function useVoiceVad({
             return;
           }
 
-          const data = (await safeJson(res)) as { text?: string } | null;
+          const data = (await safeJson(res)) as {
+            text?: string;
+            containedEvents?: boolean;
+          } | null;
           const text = (data?.text ?? "").trim();
+          const containedEvents = data?.containedEvents ?? false;
+          // Fire the raw turn result first so hosts that ducked TTS at
+          // onset can restore (events-only) or flush (real speech) before
+          // the message goes out.
+          onTurnResultRef.current?.({ text, containedEvents });
           if (text) onTranscriptRef.current?.(text);
           // Resume listening immediately for the next turn.
           if (!cancelled) setStatusBoth("waiting");
         } catch (err) {
           if (cancelled) return;
+          onTurnResultRef.current?.({ text: "", containedEvents: false });
           fail({
             code: "upstream",
             message: String(err),
@@ -263,6 +305,9 @@ export function useVoiceVad({
           try {
             recorder.start(100);
             setStatusBoth("recording");
+            // Fire onset before we know whether it's real speech —
+            // lets the host duck TTS for instant feedback.
+            onSpeechOnsetRef.current?.();
           } catch {
             // ignore — next tick will try again
           }
