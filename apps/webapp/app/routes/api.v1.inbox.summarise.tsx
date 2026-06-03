@@ -26,7 +26,7 @@ const BodySchema = z.object({
   mode: z.enum(["voice", "text"]).optional(),
 });
 
-export const { action } = createHybridActionApiRoute(
+const { loader, action } = createHybridActionApiRoute(
   {
     body: BodySchema,
     allowJWT: true,
@@ -62,3 +62,10 @@ export const { action } = createHybridActionApiRoute(
     return json({ summary, count: items.length });
   },
 );
+
+// Re-export individually rather than `export const { ... } = ...` so
+// Remix's vite plugin can isolate the server-only modules. The
+// destructured-in-export pattern leaves the entire return value of
+// createHybridActionApiRoute looking like a client-side import to the
+// analyzer, which then rejects the apiBuilder.server import.
+export { loader, action };
