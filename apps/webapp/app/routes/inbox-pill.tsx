@@ -363,7 +363,7 @@ export default function InboxPill() {
 
       {status === "speaking" && summary && (
         <div
-          className="border-border bg-background-3 text-foreground max-w-[320px] rounded-lg border px-2.5 py-1.5 text-xs leading-snug shadow-md"
+          className="border-border bg-background-3 text-foreground max-h-[200px] max-w-[320px] overflow-y-auto rounded-lg border px-2.5 py-1.5 text-xs leading-snug shadow-md"
           aria-live="polite"
         >
           {summary}

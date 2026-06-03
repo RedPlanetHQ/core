@@ -887,14 +887,14 @@ pub fn run() {
                     resolve_webview_url("/inbox-pill"),
                 )
                 .title("Inbox")
-                // 360×320 matches the voice-widget — the pill sits at
-                // the top of the window and the rest of the area is
-                // transparent so the summary card has room to render
-                // underneath while the catchup is being spoken,
-                // mirroring the partial-transcript card in
-                // voice-widget. position_inbox_window() pins this to
-                // top-right of the active screen on every show.
-                .inner_size(360.0, 320.0)
+                // 360×240 — wide enough for the voice-widget look,
+                // tall enough for the pill (~28px) + a 200px capped
+                // summary card + 12px padding. Anything taller
+                // reserves a click-blocking dead zone on screen even
+                // though the visible content stops short. The summary
+                // card itself is the actual height limit — see
+                // inbox-pill.tsx for the max-h-[200px] cap.
+                .inner_size(360.0, 240.0)
                 .resizable(false)
                 .decorations(false)
                 .transparent(true)
