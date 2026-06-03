@@ -216,7 +216,7 @@ fn ensure_running<R: Runtime>(
     Ok(())
 }
 
-fn send_command<R: Runtime>(
+pub fn send_command<R: Runtime>(
     app: &AppHandle<R>,
     proc: &mut SpeechProcess,
     cmd: serde_json::Value,

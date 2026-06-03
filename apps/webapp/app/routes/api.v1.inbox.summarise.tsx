@@ -9,8 +9,10 @@
  * requested mode (defaults to "voice" since the Mac pill is the only caller
  * today), deletes the rows, and returns the spoken/displayed text.
  *
- * One-message short-circuit: when there's exactly one row we skip the LLM
- * call and return the message verbatim — no summarisation needed.
+ * Every catchup — single or multi — goes through the summariser. The voice
+ * prompt is already tuned for short single-item catchups, and skipping the
+ * LLM for one row meant the user heard the raw agent message verbatim,
+ * which is too long for a butler-style update.
  */
 
 import { json } from "@remix-run/node";
@@ -45,20 +47,13 @@ export const { action } = createHybridActionApiRoute(
       return json({ summary: "", count: 0 });
     }
 
-    let summary: string;
-    if (items.length === 1) {
-      summary = items[0].message;
-    } else {
-      const rendered = items
-        .map((it, idx) => {
-          const taskTag = it.task?.title
-            ? ` [task: ${it.task.title}]`
-            : "";
-          return `${idx + 1}.${taskTag} ${it.message}`;
-        })
-        .join("\n");
-      summary = await summarize({ text: rendered, mode });
-    }
+    const rendered = items
+      .map((it, idx) => {
+        const taskTag = it.task?.title ? ` [task: ${it.task.title}]` : "";
+        return `${idx + 1}.${taskTag} ${it.message}`;
+      })
+      .join("\n");
+    const summary = await summarize({ text: rendered, mode });
 
     await prisma.voiceInboxMessage.deleteMany({
       where: { id: { in: items.map((i) => i.id) } },

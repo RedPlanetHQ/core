@@ -30,7 +30,6 @@ import {
   type LoaderFunctionArgs,
   type MetaFunction,
 } from "@remix-run/node";
-import { Square } from "lucide-react";
 import { Theme, useTheme } from "remix-themes";
 
 import { FlickeringGrid } from "~/components/ui/flickering-grid";
@@ -59,7 +58,13 @@ interface SummariseResponse {
   count: number;
 }
 
-const POLL_INTERVAL_MS = 10_000;
+// Rust has its own native-thread poller in `inbox_poller.rs` that
+// drives show/hide and emits `inbox:kick` whenever the count flips.
+// We keep this fallback interval for the case where Rust auth isn't
+// set up yet (no PAT) — but at a much longer cadence so it doesn't
+// race with the Rust poll. macOS WKWebView throttling of hidden
+// timers means this fallback can't be relied on for liveness anyway.
+const POLL_INTERVAL_MS = 60_000;
 
 export default function InboxPill() {
   const [count, setCount] = useState(0);
@@ -133,7 +138,11 @@ export default function InboxPill() {
   }, []);
 
   // Poll. Cookies-include authenticates via the session shared with
-  // the main window — same trick as the voice widget.
+  // the main window — same trick as the voice widget. The real
+  // liveness driver is the Rust poller (see inbox_poller.rs) which
+  // emits `inbox:kick` whenever the count changes; we listen for
+  // that below and trigger an immediate refresh.
+  const pollOnceRef = useRef<() => Promise<void>>(async () => {});
   useEffect(() => {
     let cancelled = false;
 
@@ -163,12 +172,31 @@ export default function InboxPill() {
         console.warn("[inbox-pill] poll failed", err);
       }
     }
+    pollOnceRef.current = pollOnce;
 
     void pollOnce();
     const id = window.setInterval(pollOnce, POLL_INTERVAL_MS);
     return () => {
       cancelled = true;
       window.clearInterval(id);
+    };
+  }, []);
+
+  // Rust-driven liveness: every time the native poller sees the count
+  // flip we get an `inbox:kick` event and re-fetch immediately. This
+  // is what makes new inbox rows surface promptly even when the
+  // window has been hidden long enough for the OS to throttle JS
+  // timers in this WKWebView.
+  useEffect(() => {
+    if (!isTauri()) return;
+    let unsub: (() => void) | null = null;
+    (async () => {
+      unsub = await tauriListen("inbox:kick", () => {
+        void pollOnceRef.current();
+      });
+    })();
+    return () => {
+      if (unsub) unsub();
     };
   }, []);
 
@@ -280,7 +308,10 @@ export default function InboxPill() {
     void hidePanel();
   }
 
-  // Pill visuals — match voice-widget exactly.
+  // Pill visuals — match voice-widget exactly. There's only ever one
+  // pill: the label text and click handler flip based on status, but
+  // the FlickeringGrid + chrome stay put. While speaking, clicking
+  // the same pill stops the speech.
   const isActive = status === "speaking" || status === "summarising";
   const gridColor = isActive
     ? "rgb(var(--primary))"
@@ -290,59 +321,31 @@ export default function InboxPill() {
 
   const stateLabel = (() => {
     if (status === "summarising") return "Summarising…";
-    if (status === "speaking") return "Speaking…";
+    if (status === "speaking") return "Stop";
     if (status === "error") return "Retry";
     return count === 1 ? "1 message" : `${count} messages`;
   })();
 
-  // While speaking, swap the pill for a stop control — same shape and
-  // chrome, just a stop glyph instead of the flickering grid + count.
-  // The catchup text renders underneath in the same style as the
-  // voice-widget's partial transcript card.
-  if (status === "speaking") {
-    return (
-      <div className="flex h-screen w-screen flex-col items-end gap-1 p-2">
-        <button
-          type="button"
-          onClick={handleStop}
-          className="border-border bg-background-3 text-foreground hover:text-primary flex h-7 items-center gap-1.5 rounded-lg border px-2 text-xs font-medium shadow-md transition-colors"
-          title="Stop"
-          aria-label="Stop"
-        >
-          <span className="bg-primary text-primary-foreground grid h-4 w-4 place-items-center rounded">
-            <Square size={9} className="fill-current" />
-          </span>
-          Stop
-        </button>
-        {summary && (
-          <div
-            className="border-border bg-background-3 text-foreground max-w-[320px] rounded-lg border px-2.5 py-1.5 text-xs leading-snug shadow-md"
-            aria-live="polite"
-          >
-            {summary}
-          </div>
-        )}
-      </div>
-    );
-  }
+  const onPillClick = status === "speaking" ? handleStop : handleClick;
+  const pillTitle = (() => {
+    if (status === "summarising") return "Summarising your inbox…";
+    if (status === "speaking") return "Click to stop";
+    if (status === "error") return error ?? "Error — click to retry";
+    return "Click to hear summary";
+  })();
 
   return (
     <div className="flex h-screen w-screen flex-col items-end gap-1 p-2">
       <button
         type="button"
-        onClick={handleClick}
+        onClick={onPillClick}
         disabled={status === "summarising"}
         className={cn(
           "border-border bg-background-3 text-muted-foreground flex h-7 items-center gap-1.5 rounded-lg border px-2 text-xs font-medium shadow-md transition-colors",
+          status === "speaking" && "text-foreground hover:text-primary",
           status === "error" && "border-destructive/40 text-destructive",
         )}
-        title={
-          status === "summarising"
-            ? "Summarising your inbox…"
-            : status === "error"
-              ? (error ?? "Error — click to retry")
-              : "Click to hear summary"
-        }
+        title={pillTitle}
       >
         <div className="relative h-3.5 w-5 overflow-hidden rounded-sm">
           <FlickeringGrid
@@ -357,6 +360,15 @@ export default function InboxPill() {
         </div>
         {stateLabel}
       </button>
+
+      {status === "speaking" && summary && (
+        <div
+          className="border-border bg-background-3 text-foreground max-w-[320px] rounded-lg border px-2.5 py-1.5 text-xs leading-snug shadow-md"
+          aria-live="polite"
+        >
+          {summary}
+        </div>
+      )}
     </div>
   );
 }
