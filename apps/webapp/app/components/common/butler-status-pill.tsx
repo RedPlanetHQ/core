@@ -75,6 +75,15 @@ export function ButlerStatusPill() {
   const audioRef = React.useRef<HTMLAudioElement | null>(null);
   const audioUrlRef = React.useRef<string | null>(null);
 
+  // While a catchup is mid-flight (summarising / speaking / text on
+  // screen waiting for dismissal), force the popover open and ignore
+  // hover-out — the mouse easily slips while the user reads the
+  // summary, and we don't want it disappearing on them.
+  const isCatchupActive =
+    catchupStatus === "summarising" ||
+    catchupStatus === "speaking" ||
+    (catchupStatus === "stopped" && catchupText.length > 0);
+
   const handleMouseEnter = () => {
     if (closeTimerRef.current) {
       clearTimeout(closeTimerRef.current);
@@ -84,6 +93,7 @@ export function ButlerStatusPill() {
   };
 
   const handleMouseLeave = () => {
+    if (isCatchupActive) return;
     closeTimerRef.current = setTimeout(() => setOpen(false), 150);
   };
 
@@ -247,6 +257,22 @@ export function ButlerStatusPill() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [open]);
 
+  // While a catchup is locked open, make sure the popover IS open. If
+  // the trigger lost focus and Radix collapsed it, the catchup phase
+  // re-opens it.
+  React.useEffect(() => {
+    if (isCatchupActive && !open) setOpen(true);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [isCatchupActive]);
+
+  function handleDismissCatchup() {
+    stopPlayback();
+    setCatchupStatus("ready");
+    setCatchupText("");
+    setCatchupError(null);
+    setOpen(false);
+  }
+
   const data = fetcher.data;
   const state = data?.state ?? "idle";
   const isButlerActive = ACTIVE_STATES.includes(state);
@@ -255,10 +281,12 @@ export function ButlerStatusPill() {
 
   const inboxCount = inboxFetcher.data?.count ?? 0;
   // Inbox mode wins only when butler is genuinely idle — any acting,
-  // thinking, or watching takes priority on the pill.
+  // thinking, or watching takes priority on the pill. We also force
+  // inbox mode while a catchup is mid-flight so the summary stays on
+  // screen even after summarise has deleted the rows (count → 0).
   const mode: "butler-active" | "inbox" | "butler-idle" = isButlerActive
     ? "butler-active"
-    : inboxCount > 0
+    : inboxCount > 0 || isCatchupActive
       ? "inbox"
       : "butler-idle";
 
@@ -334,6 +362,7 @@ export function ButlerStatusPill() {
             error={catchupError}
             onSummarise={handleSummarise}
             onStop={handleStop}
+            onDismiss={handleDismissCatchup}
           />
         ) : (
           <ButlerStatusContent
@@ -439,6 +468,7 @@ function InboxCatchupContent({
   error,
   onSummarise,
   onStop,
+  onDismiss,
 }: {
   count: number;
   status: CatchupStatus;
@@ -446,27 +476,45 @@ function InboxCatchupContent({
   error: string | null;
   onSummarise: () => void;
   onStop: () => void;
+  onDismiss: () => void;
 }) {
+  // Once we have a catchup, the summary text IS the popover content —
+  // no more "N messages waiting" header. We only show that on the
+  // initial "ready" state before the user clicks Summarise.
+  const hasText = text.length > 0;
+
   return (
     <>
       <div className="p-3">
-        <div className="flex items-center gap-2 font-medium">
-          <Inbox size={14} className="text-primary shrink-0" />
-          {count === 1 ? "1 message waiting" : `${count} messages waiting`}
-        </div>
-        <div className="text-muted-foreground mt-0.5 text-sm">
-          {status === "speaking"
-            ? "Butler is reading the catchup aloud."
-            : status === "summarising"
-              ? "Preparing your catchup…"
-              : status === "error"
-                ? (error ?? "Something went wrong.")
-                : "Ask for a quick verbal catchup."}
-        </div>
-        {(status === "speaking" || status === "stopped") && text && (
-          <div className="border-border bg-background-3 text-foreground mt-2 max-h-[160px] overflow-y-auto rounded-md border px-2.5 py-1.5 text-xs leading-snug">
-            {text}
-          </div>
+        {hasText ? (
+          <>
+            <div className="text-muted-foreground flex items-center gap-2 text-[10px] font-medium uppercase tracking-wide">
+              <Inbox size={11} className="text-primary shrink-0" />
+              Catchup
+              {status === "speaking" && (
+                <span className="text-primary normal-case tracking-normal">
+                  · speaking…
+                </span>
+              )}
+            </div>
+            <div className="text-foreground mt-1.5 text-sm leading-snug">
+              {text}
+            </div>
+          </>
+        ) : (
+          <>
+            <div className="flex items-center gap-2 font-medium">
+              <Inbox size={14} className="text-primary shrink-0" />
+              {count === 1 ? "1 message waiting" : `${count} messages waiting`}
+            </div>
+            <div className="text-muted-foreground mt-0.5 text-sm">
+              {status === "summarising"
+                ? "Preparing your catchup…"
+                : status === "error"
+                  ? (error ?? "Something went wrong.")
+                  : "Ask for a quick verbal catchup."}
+            </div>
+          </>
         )}
       </div>
       <div className="border-t px-1 py-1">
@@ -485,6 +533,14 @@ function InboxCatchupContent({
             disabled
           >
             <Loader2 size={14} className="animate-spin" /> Summarising…
+          </Button>
+        ) : hasText ? (
+          <Button
+            variant="ghost"
+            className="w-full justify-start gap-2"
+            onClick={onDismiss}
+          >
+            Done
           </Button>
         ) : (
           <Button
