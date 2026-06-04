@@ -436,6 +436,36 @@ export async function changeTaskStatus(
     data: { status },
   });
 
+  // Clear any unread voice inbox rows that belong to this task once it's
+  // resolved. Two trigger conditions:
+  //   - status moved to Done (task is finished, no need to nag)
+  //   - status moved out of Waiting (the blocker was acknowledged)
+  // The pill should stop showing stale "task is waiting on you" updates after
+  // the user acts.
+  const shouldClearInbox =
+    status === "Done" ||
+    (current.status === "Waiting" && status !== "Waiting");
+  if (shouldClearInbox) {
+    try {
+      const cleared = await prisma.voiceInboxMessage.updateMany({
+        where: { taskId, checked: null },
+        data: { checked: new Date() },
+      });
+      if (cleared.count > 0) {
+        logger.info(
+          `Auto-checked ${cleared.count} voice inbox row(s) for task ${taskId} (${current.status} -> ${status})`,
+        );
+      }
+    } catch (err) {
+      logger.warn("Failed to auto-check voice inbox rows on status change", {
+        err,
+        taskId,
+        from: current.status,
+        to: status,
+      });
+    }
+  }
+
   return task;
 }
 

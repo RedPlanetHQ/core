@@ -54,6 +54,7 @@ export async function loader({ request }: LoaderFunctionArgs) {
         taskId: true,
         channelType: true,
         createdAt: true,
+        task: { select: { displayId: true, title: true } },
       },
     }),
   ]);

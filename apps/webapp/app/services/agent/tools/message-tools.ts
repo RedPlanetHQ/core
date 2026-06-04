@@ -191,7 +191,7 @@ export function getMessageTools(
           // these rows.
           // ---------------------------------------------------------------
           try {
-            await prisma.voiceInboxMessage.create({
+            const row = await prisma.voiceInboxMessage.create({
               data: {
                 userId,
                 workspaceId,
@@ -199,10 +199,25 @@ export function getMessageTools(
                 message,
                 channelType,
               },
+              select: { id: true },
+            });
+            logger.info("[send_message] Wrote inbox row", {
+              id: row.id,
+              userId,
+              workspaceId,
+              taskId: currentTaskId ?? null,
+              channelType,
             });
           } catch (inboxError) {
-            logger.warn("[send_message] Failed to write inbox row", {
-              error: inboxError,
+            logger.error("[send_message] Failed to write inbox row", {
+              error:
+                inboxError instanceof Error
+                  ? { message: inboxError.message, stack: inboxError.stack }
+                  : inboxError,
+              userId,
+              workspaceId,
+              taskId: currentTaskId ?? null,
+              channelType,
             });
           }
 
