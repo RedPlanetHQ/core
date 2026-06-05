@@ -614,6 +614,7 @@ RULES:
 - DO NOT create independent top-level tasks. ${isSubtask ? "You are a subtask — just do your work." : "Subtasks under this task only."}
 - DO NOT mark Done — that's the user's call.
 - DESCRIPTION UPDATES. Only at meaningful boundaries: Waiting (record what's blocked), decomposition (record the plan), Review (record the outcome), or when the user provides new context. Never write error logs, debug output, or transient state into the description.
+- PRESERVE USER CONTENT. You may edit the <plan> and <outcome> zones freely, and anything the user has SPECIFICALLY asked you to change. Everything else the user authored stays as-is — do not silently rewrite, reorder, or delete it just because you're touching the description for another reason.
 
 CODING SESSIONS:
 The gateway sub-agent owns all sleep/polling for coding sessions. You do NOT sleep or poll directly.

@@ -238,6 +238,7 @@ Do NOT update the task description on every interaction. Only update it at meani
 - **Review/Done**: record the output as HTML with \`<outcome>...</outcome>\` tags
 - **User provides new context**: when the user adds requirements or constraints, append their input. EXCEPTION: do NOT append the user's reply when you're about to call unblock_task — unblock_task already records the resolution as "Approved: …" in the description, so a separate append duplicates the same content.
 Do NOT update the description just because you interacted with the task. The description is a living brief, not a log.
+What you may edit in the description: the \`<plan>\` and \`<outcome>\` zones (always), and anything the user has SPECIFICALLY asked you to change. Everything else the user authored stays as-is — do not silently rewrite, reorder, or delete it just because you're touching the description for another reason.
 
 SCHEDULING & REMINDERS:
 Scheduled tasks are how you stay on top of things. Your own wake-up calls — to check on delegations, follow up on pending items, nudge them about something important.

@@ -1,3 +1,4 @@
+import { useEffect, useRef, useState } from "react";
 import { cn } from "~/lib/utils";
 import { useTypedMatchesData } from "~/hooks/useTypedMatchData";
 import { EYE_PATTERNS, EYE_VIEWBOX } from "./eye-patterns";
@@ -31,6 +32,8 @@ export interface SamAvatarProps {
   /** Hex color for the eye pixels (primary shade). When omitted, reads from
    *  the root loader's `currentWorkspace.metadata.agentEyeColor`. */
   eyeColor?: string;
+  /** When true, the eyes follow the user's cursor. Defaults to false. */
+  trackCursor?: boolean;
   className?: string;
 }
 
@@ -82,6 +85,22 @@ const EYE_H = 105;
 const EYE_X = (HEAD_VIEW_W - EYE_W) / 2;
 const EYE_Y = (HEAD_VIEW_H - EYE_H) / 2 - 8; // slightly above center
 
+// Max distance (in head viewBox units) the eyes can drift when tracking cursor.
+const CURSOR_MAX_OFFSET_X = 22;
+const CURSOR_MAX_OFFSET_Y = 14;
+// Distance (in screen px) at which the eye reaches max offset; closer = less drift.
+const CURSOR_RAMP_DISTANCE = 250;
+
+// Blink: how often (random in this range) and how long the closed phase lasts.
+const BLINK_INTERVAL_MIN_MS = 3000;
+const BLINK_INTERVAL_MAX_MS = 6000;
+const BLINK_CLOSED_MS = 130;
+// Sprite is 64 wide → x=32 is the centerline between left and right eyes.
+const EYE_SPLIT_X = 32;
+// Approx vertical center of the right eye in sprite coords (used as transform-origin).
+const RIGHT_EYE_CENTER_X = 42;
+const RIGHT_EYE_CENTER_Y = 12;
+
 // ============================================================================
 // Eye color shading
 // ============================================================================
@@ -104,6 +123,7 @@ export function SamAvatar({
   size = 32,
   eye,
   eyeColor,
+  trackCursor = false,
   className,
 }: SamAvatarProps) {
   // Fallback chain: explicit prop → workspace prefs (from root loader) → default
@@ -119,8 +139,77 @@ export function SamAvatar({
   const eyeScaleX = EYE_W / EYE_VIEWBOX.w;
   const eyeScaleY = EYE_H / EYE_VIEWBOX.h;
 
+  // Cursor tracking — bypass React entirely on mousemove. Each move updates a
+  // ref-held transform via a single rAF tick; no re-renders, no transition lag.
+  const svgRef = useRef<SVGSVGElement | null>(null);
+  const eyeGroupRef = useRef<SVGGElement | null>(null);
+  const rafIdRef = useRef<number | null>(null);
+
+  useEffect(() => {
+    if (!trackCursor) return;
+    let nextDx = 0;
+    let nextDy = 0;
+    const handleMove = (e: MouseEvent) => {
+      const el = svgRef.current;
+      if (!el) return;
+      const rect = el.getBoundingClientRect();
+      const cx = rect.left + rect.width / 2;
+      const cy = rect.top + rect.height / 2;
+      const dx = e.clientX - cx;
+      const dy = e.clientY - cy;
+      const dist = Math.hypot(dx, dy) || 1;
+      const ramp = Math.min(1, dist / CURSOR_RAMP_DISTANCE);
+      nextDx = (dx / dist) * CURSOR_MAX_OFFSET_X * ramp;
+      nextDy = (dy / dist) * CURSOR_MAX_OFFSET_Y * ramp;
+      if (rafIdRef.current == null) {
+        rafIdRef.current = requestAnimationFrame(() => {
+          rafIdRef.current = null;
+          const g = eyeGroupRef.current;
+          if (!g) return;
+          g.setAttribute(
+            "transform",
+            `translate(${EYE_X + nextDx} ${EYE_Y + nextDy}) scale(${eyeScaleX} ${eyeScaleY})`,
+          );
+        });
+      }
+    };
+    window.addEventListener("mousemove", handleMove, { passive: true });
+    return () => {
+      window.removeEventListener("mousemove", handleMove);
+      if (rafIdRef.current != null) cancelAnimationFrame(rafIdRef.current);
+      rafIdRef.current = null;
+    };
+  }, [trackCursor, eyeScaleX, eyeScaleY]);
+
+  // Random one-eye blink — winks the RIGHT eye every 3–6 s.
+  const [isBlinking, setIsBlinking] = useState(false);
+  useEffect(() => {
+    let cancelled = false;
+    let timeoutId: ReturnType<typeof setTimeout>;
+    const schedule = () => {
+      const delay =
+        BLINK_INTERVAL_MIN_MS +
+        Math.random() * (BLINK_INTERVAL_MAX_MS - BLINK_INTERVAL_MIN_MS);
+      timeoutId = setTimeout(() => {
+        if (cancelled) return;
+        setIsBlinking(true);
+        timeoutId = setTimeout(() => {
+          if (cancelled) return;
+          setIsBlinking(false);
+          schedule();
+        }, BLINK_CLOSED_MS);
+      }, delay);
+    };
+    schedule();
+    return () => {
+      cancelled = true;
+      clearTimeout(timeoutId);
+    };
+  }, []);
+
   return (
     <svg
+      ref={svgRef}
       width={size}
       height={size}
       viewBox={`0 0 ${HEAD_VIEW_W} ${HEAD_VIEW_H}`}
@@ -134,15 +223,34 @@ export function SamAvatar({
         href="/head.svg"
         x="0" y="0" width={HEAD_VIEW_W} height={HEAD_VIEW_H}
       />
-      {/* Inline-rendered eye pixels, recolored with the user's chosen hue */}
-      <g transform={`translate(${EYE_X} ${EYE_Y}) scale(${eyeScaleX} ${eyeScaleY})`}>
-        {pattern.map((group, gi) => (
-          <g key={gi} fill={group.shade === "bright" ? brightColor : resolvedColor}>
-            {group.rects.map(([x, y, w, h], i) => (
-              <rect key={i} x={x} y={y} width={w} height={h} />
-            ))}
-          </g>
-        ))}
+      {/* Eye-pair group — translated to screen position, scaled to fit. */}
+      <g
+        ref={eyeGroupRef}
+        transform={`translate(${EYE_X} ${EYE_Y}) scale(${eyeScaleX} ${eyeScaleY})`}
+      >
+        {pattern.map((group, gi) => {
+          const color = group.shade === "bright" ? brightColor : resolvedColor;
+          const leftRects = group.rects.filter(([x]) => x < EYE_SPLIT_X);
+          const rightRects = group.rects.filter(([x]) => x >= EYE_SPLIT_X);
+          return (
+            <g key={gi} fill={color}>
+              {leftRects.map(([x, y, w, h], i) => (
+                <rect key={`l${i}`} x={x} y={y} width={w} height={h} />
+              ))}
+              <g
+                style={{
+                  transformOrigin: `${RIGHT_EYE_CENTER_X}px ${RIGHT_EYE_CENTER_Y}px`,
+                  transform: isBlinking ? "scaleY(0.05)" : "scaleY(1)",
+                  transition: "transform 90ms ease-out",
+                }}
+              >
+                {rightRects.map(([x, y, w, h], i) => (
+                  <rect key={`r${i}`} x={x} y={y} width={w} height={h} />
+                ))}
+              </g>
+            </g>
+          );
+        })}
       </g>
     </svg>
   );

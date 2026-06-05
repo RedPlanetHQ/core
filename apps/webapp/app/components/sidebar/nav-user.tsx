@@ -59,7 +59,7 @@ export function NavUser({
     <DropdownMenu>
       <DropdownMenuTrigger asChild>
         <Button variant="link" className="gap-2 px-0">
-          <SamAvatar size={28} />
+          <SamAvatar size={28} trackCursor />
         </Button>
       </DropdownMenuTrigger>
       <DropdownMenuContent

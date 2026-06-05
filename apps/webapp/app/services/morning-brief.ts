@@ -67,8 +67,8 @@ export const MORNING_BRIEF_TASK_DESCRIPTION = `<h2>Morning Brief — Daily 9am</
   <li><strong>Spam:</strong> Read full body. Output: one-liner on what they're selling.</li>
 </ul>
 
-<h3>2) Slack Delivery (send message)</h3>
-<p><strong>Goal:</strong> Deliver a concise, high-signal Morning Brief message over Slack.</p>
+<h3>2) Delivery (send message)</h3>
+<p><strong>Goal:</strong> Deliver a concise, high-signal Morning Brief message to the default channel.</p>
 <p><strong>Format:</strong> Use short sections (Email today; GitHub / Calendar when enabled), keep it scannable, and end with a short "Top actions" list.</p>
 
 <h3>3) Scratchpad Update (keep this structure EXACTLY)</h3>

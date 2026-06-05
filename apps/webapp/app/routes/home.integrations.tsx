@@ -45,9 +45,10 @@ import {
   parseCustomMcpHeadersInput,
   type CustomMcpTransportStrategy,
 } from "~/utils/mcp/custom-mcp-config";
+import { createScheduledTask } from "~/services/task.server";
+import { MORNING_BRIEF_TASK_DESCRIPTION } from "~/services/morning-brief";
 
 export const meta = () => [{ title: "Integrations" }];
-
 
 export async function loader({ request }: LoaderFunctionArgs) {
   const userId = await requireUserId(request);
@@ -62,9 +63,10 @@ export async function loader({ request }: LoaderFunctionArgs) {
     allowNoAuth: env.CUSTOM_MCP_ALLOW_NO_AUTH,
     allowCustomHeaders: env.CUSTOM_MCP_ALLOW_CUSTOM_HEADERS,
   };
-  const mcpIntegrations = ((metadata?.mcpIntegrations || []) as McpIntegration[]).filter(
-    (integration) =>
-      isCustomMcpIntegrationEnabled(integration, customMcpFeatureFlags),
+  const mcpIntegrations = (
+    (metadata?.mcpIntegrations || []) as McpIntegration[]
+  ).filter((integration) =>
+    isCustomMcpIntegrationEnabled(integration, customMcpFeatureFlags),
   );
 
   if (!workspace) {
@@ -141,7 +143,9 @@ export async function action({ request }: ActionFunctionArgs) {
           );
         }
 
-        const { headers, error } = parseCustomMcpHeadersInput(headerConfig || "");
+        const { headers, error } = parseCustomMcpHeadersInput(
+          headerConfig || "",
+        );
         if (error) {
           return json({ error }, { status: 400 });
         }
@@ -312,12 +316,14 @@ function NewIntegrationForm({
       <CardHeader className="p-0 pb-4">
         <CardTitle>New Custom Integration</CardTitle>
         <CardDescription>
-          Connect an external MCP server using OAuth, an access token, or an
-          API key.
+          Connect an external MCP server using OAuth, an access token, or an API
+          key.
           {featureFlags.allowCustomHeaders
             ? " Additional static headers are available when needed."
             : ""}
-          {featureFlags.allowNoAuth ? " No-auth servers can also be added." : ""}
+          {featureFlags.allowNoAuth
+            ? " No-auth servers can also be added."
+            : ""}
         </CardDescription>
       </CardHeader>
       <CardContent className="p-0">
@@ -474,7 +480,8 @@ function NewIntegrationForm({
               />
               <p className="text-muted-foreground text-xs">
                 One header per line. Use <code>Header=env:MCP_KEY</code> for
-                env-backed secrets. Only <code>MCP_*</code> env vars are allowed.
+                env-backed secrets. Only <code>MCP_*</code> env vars are
+                allowed.
               </p>
             </div>
           )}
@@ -568,7 +575,7 @@ export default function Integrations() {
   return (
     <div className="flex h-full flex-col">
       <PageHeader title="Integrations" />
-      <div className="home flex h-page-sm justify-center overflow-y-auto p-4 px-5 md:h-page">
+      <div className="home h-page-sm md:h-page flex justify-center overflow-y-auto p-4 px-5">
         <div className="flex w-full max-w-3xl flex-col items-center gap-6">
           <div className="w-full space-y-3">
             <div className="flex items-start justify-between gap-4">

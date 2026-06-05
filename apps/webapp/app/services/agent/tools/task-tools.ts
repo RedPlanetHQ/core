@@ -614,17 +614,14 @@ REPARENTING: Pass newParentId to move a task under a different parent (or null t
           ) {
             await updateScheduledTask(resolvedTaskId, workspaceId, {
               title,
-              // Never update description for recurring tasks — it pollutes the
-              // next run's context. Results go via send_message.
-              description: isRecurring ? undefined : description,
+              description,
               schedule,
               channel: updateChannel,
               isActive,
               maxOccurrences: maxOccurrences ?? undefined,
               endDate: endDate ? new Date(endDate) : undefined,
             });
-          } else if (!isRecurring && (title || description !== undefined)) {
-            // Description / title update — silently skipped for recurring tasks.
+          } else if (title || description !== undefined) {
             if (description !== undefined && currentTask?.pageId) {
               if (replaceDescription) {
                 const existingHtml =
@@ -643,9 +640,6 @@ REPARENTING: Pass newParentId to move a task under a different parent (or null t
             if (title) {
               await updateTask(resolvedTaskId, { title }, false);
             }
-          } else if (isRecurring && title) {
-            // Recurring tasks: allow title updates only (no description)
-            await updateTask(resolvedTaskId, { title }, false);
           }
 
           if (status) {
@@ -683,12 +677,7 @@ REPARENTING: Pass newParentId to move a task under a different parent (or null t
           const parts = [];
           if (status) parts.push(`status → ${status}`);
           if (title) parts.push(`title updated`);
-          if (description !== undefined && !isRecurring)
-            parts.push(`description updated`);
-          if (description !== undefined && isRecurring)
-            parts.push(
-              `description skipped (recurring task — use send_message for results)`,
-            );
+          if (description !== undefined) parts.push(`description updated`);
           if (schedule) parts.push(`schedule updated`);
           if (isActive !== undefined)
             parts.push(isActive ? "resumed" : "paused");
