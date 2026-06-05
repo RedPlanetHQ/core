@@ -26,7 +26,7 @@ import {
   SelectValue,
 } from "../ui/select";
 import type { LLMModel } from "./conversation-textarea.client";
-import Avatar from "boring-avatars";
+import { SamAvatar } from "../ui/sam-avatar";
 import {
   createSkillSlashCommand,
   SkillSlashPluginKey,
@@ -220,12 +220,7 @@ export const ConversationNew = ({
     >
       {/* Centered hero */}
       <div className="flex flex-1 flex-col items-center justify-center gap-3">
-        <Avatar
-          name={name || "butler"}
-          variant="pixel"
-          colors={["var(--background-3)", accentColor]}
-          size={64}
-        />
+        <SamAvatar size={64} />
         <h1 className="text-3xl font-medium tracking-tight">
           What can I help with?
         </h1>

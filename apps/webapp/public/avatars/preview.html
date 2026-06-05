@@ -1,0 +1,563 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>SAM-1 Avatar Picker</title>
+  <style>
+    :root {
+      /* Posthog-style warm cream / hand-drawn brown palette */
+      --bg:           #E8DDC6;
+      --bg-darker:    #DDD0B3;
+      --paper:        #F5EBD5;
+      --paper-2:      #EDE0C4;
+      --ink:          #2A1F18;
+      --ink-soft:     #6E5E48;
+      --line:         #3a2b20;
+      --line-soft:    #b8a78a;
+      --sage:         #7A8B4F;
+      --sage-deep:    #5A6A36;
+      --rust:         #B0612D;
+      --warm-screen:  #2E2418;
+      --warm-screen-2: #3D3120;
+      --eye-glow:     #C7D182;
+      --select-ring:  #B0612D;
+    }
+
+    * { box-sizing: border-box; }
+    html, body {
+      margin: 0;
+      padding: 0;
+      background: var(--bg);
+      color: var(--ink);
+      font-family: ui-sans-serif, system-ui, -apple-system, "Inter", sans-serif;
+      min-height: 100vh;
+      /* paper grain */
+      background-image:
+        radial-gradient(rgba(0,0,0,0.04) 1px, transparent 1px),
+        radial-gradient(rgba(0,0,0,0.025) 1px, transparent 1px);
+      background-size: 4px 4px, 7px 7px;
+      background-position: 0 0, 2px 3px;
+    }
+
+    .container {
+      max-width: 1080px;
+      margin: 0 auto;
+      padding: 56px 32px;
+      display: grid;
+      grid-template-columns: minmax(280px, 360px) 1fr;
+      gap: 56px;
+      align-items: start;
+    }
+
+    .header {
+      grid-column: 1 / -1;
+      margin-bottom: 8px;
+    }
+    .header h1 {
+      margin: 0 0 6px;
+      font-size: 28px;
+      font-weight: 700;
+      letter-spacing: -0.02em;
+      color: var(--ink);
+    }
+    .header p {
+      margin: 0;
+      color: var(--ink-soft);
+      font-size: 14px;
+      line-height: 1.5;
+    }
+
+    /* ===== Big preview card ===== */
+    .preview-stage { position: sticky; top: 56px; }
+    .preview-card {
+      background: var(--paper);
+      border: 2px solid var(--line);
+      border-radius: 18px;
+      padding: 40px 28px 32px;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      gap: 22px;
+      box-shadow: 4px 4px 0 var(--line);
+    }
+
+    /* small platform the head sits on (mimics the isometric base feel) */
+    .head-stage {
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+    }
+    .head-platform {
+      width: 150px;
+      height: 16px;
+      background: var(--bg-darker);
+      border: 2px solid var(--line);
+      border-radius: 50%;
+      margin-top: -6px;
+      box-shadow: inset 0 -3px 0 rgba(0,0,0,0.06);
+    }
+
+    /* ===========================================================
+       BASE HEAD STRUCTURE — every style overrides the parts below
+       =========================================================== */
+    .head {
+      position: relative;
+      width: 220px;
+      height: 200px;
+    }
+    .head-shell { position: absolute; }
+    .head-screen { position: absolute; overflow: hidden; }
+    .head-ear {
+      position: absolute;
+      top: 50%;
+      transform: translateY(-50%);
+    }
+    .head-eyes {
+      position: absolute;
+      top: 50%;
+      left: 50%;
+      transform: translate(-50%, -50%);
+      width: 88%;
+      height: 72%;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+    }
+    .head-eyes img {
+      width: 100%;
+      height: auto;
+      image-rendering: pixelated;
+    }
+    .head-neck { position: absolute; left: 50%; bottom: -2px; transform: translateX(-50%); }
+
+    /* ===========================================================
+       STYLE 1 — Classic CRT  (Posthog-style hand-drawn vintage TV)
+       Landscape rounded rectangle + single right knob
+       =========================================================== */
+    .head.style-classic .head-shell {
+      inset: 34px 22px 44px 22px;
+      background: var(--paper-2);
+      border: 2.5px solid var(--line);
+      border-radius: 30px;
+      z-index: 1;
+      box-shadow:
+        inset 0 3px 0 rgba(255,255,255,0.4),
+        inset 0 -5px 0 rgba(0,0,0,0.05);
+    }
+    .head.style-classic .head-ear {
+      width: 26px;
+      height: 26px;
+      background: var(--paper-2);
+      border: 2.5px solid var(--line);
+      border-radius: 50%;
+      box-shadow: inset 0 2px 0 rgba(255,255,255,0.35);
+      z-index: 0;
+    }
+    .head.style-classic .head-ear.left  { display: none; }
+    .head.style-classic .head-ear.right { right: 6px; }
+    .head.style-classic .head-screen {
+      inset: 46px 38px 60px 38px;
+      background: linear-gradient(160deg, var(--warm-screen-2) 0%, var(--warm-screen) 100%);
+      border: 2px solid var(--line);
+      border-radius: 18px;
+      z-index: 2;
+    }
+    .head.style-classic .head-eyes { width: 86%; height: 72%; }
+    .head.style-classic .head-neck {
+      width: 56px; height: 12px;
+      background: var(--bg-darker);
+      border: 2px solid var(--line);
+      border-radius: 4px 4px 2px 2px;
+      z-index: 1;
+    }
+
+    /* ===========================================================
+       STYLE 2 — Stout TV  (chunky square TV with both side knobs)
+       =========================================================== */
+    .head.style-stout .head-shell {
+      inset: 18px 18px 32px 18px;
+      background: var(--paper-2);
+      border: 2.5px solid var(--line);
+      border-radius: 22px;
+      z-index: 1;
+      box-shadow:
+        inset 0 3px 0 rgba(255,255,255,0.4),
+        inset 0 -5px 0 rgba(0,0,0,0.05);
+    }
+    .head.style-stout .head-ear {
+      width: 20px;
+      height: 20px;
+      background: var(--paper-2);
+      border: 2.5px solid var(--line);
+      border-radius: 50%;
+      z-index: 0;
+    }
+    .head.style-stout .head-ear.left  { left: 4px; }
+    .head.style-stout .head-ear.right { right: 4px; }
+    .head.style-stout .head-screen {
+      inset: 36px 38px 50px 38px;
+      background: linear-gradient(160deg, var(--warm-screen-2) 0%, var(--warm-screen) 100%);
+      border: 2px solid var(--line);
+      border-radius: 14px;
+      z-index: 2;
+    }
+    .head.style-stout .head-eyes { width: 88%; height: 72%; }
+    .head.style-stout .head-neck {
+      width: 52px; height: 14px;
+      background: var(--bg-darker);
+      border: 2px solid var(--line);
+      border-radius: 4px 4px 2px 2px;
+      z-index: 1;
+    }
+
+    /* ===========================================================
+       STYLE 3 — Pocket Console  (handheld game-console feel)
+       =========================================================== */
+    .head.style-console .head-shell {
+      inset: 16px 28px 32px 28px;
+      background: var(--paper-2);
+      border: 2.5px solid var(--line);
+      border-radius: 18px 18px 30px 30px;
+      z-index: 1;
+      box-shadow:
+        inset 0 3px 0 rgba(255,255,255,0.4),
+        inset 0 -5px 0 rgba(0,0,0,0.05);
+    }
+    .head.style-console .head-ear {
+      width: 14px;
+      height: 14px;
+      background: var(--rust);
+      border: 2px solid var(--line);
+      border-radius: 50%;
+      z-index: 0;
+    }
+    .head.style-console .head-ear.left  { left: 12px; top: 22%; transform: none; }
+    .head.style-console .head-ear.right { right: 12px; top: 22%; transform: none; }
+    .head.style-console .head-screen {
+      inset: 36px 46px 56px 46px;
+      background: linear-gradient(160deg, var(--warm-screen-2) 0%, var(--warm-screen) 100%);
+      border: 2px solid var(--line);
+      border-radius: 10px;
+      z-index: 2;
+    }
+    .head.style-console .head-eyes { width: 86%; height: 70%; }
+    .head.style-console .head-neck {
+      width: 48px; height: 12px;
+      background: var(--bg-darker);
+      border: 2px solid var(--line);
+      border-radius: 4px 4px 2px 2px;
+      z-index: 1;
+    }
+
+    /* ===========================================================
+       STYLE 4 — Smart Speaker (rounded vertical pod)
+       =========================================================== */
+    .head.style-speaker .head-shell {
+      inset: 10px 38px 22px 38px;
+      background: var(--paper-2);
+      border: 2.5px solid var(--line);
+      border-radius: 38px;
+      z-index: 1;
+      box-shadow: inset 0 3px 0 rgba(255,255,255,0.4);
+    }
+    .head.style-speaker .head-ear { display: none; }
+    .head.style-speaker .head-screen {
+      inset: 56px 56px 56px 56px;
+      background: linear-gradient(160deg, var(--warm-screen-2) 0%, var(--warm-screen) 100%);
+      border: 2px solid var(--line);
+      border-radius: 50%;
+      z-index: 2;
+    }
+    .head.style-speaker .head-eyes { width: 78%; height: 60%; }
+    .head.style-speaker .head-neck {
+      width: 56px; height: 12px;
+      background: var(--bg-darker);
+      border: 2px solid var(--line);
+      border-radius: 4px 4px 2px 2px;
+      z-index: 1;
+    }
+
+    /* === scanline/grain overlay inside every screen === */
+    .head-screen::before {
+      content: "";
+      position: absolute;
+      inset: 0;
+      background: repeating-linear-gradient(
+        to bottom,
+        transparent 0 2px,
+        rgba(199, 209, 130, 0.04) 2px 3px
+      );
+      pointer-events: none;
+    }
+
+    /* ===== Preview meta ===== */
+    .preview-meta { text-align: center; }
+    .preview-meta .name {
+      font-size: 17px;
+      font-weight: 600;
+      letter-spacing: -0.005em;
+      margin-bottom: 4px;
+      color: var(--ink);
+    }
+    .preview-meta .desc {
+      font-size: 13px;
+      color: var(--ink-soft);
+      line-height: 1.45;
+    }
+
+    /* ===== Pickers ===== */
+    .grid-section { margin-bottom: 28px; }
+    .grid-section h2 {
+      font-size: 11px;
+      font-weight: 700;
+      text-transform: uppercase;
+      letter-spacing: 0.1em;
+      color: var(--ink-soft);
+      margin: 0 0 12px;
+    }
+    .grid {
+      display: grid;
+      grid-template-columns: repeat(4, 1fr);
+      gap: 12px;
+    }
+    .grid.heads { grid-template-columns: repeat(4, 1fr); }
+
+    .grid-card {
+      background: var(--paper);
+      border: 2px solid var(--line);
+      border-radius: 14px;
+      padding: 14px 8px 10px;
+      cursor: pointer;
+      transition: transform 0.12s, box-shadow 0.12s, background 0.12s;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      gap: 6px;
+      box-shadow: 2px 2px 0 var(--line);
+    }
+    .grid-card:hover {
+      transform: translate(-1px, -1px);
+      box-shadow: 3px 3px 0 var(--line);
+      background: var(--paper-2);
+    }
+    .grid-card.selected {
+      background: var(--paper-2);
+      box-shadow:
+        2px 2px 0 var(--line),
+        0 0 0 3px var(--select-ring);
+    }
+    .grid-card .label {
+      font-size: 11px;
+      font-weight: 600;
+      color: var(--ink);
+      text-align: center;
+      line-height: 1.2;
+    }
+
+    /* miniature head — scaled-down version of the same DOM */
+    .mini-head {
+      position: relative;
+      width: 76px;
+      height: 70px;
+    }
+    .mini-wrap {
+      transform: scale(0.34);
+      transform-origin: center center;
+      width: 220px;
+      height: 200px;
+      position: absolute;
+      top: 50%; left: 50%;
+      margin-top: -100px;
+      margin-left: -110px;
+      pointer-events: none;
+    }
+
+    @media (max-width: 800px) {
+      .container { grid-template-columns: 1fr; gap: 32px; padding: 32px 20px; }
+      .preview-stage { position: static; }
+      .head { width: 200px; height: 180px; }
+      .grid, .grid.heads { grid-template-columns: repeat(3, 1fr); }
+    }
+  </style>
+</head>
+<body>
+  <div class="container">
+    <div class="header">
+      <h1>SAM-1 · Avatar Picker</h1>
+      <p>Pick a head shape and a pair of eyes. Hand-drawn warm aesthetic — the rendered version will live in the product as the user's identity.</p>
+    </div>
+
+    <!-- Big preview -->
+    <div class="preview-stage">
+      <div class="preview-card">
+        <div class="head-stage">
+          <div class="head style-classic" id="big-head">
+            <div class="head-shell"></div>
+            <div class="head-ear left"></div>
+            <div class="head-ear right"></div>
+            <div class="head-screen">
+              <div class="head-eyes">
+                <img id="big-eyes" src="eyes/bot-pixel-classic.svg" alt="" />
+              </div>
+            </div>
+            <div class="head-neck"></div>
+          </div>
+          <div class="head-platform"></div>
+        </div>
+        <div class="preview-meta">
+          <div class="name" id="preview-name">style-classic · bot-pixel-classic</div>
+          <div class="desc" id="preview-desc">Classic CRT — landscape rectangle with a single right knob. Dense LED-matrix eye cluster.</div>
+        </div>
+      </div>
+    </div>
+
+    <!-- Pickers -->
+    <div>
+      <div class="grid-section">
+        <h2>Head Shape</h2>
+        <div class="grid heads" id="grid-heads"></div>
+      </div>
+      <div class="grid-section">
+        <h2>Textured Pixel Eyes</h2>
+        <div class="grid" id="grid-pixel"></div>
+      </div>
+      <div class="grid-section">
+        <h2>Simple Solid Eyes</h2>
+        <div class="grid" id="grid-solid"></div>
+      </div>
+    </div>
+  </div>
+
+  <script>
+    const HEAD_STYLES = [
+      { id: "style-classic", label: "Classic CRT",    desc: "Landscape rectangle with single right knob — vintage handheld TV" },
+      { id: "style-stout",   label: "Stout TV",       desc: "Chunky squarer TV with twin side knobs" },
+      { id: "style-console", label: "Pocket Console", desc: "Handheld game-console feel with twin status dots" },
+      { id: "style-speaker", label: "Smart Speaker",  desc: "Rounded vertical pod with circular screen" },
+    ];
+
+    const EYES = [
+      { id: "bot-pixel-classic", group: "pixel", label: "Classic",  desc: "Dense LED-matrix happy-eye cluster" },
+      { id: "bot-pixel-led",     group: "pixel", label: "LED",      desc: "Circular LED dots with center highlight" },
+      { id: "bot-pixel-diamond", group: "pixel", label: "Diamond",  desc: "Refined diamond pixel shape" },
+      { id: "bot-pixel-arc",     group: "pixel", label: "Arc",      desc: "Low warm arc — gentle, content" },
+      { id: "bot-pixel-soft",    group: "pixel", label: "Soft",     desc: "Subtle dot pairs — minimal" },
+      { id: "bot-pixel-scan",    group: "pixel", label: "Scan",     desc: "Horizontal scanning bar — active" },
+      { id: "bot-attentive",     group: "solid", label: "Attentive", desc: "Steady neutral gaze" },
+      { id: "bot-thinking",      group: "solid", label: "Thinking",  desc: "Cluster + offset pixel" },
+      { id: "bot-focused",       group: "solid", label: "Focused",   desc: "Narrow slits" },
+      { id: "bot-zen",           group: "solid", label: "Zen",       desc: "Closed crescents" },
+      { id: "bot-spark",         group: "solid", label: "Spark",     desc: "Cluster + twinkle" },
+      { id: "bot-night",         group: "solid", label: "Night",     desc: "Steady gaze, indigo" },
+    ];
+
+    let currentHead = HEAD_STYLES[0];
+    let currentEye  = EYES[0];
+
+    const bigHead = document.getElementById("big-head");
+    const bigEyes = document.getElementById("big-eyes");
+    const previewName = document.getElementById("preview-name");
+    const previewDesc = document.getElementById("preview-desc");
+
+    function updatePreview() {
+      bigHead.className = "head " + currentHead.id;
+      bigEyes.src = `eyes/${currentEye.id}.svg`;
+      previewName.textContent = `${currentHead.id} · ${currentEye.id}`;
+      previewDesc.textContent = `${currentHead.label} — ${currentHead.desc.toLowerCase()}. ${currentEye.desc}.`;
+
+      document.querySelectorAll(".grid.heads .grid-card").forEach(c =>
+        c.classList.toggle("selected", c.dataset.id === currentHead.id)
+      );
+      document.querySelectorAll(".grid:not(.heads) .grid-card").forEach(c =>
+        c.classList.toggle("selected", c.dataset.id === currentEye.id)
+      );
+
+      document.querySelectorAll(".eye-mini").forEach(mini =>
+        mini.querySelector(".head").className = "head " + currentHead.id
+      );
+    }
+
+    function buildMiniHead(eyeId, extraClass) {
+      return `
+        <div class="mini-head ${extraClass||""}">
+          <div class="mini-wrap">
+            <div class="head ${currentHead.id}">
+              <div class="head-shell"></div>
+              <div class="head-ear left"></div>
+              <div class="head-ear right"></div>
+              <div class="head-screen">
+                <div class="head-eyes">
+                  <img src="eyes/${eyeId}.svg" alt="" />
+                </div>
+              </div>
+              <div class="head-neck"></div>
+            </div>
+          </div>
+        </div>
+      `;
+    }
+
+    function buildHeadThumb(style) {
+      return `
+        <div class="mini-head">
+          <div class="mini-wrap">
+            <div class="head ${style.id}">
+              <div class="head-shell"></div>
+              <div class="head-ear left"></div>
+              <div class="head-ear right"></div>
+              <div class="head-screen">
+                <div class="head-eyes">
+                  <img src="eyes/${currentEye.id}.svg" alt="" />
+                </div>
+              </div>
+              <div class="head-neck"></div>
+            </div>
+          </div>
+        </div>
+      `;
+    }
+
+    function renderHeadGrid() {
+      const c = document.getElementById("grid-heads");
+      c.innerHTML = "";
+      HEAD_STYLES.forEach(style => {
+        const card = document.createElement("div");
+        card.className = "grid-card";
+        card.dataset.id = style.id;
+        card.title = style.desc;
+        card.innerHTML = buildHeadThumb(style) + `<div class="label">${style.label}</div>`;
+        card.addEventListener("click", () => {
+          currentHead = style;
+          renderHeadGrid();
+          updatePreview();
+        });
+        c.appendChild(card);
+      });
+    }
+
+    function renderEyeGrid(containerId, group) {
+      const c = document.getElementById(containerId);
+      c.innerHTML = "";
+      EYES.filter(e => e.group === group).forEach(eye => {
+        const card = document.createElement("div");
+        card.className = "grid-card";
+        card.dataset.id = eye.id;
+        card.title = eye.desc;
+        card.innerHTML = buildMiniHead(eye.id, "eye-mini") + `<div class="label">${eye.label}</div>`;
+        card.addEventListener("click", () => {
+          currentEye = eye;
+          renderHeadGrid();
+          updatePreview();
+        });
+        c.appendChild(card);
+      });
+    }
+
+    renderHeadGrid();
+    renderEyeGrid("grid-pixel", "pixel");
+    renderEyeGrid("grid-solid", "solid");
+    updatePreview();
+  </script>
+</body>
+</html>

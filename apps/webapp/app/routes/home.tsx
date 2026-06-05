@@ -36,6 +36,8 @@ export async function action({ request }: ActionFunctionArgs) {
   const formData = await request.formData();
   const name = formData.get("name") as string;
   const slug = formData.get("slug") as string;
+  const agentEye = (formData.get("agentEye") as string) || undefined;
+  const agentEyeColor = (formData.get("agentEyeColor") as string) || undefined;
 
   if (!name || !slug) {
     return json({ error: "name and slug are required" }, { status: 400 });
@@ -46,13 +48,19 @@ export async function action({ request }: ActionFunctionArgs) {
     select: { metadata: true },
   });
   const existingMeta = (existing?.metadata ?? {}) as Record<string, unknown>;
+  const nextMeta: Record<string, unknown> = {
+    ...existingMeta,
+    onboardingV2Complete: true,
+  };
+  if (agentEye) nextMeta.agentEye = agentEye;
+  if (agentEyeColor) nextMeta.agentEyeColor = agentEyeColor;
 
   await prisma.workspace.update({
     where: { id: workspaceId },
     data: {
       name,
       slug,
-      metadata: { ...existingMeta, onboardingV2Complete: true },
+      metadata: nextMeta,
     },
   });
 

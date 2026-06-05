@@ -2,14 +2,20 @@ import { useState, useEffect, useRef, useCallback } from "react";
 import { Loader2, Check, X } from "lucide-react";
 import { Button } from "~/components/ui";
 import { Input } from "~/components/ui/input";
-import Avatar from "boring-avatars";
+import {
+  SamAvatar,
+  SAM_EYE_OPTIONS,
+  DEFAULT_SAM_EYE,
+} from "~/components/ui/sam-avatar";
+import { cn } from "~/lib/utils";
 
 interface OnboardingAgentNameProps {
   defaultName: string;
   defaultSlug: string;
   workspaceId: string;
-  onComplete: (name: string, slug: string) => void;
+  onComplete: (name: string, slug: string, agentEye?: string) => void;
   isSubmitting?: boolean;
+  defaultAgentEye?: string;
   // Optional "regenerate name" flow used by the modal entry point.
   onGenerateName?: (currentName: string, previousNames: string[]) => void;
   generatedName?: string;
@@ -32,11 +38,13 @@ export function OnboardingAgentName({
   workspaceId,
   onComplete,
   isSubmitting = false,
+  defaultAgentEye = DEFAULT_SAM_EYE,
 }: OnboardingAgentNameProps) {
   const [name, setName] = useState(defaultName);
   const [slug, setSlug] = useState(defaultSlug);
   const [slugManuallyEdited, setSlugManuallyEdited] = useState(false);
   const [availability, setAvailability] = useState<AvailabilityState>("idle");
+  const [agentEye, setAgentEye] = useState(defaultAgentEye);
   const debounceRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   const checkAvailability = useCallback(
@@ -87,19 +95,18 @@ export function OnboardingAgentName({
     availability !== "checking";
 
   return (
-    <div className="flex w-full max-w-lg flex-col gap-4 p-3">
+    <div className="flex w-full max-w-lg flex-col gap-4 p-3 sm:p-4">
       <div className="flex justify-center">
-        <Avatar
-          name={name || "butler"}
-          variant="pixel"
-          colors={["var(--background-3)", "#c87844"]}
-          size={72}
+        <SamAvatar
+          size={80}
+          eye={agentEye}
+          className="sm:!h-[100px] sm:!w-[100px]"
         />
       </div>
       <div className="space-y-1">
-        <h2 className="text-xl font-semibold">name your butler</h2>
-        <p className="text-muted-foreground text-base">
-          give your butler a name. this is how you'll know them.
+        <h2 className="text-lg font-semibold sm:text-xl">name your butler</h2>
+        <p className="text-muted-foreground text-sm sm:text-base">
+          give your butler a name and a mood.
         </p>
       </div>
 
@@ -144,9 +151,36 @@ export function OnboardingAgentName({
           ) : slug ? (
             <p className="text-muted-foreground text-xs">
               your butler's email:{" "}
-              <span className="text-foreground font-medium">{slug}@getcore.me</span>
+              <span className="text-foreground font-medium">
+                {slug}@getcore.me
+              </span>
             </p>
           ) : null}
+        </div>
+
+        {/* Mood picker */}
+        <div className="flex flex-col gap-1.5">
+          <div className="grid grid-cols-4 gap-1.5 sm:grid-cols-6">
+            {SAM_EYE_OPTIONS.map((opt) => {
+              const selected = agentEye === opt.id;
+              return (
+                <button
+                  key={opt.id}
+                  type="button"
+                  title={opt.desc}
+                  onClick={() => setAgentEye(opt.id)}
+                  className={cn(
+                    "bg-background flex items-center justify-center rounded-md border-2 p-2 transition-all hover:scale-[1.03] focus:outline-none",
+                    selected
+                      ? "border-primary"
+                      : "hover:border-border border-transparent",
+                  )}
+                >
+                  <SamAvatar size={36} eye={opt.id} />
+                </button>
+              );
+            })}
+          </div>
         </div>
       </div>
 
@@ -154,7 +188,7 @@ export function OnboardingAgentName({
         <Button
           variant="secondary"
           size="lg"
-          onClick={() => canContinue && onComplete(name.trim(), slug)}
+          onClick={() => canContinue && onComplete(name.trim(), slug, agentEye)}
           disabled={!canContinue || isSubmitting}
           isLoading={isSubmitting}
         >

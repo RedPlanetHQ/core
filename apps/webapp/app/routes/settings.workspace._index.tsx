@@ -1,4 +1,4 @@
-import { useState, useCallback } from "react";
+import { useState } from "react";
 import {
   json,
   redirect,
@@ -24,10 +24,12 @@ import {
 } from "~/components/ui/alert-dialog";
 import { Card, CardContent } from "~/components/ui/card";
 import { AvatarText } from "~/components/ui/avatar";
-import { Trash2, RefreshCw } from "lucide-react";
-import Avatar from "boring-avatars";
-import { generateOklchColor } from "~/components/ui/color-utils";
-import { toHex } from "~/lib/color-utils";
+import { Trash2 } from "lucide-react";
+import {
+  SamAvatar,
+  SAM_EYE_OPTIONS,
+  SAM_EYE_COLOR_OPTIONS,
+} from "~/components/ui/sam-avatar";
 import { cn } from "~/lib/utils";
 
 const DEFAULT_ACCENT = "#c87844";
@@ -55,8 +57,10 @@ export async function loader({ request }: LoaderFunctionArgs) {
 
   const meta = (workspace.metadata ?? {}) as Record<string, unknown>;
   const accentColor = (meta.accentColor as string) || DEFAULT_ACCENT;
+  const agentEye = (meta.agentEye as string) || "bot-pixel-classic";
+  const agentEyeColor = (meta.agentEyeColor as string) || "#74E07A";
 
-  return json({ workspace, memberCount, accentColor });
+  return json({ workspace, memberCount, accentColor, agentEye, agentEyeColor });
 }
 
 export async function action({ request }: ActionFunctionArgs) {
@@ -71,6 +75,8 @@ export async function action({ request }: ActionFunctionArgs) {
   if (intent === "update") {
     const name = (formData.get("name") as string)?.trim();
     const slug = (formData.get("slug") as string)?.trim();
+    const agentEye = (formData.get("agentEye") as string)?.trim();
+    const agentEyeColor = (formData.get("agentEyeColor") as string)?.trim();
 
     if (!name || !slug) {
       return json({ error: "Name and slug are required" }, { status: 400 });
@@ -85,9 +91,18 @@ export async function action({ request }: ActionFunctionArgs) {
       return json({ error: "Slug is already taken" }, { status: 400 });
     }
 
+    const existing = await prisma.workspace.findFirst({
+      where: { id: workspaceId },
+      select: { metadata: true },
+    });
+    const existingMeta = (existing?.metadata ?? {}) as Record<string, unknown>;
+    const nextMeta: Record<string, unknown> = { ...existingMeta };
+    if (agentEye) nextMeta.agentEye = agentEye;
+    if (agentEyeColor) nextMeta.agentEyeColor = agentEyeColor;
+
     await prisma.workspace.update({
       where: { id: workspaceId },
-      data: { name, slug },
+      data: { name, slug, metadata: nextMeta },
     });
 
     return json({ success: true });
@@ -106,6 +121,24 @@ export async function action({ request }: ActionFunctionArgs) {
     await prisma.workspace.update({
       where: { id: workspaceId },
       data: { metadata: { ...existingMeta, accentColor } },
+    });
+    return json({ success: true });
+  }
+
+  if (intent === "updateAgentEye") {
+    const agentEye = (formData.get("agentEye") as string)?.trim();
+    const agentEyeColor = (formData.get("agentEyeColor") as string)?.trim();
+    if (!agentEye || !agentEyeColor) {
+      return json({ error: "Missing eye or color" }, { status: 400 });
+    }
+    const existing = await prisma.workspace.findFirst({
+      where: { id: workspaceId },
+      select: { metadata: true },
+    });
+    const existingMeta = (existing?.metadata ?? {}) as Record<string, unknown>;
+    await prisma.workspace.update({
+      where: { id: workspaceId },
+      data: { metadata: { ...existingMeta, agentEye, agentEyeColor } },
     });
     return json({ success: true });
   }
@@ -178,29 +211,26 @@ export default function WorkspaceSettings() {
   const {
     workspace,
     memberCount,
-    accentColor: savedAccentColor,
+    agentEye: savedAgentEye,
+    agentEyeColor: savedAgentEyeColor,
   } = useLoaderData<typeof loader>();
   const fetcher = useFetcher<{ error?: string; success?: boolean }>();
   const updateFetcher = useFetcher<{ error?: string; success?: boolean }>();
-  const colorFetcher = useFetcher<{ error?: string; success?: boolean }>();
   const [confirmName, setConfirmName] = useState("");
   const [isDeleteDialogOpen, setIsDeleteDialogOpen] = useState(false);
   const [name, setName] = useState(workspace.name);
   const [slug, setSlug] = useState(workspace.slug);
-  const [accentColor, setAccentColor] = useState(savedAccentColor);
+  const [agentEye, setAgentEye] = useState(savedAgentEye);
+  const [agentEyeColor, setAgentEyeColor] = useState(savedAgentEyeColor);
 
   const isDeleting = fetcher.state === "submitting";
   const canDelete = confirmName === workspace.name;
   const isSaving = updateFetcher.state === "submitting";
-  const hasChanges = name !== workspace.name || slug !== workspace.slug;
-  const isSavingColor = colorFetcher.state === "submitting";
-  const colorChanged = accentColor !== savedAccentColor;
-
-  const generateSwatches = useCallback(() => {
-    return Array.from({ length: 10 }, () => toHex(generateOklchColor()));
-  }, []);
-
-  const [swatches, setSwatches] = useState<string[]>(() => generateSwatches());
+  const hasChanges =
+    name !== workspace.name ||
+    slug !== workspace.slug ||
+    agentEye !== savedAgentEye ||
+    agentEyeColor !== savedAgentEyeColor;
 
   const handleDelete = () => {
     fetcher.submit({ intent: "delete", confirmName }, { method: "POST" });
@@ -216,7 +246,18 @@ export default function WorkspaceSettings() {
           <div>
             <h2 className="text-md mb-4">Butler settings</h2>
             <Card>
-              <CardContent className="flex flex-col gap-4 p-4">
+              <CardContent className="flex flex-col gap-5 p-4">
+                {/* Live preview */}
+                <div className="flex items-center gap-4">
+                  <SamAvatar size={72} eye={agentEye} eyeColor={agentEyeColor} />
+                  <div className="flex flex-col">
+                    <span className="text-sm font-medium">{name || "Butler"}</span>
+                    <span className="text-muted-foreground text-xs">
+                      {SAM_EYE_OPTIONS.find((o) => o.id === agentEye)?.label ?? agentEye}
+                    </span>
+                  </div>
+                </div>
+
                 <div className="flex flex-col gap-1.5">
                   <label className="text-sm font-medium">Name</label>
                   <Input
@@ -225,6 +266,7 @@ export default function WorkspaceSettings() {
                     placeholder="Butler name"
                   />
                 </div>
+
                 <div className="flex flex-col gap-1.5">
                   <label className="text-sm font-medium">Slug</label>
                   <Input
@@ -236,6 +278,59 @@ export default function WorkspaceSettings() {
                     Used as the butler's email prefix. Must be unique.
                   </p>
                 </div>
+
+                {/* Mood (eye pattern) */}
+                <div className="flex flex-col gap-2">
+                  <label className="text-sm font-medium">Mood</label>
+                  <div className="grid grid-cols-6 gap-2">
+                    {SAM_EYE_OPTIONS.map((opt) => {
+                      const selected = agentEye === opt.id;
+                      return (
+                        <button
+                          key={opt.id}
+                          type="button"
+                          title={opt.desc}
+                          onClick={() => setAgentEye(opt.id)}
+                          className={cn(
+                            "bg-background flex flex-col items-center gap-1 rounded-md border-2 p-2 transition-all hover:scale-[1.03] focus:outline-none",
+                            selected
+                              ? "border-primary"
+                              : "border-transparent hover:border-border",
+                          )}
+                        >
+                          <SamAvatar size={40} eye={opt.id} eyeColor={agentEyeColor} />
+                          <span className="text-muted-foreground text-[10px]">
+                            {opt.label}
+                          </span>
+                        </button>
+                      );
+                    })}
+                  </div>
+                </div>
+
+                {/* Color */}
+                <div className="flex flex-col gap-2">
+                  <label className="text-sm font-medium">Color</label>
+                  <div className="flex flex-wrap gap-2">
+                    {SAM_EYE_COLOR_OPTIONS.map((opt) => {
+                      const selected = agentEyeColor === opt.hex;
+                      return (
+                        <button
+                          key={opt.id}
+                          type="button"
+                          title={opt.label}
+                          onClick={() => setAgentEyeColor(opt.hex)}
+                          className={cn(
+                            "h-7 w-7 rounded-full border-2 transition-transform hover:scale-110 focus:outline-none",
+                            selected ? "border-border" : "border-transparent",
+                          )}
+                          style={{ backgroundColor: opt.hex }}
+                        />
+                      );
+                    })}
+                  </div>
+                </div>
+
                 {updateFetcher.data?.error && (
                   <p className="text-destructive text-sm">
                     {updateFetcher.data.error}
@@ -244,79 +339,26 @@ export default function WorkspaceSettings() {
                 {updateFetcher.data?.success && (
                   <p className="text-sm text-green-600">Saved successfully.</p>
                 )}
+
                 <div className="flex justify-end">
                   <Button
                     variant="secondary"
                     size="lg"
                     onClick={() =>
                       updateFetcher.submit(
-                        { intent: "update", name, slug },
+                        {
+                          intent: "update",
+                          name,
+                          slug,
+                          agentEye,
+                          agentEyeColor,
+                        },
                         { method: "POST" },
                       )
                     }
                     disabled={!hasChanges || isSaving}
                   >
                     {isSaving ? "Saving..." : "Save"}
-                  </Button>
-                </div>
-              </CardContent>
-            </Card>
-          </div>
-
-          <div>
-            <h2 className="text-md mb-4">Butler color</h2>
-            <Card>
-              <CardContent className="flex flex-col gap-4 p-4">
-                <div className="flex items-center gap-4">
-                  <Avatar
-                    name={name || "butler"}
-                    variant="pixel"
-                    colors={["var(--background-3)", accentColor]}
-                    size={56}
-                  />
-                  <div className="flex flex-1 flex-col gap-3">
-                    <div className="flex flex-wrap gap-2">
-                      {swatches.map((color) => (
-                        <button
-                          key={color}
-                          type="button"
-                          onClick={() => setAccentColor(color)}
-                          className={cn(
-                            "h-7 w-7 rounded-full border-2 transition-transform hover:scale-110 focus:outline-none",
-                            accentColor === color
-                              ? "border-border"
-                              : "border-transparent",
-                          )}
-                          style={{
-                            backgroundColor: color,
-                          }}
-                        />
-                      ))}
-                    </div>
-                  </div>
-                </div>
-                <div className="flex justify-end gap-2">
-                  <Button
-                    variant="ghost"
-                    size="lg"
-                    onClick={() => setSwatches(generateSwatches())}
-                    type="button"
-                  >
-                    <RefreshCw size={13} className="mr-1.5" />
-                    Regenerate
-                  </Button>
-                  <Button
-                    variant="secondary"
-                    size="lg"
-                    disabled={!colorChanged || isSavingColor}
-                    onClick={() =>
-                      colorFetcher.submit(
-                        { intent: "updateAccentColor", accentColor },
-                        { method: "POST" },
-                      )
-                    }
-                  >
-                    {isSavingColor ? "Saving..." : "Save color"}
                   </Button>
                 </div>
               </CardContent>

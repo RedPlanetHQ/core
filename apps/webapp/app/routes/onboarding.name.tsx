@@ -34,6 +34,8 @@ export async function action({ request }: ActionFunctionArgs) {
   const formData = await request.formData();
   const agentName = formData.get("agentName") as string;
   const agentSlug = formData.get("agentSlug") as string;
+  const agentEye = (formData.get("agentEye") as string) || undefined;
+  const agentEyeColor = (formData.get("agentEyeColor") as string) || undefined;
 
   if (workspaceId) {
     const existing = await prisma.workspace.findFirst({
@@ -41,13 +43,19 @@ export async function action({ request }: ActionFunctionArgs) {
       select: { metadata: true },
     });
     const existingMeta = (existing?.metadata ?? {}) as Record<string, unknown>;
+    const nextMeta: Record<string, unknown> = {
+      ...existingMeta,
+      onboardingV2Complete: true,
+    };
+    if (agentEye) nextMeta.agentEye = agentEye;
+    if (agentEyeColor) nextMeta.agentEyeColor = agentEyeColor;
 
     await prisma.workspace.update({
       where: { id: workspaceId as string },
       data: {
         name: agentName,
         slug: agentSlug,
-        metadata: { ...existingMeta, onboardingV2Complete: true },
+        metadata: nextMeta,
       },
     });
 
@@ -63,8 +71,19 @@ export default function OnboardingName() {
   >() as LoaderData<typeof loader>;
   const fetcher = useFetcher();
 
-  const handleComplete = (name: string, slug: string) => {
-    fetcher.submit({ agentName: name, agentSlug: slug }, { method: "POST" });
+  const handleComplete = (
+    name: string,
+    slug: string,
+    agentEye?: string,
+  ) => {
+    fetcher.submit(
+      {
+        agentName: name,
+        agentSlug: slug,
+        ...(agentEye ? { agentEye } : {}),
+      },
+      { method: "POST" },
+    );
   };
 
   return (

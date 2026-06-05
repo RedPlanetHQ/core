@@ -23,7 +23,7 @@ import { useSidebar } from "../ui/sidebar";
 import { Button } from "../ui";
 import { useNavigate, useFetcher } from "@remix-run/react";
 import { type ExtendedUser } from "~/hooks/useUser";
-import Avatar from "boring-avatars";
+import { SamAvatar } from "../ui/sam-avatar";
 import { useEffect, useRef } from "react";
 
 export function NavUser({
@@ -59,12 +59,7 @@ export function NavUser({
     <DropdownMenu>
       <DropdownMenuTrigger asChild>
         <Button variant="link" className="gap-2 px-0">
-          <Avatar
-            name={agentName}
-            variant="pixel"
-            colors={["var(--background-3)", accentColor]}
-            size={24}
-          />
+          <SamAvatar size={28} />
         </Button>
       </DropdownMenuTrigger>
       <DropdownMenuContent

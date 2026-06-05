@@ -20,8 +20,19 @@ export function SetButlerNameModal({
   const isGenerating = nameFetcher.state !== "idle";
   const [generatedName, setGeneratedName] = useState<string | undefined>();
 
-  const handleComplete = (name: string, slug: string) => {
-    fetcher.submit({ name, slug }, { method: "POST", action: "/home" });
+  const handleComplete = (
+    name: string,
+    slug: string,
+    agentEye?: string,
+  ) => {
+    fetcher.submit(
+      {
+        name,
+        slug,
+        ...(agentEye ? { agentEye } : {}),
+      },
+      { method: "POST", action: "/home" },
+    );
   };
 
   const handleGenerateName = (currentName: string, previousNames: string[]) => {
