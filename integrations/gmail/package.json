@@ -1,6 +1,6 @@
 {
   "name": "@core/gmail",
-  "version": "0.1.26",
+  "version": "0.1.27",
   "description": "Gmail integration for Core",
   "main": "./bin/index.js",
   "module": "./bin/index.mjs",

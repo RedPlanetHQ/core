@@ -252,7 +252,16 @@ const SearchEmailsSchema = z.object({
     .describe(
       "Gmail search query (e.g., 'from:example@gmail.com', 'after:2024/01/15', 'before:2024/12/31'). Use standard date format (YYYY/MM/DD) for date operators. Dates will be automatically converted to your timezone."
     ),
-  maxResults: z.number().optional().describe('Maximum number of results to return'),
+  maxResults: z
+    .number()
+    .optional()
+    .describe('Maximum number of results to return per page (Gmail caps at 500).'),
+  pageToken: z
+    .string()
+    .optional()
+    .describe(
+      'Opaque cursor for the next page. Pass the `nextPageToken` returned by a previous search_emails call to continue paging through the same query.'
+    ),
 });
 
 // Updated schema to include removeLabelIds
@@ -1009,9 +1018,12 @@ export async function callTool(
           userId: 'me',
           q: convertedQuery,
           maxResults: validatedArgs.maxResults || 10,
+          pageToken: validatedArgs.pageToken,
         });
 
         const messages = response.data.messages || [];
+        const nextPageToken = response.data.nextPageToken || '';
+        const resultSizeEstimate = response.data.resultSizeEstimate ?? null;
 
         const results = await Promise.all(
           messages.map(async msg => {
@@ -1041,16 +1053,25 @@ export async function callTool(
           })
         );
 
+        const estimateLine =
+          resultSizeEstimate !== null
+            ? `\nGmail result size estimate: ~${resultSizeEstimate} (rough total for this query, server-side estimate)`
+            : '';
+        const pageFooter = nextPageToken
+          ? `${estimateLine}\nNext Page Token: ${nextPageToken}\n(Pass this as \`pageToken\` to search_emails to fetch the next page.)`
+          : `${estimateLine}\nNext Page Token: (none — end of results)`;
+
         return {
           content: [
             {
               type: 'text',
-              text: results
-                .map(
-                  r =>
-                    `ID: ${r.id}\nThread ID: ${r.threadId}\nSubject: ${r.subject}\nFrom: ${r.from}\nTo: ${r.to}${r.cc ? `\nCc: ${r.cc}` : ''}${r.replyTo ? `\nReply-To: ${r.replyTo}` : ''}\nDate: ${r.date}\nLabels: ${r.labels}\nSnippet: ${r.snippet}\n`
-                )
-                .join('\n'),
+              text:
+                results
+                  .map(
+                    r =>
+                      `ID: ${r.id}\nThread ID: ${r.threadId}\nSubject: ${r.subject}\nFrom: ${r.from}\nTo: ${r.to}${r.cc ? `\nCc: ${r.cc}` : ''}${r.replyTo ? `\nReply-To: ${r.replyTo}` : ''}\nDate: ${r.date}\nLabels: ${r.labels}\nSnippet: ${r.snippet}\n`
+                  )
+                  .join('\n') + pageFooter,
             },
           ],
         };
