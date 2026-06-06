@@ -15,7 +15,7 @@ export async function loader({ request }: LoaderFunctionArgs) {
   if (gateways.length === 0) {
     return redirect("/home");
   }
-  return redirect(`/home/gateways/${gateways[0].id}/info`);
+  return redirect(`/home/gateways/${gateways[0].id}/files`);
 }
 
 export default function GatewaysIndex() {

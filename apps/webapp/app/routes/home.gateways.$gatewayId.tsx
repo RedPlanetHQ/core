@@ -147,7 +147,7 @@ function GatewayDetailShell() {
   const activePath = navigation.location?.pathname ?? location.pathname;
   const isTerminal = activePath.endsWith("/terminal");
   const isBrowser = /\/browser(\/|$)/.test(activePath);
-  const isInfo = !isTerminal && !isBrowser;
+  const isFiles = !isTerminal && !isBrowser;
 
   // Periodic re-run of the layout loader so the connection indicator,
   // manifest data, and DB-synced name/description stay current while the
@@ -172,10 +172,10 @@ function GatewayDetailShell() {
         ]}
         tabs={[
           {
-            label: "Info",
-            value: "info",
-            isActive: isInfo,
-            onClick: () => navigate(`/home/gateways/${gw.id}/info`),
+            label: "Files",
+            value: "files",
+            isActive: isFiles,
+            onClick: () => navigate(`/home/gateways/${gw.id}/files`),
           },
           {
             label: "Terminal",
@@ -191,7 +191,7 @@ function GatewayDetailShell() {
           },
         ]}
         actionsNode={
-          isInfo ? (
+          isFiles ? (
             <div className="flex items-center gap-1.5">
               <Button
                 variant="secondary"

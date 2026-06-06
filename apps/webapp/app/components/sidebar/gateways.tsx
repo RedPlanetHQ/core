@@ -93,7 +93,7 @@ export function GatewaysNav() {
                       <Button
                         variant="ghost"
                         className="text-foreground flex min-w-0 justify-start gap-2 !rounded-md"
-                        onClick={() => navigate(`/home/gateways/${g.id}/info`)}
+                        onClick={() => navigate(`/home/gateways/${g.id}/files`)}
                         isActive={active}
                       >
                         <Server size={14} className="shrink-0" />
