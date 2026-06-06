@@ -333,7 +333,10 @@ export async function buildAgentContext({
             : `[capabilities: ${tags.join(", ")}]`;
       const slug = gw.name.toLowerCase().replace(/[^a-z0-9]/g, "_");
       const desc = gw.description ? `\n   ${gw.description}` : "";
-      return `${index + 1}. **${gw.name}** ${capStr} — agent: agent-gateway_${slug}${desc}`;
+      // Include the raw DB id so widgets that take a gatewayId
+      // (e.g. gateway-file-viewer) can be wired directly without
+      // the agent guessing.
+      return `${index + 1}. **${gw.name}** ${capStr} — id: \`${gw.id}\` — agent: agent-gateway_${slug}${desc}`;
     })
     .join("\n");
 
@@ -652,6 +655,13 @@ This IS the task — don't create or search for other tasks about this topic. If
       (triggerContext.trigger.data as any)?.isFollowUp === true;
     const isRecurring =
       (triggerContext.trigger.data as any)?.isRecurring === true;
+    // Inbound observation triggers (external noise the system is deciding
+    // whether to surface) get the "surfacing ≠ acting" rule. User-authored
+    // triggers (scheduled tasks, reminders, daily sync) treat the description
+    // as a pre-authorized runbook and execute it as written.
+    const isObservationTrigger =
+      triggerContext.trigger.type === "integration_webhook" ||
+      triggerContext.trigger.type === "memory_ingest";
 
     // Resolve the Watch Rules skill ID so the butler can load the user's
     // current surfacing policy via get_skill. Single source of truth: the
@@ -661,10 +671,14 @@ This IS the task — don't create or search for other tasks about this topic. If
       ? `\n\n2. **Load Watch Rules and follow them.** Call \`get_skill\` with \`skill_id: "${watchRulesSkill.id}"\` and follow the directives in the returned content. Watch Rules govern TWO independent decisions for this trigger:\n   - Whether to ping the user (\`send_message\`). Use the ActionPlan's \`shouldMessage\` — \`think\` already evaluated Watch Rules to produce it.\n   - Whether to record a Live finds suggestion in today's scratchpad (\`update_scratchpad\`). These are independent — Watch Rules may call for a scratchpad write even when \`shouldMessage\` is false, and vice versa. For trigger flows, Watch Rules override anything in <capabilities> about scratchpad use.\n`
       : "";
 
+    const surfacingOrRunbookRule = isObservationTrigger
+      ? `**Surfacing ≠ acting on the underlying item.** A trigger is the system noticing something — your job is to *surface* it per Watch Rules (notify + scratchpad), not to take the irreversible action on the user's behalf. For an inbound customer email, that means flagging it and queuing a suggestion; do NOT draft and send a reply unless the user asked you to. Do NOT end the turn by asking the user "should I do A or B?" — make the surfacing call from Watch Rules and stop.`
+      : `**The trigger description IS your runbook — the user pre-authorized it.** The user wrote this task knowing it would fire on a schedule, so any actions it specifies (auto-send, archive, delete, reply, draft, label, etc.) are already approved. Execute the steps as written. Do NOT ask "should I do X?" and do NOT end the turn with "say 'do it' if you want me to" for actions the description already covers — that breaks the recurring flow because the user can't keep re-approving every occurrence. Only stop and ask if a step has a genuine blocking gap that changes the outcome (a referenced field is missing, a destination is truly ambiguous). Cosmetic mismatches and obvious defaults are NOT blockers.`;
+
     systemPrompt += `\n\n<trigger_context>
 A trigger has fired: "${triggerContext.reminderText}"${isTriggerFollowUp ? `\nThis is a FOLLOW-UP trigger. One follow-up level is the maximum — if the issue is still unresolved, mark the task Waiting and notify the user via send_message.` : ""}${isRecurring ? `\nThis is a RECURRING task. Send results via send_message only and leave the task description untouched. The system handles the recurring lifecycle, so use Review for status changes; the next occurrence is scheduled automatically.` : ""}
 
-**Surfacing ≠ acting on the underlying item.** A trigger is the system noticing something — your job is to *surface* it per Watch Rules (notify + scratchpad), not to take the irreversible action on the user's behalf. For an inbound customer email, that means flagging it and queuing a suggestion; do NOT draft and send a reply unless the user asked you to. Do NOT end the turn by asking the user "should I do A or B?" — make the surfacing call from Watch Rules and stop.
+${surfacingOrRunbookRule}
 
 The \`think\` tool is your decision filter. It tells you whether to speak, what silent actions to take, and what follow-ups to queue. It does NOT compose the message — that's your job, using the skill (when one applies) and fresh data.
 

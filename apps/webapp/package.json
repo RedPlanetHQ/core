@@ -163,6 +163,7 @@
     "p-queue": "^9.1.0",
     "posthog-js": "^1.116.6",
     "posthog-node": "^5.10.3",
+    "pptx-preview": "^1.0.7",
     "prettier": "^3.8.1",
     "radix-ui": "^1.4.3",
     "react": "^19.2.4",

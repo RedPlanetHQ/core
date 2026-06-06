@@ -37,6 +37,10 @@ import {
   getSuggestIntegrationsTool,
   getCompleteOnboardingTool,
 } from "../tools/onboarding-tools";
+import {
+  getSupportedWidgetsTool,
+  getWidgetInfoTool,
+} from "../tools/widget-tools";
 import { createOrchestratorAgent } from "./orchestrator";
 import { createGatewayAgents } from "./gateway";
 import { getWorkspaceChannelContext } from "~/services/channel.server";
@@ -145,6 +149,12 @@ export async function createCoreTools(
   // suggest_integrations — global. Agent may offer connect cards
   // anytime, not just during onboarding.
   tools["suggest_integrations"] = getSuggestIntegrationsTool();
+
+  // Inline-widget catalog — agent calls these to discover which UI
+  // widgets it can embed in chat (gateway file viewer today, more
+  // later) and to fetch their prop contracts before emitting one.
+  tools["get_supported_widgets"] = getSupportedWidgetsTool();
+  tools["get_widget_info"] = getWidgetInfoTool();
 
   // complete_onboarding — only while user.onboardingComplete === false.
   // Flips the flag and persists the final profile summary.

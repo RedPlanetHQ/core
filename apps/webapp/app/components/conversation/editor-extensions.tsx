@@ -14,6 +14,7 @@ import { all, createLowlight } from "lowlight";
 import { mergeAttributes } from "@tiptap/core";
 import { type Extension } from "@tiptap/react";
 import { Markdown } from "tiptap-markdown";
+import { ChatWidgetExtension } from "./extensions/widget-extension";
 
 // create a lowlight instance with all languages loaded
 export const lowlight = createLowlight(all);
@@ -148,5 +149,9 @@ export const extensionsForConversation = [
   CodeBlockLowlight.configure({
     lowlight,
   }),
+  // Inline UI widgets the agent embeds in replies (e.g. gateway
+  // file viewer). See `extensions/widget-extension.tsx` for the
+  // node + the catalog at `~/services/widgets/registry.server.ts`.
+  ChatWidgetExtension,
   Markdown,
 ];

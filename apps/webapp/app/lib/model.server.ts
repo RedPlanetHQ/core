@@ -215,7 +215,10 @@ function buildOpenAIProviderOptions(
       options.reasoningEffort = "low";
     } else {
       options.promptCacheRetention = "24h";
-      options.reasoningEffort = reasoningEffort || "none";
+      // gpt-5 dropped "none" — the OpenAI Responses API now only accepts
+      // "minimal" | "low" | "medium" | "high". "minimal" is the
+      // closest analog to the previous "none" default.
+      options.reasoningEffort = reasoningEffort || "minimal";
     }
   }
 
