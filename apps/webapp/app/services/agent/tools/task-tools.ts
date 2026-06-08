@@ -604,7 +604,26 @@ REPARENTING: Pass newParentId to move a task under a different parent (or null t
           const currentTask = await getTaskById(resolvedTaskId);
           const isRecurring = !!currentTask?.schedule;
 
-          // Handle scheduling updates
+          // Description updates go through the same safeguards regardless of
+          // whether scheduling fields are also being changed — never let the
+          // scheduling branch wholesale-replace the page.
+          if (description !== undefined && currentTask?.pageId) {
+            if (replaceDescription) {
+              const existingHtml =
+                (await getPageContentAsHtml(currentTask.pageId)) ?? "";
+              if (existingHtml.length > 0) {
+                const similarity = textSimilarity(existingHtml, description);
+                if (similarity < 0.3) {
+                  return `Description update rejected: the new content is too different from the existing description (similarity: ${Math.round(similarity * 100)}%). Omit replaceDescription and pass <plan>/<outcome> tags to upsert sections instead.`;
+                }
+              }
+              await setPageContentFromHtml(currentTask.pageId, description);
+            } else {
+              await upsertPageSection(currentTask.pageId, description);
+            }
+          }
+
+          // Handle scheduling updates (description handled above)
           if (
             schedule !== undefined ||
             isActive !== undefined ||
@@ -614,32 +633,14 @@ REPARENTING: Pass newParentId to move a task under a different parent (or null t
           ) {
             await updateScheduledTask(resolvedTaskId, workspaceId, {
               title,
-              description,
               schedule,
               channel: updateChannel,
               isActive,
               maxOccurrences: maxOccurrences ?? undefined,
               endDate: endDate ? new Date(endDate) : undefined,
             });
-          } else if (title || description !== undefined) {
-            if (description !== undefined && currentTask?.pageId) {
-              if (replaceDescription) {
-                const existingHtml =
-                  (await getPageContentAsHtml(currentTask.pageId)) ?? "";
-                if (existingHtml.length > 0) {
-                  const similarity = textSimilarity(existingHtml, description);
-                  if (similarity < 0.3) {
-                    return `Description update rejected: the new content is too different from the existing description (similarity: ${Math.round(similarity * 100)}%). Omit replaceDescription and pass <plan>/<outcome> tags to upsert sections instead.`;
-                  }
-                }
-                await setPageContentFromHtml(currentTask.pageId, description);
-              } else {
-                await upsertPageSection(currentTask.pageId, description);
-              }
-            }
-            if (title) {
-              await updateTask(resolvedTaskId, { title }, false);
-            }
+          } else if (title) {
+            await updateTask(resolvedTaskId, { title }, false);
           }
 
           if (status) {
