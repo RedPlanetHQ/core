@@ -1,231 +1,105 @@
 ---
-title: "Account Research"
-description: Research a company or person and get actionable sales intel. Works standalone with web search, supercharged when you connect enrichment tools or your CRM. Trigger with "research [company]", "look up [person]", "intel on [prospect]", "who is [name] at [company]", or "tell me about [company]".
+title: "How I Look at an Account"
+description: My personal lens for sizing up any company or person before outreach — what signals I care about, what angles I look for, and what I want surfaced in a research report. Applied whenever the agent researches an account, drafts cold outreach, prepares for a call, or summarises a prospect. Trigger with "how I research accounts", "set my account research preferences", or "tell CORE what matters when researching a prospect".
 category: Sales
 integrations: '[]'
 ---
-Goal: Get a complete picture of any company or person before outreach. This skill always works with web search, memory and gets significantly better with enrichment and CRM data.
 
-## How It Works
+**What this is:** A reusable lens for evaluating any account. This is *how I look at companies and people* — the signals I weight, the angles I care about, the structure I want any account report to follow. Tasks (a one-off research run, a scheduled prospect refresh, a pre-call brief) apply this lens. The lens itself does not run on a schedule.
 
-ALWAYS (works standalone via web search and memory)
-
-- Company overview: what they do, size, industry
-- Recent news: funding, leadership changes, announcements
-- Hiring signals: open roles, growth indicators
-- Key people: leadership team from LinkedIn
-- Product/service: what they sell, who they serve
-- Past context stored in memory about this person/company (email id, any discussion happened or anything)
-
-SUPERCHARGED (when you connect other apps)
-
-- Enrichment: verified emails, phone, tech stack, org chart
-- CRM: prior relationship, past opportunities, contacts
+**Tools touched (when this lens is applied):** CORE memory (always first), web search (always), and any connected enrichment or CRM tools.
 
 ---
 
-**Connectors (Optional)**
+### Order of operations
 
-Connect your tools to supercharge this skill:
+1. **CORE memory first** — search what I already know about this company or person before anything else. Prior conversations, email threads, past research, notes I've left for myself. If I've touched this account before, that context outranks anything web search can produce.
+2. **Web search** — fill the gaps memory doesn't cover.
+3. **Enrichment / CRM** — if connected, layer on verified contacts, tech stack, prior deal history.
 
-| Connector      | What It Adds                                                             |
-| -------------- | ------------------------------------------------------------------------ |
-| **Enrichment** | Verified emails, phone numbers, tech stack, org chart, funding details   |
-| **CRM**        | Prior relationship history, past opportunities, existing contacts, notes |
-
-> **No connectors?** No problem. Web search provides solid research for any company or person.
+> Skipping the memory step is the single biggest way to deliver research that feels generic. Always start there.
 
 ---
 
-## Output Format
+### 1. The signals I weight most
 
-```markdown
-### Research: [Company or Person Name]
+When sizing up a company, lead with these. Skip or de-prioritise the rest.
 
-**Generated:** [Date]
-**Sources:** Web Search + Memory [+ Enrichment] [+ CRM]
+- **Prior context from CORE memory** — anything I already know about this company or person. *Always check this first, even before web search.* Includes past email threads, prior conversations, notes I've stored, previous research runs.
+- **What they actually sell** — one sentence in plain language. Not the marketing tagline.
+- **Who buys it** — segment, company size, industry. If I can't picture their customer, the rest doesn't matter.
+- **Recent direction** — funding rounds, leadership hires, pivots, layoffs in the last 90 days. These are the unlocks for "why now".
+- **Hiring signals** — open roles that hint at what they're building or where they're spending. Engineering and AI/ML roles are the highest signal for me.
 
----
+### 2. The signals I de-prioritise
 
-#### Quick Take
+Don't pad reports with these unless I ask:
 
-[2-3 sentences: Who they are, why they might need you, best angle for outreach]
+- Generic company history / founding year unless it changes the pitch
+- Awards, press releases unrelated to the buying motion
+- Aspirational mission statements
 
----
+### 3. How I look at people
 
-#### From CORE Memory
+For any named contact:
 
-[2-3 sentences: Whatever context is available in CORE memory about the company or the person]
+- **What they actually do** (real responsibility, not job title)
+- **How long they've been there** (signal for buy-in and tenure)
+- **Where they came from** (last 1–2 roles — used for warm angles)
+- **Anything personal worth knowing** (recent post, talk, podcast — only if substantive)
 
-### Company Profile
+> Skip personal trivia. Skip LinkedIn bio fluff. The hook should be something they actually did or said.
 
-| Field            | Value                     |
-| ---------------- | ------------------------- |
-| **Company**      | [Name]                    |
-| **Website**      | [URL]                     |
-| **Industry**     | [Industry]                |
-| **Size**         | [Employee count]          |
-| **Headquarters** | [Location]                |
-| **Founded**      | [Year]                    |
-| **Funding**      | [Stage + amount if known] |
-| **Revenue**      | [Estimate if available]   |
+### 4. What "good outreach angle" means to me
 
-#### What They Do
+A good angle is:
 
-[1-2 sentence description of their business, product, and customers]
+- **Specific** — references a real signal (a hire, a launch, a problem I can name)
+- **Recent** — within 90 days for most cases
+- **Not flattery** — observation > compliment
 
-#### Recent News
+A bad angle is:
 
-- **[Headline]** — [Date] — [Why it matters for your outreach]
-- **[Headline]** — [Date] — [Why it matters]
+- Generic ("Saw you're growing fast — congrats!")
+- About me / my product without earning the right yet
+- A vague compliment about their company
 
-#### Hiring Signals
+### 5. What I want surfaced when CORE researches an account
 
-- [x] open roles in [Department]
-- Notable: [Relevant roles like Engineering, Sales, AI/ML]
-- Growth indicator: [Hiring velocity interpretation]
+Any report should include, in this order:
 
----
+1. **Quick take** — 2–3 sentences: who they are, why they might need me, best angle.
+2. **From CORE memory** — 2–3 sentences summarising whatever I already know: past threads, prior research, notes, contacts. Always present this section, even if empty — say "no prior context in memory" so I know the search was done. This section runs *before* anything web-sourced in the report.
+3. **Company snapshot** — what they do, size, recent direction.
+4. **Key people** with my preferred fields (above).
+5. **Best angle for outreach** — specific, recent, not flattery.
+6. **Sources** — links so I can verify.
 
-### Key People
+Connectors deepen the report but do not change the lens:
 
-#### [Name] — [Title]
+- **Enrichment** → adds verified contacts, tech stack, org chart
+- **CRM** → adds prior relationship history (prior opps won/lost, who I've already talked to)
 
-| Field          | Detail                       |
-| -------------- | ---------------------------- |
-| **LinkedIn**   | [URL]                        |
-| **Background** | [Prior companies, education] |
-| **Tenure**     | [Time at company]            |
-| **Email**      | [If enrichment connected]    |
-
-**Talking Points:**
-
-- [Personal hook based on background]
-- [Professional hook based on role]
-
-[Repeat for relevant contacts]
+> No connectors? The lens still works on web search and memory alone.
 
 ---
 
-### Tech Stack [If Enrichment Connected]
+### How this lens is used
 
-| Category  | Tools                         |
-| --------- | ----------------------------- |
-| **Cloud** | [AWS, GCP, Azure, etc.]       |
-| **Data**  | [Snowflake, Databricks, etc.] |
-| **CRM**   | [e.g. Salesforce, HubSpot]    |
-| **Other** | [Relevant tools]              |
+Other surfaces consume this lens:
 
-**Integration Opportunity:** [How your product fits with their stack]
+- **One-off research run** ("research Stripe") applies the lens end-to-end
+- **Cold email draft** uses the "good outreach angle" definition to write the hook
+- **Pre-call brief task** filters down to the angle + recent direction
+- **Scheduled prospect refresh** re-runs the lens periodically on watched accounts
+- **Agent reading a thread** uses the people-lens to summarise who someone is
 
----
-
-### Prior Relationship [If CRM Connected]
-
-| Field              | Detail                                      |
-| ------------------ | ------------------------------------------- |
-| **Status**         | [New / Prior prospect / Customer / Churned] |
-| **Last Contact**   | [Date and type]                             |
-| **Previous Opps**  | [Won/Lost and why]                          |
-| **Known Contacts** | [Names already in CRM]                      |
-
-**History:** [Summary of past relationship]
+Each task is responsible for *when* and *how* the research runs — this skill only defines *what to look for*.
 
 ---
 
-### Sources
+### Edge cases
 
-- [Source 1](URL)
-- [Source 2](URL)
-```
-
----
-
-## Execution Flow
-
-### Step 1: Parse Request
-
-```
-Identify what to research:
-- "Research Stripe" → Company research
-- "Look up John Smith at Acme" → Person + company
-- "Who is the CTO at Notion" → Role-based search
-- "Intel on acme.com" → Domain-based lookup
-```
-
-### Step 2: Web Search (Always)
-
-```
-Run these searches:
-1. "[Company name]" → Homepage, about page
-2. "[Company name] news" → Recent announcements
-3. "[Company name] funding" → Investment history
-4. "[Company name] careers" → Hiring signals
-5. "[Person name] [Company] LinkedIn" → Profile info
-6. "[Company name] product" → What they sell
-7. "[Company name] customers" → Who they serve
-```
-
-**Extract:**
-
-- Company description and positioning
-- Recent news (last 90 days)
-- Leadership team
-- Open job postings
-- Technology mentions
-- Customer base
-
-### Step 3: Enrichment (If Connected)
-
-```
-If enrichment tools available:
-1. Enrich company → Firmographics, funding, tech stack
-2. Search people → Org chart, contact list
-3. Enrich person → Email, phone, background
-4. Get signals → Intent data, hiring velocity
-```
-
-**Enrichment adds:**
-
-- Verified contact info
-- Complete org chart
-- Precise employee count
-- Detailed tech stack
-- Funding history with investors
-
-### Step 4: CRM Check (If Connected)
-
-```
-If CRM available:
-1. Search for account by domain
-2. Get related contacts
-3. Get opportunity history
-4. Get activity timeline
-```
-
-**CRM adds:**
-
-- Prior relationship context
-- What happened before (won/lost deals)
-- Who we've talked to
-- Notes and history
-
-### Step 5: Synthesize
-
-```
-1. Combine all sources
-2. Prioritize enrichment data over web (more accurate)
-3. Add CRM context if exists
-4. Identify qualification signals
-5. Generate talking points
-6. Recommend approach
-```
-
----
-
-## Tips for Better Research
-
-1. **Include the domain** — "research acme.com" is more precise
-2. **Specify the person** — "look up Jane Smith, VP Sales at Acme"
-3. **State your goal** — "research Stripe before my demo call"
-4. **Ask for specifics** — "what's their tech stack?" after initial research
+- **Person without a company** → apply the people-lens only; skip the company sections
+- **Account I've researched before** → load prior research from memory, only refresh sections that have moved
+- **No public information available** → say so explicitly. Do not invent or extrapolate.

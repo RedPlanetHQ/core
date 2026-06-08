@@ -794,6 +794,9 @@ importers:
       fastify:
         specifier: ^5.0.0
         version: 5.8.5
+      gray-matter:
+        specifier: 4.0.3
+        version: 4.0.3
       ink:
         specifier: ^6.6.0
         version: 6.6.0(@types/react@19.2.13)(react-devtools-core@6.1.5)(react@19.2.4)
