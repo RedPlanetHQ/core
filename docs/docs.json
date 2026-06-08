@@ -141,12 +141,9 @@
           {
             "group": "Skill Library",
             "pages": [
-              "skills/account_research",
               "skills/email_label_management",
-              "skills/morning_brief_gmail_calendar",
               "skills/notify_emails",
-              "skills/plan_my_day",
-              "skills/user_changelog",
+              "skills/account_research",
               "skills/engineering_analytics"
             ]
           }

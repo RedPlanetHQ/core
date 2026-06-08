@@ -26,12 +26,25 @@ import { getIcon, type IconType } from "~/components/icon-utils";
 import { EditorContent, useEditor } from "@tiptap/react";
 import { extensionsForConversation } from "../conversation/editor-extensions";
 
+export interface GatewayPickerOption {
+  id: string;
+  name: string;
+  status: string;
+}
+
 interface LibrarySkillCardProps {
   skill: LibrarySkill;
+  /**
+   * Gateway list for the picker. Only used when `skill.kind === "gateway"`.
+   * Disconnected gateways are shown but disabled so the user can see why a
+   * particular target isn't available.
+   */
+  gateways: GatewayPickerOption[];
   installedSkillId?: string;
   isInstalling?: boolean;
   isRemoving?: boolean;
-  onInstall: () => void;
+  /** `gatewayId` is required for gateway-kind skills, omitted for policy. */
+  onInstall: (gatewayId?: string) => void;
   onUninstall: () => void;
 }
 
@@ -60,6 +73,58 @@ function IntegrationLogos({ skill }: { skill: LibrarySkill }) {
   );
 }
 
+function GatewayPickerDialog({
+  isOpen,
+  gateways,
+  onPick,
+  onClose,
+}: {
+  isOpen: boolean;
+  gateways: GatewayPickerOption[];
+  onPick: (gatewayId: string) => void;
+  onClose: () => void;
+}) {
+  return (
+    <Dialog open={isOpen} onOpenChange={onClose}>
+      <DialogContent className="sm:max-w-md">
+        <DialogHeader>
+          <DialogTitle>Install on which gateway?</DialogTitle>
+        </DialogHeader>
+
+        {gateways.length === 0 ? (
+          <p className="text-muted-foreground text-sm">
+            No gateways found in this workspace. Connect a gateway first, then
+            try again.
+          </p>
+        ) : (
+          <div className="flex flex-col gap-2 py-2">
+            {gateways.map((g) => {
+              const connected = g.status === "CONNECTED";
+              return (
+                <Button
+                  key={g.id}
+                  variant="secondary"
+                  className="justify-between rounded"
+                  disabled={!connected}
+                  onClick={() => {
+                    onPick(g.id);
+                    onClose();
+                  }}
+                >
+                  <span>{g.name}</span>
+                  <span className="text-muted-foreground text-xs">
+                    {connected ? "Connected" : g.status.toLowerCase()}
+                  </span>
+                </Button>
+              );
+            })}
+          </div>
+        )}
+      </DialogContent>
+    </Dialog>
+  );
+}
+
 function SkillPreviewModal({
   skill,
   isOpen,
@@ -67,7 +132,7 @@ function SkillPreviewModal({
   installedSkillId,
   isInstalling,
   isRemoving,
-  onInstall,
+  onInstallClick,
   onUninstall,
 }: {
   skill: LibrarySkill;
@@ -76,7 +141,12 @@ function SkillPreviewModal({
   installedSkillId?: string;
   isInstalling?: boolean;
   isRemoving?: boolean;
-  onInstall: () => void;
+  /**
+   * Called when the user clicks Install in the preview. The card itself
+   * decides whether to open a gateway picker (for `kind: "gateway"` skills)
+   * or to install immediately (for `kind: "policy"`).
+   */
+  onInstallClick: () => void;
   onUninstall: () => void;
 }) {
   const isInstalled = !!installedSkillId;
@@ -132,12 +202,16 @@ function SkillPreviewModal({
               className="rounded"
               size="lg"
               onClick={() => {
-                onInstall();
+                onInstallClick();
                 onClose();
               }}
               disabled={isInstalling}
             >
-              {isInstalling ? "Installing..." : "Install"}
+              {isInstalling
+                ? "Installing..."
+                : skill.kind === "gateway"
+                  ? "Install on gateway…"
+                  : "Install"}
             </Button>
           )}
         </div>
@@ -148,6 +222,7 @@ function SkillPreviewModal({
 
 export function LibrarySkillCard({
   skill,
+  gateways,
   installedSkillId,
   isInstalling,
   isRemoving,
@@ -157,12 +232,24 @@ export function LibrarySkillCard({
   const navigate = useNavigate();
   const isInstalled = !!installedSkillId;
   const [isPreviewOpen, setIsPreviewOpen] = useState(false);
+  const [isPickerOpen, setIsPickerOpen] = useState(false);
 
   const handleCardClick = () => {
     if (isInstalled) {
       navigate(`/home/agent/skills/${installedSkillId}`);
     } else {
       setIsPreviewOpen(true);
+    }
+  };
+
+  // Single entry point for both Install buttons (card + preview modal).
+  // Gateway-kind skills need a target gateway → open the picker. Policy
+  // skills just install straight into the workspace.
+  const handleInstallClick = () => {
+    if (skill.kind === "gateway") {
+      setIsPickerOpen(true);
+    } else {
+      onInstall();
     }
   };
 
@@ -207,11 +294,15 @@ export function LibrarySkillCard({
                 className="rounded"
                 onClick={(e) => {
                   e.stopPropagation();
-                  onInstall();
+                  handleInstallClick();
                 }}
                 disabled={isInstalling}
               >
-                {isInstalling ? "Installing..." : "Install"}
+                {isInstalling
+                  ? "Installing..."
+                  : skill.kind === "gateway"
+                    ? "Install on gateway…"
+                    : "Install"}
               </Button>
             )}
           </div>
@@ -225,8 +316,15 @@ export function LibrarySkillCard({
         installedSkillId={installedSkillId}
         isInstalling={isInstalling}
         isRemoving={isRemoving}
-        onInstall={onInstall}
+        onInstallClick={handleInstallClick}
         onUninstall={onUninstall}
+      />
+
+      <GatewayPickerDialog
+        isOpen={isPickerOpen}
+        gateways={gateways}
+        onClose={() => setIsPickerOpen(false)}
+        onPick={(gatewayId) => onInstall(gatewayId)}
       />
     </>
   );

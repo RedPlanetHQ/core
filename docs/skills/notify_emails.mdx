@@ -1,87 +1,99 @@
 ---
-title: "Email Alert - Notify Me"
-description: Get notified the moment an important email lands — from key vendors, customers, or security services — with a quick summary and action flag, so nothing slips through. Trigger with "notify me for important emails", "alert me when I get emails from [person/vendor]", or "set up email alerts".
+title: "What's Important in My Inbox"
+description: A personal policy for what counts as important email — key vendors, customer signals, security alerts, money matters, and the people I always want to hear from. Loaded whenever email is touched, so triage, replies, summaries, and notifications all use the same definition of "important". Trigger with "what's important in my inbox", "set my email priorities", or "tell CORE what matters in email".
 category: Email
 integrations: '[{"name":"Gmail","slug":"gmail"}]'
 ---
 
-**Goal:** Check if the email is from a key sender or category. If yes, immediately send a summary notification. If no match, do nothing.
+**What this is:** A reusable definition of what *I* consider important in email. This policy is applied wherever email shows up — inbound triage, agent reading my inbox during a task, chat summaries, daily briefs, alert tasks. It does not run on its own. Tasks (a watcher, a brief, an agent flow) read this policy and act on it.
 
-**Tools Required:** Gmail
-
-### Setup — Run Once Before Processing
-
-Search memory for the following before doing anything else:
-
-- "user's key vendors, suppliers, or accountants and their email addresses or domains"
-- "user's product name and how customers are identified"
-- "security alert senders the user cares about — e.g. Google, bank, financial tools"
-- "key people whose emails should trigger an immediate notification"
-
-Use whatever is found to pre-populate the matching logic below.
-
-If nothing is found for a category, fill it in from the user's past conversations where possible. Only ask the user if truly no context exists:
-
-> "To set up your email alerts, I need a few details:
->
-> 1. Who are your key vendors or contacts I should always notify you about? (name, email, or domain)
-> 2. What is your product or business called? How do I identify emails from your customers?
-> 3. Any security or financial services I should watch for alerts from? (e.g. Google, Stripe, your bank)
->
-> I'll remember these — you won't need to tell me again."
-
-Store all answers in memory immediately.
+**Tools touched (when this policy is applied):** Gmail.
 
 ---
 
-### Step 1 — Check the Sender
+### How to read this policy
 
-Read the sender's email address and name. Check if it matches any key contact stored in memory:
+Each section answers one question about *me*:
 
-- Named individuals (by email address)
-- Known domains (e.g. a vendor's company domain)
-- Security alert senders (e.g. `@accounts.google.com`, financial platforms)
+1. Who do I always want to hear from?
+2. What signals from customers matter?
+3. What security and money events should never be missed?
+4. What categories do I care about beyond the above?
 
-If sender matches → proceed to Step 3.
-If sender does not match → proceed to Step 2.
-
----
-
-### Step 2 — Check the Email Body
-
-Read the full email body and check if it matches any of these:
-
-- A customer of the user's product reaching out for support, reporting a bug, asking a question, or giving feedback — identify by looking for the product name or related terms in the body
-- Any other category the user has defined as high-priority that can only be identified from body content
-
-If yes → proceed to Step 3.
-If no → stop. Do nothing.
+Anything matching these definitions is **important**. Everything else is background.
 
 ---
 
-### Step 3 — Summarise and Notify
+### 1. People and senders that matter to me
 
-Read the full email body and send a notification in this format:
+Stored in memory and refreshed when I tell CORE about a new key contact:
 
-> 📧 Email Alert — [Category]
-> From: [Sender name] ([email address])
-> Subject: [Email subject]
-> Summary: [2–4 sentence summary of what the email is about]
-> Action needed: [Yes — [what needs to happen] / No — FYI only]
+- Named individuals — investors, advisors, co-founders, key customers (by email address)
+- Vendor and supplier domains — accountants, lawyers, compliance providers, payroll, infra
+- Specific senders flagged by me as "always notify"
 
-**Category label** to use:
+> When a new email matches any of these, treat it as important regardless of content.
 
-- Key vendor or contact → 📂 Vendor / Key Contact
-- Security alert → 🔐 Security Alert
-- Financial alert → 💳 Financial Alert
-- Customer support or bug → 🛠 Customer Support
-- Other user-defined category → 📌 [Category name]
+If memory has nothing here, ask once:
+
+> "Who are the people and companies I should always treat as important? (names, emails, or domains)"
+
+Store answers immediately.
 
 ---
 
-### Edge Cases
+### 2. Customer signals that matter to me
 
-- **Multiple categories match** → pick the most specific, note both in the summary.
-- **Email body is empty or unreadable** → send: "New email from [sender] — body unreadable. Check manually."
-- **Duplicate trigger for same email** → send only once. Do not notify twice.
-- **Sender is ambiguous** → if unsure, read the body before deciding. When in doubt, notify rather than skip.
+The body — not the sender — tells me this. A customer is important when they are:
+
+- Reporting a bug or breakage in my product
+- Asking for support or stuck on something
+- Giving feedback (positive or negative) about a feature
+- Reaching out as a prospect — interested in buying, trying, or evaluating
+
+> Identify the product by name (from memory). Generic newsletters that mention the product in passing are not customer signals.
+
+---
+
+### 3. Security and money events that matter to me
+
+Always important regardless of who else is involved:
+
+- Security alerts — sign-in from a new device, password change, suspicious activity (from accounts I own: Google, GitHub, banks, financial tools)
+- Payment failures — declined card, failed payout, overdue invoice
+- Account access changes — added user, permission change, billing role change
+- Anything from my bank, primary financial platforms, or tax/compliance providers about deadlines or actions required
+
+---
+
+### 4. Categories I've defined for myself
+
+Free-form. Stored in memory as `{category_name, matching_rule}`. Examples:
+
+- "Press or media reaching out" → matches journalists, podcasters, conference organisers
+- "Hiring funnel — top candidates" → matches replies in active hiring threads
+- "Fundraising — investor replies" → matches threads with known investor domains
+
+> These are the categories *I* care about that don't fit the buckets above. Add freely.
+
+---
+
+### How this policy is used
+
+Other surfaces consume this policy:
+
+- **Triage tasks** decide what to surface vs. skip
+- **Notification tasks** decide what to push live
+- **Daily / weekly brief tasks** decide what to lead with
+- **Agent-in-the-loop work** uses this to know which threads need my attention vs. which it can handle quietly
+- **Chat queries** like "what's important in my inbox?" answer against this policy
+
+Each consumer is responsible for *how* to act — this policy only defines *what* matters.
+
+---
+
+### Edge cases
+
+- **Ambiguous signals** → if a sender matches but the body is clearly automated/promotional, treat as not important. Promotional ≠ important even from a key vendor's marketing list.
+- **One-off relevance** → if something matches only once and isn't likely to repeat, do not add it to the policy. Keep this lean.
+- **Conflicting rules** → security and money events always win over category preferences.

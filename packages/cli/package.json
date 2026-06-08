@@ -33,6 +33,7 @@
 		"fast-glob": "^3.3.2",
 		"fast-png": "^8.0.0",
 		"fastify": "^5.0.0",
+		"gray-matter": "4.0.3",
 		"ink": "^6.6.0",
 		"ink-select-input": "^6.2.0",
 		"ink-spinner": "5.0.0",

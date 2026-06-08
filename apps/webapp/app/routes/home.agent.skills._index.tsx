@@ -14,7 +14,15 @@ import { Card, CardContent } from "~/components/ui/card";
 import { prisma } from "~/db.server";
 import { getUser, getWorkspaceId } from "~/services/session.server";
 import { createSkill, deleteSkill } from "~/services/skills.server";
-import { getLibrarySkills, groupSkillsByCategory } from "~/lib/skills-library";
+import { listGateways } from "~/services/gateway/crud.server";
+import { callTool } from "~/services/gateway/transport.server";
+import {
+  getLibrarySkills,
+  groupSkillsByCategory,
+  substituteSkillVariables,
+  LIBRARY_REPO_URL,
+  LIBRARY_SKILLS_PATH,
+} from "~/lib/skills-library";
 import { ClientOnly } from "remix-utils/client-only";
 
 export const meta = () => [{ title: "Skills" }];
@@ -43,7 +51,16 @@ export async function loader({ request }: LoaderFunctionArgs) {
 
   const librarySkills = await getLibrarySkills();
 
-  return json({ installedSlugs, librarySkills });
+  // Used by the gateway picker in the Library tab when installing a
+  // gateway-shape skill. Only `id`, `name`, and `status` go to the client —
+  // the rest of the gateway record stays server-side.
+  const gateways = (await listGateways(workspaceId as string)).map((g) => ({
+    id: g.id,
+    name: g.name,
+    status: g.status,
+  }));
+
+  return json({ installedSlugs, librarySkills, gateways });
 }
 
 export async function action({ request }: ActionFunctionArgs) {
@@ -54,18 +71,71 @@ export async function action({ request }: ActionFunctionArgs) {
 
   if (intent === "install-library-skill") {
     const slug = formData.get("slug") as string;
+    const gatewayId = (formData.get("gatewayId") as string | null) || null;
+
     const librarySkills = await getLibrarySkills();
     const skill = librarySkills.find((s) => s.slug === slug);
     if (!skill) return json({ error: "Skill not found" }, { status: 404 });
 
+    let content = skill.content;
+    const metadata: Record<string, unknown> = {
+      shortDescription: skill.shortDescription,
+      librarySlug: slug,
+      kind: skill.kind,
+    };
+
+    if (skill.kind === "gateway") {
+      if (!gatewayId) {
+        return json(
+          { error: "Pick a gateway to install this skill on" },
+          { status: 400 },
+        );
+      }
+      // Make sure the gateway belongs to the requesting workspace before we
+      // touch it — `callTool` doesn't enforce tenancy itself.
+      const gateway = await prisma.gateway.findFirst({
+        where: { id: gatewayId, workspaceId: workspaceId as string },
+        select: { id: true, name: true },
+      });
+      if (!gateway) {
+        return json({ error: "Gateway not found" }, { status: 404 });
+      }
+
+      try {
+        await callTool(gatewayId, "skill_install", {
+          url: LIBRARY_REPO_URL,
+          name: slug,
+          subdir: `${LIBRARY_SKILLS_PATH}/${slug}`,
+          force: true,
+        });
+      } catch (err) {
+        return json(
+          {
+            error: `Gateway install failed: ${
+              err instanceof Error ? err.message : String(err)
+            }`,
+          },
+          { status: 502 },
+        );
+      }
+
+      const gatewaySkillRoot = `~/.corebrain/skills/${slug}`;
+      content = substituteSkillVariables(content, {
+        gatewayId: gateway.id,
+        gatewayName: gateway.name,
+        gatewaySkillRoot,
+      });
+
+      metadata.gatewayId = gateway.id;
+      metadata.gatewayName = gateway.name;
+      metadata.gatewaySkillRoot = gatewaySkillRoot;
+    }
+
     await createSkill(workspaceId as string, user?.id as string, {
       title: skill.title,
-      content: skill.content,
+      content,
       source: "library",
-      metadata: {
-        shortDescription: skill.shortDescription,
-        librarySlug: slug,
-      },
+      metadata,
     });
 
     return json({ success: true });
@@ -73,6 +143,29 @@ export async function action({ request }: ActionFunctionArgs) {
 
   if (intent === "uninstall-library-skill") {
     const skillId = formData.get("skillId") as string;
+
+    // If this install was paired with a gateway, best-effort remove the
+    // bundle there before deleting the local record. We don't fail the
+    // uninstall if the gateway is offline — the user can re-run a cleanup
+    // later, and the local record going away is the user-visible signal.
+    const doc = await prisma.document.findFirst({
+      where: { id: skillId, workspaceId: workspaceId as string, deleted: null },
+      select: { metadata: true },
+    });
+    const meta = (doc?.metadata ?? null) as {
+      gatewayId?: string;
+      librarySlug?: string;
+    } | null;
+    if (meta?.gatewayId && meta.librarySlug) {
+      try {
+        await callTool(meta.gatewayId, "skill_remove", {
+          name: meta.librarySlug,
+        });
+      } catch {
+        // swallow: see comment above
+      }
+    }
+
     await deleteSkill(skillId, workspaceId as string);
     return json({ success: true });
   }
@@ -81,8 +174,11 @@ export async function action({ request }: ActionFunctionArgs) {
 }
 
 export default function Skills() {
-  const { installedSlugs: loaderInstalledSlugs, librarySkills } =
-    useLoaderData<typeof loader>();
+  const {
+    installedSlugs: loaderInstalledSlugs,
+    librarySkills,
+    gateways,
+  } = useLoaderData<typeof loader>();
   const libraryByCategory = groupSkillsByCategory(librarySkills);
   const navigate = useNavigate();
   const { skills, hasMore, loadMore, isLoading, isInitialLoad, reset } =
@@ -99,10 +195,12 @@ export default function Skills() {
   // Merge loader state with optimistic updates
   const installedSlugs = { ...loaderInstalledSlugs };
 
-  const handleInstall = (slug: string) => {
+  const handleInstall = (slug: string, gatewayId?: string) => {
     setPendingInstall(slug);
     fetcher.submit(
-      { intent: "install-library-skill", slug },
+      gatewayId
+        ? { intent: "install-library-skill", slug, gatewayId }
+        : { intent: "install-library-skill", slug },
       { method: "post" },
     );
   };
@@ -210,10 +308,13 @@ export default function Skills() {
                             <LibrarySkillCard
                               key={skill.slug}
                               skill={skill}
+                              gateways={gateways}
                               installedSkillId={installedSlugs[skill.slug]}
                               isInstalling={pendingInstall === skill.slug}
                               isRemoving={pendingRemove === skill.slug}
-                              onInstall={() => handleInstall(skill.slug)}
+                              onInstall={(gatewayId) =>
+                                handleInstall(skill.slug, gatewayId)
+                              }
                               onUninstall={() =>
                                 handleUninstall(
                                   installedSlugs[skill.slug],
