@@ -34,7 +34,6 @@ import {
 } from "~/components/editor/extensions/widget-node-extension";
 import { PlanNode } from "~/components/editor/extensions/plan-extension";
 import { OutcomeNode } from "~/components/editor/extensions/outcome-extension";
-import { LogNode } from "~/components/editor/extensions/log-extension";
 import type { WidgetOption } from "~/components/overview/types";
 
 const lowlight = createLowlight(all);
@@ -126,7 +125,6 @@ function buildExtensions(
     WidgetNode,
     PlanNode,
     OutcomeNode,
-    LogNode,
     Collaboration.configure({ document: ydoc }),
   ];
 }

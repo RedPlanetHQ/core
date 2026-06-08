@@ -94,19 +94,6 @@ const ServerOutcomeNode = Node.create({
   },
 });
 
-const ServerLogNode = Node.create({
-  name: "log",
-  group: "block",
-  content: "block+",
-  defining: true,
-  parseHTML() {
-    return [{ tag: "log" }];
-  },
-  renderHTML() {
-    return ["log", 0];
-  },
-});
-
 /**
  * Returns server-safe TipTap extensions (no React renderers).
  */
@@ -123,7 +110,6 @@ export function getServerExtensions(): Extensions {
     TableCell,
     ServerPlanNode,
     ServerOutcomeNode,
-    ServerLogNode,
   ];
 }
 

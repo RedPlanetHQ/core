@@ -616,9 +616,8 @@ RULES:
   2. send_message that names the task title so the user can identify it. Example: "Task '${linkedTask.title}' is waiting: <reason>. <what's needed to continue>"
 - DO NOT create independent top-level tasks. ${isSubtask ? "You are a subtask — just do your work." : "Subtasks under this task only."}
 - DO NOT mark Done — that's the user's call.
-- DESCRIPTION UPDATES. Only at meaningful boundaries: Waiting (record what's blocked), decomposition (record the plan), Review (record the outcome), or when the user provides new context. For recurring tasks that accumulate per-run data, use <log>...</log> (append) and clearLog at cycle boundaries. Never write error logs, debug output, or transient state into the description.
-- PRESERVE USER CONTENT. You may edit the <plan>, <outcome>, and <log> zones, and anything the user has SPECIFICALLY asked you to change. Everything else the user authored stays as-is — do not silently rewrite, reorder, or delete it just because you're touching the description for another reason.
-- BACKGROUND MODE. You are in background execution. update_task will reject <plan> and <outcome> writes — only <log> and clearLog are allowed. The plan is frozen until the user is back in the loop. If the plan genuinely needs to change, mark Waiting and ask.
+- DESCRIPTION UPDATES. Only at meaningful boundaries: Waiting (record what's blocked), decomposition (record the plan), Review (record the outcome), or when the user provides new context. Never write error logs, debug output, or transient state into the description.
+- PRESERVE USER CONTENT. You may edit the <plan> and <outcome> zones freely, and anything the user has SPECIFICALLY asked you to change. Everything else the user authored stays as-is — do not silently rewrite, reorder, or delete it just because you're touching the description for another reason.
 
 CODING SESSIONS:
 The gateway sub-agent owns all sleep/polling for coding sessions. You do NOT sleep or poll directly.
@@ -677,7 +676,7 @@ This IS the task — don't create or search for other tasks about this topic. If
       : `**The trigger description IS your runbook — the user pre-authorized it.** The user wrote this task knowing it would fire on a schedule, so any actions it specifies (auto-send, archive, delete, reply, draft, label, etc.) are already approved. Execute the steps as written. Do NOT ask "should I do X?" and do NOT end the turn with "say 'do it' if you want me to" for actions the description already covers — that breaks the recurring flow because the user can't keep re-approving every occurrence. Only stop and ask if a step has a genuine blocking gap that changes the outcome (a referenced field is missing, a destination is truly ambiguous). Cosmetic mismatches and obvious defaults are NOT blockers.`;
 
     systemPrompt += `\n\n<trigger_context>
-A trigger has fired: "${triggerContext.reminderText}"${isTriggerFollowUp ? `\nThis is a FOLLOW-UP trigger. One follow-up level is the maximum — if the issue is still unresolved, mark the task Waiting and notify the user via send_message.` : ""}${isRecurring ? `\nThis is a RECURRING task running in background mode. The <plan> is frozen — update_task will reject <plan>/<outcome> writes. Deliver results via send_message. If the runbook says to accumulate per-run data across occurrences, append to <log>...</log>; if it says to clear at a cycle boundary (e.g. weekly summary then reset), set clearLog: true after delivery. The system handles the recurring lifecycle; use Review for status, and the next occurrence is scheduled automatically.` : ""}
+A trigger has fired: "${triggerContext.reminderText}"${isTriggerFollowUp ? `\nThis is a FOLLOW-UP trigger. One follow-up level is the maximum — if the issue is still unresolved, mark the task Waiting and notify the user via send_message.` : ""}${isRecurring ? `\nThis is a RECURRING task. Send results via send_message only and leave the task description untouched. The system handles the recurring lifecycle, so use Review for status changes; the next occurrence is scheduled automatically.` : ""}
 
 ${surfacingOrRunbookRule}
 
@@ -698,7 +697,7 @@ The \`think\` tool is your decision filter. It tells you whether to speak, what 
 
 6. Apply \`createFollowUps\`${isTriggerFollowUp ? ` (ignore these — this trigger is itself a follow-up; the chain stops here)` : ` by calling \`create_task\` with \`isFollowUp=true\` and \`parentTaskId\` set to the triggering task's ID (these are reschedules of the existing task, not new ones)`}.
 
-7. Apply \`updateTasks\` via \`update_task\`${isRecurring ? ` — restricted on recurring runs: description writes are limited to <log> (append) and clearLog; <plan>/<outcome> are rejected. Skip \`status: "Done"\` (the system loops recurring tasks automatically)` : ""}.
+7. Apply \`updateTasks\` via \`update_task\`${isRecurring ? ` — except skip description updates and skip \`status: "Done"\` (the system loops recurring tasks automatically)` : ""}.
 
 8. Apply \`silentActions\` (log entries, state updates).
 

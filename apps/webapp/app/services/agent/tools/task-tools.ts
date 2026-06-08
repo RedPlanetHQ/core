@@ -24,10 +24,7 @@ import {
   setPageContentFromHtml,
   getPageContentAsHtml,
 } from "~/services/hocuspocus/content.server";
-import {
-  upsertPageSection,
-  clearPageSection,
-} from "~/services/coding-task.server";
+import { upsertPageSection } from "~/services/coding-task.server";
 import { createEmptyConversation } from "~/services/conversation.server";
 import { logger } from "~/services/logger.service";
 import { Prisma, type TaskStatus } from "@prisma/client";
@@ -521,17 +518,14 @@ FOLLOW-UP: Set isFollowUp=true and parentTaskId to reschedule an existing task.`
 
 DESCRIPTION CONTENT (the task body the user reads):
 
-The description has three structured zones the agent owns. Pass HTML in the \`description\` parameter containing one or more of these tags:
+The description has two structured zones the agent owns. Pass HTML in the \`description\` parameter containing one or both of these tags:
 
-- <plan>...</plan> — the current plan or step-by-step approach. REPLACE semantics: each write overwrites the zone.
-- <outcome>...</outcome> — the result the user reads when the work is done. REPLACE semantics: each write overwrites the zone.
-- <log>...</log> — rolling per-run data (e.g. a daily recurring task accumulating entries through the week). APPEND semantics: each write's children are concatenated onto the existing log.
+- <plan>...</plan> — the current plan or step-by-step approach you are following. Rewrite this in full whenever the plan changes.
+- <outcome>...</outcome> — the result the user reads when the work is done. Replace each run.
 
-Strict input contract: at most ONE of each tag per call. Multiple of any one type returns an error and the description is not updated. To touch more than one zone at once, send HTML containing all the tags in a single call.
+Strict input contract: at most ONE <plan> tag and at most ONE <outcome> tag per call. Multiple of either returns an error and the description is not updated. To update both at once, send HTML containing both tags in a single call.
 
 Anything outside these tags is silently dropped — the user's prose elsewhere on the page is sacred and never modified by this tool. Do NOT use the description for status updates, error logs, or transient state; status updates go via send_message.
-
-BACKGROUND / SCHEDULED EXECUTION: when this turn is a scheduled-fire or background run (not a live chat with the user), the tool will REJECT <plan> and <outcome> writes. Only <log> and \`clearLog\` are allowed — the plan is frozen until the user is back in the loop. Use <log> for per-run data; if the recurring runbook says "send and clear" at a boundary, set \`clearLog: true\` to wipe the log after delivery.
 
 REPARENTING: Pass newParentId to move a task under a different parent (or null to make it a root task). This deletes the task and recreates it under the new parent — the task gets a new displayId. Subtasks are also deleted.`,
       inputSchema: z.object({
@@ -549,19 +543,13 @@ REPARENTING: Pass newParentId to move a task under a different parent (or null t
           .string()
           .optional()
           .describe(
-            "Task description as HTML — provide <plan>...</plan>, <outcome>...</outcome>, and/or <log>...</log> tags to upsert those sections. At most one of each per call. <plan>/<outcome> replace; <log> appends. Other content is dropped. On background/scheduled runs, <plan> and <outcome> are rejected — use <log> only.",
+            "Task description as HTML — provide <plan>...</plan> and/or <outcome>...</outcome> tags to upsert those sections. At most one of each per call. Other content is dropped.",
           ),
         replaceDescription: z
           .boolean()
           .optional()
           .describe(
-            "Set true to replace the entire description verbatim (only valid for task creation flows where the agent writes the user's prose from a brief). Default: false — description is merged via <plan>/<outcome>/<log> upsert. Rejected on background/scheduled runs.",
-          ),
-        clearLog: z
-          .boolean()
-          .optional()
-          .describe(
-            "Set true to wipe the <log> zone only (leaves <plan>, <outcome>, and the user's prose untouched). Use at the end of a recurring cycle (e.g. weekly send → clear). Allowed on background/scheduled runs.",
+            "Set true to replace the entire description verbatim (only valid for task creation flows where the agent writes the user's prose from a brief). Default: false — description is merged via <plan>/<outcome> upsert.",
           ),
         schedule: z.string().optional().describe("New RRule schedule string"),
         isActive: z
@@ -587,7 +575,6 @@ REPARENTING: Pass newParentId to move a task under a different parent (or null t
         title,
         description,
         replaceDescription,
-        clearLog,
         schedule,
         isActive,
         maxOccurrences,
@@ -617,24 +604,6 @@ REPARENTING: Pass newParentId to move a task under a different parent (or null t
           const currentTask = await getTaskById(resolvedTaskId);
           const isRecurring = !!currentTask?.schedule;
 
-          // BACKGROUND GUARD: when this turn is a scheduled-fire or background
-          // run, the plan is frozen — only <log> writes (and clearLog) are
-          // allowed. Reject <plan>/<outcome> writes and replaceDescription
-          // before they touch the page. <log>-only descriptions still pass.
-          if (isBackgroundExecution) {
-            if (replaceDescription) {
-              return `Description update rejected: replaceDescription is not allowed on background/scheduled runs. The plan is frozen until the user is in the loop. Use <log>...</log> for per-run data, or omit description entirely.`;
-            }
-            if (description !== undefined) {
-              const hasPlanOrOutcome = /<(plan|outcome|output)\b/i.test(
-                description,
-              );
-              if (hasPlanOrOutcome) {
-                return `Description update rejected: <plan> and <outcome> writes are not allowed on background/scheduled runs. The plan is frozen until the user is in the loop. Use <log>...</log> for per-run data; if the runbook says to clear at a cycle boundary, pass clearLog: true.`;
-              }
-            }
-          }
-
           // Description updates go through the same safeguards regardless of
           // whether scheduling fields are also being changed — never let the
           // scheduling branch wholesale-replace the page.
@@ -645,16 +614,12 @@ REPARENTING: Pass newParentId to move a task under a different parent (or null t
               if (existingHtml.length > 0) {
                 const similarity = textSimilarity(existingHtml, description);
                 if (similarity < 0.3) {
-                  return `Description update rejected: the new content is too different from the existing description (similarity: ${Math.round(similarity * 100)}%). Omit replaceDescription and pass <plan>/<outcome>/<log> tags to upsert sections instead.`;
+                  return `Description update rejected: the new content is too different from the existing description (similarity: ${Math.round(similarity * 100)}%). Omit replaceDescription and pass <plan>/<outcome> tags to upsert sections instead.`;
                 }
               }
               await setPageContentFromHtml(currentTask.pageId, description);
             } else {
-              try {
-                await upsertPageSection(currentTask.pageId, description);
-              } catch (err) {
-                return `Description update failed: ${err instanceof Error ? err.message : String(err)}`;
-              }
+              await upsertPageSection(currentTask.pageId, description);
             }
           }
 
@@ -666,10 +631,6 @@ REPARENTING: Pass newParentId to move a task under a different parent (or null t
             endDate !== undefined ||
             updateChannel !== undefined
           ) {
-            // Scheduling fields and description go through different code paths
-            // — updateScheduledTask handles scheduling, while description must
-            // route through upsertPageSection (the zone-aware merger) so we
-            // don't wholesale-replace the page and obliterate <plan>.
             await updateScheduledTask(resolvedTaskId, workspaceId, {
               title,
               schedule,
@@ -680,14 +641,6 @@ REPARENTING: Pass newParentId to move a task under a different parent (or null t
             });
           } else if (title) {
             await updateTask(resolvedTaskId, { title }, false);
-          }
-
-          // Clear the rolling <log> zone, if requested. Runs after description
-          // upsert so a single call can append a final log entry, deliver via
-          // send_message elsewhere, then wipe — though typical usage is one or
-          // the other.
-          if (clearLog && currentTask?.pageId) {
-            await clearPageSection(currentTask.pageId, "log");
           }
 
           if (status) {
@@ -726,7 +679,6 @@ REPARENTING: Pass newParentId to move a task under a different parent (or null t
           if (status) parts.push(`status → ${status}`);
           if (title) parts.push(`title updated`);
           if (description !== undefined) parts.push(`description updated`);
-          if (clearLog) parts.push(`log cleared`);
           if (schedule) parts.push(`schedule updated`);
           if (isActive !== undefined)
             parts.push(isActive ? "resumed" : "paused");
