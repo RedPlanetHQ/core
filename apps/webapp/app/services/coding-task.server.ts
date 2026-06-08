@@ -13,22 +13,34 @@ import { logger } from "~/services/logger.service";
 // tag, so both incoming HTML variants resolve to `type: "outcome"` by
 // the time we get here. The set is keyed on tiptap node types, not HTML
 // tag names.
-const STRUCTURED_TYPES = new Set(["plan", "outcome"]);
+const REPLACE_TYPES = new Set(["plan", "outcome"]);
+const APPEND_TYPES = new Set(["log"]);
+const STRUCTURED_TYPES = new Set([...REPLACE_TYPES, ...APPEND_TYPES]);
 
 type DocNode = { type: string; content?: DocNode[]; [key: string]: unknown };
 
 /**
- * Merge structured agent sections (`plan`, `outcome`) from `input` into `existing`.
+ * Merge structured agent sections from `input` into `existing`.
  *
- * Strict input contract: at most one top-level <plan> and at most one
- * top-level <outcome> per call. Multiple of either throws — the agent sees
- * the error and self-corrects. The legacy <output> tag is still accepted
- * on input (OutcomeNode.parseHTML maps it to type "outcome").
+ * Zones and their semantics:
+ * - <plan>, <outcome> — REPLACE: each call overwrites the zone's content.
+ *   Designed for "current plan" and "current outcome" snapshots.
+ * - <log> — APPEND: the input's <log> children are concatenated onto the
+ *   existing <log>'s children. Designed for rolling per-run data (e.g. a
+ *   recurring task accumulating daily entries).
  *
- * For each (≤1) plan/outcome node in the input: replace the FIRST matching
- * node in `existing` in place (position preserved); append at end if no
- * match exists. Everything else in `input` is dropped — the user's prose
- * is never modified. Pre-existing duplicates in `existing` are NOT deduped.
+ * Strict input contract: at most one top-level node per structured type per
+ * call. Multiple of any one type throws — the agent sees the error and
+ * self-corrects. The legacy <output> tag is still accepted on input
+ * (OutcomeNode.parseHTML maps it to type "outcome").
+ *
+ * For each (≤1) structured node in the input:
+ *   - REPLACE types: overwrite the FIRST matching node in `existing` in
+ *     place (position preserved); append at end if no match exists.
+ *   - APPEND types: concatenate children onto the FIRST matching node in
+ *     `existing`; insert the new node at end if no match exists.
+ * Everything else in `input` is dropped — the user's prose is never
+ * modified. Pre-existing duplicates in `existing` are NOT deduped.
  *
  * Returns a new document; inputs are not mutated.
  */
@@ -66,8 +78,17 @@ export function mergeStructuredSections(
       inputStructured.has(cloned.type) &&
       !usedTypes.has(cloned.type)
     ) {
-      const replacement = inputStructured.get(cloned.type)!;
-      merged.push({ ...cloned, content: replacement.content ?? [] });
+      const incoming = inputStructured.get(cloned.type)!;
+      if (APPEND_TYPES.has(cloned.type)) {
+        const existingChildren = (cloned.content ?? []) as DocNode[];
+        const incomingChildren = (incoming.content ?? []) as DocNode[];
+        merged.push({
+          ...cloned,
+          content: [...existingChildren, ...incomingChildren],
+        });
+      } else {
+        merged.push({ ...cloned, content: incoming.content ?? [] });
+      }
       usedTypes.add(cloned.type);
     } else {
       merged.push(cloned);
@@ -80,6 +101,29 @@ export function mergeStructuredSections(
   }
 
   return { type: existing.type ?? "doc", content: merged };
+}
+
+/**
+ * Remove a specific structured zone from the page document, leaving
+ * everything else (user prose, other zones) untouched. Used by the
+ * `clearLog` flag on `update_task` to wipe the rolling log without
+ * touching plan/outcome or the user's content.
+ */
+export async function clearPageSection(
+  pageId: string,
+  zoneType: "log" | "plan" | "outcome",
+): Promise<void> {
+  const existingHtml = (await getPageContentAsHtml(pageId)) || "";
+  if (!existingHtml) return;
+  const existingDoc = htmlToTiptapJson(existingHtml) as {
+    type: string;
+    content?: DocNode[];
+  };
+  const filtered = (existingDoc.content ?? []).filter(
+    (node) => node.type !== zoneType,
+  );
+  const next = { type: existingDoc.type ?? "doc", content: filtered };
+  await setPageContentFromHtml(pageId, tiptapJsonToHtml(next));
 }
 
 // ─── upsertPageSection ───────────────────────────────────────────────

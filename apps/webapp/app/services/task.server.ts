@@ -781,7 +781,12 @@ export async function updateScheduledTask(
       existing.userId,
       taskId,
     );
-    await setPageContentFromHtml(page.id, data.description);
+    // Merge structured zones (<plan>/<outcome>/<log>) rather than wholesale
+    // replace — wholesale replace here was the bug that let scheduling-field
+    // updates obliterate the rest of the task body (including <plan>) on
+    // recurring tasks.
+    const { upsertPageSection } = await import("~/services/coding-task.server");
+    await upsertPageSection(page.id, data.description);
   }
 
   // Only touch the queue when a scheduling-relevant field actually changed.
