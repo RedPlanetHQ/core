@@ -1,122 +1,168 @@
-import { env } from "~/env.server";
+/**
+ * File storage abstraction.
+ *
+ * Two drivers:
+ *  - `s3`    — uploads/reads against AWS S3 (or any S3-compatible bucket).
+ *              Used when `STORAGE_DRIVER=s3` or when `BUCKET` is set and
+ *              `STORAGE_DRIVER` is unset.
+ *  - `local` — writes files to a directory on the server filesystem
+ *              (default `./data/storage`, override with `STORAGE_DIR`).
+ *              Used when `STORAGE_DRIVER=local` or when no S3 bucket is
+ *              configured.
+ *
+ * Both drivers return the same `${APP_ORIGIN}/api/v1/storage/<uuid>` URL
+ * shape so client code, attachments persisted in conversation history,
+ * and the auth-protected `GET /api/v1/storage/:uuid` route work
+ * identically regardless of driver.
+ */
+
+import { promises as fs } from "node:fs";
+import path from "node:path";
+
 import {
   S3Client,
   PutObjectCommand,
   GetObjectCommand,
-  type GetObjectCommandInput,
 } from "@aws-sdk/client-s3";
-import { getSignedUrl } from "@aws-sdk/s3-request-presigner";
 
-const s3Client = new S3Client({
-  region: process.env.AWS_REGION || "us-east-1",
-  credentials: {
-    accessKeyId: env.ACCESS_KEY_ID || "",
-    secretAccessKey: env.SECRET_ACCESS_KEY || "",
-  },
-});
+import { env } from "~/env.server";
+
+// ─── Driver selection ──────────────────────────────────────────────
+
+type Driver = "s3" | "local";
+
+function resolveDriver(): Driver {
+  if (env.STORAGE_DRIVER) return env.STORAGE_DRIVER as Driver;
+  return env.BUCKET ? "s3" : "local";
+}
+
+const driver: Driver = resolveDriver();
+
+function localBaseDir(): string {
+  return env.STORAGE_DIR
+    ? path.resolve(env.STORAGE_DIR)
+    : path.resolve(process.cwd(), "data", "storage");
+}
+
+// S3 client is lazy — only constructed if we need it.
+let s3ClientSingleton: S3Client | null = null;
+function getS3Client(): S3Client {
+  if (s3ClientSingleton) return s3ClientSingleton;
+  s3ClientSingleton = new S3Client({
+    region: process.env.AWS_REGION || "us-east-1",
+    credentials: {
+      accessKeyId: env.ACCESS_KEY_ID || "",
+      secretAccessKey: env.SECRET_ACCESS_KEY || "",
+    },
+  });
+  return s3ClientSingleton;
+}
+
+// ─── Public API ────────────────────────────────────────────────────
 
 export interface UploadFileResult {
   uuid: string;
   url: string;
 }
 
-export async function uploadFileToS3(
+export async function uploadFile(
   fileBuffer: Buffer,
   fileName: string,
   contentType: string,
   userId: string,
 ): Promise<UploadFileResult> {
-  if (!env.BUCKET) {
-    throw new Error("S3 bucket not configured");
+  const uuid = crypto.randomUUID();
+
+  if (driver === "s3") {
+    if (!env.BUCKET) {
+      throw new Error(
+        "Storage driver is 's3' but BUCKET is not set. Set STORAGE_DRIVER=local to use filesystem storage.",
+      );
+    }
+    const key = `storage/${userId}/${uuid}`;
+    await getS3Client().send(
+      new PutObjectCommand({
+        Bucket: env.BUCKET,
+        Key: key,
+        Body: fileBuffer,
+        ContentType: contentType,
+      }),
+    );
+  } else {
+    const dir = path.join(localBaseDir(), userId);
+    await fs.mkdir(dir, { recursive: true });
+    await fs.writeFile(path.join(dir, uuid), fileBuffer);
+    await fs.writeFile(
+      path.join(dir, `${uuid}.meta.json`),
+      JSON.stringify({ fileName, contentType, uploadedAt: Date.now() }),
+    );
   }
 
-  const uuid = crypto.randomUUID();
-  const key = `storage/${userId}/${uuid}`;
-
-  const command = new PutObjectCommand({
-    Bucket: env.BUCKET,
-    Key: key,
-    Body: fileBuffer,
-    ContentType: contentType,
-  });
-
-  await s3Client.send(command);
-
-  // Store metadata for later retrieval
   storeFileMetadata(uuid, fileName, contentType, userId);
 
-  const frontendHost = env.APP_ORIGIN;
-  const url = `${frontendHost}/api/v1/storage/${uuid}`;
-
+  const url = `${env.APP_ORIGIN}/api/v1/storage/${uuid}`;
   return { uuid, url };
 }
 
-export async function getFileFromS3(
+export async function getFile(
   uuid: string,
   userId: string,
 ): Promise<Response> {
-  if (!env.BUCKET) {
-    throw new Error("S3 bucket not configured");
-  }
-
-  const key = `storage/${userId}/${uuid}`;
-
-  const command = new GetObjectCommand({
-    Bucket: env.BUCKET,
-    Key: key,
+  const { data, contentType } = await getFileBytes(uuid, userId);
+  return new Response(data, {
+    headers: {
+      "Content-Type": contentType,
+      "Content-Length": data.length.toString(),
+      "Cache-Control": "private, max-age=3600",
+    },
   });
-
-  try {
-    const response = await s3Client.send(command);
-
-    if (!response.Body) {
-      throw new Error("File not found");
-    }
-
-    // Convert the response body to a stream
-    const stream = response.Body as ReadableStream;
-
-    return new Response(stream, {
-      headers: {
-        "Content-Type": response.ContentType as string,
-        "Content-Length": response.ContentLength?.toString() || "",
-        "Cache-Control": "public, max-age=3600",
-      },
-    });
-  } catch (error) {
-    throw new Error(`Failed to retrieve file: ${error}`);
-  }
 }
 
-export async function getSignedUrlForS3(
+export async function getFileBytes(
   uuid: string,
   userId: string,
-  expiresIn: number = 3600,
-): Promise<string> {
-  if (!env.BUCKET) {
-    throw new Error("S3 bucket not configured");
-  }
-
-  const key = `storage/${userId}/${uuid}`;
-
-  const command: GetObjectCommandInput = {
-    Bucket: env.BUCKET,
-    Key: key,
-  };
-
-  try {
-    const signedUrl = await getSignedUrl(
-      s3Client,
-      new GetObjectCommand(command),
-      { expiresIn },
+): Promise<{ data: Buffer; contentType: string }> {
+  if (driver === "s3") {
+    if (!env.BUCKET) {
+      throw new Error("Storage driver is 's3' but BUCKET is not set.");
+    }
+    const key = `storage/${userId}/${uuid}`;
+    const response = await getS3Client().send(
+      new GetObjectCommand({ Bucket: env.BUCKET, Key: key }),
     );
-    return signedUrl;
-  } catch (error) {
-    throw new Error(`Failed to generate signed URL: ${error}`);
+    if (!response.Body) throw new Error("File not found");
+    const bytes = await (
+      response.Body as { transformToByteArray: () => Promise<Uint8Array> }
+    ).transformToByteArray();
+    return {
+      data: Buffer.from(bytes),
+      contentType: response.ContentType ?? "application/octet-stream",
+    };
   }
+
+  const filePath = path.join(localBaseDir(), userId, uuid);
+  const metaPath = `${filePath}.meta.json`;
+  let contentType = "application/octet-stream";
+  try {
+    const metaRaw = await fs.readFile(metaPath, "utf8");
+    const meta = JSON.parse(metaRaw) as { contentType?: string };
+    if (meta.contentType) contentType = meta.contentType;
+  } catch {
+    // metadata missing — fall back to octet-stream
+  }
+  const data = await fs.readFile(filePath);
+  return { data, contentType };
 }
 
-// Store file metadata for retrieval
+// ─── Back-compat aliases ───────────────────────────────────────────
+// Old call sites still import the S3-suffixed names. Keep them working.
+
+export const uploadFileToS3 = uploadFile;
+export const getFileFromS3 = getFile;
+export const getFileBytesFromS3 = getFileBytes;
+
+// ─── File metadata (in-memory; survives only for the active process) ──
+
 interface FileMetadata {
   uuid: string;
   fileName: string;
@@ -125,7 +171,6 @@ interface FileMetadata {
   uploadedAt: Date;
 }
 
-// Simple in-memory storage for file metadata (use database in production)
 const fileMetadataStore = new Map<string, FileMetadata>();
 
 export function storeFileMetadata(
@@ -145,4 +190,8 @@ export function storeFileMetadata(
 
 export function getFileMetadata(uuid: string): FileMetadata | undefined {
   return fileMetadataStore.get(uuid);
+}
+
+export function getStorageDriver(): Driver {
+  return driver;
 }

@@ -2,10 +2,10 @@
  * Inbox pill — Tauri-only floating badge that surfaces unread
  * VoiceInboxMessage rows.
  *
- * Visual: mirrors the voice-widget pill (FlickeringGrid + tiny status
- * label, h-7, rounded-lg, top-right of the window). Positioned in
- * top-right of the active screen by the Rust side on every show, and
- * kept there by the shared `voice:active-screen-changed` follower.
+ * Visual: SAM avatar + tiny status label, h-7, rounded-lg, top-right of
+ * the window. Positioned in top-right of the active screen by the Rust
+ * side on every show, and kept there by the shared
+ * `voice:active-screen-changed` follower.
  *
  * Lifecycle (driven entirely from the webview, using session cookies
  * shared with the main window so we don't have to plumb a PAT through
@@ -30,9 +30,8 @@ import {
   type LoaderFunctionArgs,
   type MetaFunction,
 } from "@remix-run/node";
-import { Theme, useTheme } from "remix-themes";
 
-import { FlickeringGrid } from "~/components/ui/flickering-grid";
+import { SamAvatar } from "~/components/ui/sam-avatar";
 import { isTauri, tauriInvoke, tauriListen } from "~/lib/tauri.client";
 import { cn } from "~/lib/utils";
 
@@ -73,8 +72,6 @@ export default function InboxPill() {
   // the user can read along while butler speaks (mirrors the partial
   // transcript card in the voice-widget).
   const [summary, setSummary] = useState<string>("");
-  const [theme] = useTheme();
-  const isDark = theme === Theme.DARK;
 
   const visibleRef = useRef(false);
   const busyRef = useRef(false);
@@ -444,17 +441,9 @@ export default function InboxPill() {
     void hidePanel();
   }
 
-  // Pill visuals — match voice-widget exactly. There's only ever one
-  // pill: the label text and click handler flip based on status, but
-  // the FlickeringGrid + chrome stay put. While speaking, clicking
-  // the same pill stops the speech.
-  const isActive = status === "speaking" || status === "summarising";
-  const gridColor = isActive
-    ? "rgb(var(--primary))"
-    : isDark
-      ? "oklch(85.8% 0 0)"
-      : "oklch(30.87% 0 0)";
-
+  // Pill visuals — the SAM avatar lives on the left and the label text +
+  // click handler flip based on status. While speaking, clicking the same
+  // pill stops the speech.
   const stateLabel = (() => {
     if (status === "summarising") return "Summarising…";
     if (status === "speaking") return "Stop";
@@ -483,17 +472,7 @@ export default function InboxPill() {
         )}
         title={pillTitle}
       >
-        <div className="relative h-3.5 w-5 overflow-hidden rounded-sm">
-          <FlickeringGrid
-            width={20}
-            height={14}
-            squareSize={2}
-            gridGap={2}
-            flickerChance={isActive ? 0.8 : 0.3}
-            maxOpacity={isActive ? 0.9 : 0.25}
-            color={gridColor}
-          />
-        </div>
+        <SamAvatar size={24} />
         {stateLabel}
       </button>
 

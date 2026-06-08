@@ -149,9 +149,7 @@ export function FilesPane({
 
   // Breadcrumb shows the file's name as a trailing segment in viewer
   // mode; clicking back-off through it returns to the directory.
-  const breadcrumbFileName = viewingFilePath
-    ? basename(viewingFilePath)
-    : null;
+  const breadcrumbFileName = viewingFilePath ? basename(viewingFilePath) : null;
 
   const handleNavigateFromBreadcrumb = (p: string) => {
     if (isViewingFile) onCloseFile();
@@ -162,7 +160,7 @@ export function FilesPane({
   return (
     <div className="flex h-full min-h-0 flex-col overflow-hidden">
       {/* Header: root picker + breadcrumb + actions */}
-      <div className="flex shrink-0 items-center gap-2 border-b px-3 py-2">
+      <div className="flex shrink-0 items-center gap-2 border-b px-3 py-1">
         {roots.length === 0 ? (
           <span className="text-muted-foreground text-sm">
             No folders registered with the <code>exec</code> scope.
@@ -272,7 +270,7 @@ export function FilesPane({
                   <button
                     type="button"
                     className={cn(
-                      "flex w-full items-center gap-2 px-3 py-1.5 text-left text-sm transition-colors",
+                      "flex w-full items-center gap-2 px-3 py-1.5 text-left transition-colors",
                       isSelected
                         ? "bg-accent text-accent-foreground"
                         : "hover:bg-background-3",
@@ -299,9 +297,7 @@ export function FilesPane({
                         size={16}
                         className={cn(
                           "shrink-0",
-                          isDir
-                            ? "text-foreground"
-                            : "text-muted-foreground",
+                          isDir ? "text-foreground" : "text-muted-foreground",
                         )}
                       />
                     )}
@@ -316,49 +312,49 @@ export function FilesPane({
                         shift when the download button shows. */}
                     {!isDir ? <span className="w-7 shrink-0" /> : null}
                   </button>
-                  {!isDir ? (
-                    (() => {
-                      const isDownloading = downloading.has(entry.name);
-                      return (
-                        <button
-                          type="button"
-                          onClick={(e) => {
-                            e.stopPropagation();
-                            if (!isDownloading) {
-                              void handleDownload(entry.name, fullPath);
+                  {!isDir
+                    ? (() => {
+                        const isDownloading = downloading.has(entry.name);
+                        return (
+                          <button
+                            type="button"
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              if (!isDownloading) {
+                                void handleDownload(entry.name, fullPath);
+                              }
+                            }}
+                            onDoubleClick={(e) => e.stopPropagation()}
+                            disabled={isDownloading}
+                            className={cn(
+                              "text-muted-foreground hover:text-foreground hover:bg-background-3 absolute right-2 top-1/2 inline-flex h-6 w-6 -translate-y-1/2 items-center justify-center rounded transition-opacity",
+                              // Stay visible while downloading even if the
+                              // pointer leaves the row, so the user can see
+                              // the progress to completion.
+                              isDownloading
+                                ? "opacity-100"
+                                : "opacity-0 focus-visible:opacity-100 group-hover/row:opacity-100",
+                            )}
+                            title={
+                              isDownloading
+                                ? `Downloading ${entry.name}…`
+                                : `Download ${entry.name}`
                             }
-                          }}
-                          onDoubleClick={(e) => e.stopPropagation()}
-                          disabled={isDownloading}
-                          className={cn(
-                            "text-muted-foreground hover:text-foreground hover:bg-background-3 absolute right-2 top-1/2 inline-flex h-6 w-6 -translate-y-1/2 items-center justify-center rounded transition-opacity",
-                            // Stay visible while downloading even if the
-                            // pointer leaves the row, so the user can see
-                            // the progress to completion.
-                            isDownloading
-                              ? "opacity-100"
-                              : "opacity-0 focus-visible:opacity-100 group-hover/row:opacity-100",
-                          )}
-                          title={
-                            isDownloading
-                              ? `Downloading ${entry.name}…`
-                              : `Download ${entry.name}`
-                          }
-                          aria-label={
-                            isDownloading
-                              ? `Downloading ${entry.name}`
-                              : `Download ${entry.name}`
-                          }
-                        >
-                          {isDownloading ? (
-                            <Loader2 size={13} className="animate-spin" />
-                          ) : (
-                            <Download size={13} />
-                          )}
-                        </button>
-                      );
-                    })()
-                  ) : null}
+                            aria-label={
+                              isDownloading
+                                ? `Downloading ${entry.name}`
+                                : `Download ${entry.name}`
+                            }
+                          >
+                            {isDownloading ? (
+                              <Loader2 size={13} className="animate-spin" />
+                            ) : (
+                              <Download size={13} />
+                            )}
+                          </button>
+                        );
+                      })()
+                    : null}
                 </li>
               );
             })}
@@ -398,7 +394,7 @@ function Breadcrumb({
   const segments = inside ? inside.split("/") : [];
 
   return (
-    <div className="text-muted-foreground flex min-w-0 items-center gap-1 text-xs">
+    <div className="text-muted-foreground flex min-w-0 items-center gap-1">
       <button
         type="button"
         className="hover:text-foreground truncate font-mono"

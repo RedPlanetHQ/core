@@ -62,6 +62,10 @@ const EnvironmentSchema = z
     ACCESS_KEY_ID: z.string().optional(),
     SECRET_ACCESS_KEY: z.string().optional(),
     BUCKET: z.string().optional(),
+    /** "s3" | "local". If unset, auto-picks "s3" when BUCKET is set else "local". */
+    STORAGE_DRIVER: z.enum(["s3", "local"]).optional(),
+    /** Directory for the local storage driver. Defaults to ./data/storage. */
+    STORAGE_DIR: z.string().optional(),
     ELEVENLABS_API_KEY: z.string().optional(),
 
     // google auth

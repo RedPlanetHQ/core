@@ -10,6 +10,7 @@ import { UserTypeEnum } from "@core/types";
 import { ConversationItem } from "./conversation-item.client";
 import {
   ConversationTextarea,
+  type ChatAttachment,
   type LLMModel,
 } from "./conversation-textarea.client";
 import { ThinkingIndicator } from "./thinking-indicator.client";
@@ -474,8 +475,24 @@ export function ConversationView({
               }
               isStopping={isStopping}
               disabled={needsApproval}
-              onConversationCreated={(message) => {
-                if (message) sendMessage({ text: message });
+              onConversationCreated={(message, attachments) => {
+                const hasAttachments = (attachments?.length ?? 0) > 0;
+                if (!message && !hasAttachments) return;
+                if (hasAttachments) {
+                  const parts: Array<Record<string, unknown>> = [];
+                  if (message) parts.push({ type: "text", text: message });
+                  for (const a of attachments as ChatAttachment[]) {
+                    parts.push({
+                      type: "file",
+                      url: a.url,
+                      mediaType: a.mediaType,
+                      filename: a.filename,
+                    });
+                  }
+                  sendMessage({ role: "user", parts: parts as any });
+                } else {
+                  sendMessage({ text: message });
+                }
               }}
               stop={handleStop}
               models={modelsProp}

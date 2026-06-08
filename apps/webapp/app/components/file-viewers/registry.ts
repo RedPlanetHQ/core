@@ -1,7 +1,8 @@
 import { MarkdownViewer } from "./markdown-viewer";
 import { CodeViewer } from "./code-viewer";
 import { TextViewer } from "./text-viewer";
-import { PptxViewer } from "./pptx-viewer";
+import { CsvViewer } from "./csv-viewer";
+import { OfficeViewer } from "./office-viewer";
 import type { ViewerInfo } from "./types";
 
 /**
@@ -16,12 +17,14 @@ export const VIEWERS: ViewerInfo[] = [
   { id: "markdown", label: "Markdown", component: MarkdownViewer },
   { id: "code", label: "Code", component: CodeViewer },
   { id: "text", label: "Text", component: TextViewer },
-  // pptx-preview wants the raw bytes — skip the text fetch and let
-  // the viewer pull from /fs/download itself.
+  { id: "csv", label: "CSV", component: CsvViewer },
+  // Office Online viewer for binary office formats (PPTX / DOCX /
+  // XLSX). Needs the file's raw URL, not text — skipContentFetch
+  // makes the host hand the viewer the path directly.
   {
-    id: "pptx",
-    label: "PowerPoint",
-    component: PptxViewer,
+    id: "office",
+    label: "Office document",
+    component: OfficeViewer,
     skipContentFetch: true,
   },
 ];
@@ -57,10 +60,14 @@ const EXT_TO_VIEWER: Record<string, string> = {
   dockerfile: "code", makefile: "code", proto: "code",
 
   // Plain text
-  txt: "text", log: "text", csv: "text", tsv: "text",
+  txt: "text", log: "text", tsv: "text",
 
-  // Office (renderable via pptx-preview)
-  pptx: "pptx",
+  // CSV → dedicated table viewer
+  csv: "csv",
+
+  // Office (renderable via Microsoft Office Online iframe)
+  pptx: "office",
+  docx: "office",
 };
 
 /**
@@ -82,9 +89,10 @@ const BINARY_EXTENSIONS = new Set<string>([
   "mp3", "wav", "flac", "ogg", "m4a", "aac", "wma", "opus",
   // Archives
   "zip", "tar", "gz", "tgz", "bz2", "xz", "7z", "rar", "lz", "lzma", "zst",
-  // Office / docs (binary). pptx is excluded — handled by PptxViewer
-  // via pptx-preview, so it falls through to EXT_TO_VIEWER below.
-  "pdf", "doc", "docx", "xls", "xlsx", "ppt", "odt", "ods", "odp",
+  // Office / docs (binary). pptx + docx are excluded — handled by
+  // OfficeViewer via the MS Office Online iframe, so they fall
+  // through to EXT_TO_VIEWER below.
+  "pdf", "doc", "xls", "xlsx", "ppt", "odt", "ods", "odp",
   "pages", "numbers", "key", "keynote", "rtf",
   // Executables / libraries / installers
   "exe", "bin", "so", "dll", "dylib", "app", "dmg", "iso", "msi", "pkg",
