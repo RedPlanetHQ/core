@@ -1,6 +1,13 @@
 import { useEffect, useState } from "react";
 import DocViewer, { DocViewerRenderers } from "@cyntler/react-doc-viewer";
-import { AlertCircle, Loader2 } from "lucide-react";
+import {
+  AlertCircle,
+  Download,
+  ExternalLink,
+  Loader2,
+  ShieldAlert,
+} from "lucide-react";
+import { Button, buttonVariants } from "~/components/ui";
 import { cn } from "~/lib/utils";
 import type { ViewerComponentProps } from "./types";
 
@@ -9,16 +16,21 @@ import type { ViewerComponentProps } from "./types";
  * @cyntler/react-doc-viewer's MSDocRenderer, which embeds the file
  * via the Microsoft Office Online Viewer.
  *
- * Office Online fetches the file directly from a public URL — it
- * can't carry our session cookie. So on mount we mint a short-lived
- * signed URL via POST /fs/signed-url (auth-gated, 5 min HMAC token)
- * and hand THAT URL to DocViewer. The matching public route
- * /api/v1/fs/signed/:token/:filename streams the bytes inline.
+ * Privacy gate: Microsoft Office Online is a hosted preview — their
+ * servers fetch the file bytes from a short-lived (5 min) signed URL
+ * during render. To keep that explicit, we DON'T mint the signed URL
+ * on mount. The user sees a consent card first with two choices:
+ *   - Allow:    mint the signed URL and embed the Office Online iframe
+ *   - Download: hit the session-gated /fs/download route directly,
+ *               nothing touches Microsoft
  *
- * Privacy note (worth surfacing if it ever matters): Microsoft sees
- * the file contents during render. Token expires fast (5 min) and
- * scopes to (workspaceId, gatewayId, path) — but the URL is fetched
- * by an external server while it's live.
+ * Asked every time. No session memory yet — when "remember this" is
+ * needed, do it as a workspace setting, not browser-local state.
+ *
+ * Signed URL flow: POST /fs/signed-url (auth-gated) mints an HMAC
+ * token scoped to (workspaceId, gatewayId, path) with a 5-minute
+ * expiry. The matching public route /api/v1/fs/signed/:token/:filename
+ * streams the bytes inline so Microsoft's iframe can fetch them.
  *
  * Skips the standard /fs/read text path (`skipContentFetch: true` in
  * the registry) since DocViewer just needs the URL.
@@ -39,12 +51,24 @@ interface SignedUrlResponse {
   error?: string;
 }
 
-export function OfficeViewer({ gatewayId, path, className }: ViewerComponentProps) {
+export function OfficeViewer({
+  gatewayId,
+  path,
+  className,
+}: ViewerComponentProps) {
   const [signedUrl, setSignedUrl] = useState<string | null>(null);
-  const [loading, setLoading] = useState(true);
+  const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  // Consent is asked every time. No session memory — the user picks
+  // Allow or Download on each open. Until "Allow" is clicked we don't
+  // mint a signed URL, so Microsoft never gets a pointer to the file.
+  const [consented, setConsented] = useState(false);
+
+  const filename = basename(path);
+  const downloadHref = `/api/v1/gateways/${gatewayId}/fs/download?path=${encodeURIComponent(path)}`;
 
   useEffect(() => {
+    if (!consented) return;
     let cancelled = false;
     setLoading(true);
     setError(null);
@@ -75,7 +99,54 @@ export function OfficeViewer({ gatewayId, path, className }: ViewerComponentProp
     return () => {
       cancelled = true;
     };
+  }, [gatewayId, path, consented]);
+
+  // Reset consent whenever the file changes — every open re-prompts.
+  useEffect(() => {
+    setConsented(false);
+    setSignedUrl(null);
+    setError(null);
   }, [gatewayId, path]);
+
+  if (!consented) {
+    return (
+      <div
+        className={cn(
+          "flex h-full flex-col items-center justify-center gap-3 p-6 text-center",
+          className,
+        )}
+      >
+        <ShieldAlert size={28} className="text-muted-foreground" />
+        <div className="max-w-md space-y-1">
+          <p className="text-foreground font-medium">
+            Preview sends this file to Microsoft
+          </p>
+          <p className="text-muted-foreground text-sm leading-relaxed">
+            To render {filename} we hand a short-lived (5 min) signed URL to
+            Microsoft Office Online. Their servers fetch the bytes to display
+            the preview. If you'd rather not, download the file instead.
+          </p>
+        </div>
+        <div className="flex items-center gap-2">
+          <Button onClick={() => setConsented(true)}>
+            <ExternalLink size={14} className="mr-1.5" />
+            Allow
+          </Button>
+          {/* Plain anchor styled with buttonVariants — our Button always
+              emits a leading slot ({isLoading ? <Loader/> : <></>}) which
+              violates Slot's React.Children.only when used with asChild. */}
+          <a
+            href={downloadHref}
+            download={filename}
+            className={buttonVariants({ variant: "secondary" })}
+          >
+            <Download size={14} className="mr-1.5" />
+            Download
+          </a>
+        </div>
+      </div>
+    );
+  }
 
   if (loading) {
     return (
@@ -107,10 +178,30 @@ export function OfficeViewer({ gatewayId, path, className }: ViewerComponentProp
     );
   }
 
-  const filename = basename(path);
   const fileType = fileTypeFromPath(path);
   return (
-    <div className={cn("h-full w-full overflow-hidden bg-white", className)}>
+    <div
+      className={cn(
+        "office-viewer-host h-full w-full overflow-hidden bg-white",
+        className,
+      )}
+    >
+      {/* The library doesn't cascade its inline `style={{ height: '100%' }}`
+          down to the iframe — its inner wrappers default to a small fixed
+          height. Force the full chain to fill the host. */}
+      <style>{`
+        .office-viewer-host #react-doc-viewer,
+        .office-viewer-host #proxy-renderer,
+        .office-viewer-host #msdoc-renderer {
+          height: 100% !important;
+          width: 100% !important;
+        }
+        .office-viewer-host #msdoc-iframe {
+          height: 100% !important;
+          width: 100% !important;
+          border: 0;
+        }
+      `}</style>
       <DocViewer
         documents={[{ uri: signedUrl, fileType, fileName: filename }]}
         pluginRenderers={DocViewerRenderers}
