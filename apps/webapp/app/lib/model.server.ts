@@ -215,10 +215,11 @@ function buildOpenAIProviderOptions(
       options.reasoningEffort = "low";
     } else {
       options.promptCacheRetention = "24h";
-      // gpt-5 dropped "none" — the OpenAI Responses API now only accepts
-      // "minimal" | "low" | "medium" | "high". "minimal" is the
-      // closest analog to the previous "none" default.
-      options.reasoningEffort = reasoningEffort || "minimal";
+      // Lowest-reasoning default differs by family:
+      //   gpt-5    → "minimal" | "low" | "medium" | "high"
+      //   gpt-5.2+ → "none" | "low" | "medium" | "high" | "xhigh"
+      const lowestEffort = modelId.startsWith("gpt-5.2") ? "none" : "minimal";
+      options.reasoningEffort = reasoningEffort || (lowestEffort as any);
     }
   }
 

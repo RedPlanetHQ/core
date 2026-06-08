@@ -32,6 +32,7 @@ import { getTaskTools } from "../tools/task-tools";
 import { getMessageTools } from "../tools/message-tools";
 import { getSessionTools } from "../tools/session-tools";
 import { getSleepTool, getProgressUpdateTool } from "../tools/utils-tools";
+import { getReadFileTool } from "../tools/file-tools";
 import {
   getListAvailableIntegrationsTool,
   getSuggestIntegrationsTool,
@@ -137,6 +138,10 @@ export async function createCoreTools(
   // Progress narration — available globally so any long-running step
   // (delegations, syntheses) can keep the user informed.
   tools["progress_update"] = getProgressUpdateTool();
+
+  // Load a file at a URL into the model context (images, PDFs, text).
+  // Works against external URLs and internal /api/v1/storage attachments.
+  tools["read_file"] = getReadFileTool(userId);
 
   // Integration catalog — global. Agent calls this before
   // suggest_integrations to see which slugs are valid and which are

@@ -18,9 +18,13 @@
 import { json } from "@remix-run/node";
 import { z } from "zod";
 
+import { UserTypeEnum } from "@core/types";
 import { createHybridActionApiRoute } from "~/services/routeBuilders/apiBuilder.server";
 import { prisma } from "~/db.server";
 import { summarize } from "~/services/summarize.server";
+import { upsertConversationHistory } from "~/services/conversation.server";
+import { getOrCreateQuickChat } from "~/services/voice-conversation.server";
+import { logger } from "~/services/logger.service";
 
 const BodySchema = z.object({
   mode: z.enum(["voice", "text"]).optional(),
@@ -35,6 +39,7 @@ const { loader, action } = createHybridActionApiRoute(
   },
   async ({ body, authentication }) => {
     const userId = authentication.userId;
+    const workspaceId = authentication.workspaceId as string | undefined;
     const mode = body.mode ?? "voice";
 
     const items = await prisma.voiceInboxMessage.findMany({
@@ -62,6 +67,28 @@ const { loader, action } = createHybridActionApiRoute(
       where: { id: { in: items.map((i) => i.id) } },
       data: { checked: new Date() },
     });
+
+    // Append the catchup to today's Quick Chat as an Agent turn so the
+    // user can scroll back and re-read what was just spoken to them. We
+    // never block the response on this — if the workspace isn't on the
+    // auth payload (some token paths) or the write fails, the catchup
+    // still goes out.
+    if (summary && workspaceId) {
+      try {
+        const conversationId = await getOrCreateQuickChat(workspaceId, userId);
+        await upsertConversationHistory(
+          crypto.randomUUID(),
+          [{ type: "text", text: summary }],
+          conversationId,
+          UserTypeEnum.Agent,
+        );
+      } catch (error) {
+        logger.warn("[inbox.summarise] failed to append summary to Quick Chat", {
+          error: error instanceof Error ? error.message : String(error),
+          userId,
+        });
+      }
+    }
 
     return json({ summary, count: items.length });
   },

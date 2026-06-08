@@ -62,6 +62,48 @@ export async function action({ request }: ActionFunctionArgs) {
     return json(submission.reply());
   }
 
+  // Optional attachments — composer JSON-stringifies an array of
+  // {url, mediaType, filename} into a hidden form field.
+  type IncomingAttachment = {
+    url: string;
+    mediaType: string;
+    filename: string;
+  };
+  let attachments: IncomingAttachment[] = [];
+  const attachmentsRaw = formData.get("attachments");
+  if (typeof attachmentsRaw === "string" && attachmentsRaw.length > 0) {
+    try {
+      const parsed = JSON.parse(attachmentsRaw);
+      if (Array.isArray(parsed)) {
+        attachments = parsed.filter(
+          (a): a is IncomingAttachment =>
+            !!a &&
+            typeof a.url === "string" &&
+            typeof a.mediaType === "string" &&
+            typeof a.filename === "string",
+        );
+      }
+    } catch {
+      // ignore malformed attachments — proceed with text only
+    }
+  }
+
+  const seedParts: Array<{
+    type: string;
+    text?: string;
+    url?: string;
+    mediaType?: string;
+    filename?: string;
+  }> = [{ type: "text", text: submission.value.message }];
+  for (const a of attachments) {
+    seedParts.push({
+      type: "file",
+      url: a.url,
+      mediaType: a.mediaType,
+      filename: a.filename,
+    });
+  }
+
   const conversation = await createConversation(
     workspace?.id as string,
     userId,
@@ -69,7 +111,7 @@ export async function action({ request }: ActionFunctionArgs) {
       message: submission.value.message,
       title: submission.value.title ?? "Untitled",
       incognito: Boolean(submission.value.incognito),
-      parts: [{ text: submission.value.message, type: "text" }],
+      parts: seedParts,
     },
   );
 

@@ -26,8 +26,11 @@ export const CreateConversationSchema = z.object({
   parts: z
     .array(
       z.object({
-        text: z.string(),
         type: z.string(),
+        text: z.string().optional(),
+        url: z.string().optional(),
+        mediaType: z.string().optional(),
+        filename: z.string().optional(),
       }),
     )
     .optional(),

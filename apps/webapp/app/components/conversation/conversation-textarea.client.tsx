@@ -9,7 +9,7 @@ import { useCallback, useEffect, useRef, useState } from "react";
 import { cn } from "~/lib/utils";
 import { Button } from "../ui";
 import { Switch } from "../ui/switch";
-import { AudioLines, LoaderCircle } from "lucide-react";
+import { AudioLines, FileText, LoaderCircle, Paperclip, X } from "lucide-react";
 import { useSubmit } from "@remix-run/react";
 import {
   Select,
@@ -36,6 +36,16 @@ export interface LLMModel {
 
 export type PermissionMode = "default" | "full";
 
+export interface ChatAttachment {
+  url: string;
+  mediaType: string;
+  filename: string;
+}
+
+const ATTACHMENT_ACCEPT =
+  "image/*,application/pdf,text/*,application/json,application/xml,.csv,.txt,.md,.json,.xml,.yaml,.yml";
+const MAX_ATTACHMENT_BYTES = 20 * 1024 * 1024;
+
 interface ConversationTextareaProps {
   defaultValue?: string;
   placeholder?: string;
@@ -44,7 +54,10 @@ interface ConversationTextareaProps {
   className?: string;
   onChange?: (text: string) => void;
   disabled?: boolean;
-  onConversationCreated?: (message: string) => void;
+  onConversationCreated?: (
+    message: string,
+    attachments?: ChatAttachment[],
+  ) => void;
   stop?: () => void;
   models?: LLMModel[];
   selectedModelId?: string;
@@ -97,6 +110,10 @@ export function ConversationTextarea({
   onVoiceTurnResult,
 }: ConversationTextareaProps) {
   const [text, setText] = useState(defaultValue ?? "");
+  const [attachments, setAttachments] = useState<ChatAttachment[]>([]);
+  const [uploadingCount, setUploadingCount] = useState(0);
+  const [uploadError, setUploadError] = useState<string | null>(null);
+  const fileInputRef = useRef<HTMLInputElement | null>(null);
   const [internalVoiceMode, setInternalVoiceMode] = useState(false);
   const voiceMode = voiceModeProp ?? internalVoiceMode;
   const setVoiceMode = (next: boolean) => {
@@ -172,15 +189,83 @@ export function ConversationTextarea({
     },
   });
 
-  // Keep sendRef current
-  const handleSend = useCallback(() => {
-    if (!editor || !text || disabled) {
+  const uploadFile = useCallback(async (file: File) => {
+    if (file.size > MAX_ATTACHMENT_BYTES) {
+      setUploadError(
+        `${file.name} is over ${Math.round(MAX_ATTACHMENT_BYTES / 1024 / 1024)} MB`,
+      );
       return;
     }
-    onConversationCreated && onConversationCreated(text);
+    setUploadError(null);
+    setUploadingCount((c) => c + 1);
+    try {
+      const form = new FormData();
+      form.append("File", file);
+      const res = await fetch("/api/v1/storage", {
+        method: "POST",
+        body: form,
+        credentials: "include",
+      });
+      if (!res.ok) {
+        throw new Error(`upload failed (${res.status})`);
+      }
+      const data = (await res.json()) as {
+        url?: string;
+        filename?: string;
+        contentType?: string;
+      };
+      if (!data.url) throw new Error("no url returned");
+      setAttachments((prev) => [
+        ...prev,
+        {
+          url: data.url!,
+          filename: data.filename ?? file.name,
+          mediaType:
+            data.contentType ?? file.type ?? "application/octet-stream",
+        },
+      ]);
+    } catch (e) {
+      setUploadError(
+        e instanceof Error ? e.message : "upload failed — try again",
+      );
+    } finally {
+      setUploadingCount((c) => c - 1);
+    }
+  }, []);
+
+  const handleFiles = useCallback(
+    (files: FileList | File[]) => {
+      const arr = Array.from(files);
+      arr.forEach((f) => {
+        void uploadFile(f);
+      });
+    },
+    [uploadFile],
+  );
+
+  const removeAttachment = useCallback((index: number) => {
+    setAttachments((prev) => prev.filter((_, i) => i !== index));
+  }, []);
+
+  // Keep sendRef current
+  const handleSend = useCallback(() => {
+    if (!editor || disabled) return;
+    if (!text && attachments.length === 0) return;
+    if (uploadingCount > 0) return;
+    onConversationCreated &&
+      onConversationCreated(text, attachments.length ? attachments : undefined);
     editor.commands.clearContent(true);
     setText("");
-  }, [editor, text, disabled, onConversationCreated]);
+    setAttachments([]);
+    setUploadError(null);
+  }, [
+    editor,
+    text,
+    disabled,
+    attachments,
+    uploadingCount,
+    onConversationCreated,
+  ]);
 
   useEffect(() => {
     sendRef.current = handleSend;
@@ -230,7 +315,42 @@ export function ConversationTextarea({
   }
 
   return (
-    <div className="bg-background-3 rounded-xl">
+    <div
+      className="bg-background-3 rounded-xl"
+      onDragOver={(e) => {
+        if (disabled) return;
+        e.preventDefault();
+      }}
+      onDrop={(e) => {
+        if (disabled) return;
+        e.preventDefault();
+        if (e.dataTransfer?.files?.length) {
+          handleFiles(e.dataTransfer.files);
+        }
+      }}
+    >
+      {(attachments.length > 0 || uploadingCount > 0 || uploadError) && (
+        <div className="flex flex-wrap gap-2 px-3 pt-3">
+          {attachments.map((a, i) => (
+            <AttachmentChip
+              key={`${a.url}-${i}`}
+              attachment={a}
+              onRemove={() => removeAttachment(i)}
+            />
+          ))}
+          {uploadingCount > 0 && (
+            <div className="text-muted-foreground flex items-center gap-2 rounded-md border border-dashed px-2 py-1 text-xs">
+              <LoaderCircle size={12} className="animate-spin" />
+              Uploading…
+            </div>
+          )}
+          {uploadError && (
+            <div className="text-destructive flex items-center gap-2 rounded-md border border-dashed border-red-300 px-2 py-1 text-xs">
+              {uploadError}
+            </div>
+          )}
+        </div>
+      )}
       <EditorContent
         editor={editor}
         className={cn(
@@ -238,8 +358,30 @@ export function ConversationTextarea({
           className,
         )}
       />
+      <input
+        ref={fileInputRef}
+        type="file"
+        accept={ATTACHMENT_ACCEPT}
+        multiple
+        className="hidden"
+        onChange={(e) => {
+          if (e.target.files?.length) handleFiles(e.target.files);
+          e.target.value = "";
+        }}
+      />
       <div className="flex items-center justify-between px-2 pb-2 pt-1">
-        <div>
+        <div className="flex items-center gap-1">
+          <Button
+            variant="ghost"
+            size="sm"
+            type="button"
+            onClick={() => fileInputRef.current?.click()}
+            disabled={disabled}
+            title="Attach image or PDF"
+            aria-label="Attach file"
+          >
+            <Paperclip size={14} />
+          </Button>
           {showModelSelector && (
             <Select value={selectedModelId} onValueChange={onModelChange}>
               <SelectTrigger className="h-8 w-auto min-w-[110px] border-0 bg-transparent text-sm shadow-none focus:ring-0">
@@ -294,7 +436,12 @@ export function ConversationTextarea({
                 handleSend();
               }
             }}
-            disabled={disabled || isStopping}
+            disabled={
+              disabled ||
+              isStopping ||
+              (!isLoading && uploadingCount > 0) ||
+              (!isLoading && !text && attachments.length === 0)
+            }
             size="lg"
           >
             {isStopping ? (
@@ -310,6 +457,44 @@ export function ConversationTextarea({
           </Button>
         </div>
       </div>
+    </div>
+  );
+}
+
+function AttachmentChip({
+  attachment,
+  onRemove,
+}: {
+  attachment: ChatAttachment;
+  onRemove: () => void;
+}) {
+  const isImage = attachment.mediaType.startsWith("image/");
+  return (
+    <div className="bg-background-2 border-border flex items-center gap-2 rounded-md border px-2 py-1 text-xs">
+      {isImage ? (
+        <img
+          src={attachment.url}
+          alt={attachment.filename}
+          className="h-8 w-8 rounded object-cover"
+          title={attachment.filename}
+        />
+      ) : (
+        <>
+          <FileText size={14} className="text-muted-foreground" />
+          <span className="max-w-[160px] truncate" title={attachment.filename}>
+            {attachment.filename}
+          </span>
+        </>
+      )}
+
+      <button
+        type="button"
+        className="text-muted-foreground hover:text-foreground"
+        onClick={onRemove}
+        aria-label={`Remove ${attachment.filename}`}
+      >
+        <X size={12} />
+      </button>
     </div>
   );
 }

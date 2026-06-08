@@ -97,7 +97,10 @@ const BLINK_INTERVAL_MAX_MS = 6000;
 const BLINK_CLOSED_MS = 130;
 // Sprite is 64 wide → x=32 is the centerline between left and right eyes.
 const EYE_SPLIT_X = 32;
-// Approx vertical center of the right eye in sprite coords (used as transform-origin).
+// Approx vertical centers of each eye in sprite coords (used as transform-origin
+// for the blink scaleY). Symmetric around the split line.
+const LEFT_EYE_CENTER_X = 22;
+const LEFT_EYE_CENTER_Y = 12;
 const RIGHT_EYE_CENTER_X = 42;
 const RIGHT_EYE_CENTER_Y = 12;
 
@@ -181,7 +184,7 @@ export function SamAvatar({
     };
   }, [trackCursor, eyeScaleX, eyeScaleY]);
 
-  // Random one-eye blink — winks the RIGHT eye every 3–6 s.
+  // Random both-eye blink — closes both eyes briefly every 3–6 s, like a human.
   const [isBlinking, setIsBlinking] = useState(false);
   useEffect(() => {
     let cancelled = false;
@@ -234,9 +237,17 @@ export function SamAvatar({
           const rightRects = group.rects.filter(([x]) => x >= EYE_SPLIT_X);
           return (
             <g key={gi} fill={color}>
-              {leftRects.map(([x, y, w, h], i) => (
-                <rect key={`l${i}`} x={x} y={y} width={w} height={h} />
-              ))}
+              <g
+                style={{
+                  transformOrigin: `${LEFT_EYE_CENTER_X}px ${LEFT_EYE_CENTER_Y}px`,
+                  transform: isBlinking ? "scaleY(0.05)" : "scaleY(1)",
+                  transition: "transform 90ms ease-out",
+                }}
+              >
+                {leftRects.map(([x, y, w, h], i) => (
+                  <rect key={`l${i}`} x={x} y={y} width={w} height={h} />
+                ))}
+              </g>
               <g
                 style={{
                   transformOrigin: `${RIGHT_EYE_CENTER_X}px ${RIGHT_EYE_CENTER_Y}px`,

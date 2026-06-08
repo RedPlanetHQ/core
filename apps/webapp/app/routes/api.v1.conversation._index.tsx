@@ -25,6 +25,7 @@ import {
   createResumableUIResponse,
   drainAgentResult,
 } from "~/services/agent/mastra-stream.server";
+import { processFileAttachments } from "~/services/agent/file-resolver.server";
 import {
   registerStream,
   unregisterStream,
@@ -249,10 +250,16 @@ const { loader, action } = createHybridActionApiRoute(
       let currentMessage: MessageEntry;
       let historyForSelection: MessageEntry[];
       if (incomingUserText && !alreadyInHistory) {
+        // Preserve the FULL incoming parts (text + file attachments etc.)
+        // — earlier this dropped everything but the first text part, so
+        // attachments never reached the model.
+        const incomingParts = normalizeParts(body.message?.parts);
         currentMessage = {
           id: body.message?.id ?? generateId(),
           role: "user",
-          parts: [{ type: "text", text: incomingUserText }],
+          parts: incomingParts.length
+            ? incomingParts
+            : [{ type: "text", text: incomingUserText }],
         };
         historyForSelection = validHistory;
       } else {
@@ -542,7 +549,15 @@ const { loader, action } = createHybridActionApiRoute(
 
     let stream;
     try {
-      stream = await agent.stream(modelMessages, {
+      // Walk modelMessages content[] and resolve any file parts:
+      //   - image/* and application/pdf → fetch bytes, set data=Buffer
+      //   - text/*, json, xml, yaml    → drop part, inline into <attachments>
+      //   - everything else            → drop part, list as unsupported
+      const finalModelMessages = await processFileAttachments(
+        modelMessages as any,
+        authentication.userId,
+      );
+      stream = await agent.stream(finalModelMessages, {
         toolsets: { core: tools },
         runId: body.id,
         stopWhen: [stepCountIs(10)],

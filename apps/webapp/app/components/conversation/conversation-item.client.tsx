@@ -117,16 +117,38 @@ const ConversationItemComponent = ({
 
     if (
       partType === "file" &&
-      typeof (part as { mediaType?: string }).mediaType === "string" &&
-      (part as { mediaType: string }).mediaType.startsWith("image/")
+      typeof (part as { mediaType?: string }).mediaType === "string"
     ) {
-      const filePart = part as { url?: string; filename?: string };
+      const filePart = part as {
+        url?: string;
+        filename?: string;
+        mediaType: string;
+      };
+      const isImage = filePart.mediaType.startsWith("image/");
+      const label =
+        filePart.filename ??
+        (isImage ? "image" : filePart.mediaType || "attachment");
       return (
-        <img
-          src={filePart.url}
-          alt={filePart.filename ?? "attachment"}
-          className="mt-2 max-h-[400px] max-w-full rounded-md object-contain"
-        />
+        <a
+          href={filePart.url}
+          target="_blank"
+          rel="noopener noreferrer"
+          className="bg-background-2 border-border mt-2 inline-flex max-w-[240px] items-center gap-2 rounded-md border px-2 py-1 text-xs hover:underline"
+          title={label}
+        >
+          {isImage && filePart.url ? (
+            <img
+              src={filePart.url}
+              alt={label}
+              className="h-6 w-6 shrink-0 rounded object-cover"
+            />
+          ) : (
+            <>
+              <span className="shrink-0">📎</span>
+              <span className="truncate">{label}</span>
+            </>
+          )}
+        </a>
       );
     }
 
