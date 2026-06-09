@@ -42,7 +42,10 @@ const ConversationItemComponent = ({
   className,
 }: AIConversationItemProps) => {
   const isUser = message.role === "user" || false;
-  const textPart = message.parts.find((part) => part.type === "text");
+  const combinedText = message.parts
+    .filter((part: any) => part.type === "text" && part.text)
+    .map((p: any) => p.text)
+    .join("");
   const [showAllTools, setShowAllTools] = useState(false);
   const formattedTime = createdAt
     ? new Date(createdAt).toLocaleTimeString([], {
@@ -54,12 +57,12 @@ const ConversationItemComponent = ({
   const editor = useEditor({
     extensions: [...extensionsForConversation],
     editable: false,
-    content: textPart ? textPart.text : "",
+    content: combinedText ? combinedText : "",
   });
 
   useEffect(() => {
-    if (textPart) {
-      editor?.commands.setContent(textPart.text);
+    if (combinedText) {
+      editor?.commands.setContent(combinedText);
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [message]);
