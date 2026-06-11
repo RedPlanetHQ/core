@@ -20,7 +20,11 @@ import { Input } from "~/components/ui/input";
 import { Button } from "~/components/ui/button";
 import { Badge } from "~/components/ui/badge";
 import { Trash2 } from "lucide-react";
-import { getChatModels } from "~/services/llm-provider.server";
+import {
+  getChatModels,
+  persistCustomWorkspaceModel,
+  pruneOrphanWorkspaceModels,
+} from "~/services/llm-provider.server";
 import {
   getWorkspaceKeyStatus,
   setWorkspaceApiKey,
@@ -137,6 +141,9 @@ export const action = async ({ request }: ActionFunctionArgs) => {
         } as Prisma.InputJsonValue,
       },
     });
+
+    await persistCustomWorkspaceModel(user.workspaceId, modelId);
+    await pruneOrphanWorkspaceModels(user.workspaceId);
 
     return json({ success: true });
   }

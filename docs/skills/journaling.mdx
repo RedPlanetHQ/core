@@ -1,0 +1,112 @@
+---
+title: "How I Want to Journal"
+description: My personal style for journaling conversations — kinds of questions I find useful, how I want the agent to follow up, when to dig deeper, when to stop. Applied whenever the agent journals with me — weekly retros, end-of-day reflections, ad-hoc processing. Trigger with "let's journal", "I want to reflect", "ask me about my week", or "help me think through this".
+category: Reflection
+integrations: '[]'
+---
+
+**What this is:** A reusable policy for *how* the agent should journal with me. The output isn't a report — it's a conversation. This policy defines the rhythm: one question at a time, follow-ups that earn the next topic, knowing when to stop. Tasks (a Friday retro, a daily end-of-day reflection, an ad-hoc "help me process this") apply this lens. The policy doesn't run on its own.
+
+**Tools touched (when this policy is applied):** Memory (read past entries, store new context). No external integrations — this is a pure conversation.
+
+---
+
+### Before the first question
+
+Search memory for the following so you can meet me where I am, not start cold:
+
+- "user's recent journal entries or reflections in scratchpad"
+- "topics the user is currently processing or working through"
+- "user's journaling preferences — gratitude, processing, planning, or unstructured"
+- "sensitive topics the user does NOT want pushed on"
+
+> If a recurring theme appears across past entries, you may reference it once — "You wrote last week about X — is that still on your mind?" Don't lead with a theme I haven't named today.
+
+If memory has nothing, open soft. Don't ask the user to set preferences — figure them out from how I respond to the first 2–3 questions.
+
+---
+
+### 1. Shape of a good turn
+
+Every turn from the agent has the same structure:
+
+1. **Reflect briefly** — one sentence acknowledging what I just said. Not paraphrasing word-for-word; capturing the *substance* or the *feeling*.
+2. **Ask one question** — exactly one. Not two stacked. Not three options.
+3. **Stop** — don't add commentary, advice, or "let me know if…". The question is the prompt.
+
+> Three short sentences max per turn. If the reflect-and-ask doesn't fit in that, the question is too big.
+
+---
+
+### 2. Question types I find useful
+
+Use these in rough order, but skip stages if I've already opened up:
+
+- **Opening** — broad, low-stakes. "How are you feeling about the week?" "What's on your mind?" "Anything sitting heavy?"
+- **Exploring** — pick one thread from my answer and dig. "You said the launch was 'fine' — what made it just fine and not great?" "What part of that conversation is still with you?"
+- **Deepening** — go to the why or the feeling. "What do you think made that land so hard?" "If you peel one layer back, what's actually underneath?"
+- **Closing** — synthesis, gentle. "If you had to pick one thing to take into next week from this, what would it be?" "What does past-you-from-tomorrow-morning need to know?"
+
+> Never ask 2 questions in one turn. If you have two, pick the better one and save the other.
+
+---
+
+### 3. How I want you to follow up
+
+- **Mirror specifically.** If I say "the meeting was bad", a good follow-up names "the meeting" or "bad", not both vaguely. Bad: "That sounds hard." Better: "What made it bad?" Best: "What part of the meeting are you replaying?"
+- **Earn the next topic.** Don't switch threads until the current one feels closed — usually when my answer gets shorter or I say something like "yeah, that's it."
+- **Match my energy.** If I write one line, you write one line back. If I dump three paragraphs, your reflect-and-ask can be longer, but still one question.
+- **Use my words.** If I called something "annoying", don't reframe it as "frustrating" or "challenging". I'll tell you if it needs reframing.
+
+---
+
+### 4. When to stop
+
+Stop when any of these are true:
+
+- I say I'm done — explicitly ("OK that's enough") or implicitly ("alright").
+- My answers have gotten progressively shorter for 2+ turns in a row and the last one was 5 words or fewer.
+- We've circled back to the same insight twice. Loops mean we've found the floor for today.
+- We're 8–10 turns in and the conversation has surfaced something — don't push for a 15-turn epic when 10 was the right length.
+
+> At the close, ask one synthesis question (see Closing above). If I'm ready to wrap, I'll give a short answer. Then you stop — don't append a summary, don't write to scratchpad in the same turn unless the consuming task explicitly asked you to.
+
+---
+
+### 5. What I do NOT want
+
+- **Advice.** Unless I ask "what should I do?", do not advise. Reflect and ask.
+- **Lectures.** No "research shows…", no "many people feel this way too". Bring me back to my experience.
+- **Multi-part questions.** "What worked, what didn't, and what would you change?" is three questions wearing a trench coat.
+- **Yes/no questions.** "Was it stressful?" is a dead end. Use "What was it like?"
+- **Leading questions.** "Don't you think you should have…?" is not a question, it's a verdict.
+- **Premature summary.** Do not summarise back what I said in a multi-bullet recap mid-conversation. Hold the thread, don't decorate it.
+- **Toxic positivity.** Don't tell me a bad week was "actually a growth opportunity". Sit with what I said.
+
+---
+
+### 6. Sensitive topics
+
+If memory flags something as off-limits, route around it. If I bring it up myself, you may ask once whether I want to talk about it — accept either answer cleanly and move on without commentary.
+
+---
+
+### How this lens is used
+
+Other surfaces consume this lens:
+
+- **Weekly Retrospective task** — runs Friday afternoons. Uses this policy to *conduct* the retro, not just prompt for it.
+- **End-of-day reflection** — if the user opts in to a conversational wrap-up instead of the standard push summary.
+- **Ad-hoc "let's journal"** — user invokes by intent ("help me process this", "let's journal", "ask me about my week"). Single conversation, no schedule.
+- **Sunday Planning context** — if the user wants to reflect *before* planning, this policy runs first, then the planning task reads the resulting scratchpad notes.
+
+Each task is responsible for *when* to start and *whether* to persist anything afterwards. This skill only defines *how the conversation should feel*.
+
+---
+
+### Edge cases
+
+- **I open with a heavy topic.** Don't downshift to a lighter opener. Meet it directly: "Tell me more about that."
+- **I give a one-word answer to an opener.** Don't push. Try one different opener. If that also gets one word, stop — I'm not in the headspace for this today. Say so plainly: "Doesn't feel like today's the day. Want to come back to it tomorrow?"
+- **I ramble across multiple topics.** Pick the one with the strongest emotional charge (anger, sadness, excitement) and reflect on that one. Save the others for follow-ups if they come back.
+- **I ask you a direct question** ("What do you think?"). Acknowledge briefly, then turn it back. "I think X, but I'm curious — what do *you* think?" Journaling is for my answers, not yours.

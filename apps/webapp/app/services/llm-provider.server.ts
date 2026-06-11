@@ -367,6 +367,136 @@ export async function getChatModels(workspaceId?: string) {
   });
 }
 
+export interface ComposerModel {
+  id: string;
+  modelId: string;
+  label: string;
+  provider: string;
+  isDefault: boolean;
+}
+
+/**
+ * Models ready to render in the chat composer dropdown for a workspace.
+ * Marks the workspace's configured chat model (workspace.metadata.modelConfig.chat)
+ * as isDefault, and avoids double-prefixing ids when the modelId already starts
+ * with its provider type (e.g. "openrouter/xiaomi/mimo-v2.5-pro").
+ */
+export async function getChatComposerModels(
+  workspaceId?: string,
+): Promise<ComposerModel[]> {
+  const allModels = await getAvailableModels(workspaceId);
+
+  let defaultChatModelId: string | undefined;
+  if (workspaceId) {
+    const workspace = await prisma.workspace.findUnique({
+      where: { id: workspaceId },
+      select: { metadata: true },
+    });
+    const meta = (workspace?.metadata ?? {}) as Record<string, any>;
+    defaultChatModelId = meta.modelConfig?.chat?.modelId as string | undefined;
+  }
+
+  return allModels
+    .filter(
+      (m) => m.capabilities.length === 0 || m.capabilities.includes("chat"),
+    )
+    .map((m) => {
+      const providerPrefix = `${m.provider.type}/`;
+      const id = m.modelId.startsWith(providerPrefix)
+        ? m.modelId
+        : `${providerPrefix}${m.modelId}`;
+      const label = m.modelId.startsWith(providerPrefix)
+        ? m.label === m.modelId
+          ? m.modelId.slice(providerPrefix.length)
+          : m.label
+        : m.label;
+      return {
+        id,
+        modelId: m.modelId,
+        label,
+        provider: m.provider.type,
+        isDefault: defaultChatModelId === m.modelId,
+      };
+    });
+}
+
+/**
+ * Persist a custom modelId (typed via the settings UI) as a workspace-scoped
+ * LLMModel so it shows up in the composer dropdown. No-op if the modelId is
+ * already in any catalog or if no workspace-scoped provider exists for the
+ * inferred provider type (we don't pollute the global catalog).
+ */
+export async function persistCustomWorkspaceModel(
+  workspaceId: string,
+  modelId: string,
+): Promise<void> {
+  const existing = await prisma.lLMModel.findFirst({
+    where: {
+      modelId,
+      OR: [
+        { provider: { workspaceId } },
+        { provider: { workspaceId: null } },
+      ],
+    },
+  });
+  if (existing) return;
+
+  const providerType = inferProviderFromModelId(modelId);
+  const workspaceProvider = await prisma.lLMProvider.findFirst({
+    where: { workspaceId, type: providerType, isActive: true },
+  });
+  if (!workspaceProvider) return;
+
+  await prisma.lLMModel.create({
+    data: {
+      providerId: workspaceProvider.id,
+      modelId,
+      label: modelId,
+      complexity: "medium",
+      supportsBatch: false,
+      capabilities: ["chat"],
+    },
+  });
+}
+
+/**
+ * Delete workspace-scoped LLMModel rows that are no longer referenced by any
+ * entry in workspace.metadata.modelConfig. Global catalog rows are never
+ * touched. Run this after every modelConfig mutation so swapping or clearing a
+ * custom id removes the orphan row.
+ */
+export async function pruneOrphanWorkspaceModels(
+  workspaceId: string,
+): Promise<void> {
+  const workspace = await prisma.workspace.findUnique({
+    where: { id: workspaceId },
+    select: { metadata: true },
+  });
+  const meta = (workspace?.metadata ?? {}) as Record<string, any>;
+  const modelConfig = (meta.modelConfig ?? {}) as Record<
+    string,
+    { modelId?: string } | undefined
+  >;
+
+  const referenced = new Set<string>();
+  for (const cfg of Object.values(modelConfig)) {
+    if (cfg?.modelId) referenced.add(cfg.modelId);
+  }
+
+  const workspaceModels = await prisma.lLMModel.findMany({
+    where: { provider: { workspaceId } },
+    select: { id: true, modelId: true },
+  });
+
+  const orphanIds = workspaceModels
+    .filter((m) => !referenced.has(m.modelId))
+    .map((m) => m.id);
+
+  if (orphanIds.length === 0) return;
+
+  await prisma.lLMModel.deleteMany({ where: { id: { in: orphanIds } } });
+}
+
 export async function getAvailableModels(workspaceId?: string) {
   const providers = await getProviders(workspaceId);
   const providerIds = providers.map((p) => p.id);

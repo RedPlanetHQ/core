@@ -20,7 +20,7 @@ import { SetButlerNameModal } from "~/components/onboarding/set-butler-name-moda
 import { CollabSocketProvider } from "~/components/editor/collab-socket-context";
 import React from "react";
 import { getIntegrationAccounts } from "~/services/integrationAccount.server";
-import { getAvailableModels } from "~/services/llm-provider.server";
+import { getChatComposerModels } from "~/services/llm-provider.server";
 import { type LLMModel } from "~/components/conversation";
 import { useTauri } from "~/hooks/use-tauri";
 import { DesktopTabsProvider } from "~/components/desktop/tabs-context";
@@ -80,22 +80,10 @@ export const loader = async ({ request }: LoaderFunctionArgs) => {
     user.id,
   );
 
-  const [integrationAccounts, allModels] = await Promise.all([
+  const [integrationAccounts, models] = await Promise.all([
     getIntegrationAccounts(user.id, workspace?.id as string),
-    getAvailableModels(),
+    getChatComposerModels(workspace?.id),
   ]);
-
-  const models = allModels
-    .filter(
-      (m) => m.capabilities.length === 0 || m.capabilities.includes("chat"),
-    )
-    .map((m) => ({
-      id: `${m.provider.type}/${m.modelId}`,
-      modelId: m.modelId,
-      label: m.label,
-      provider: m.provider.type,
-      isDefault: m.isDefault,
-    }));
 
   const integrationAccountMap: Record<string, string> = {};
   const integrationFrontendMap: Record<string, string> = {};
