@@ -13,7 +13,7 @@ import {
   deleteConversation,
 } from "~/services/conversation.server";
 import { getIntegrationAccounts } from "~/services/integrationAccount.server";
-import { getAvailableModels } from "~/services/llm-provider.server";
+import { getChatComposerModels } from "~/services/llm-provider.server";
 import { ConversationView } from "~/components/conversation";
 import { useTypedLoaderData } from "remix-typedjson";
 import type { LoaderData } from "~/utils/loader-data";
@@ -36,23 +36,11 @@ export async function loader({ params, request }: LoaderFunctionArgs) {
   const initialVoiceMode =
     new URL(request.url).searchParams.get("voice") === "1";
 
-  const [conversation, integrationAccounts, allModels] = await Promise.all([
+  const [conversation, integrationAccounts, models] = await Promise.all([
     getConversationAndHistory(params.conversationId as string, user.id),
     getIntegrationAccounts(user.id, workspaceId),
-    getAvailableModels(),
+    getChatComposerModels(workspaceId),
   ]);
-
-  const models = allModels
-    .filter(
-      (m) => m.capabilities.length === 0 || m.capabilities.includes("chat"),
-    )
-    .map((m) => ({
-      id: `${m.provider.type}/${m.modelId}`,
-      modelId: m.modelId,
-      label: m.label,
-      provider: m.provider.type,
-      isDefault: m.isDefault,
-    }));
 
   if (!conversation) {
     return {
