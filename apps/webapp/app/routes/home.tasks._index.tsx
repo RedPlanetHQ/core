@@ -5,7 +5,6 @@ import {
   type LoaderFunctionArgs,
 } from "@remix-run/node";
 import { useFetcher, useNavigate } from "@remix-run/react";
-import { prisma } from "~/db.server";
 import { getWorkspaceId, requireUser } from "~/services/session.server";
 import {
   getTasks,
@@ -17,6 +16,14 @@ import {
 import { Button } from "~/components/ui";
 import { Card, CardContent } from "~/components/ui/card";
 import { Badge } from "~/components/ui/badge";
+import {
+  Dialog,
+  DialogContent,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
+} from "~/components/ui/dialog";
+import { cn } from "~/lib/utils";
 import { PageHeader } from "~/components/common/page-header";
 import { TaskListPanel } from "~/components/tasks/task-list-panel";
 import {
@@ -25,7 +32,7 @@ import {
   RecurringFilterChip,
   ViewOptionsButton,
 } from "~/components/tasks/task-view-options";
-import { Plus, Calendar, Clock, Check, LoaderCircle } from "lucide-react";
+import { Plus, Calendar, Clock, LoaderCircle } from "lucide-react";
 import { typedjson, useTypedLoaderData } from "remix-typedjson";
 import { useLocalCommonState } from "~/hooks/use-local-state";
 import { z } from "zod";
@@ -51,19 +58,7 @@ export async function loader({ request }: LoaderFunctionArgs) {
   const tasks = await getTasks(workspaceId);
   const libraryTasks = await getLibraryTasks();
 
-  // Map librarySlug → taskId so the Library tab can show "Installed" badges
-  // without a per-card lookup.
-  const installs = await prisma.task.findMany({
-    where: { workspaceId, source: "library" },
-    select: { id: true, metadata: true },
-  });
-  const installedLibrarySlugs: Record<string, string> = {};
-  for (const t of installs) {
-    const meta = t.metadata as { librarySlug?: string } | null;
-    if (meta?.librarySlug) installedLibrarySlugs[meta.librarySlug] = t.id;
-  }
-
-  return typedjson({ tasks, libraryTasks, installedLibrarySlugs });
+  return typedjson({ tasks, libraryTasks });
 }
 
 const ActionSchema = z.discriminatedUnion("intent", [
@@ -89,47 +84,25 @@ export async function action({ request }: ActionFunctionArgs) {
   const formData = await request.formData();
   const intent = formData.get("intent");
 
-  // Library-tab intents are handled before the discriminated-union parse
-  // so they can stay loosely typed (their form bodies differ from the
-  // task-management intents). Returns `{ success: true }` on success to
-  // match the skills-library install/uninstall response shape.
   if (intent === "install-library-task") {
     const slug = formData.get("slug") as string;
     const libraryTasks = await getLibraryTasks();
     const task = libraryTasks.find((t) => t.slug === slug);
     if (!task) return json({ error: "Task not found" }, { status: 404 });
 
-    // tasks.json descriptions are already authored as HTML — pass them
-    // straight through to setPageContentFromHtml. No wrap or escape.
     if (task.schedule) {
       await createScheduledTask(workspaceId, user.id, {
         title: task.title,
         description: task.description,
         schedule: task.schedule,
         source: "library",
-        metadata: { librarySlug: slug },
       });
     } else {
-      const created = await createTask(
-        workspaceId,
-        user.id,
-        task.title,
-        task.description,
-        { source: "library", status: "Ready" },
-      );
-      // createTask doesn't accept metadata; backfill so the loader can mark
-      // this slug as installed on next render.
-      await prisma.task.update({
-        where: { id: created.id },
-        data: { metadata: { librarySlug: slug } },
+      await createTask(workspaceId, user.id, task.title, task.description, {
+        source: "library",
+        status: "Ready",
       });
     }
-    return json({ success: true });
-  }
-
-  if (intent === "uninstall-library-task") {
-    const taskId = formData.get("taskId") as string;
-    await deleteTask(taskId, workspaceId);
     return json({ success: true });
   }
 
@@ -163,8 +136,7 @@ export async function action({ request }: ActionFunctionArgs) {
 // ─── Page ─────────────────────────────────────────────────────────────────────
 
 export default function TasksIndex() {
-  const { tasks, libraryTasks, installedLibrarySlugs } =
-    useTypedLoaderData<typeof loader>();
+  const { tasks, libraryTasks } = useTypedLoaderData<typeof loader>();
   const fetcher = useFetcher<typeof action>();
   const libraryFetcher = useFetcher<{ success: boolean }>();
   const navigate = useNavigate();
@@ -183,34 +155,25 @@ export default function TasksIndex() {
     "task-show-done",
     true,
   );
-  const [pendingInstall, setPendingInstall] = useState<string | null>(null);
-  const [pendingRemove, setPendingRemove] = useState<string | null>(null);
+  const [pendingDuplicate, setPendingDuplicate] = useState<string | null>(null);
+  const [previewSlug, setPreviewSlug] = useState<string | null>(null);
 
   useEffect(() => {
-    if (
-      libraryFetcher.state === "idle" &&
-      libraryFetcher.data?.success
-    ) {
-      setPendingInstall(null);
-      setPendingRemove(null);
+    if (libraryFetcher.state === "idle" && libraryFetcher.data?.success) {
+      setPendingDuplicate(null);
+      setPreviewSlug(null);
     }
   }, [libraryFetcher.state, libraryFetcher.data]);
 
-  const handleLibraryInstall = (slug: string) => {
-    setPendingInstall(slug);
+  const handleLibraryDuplicate = (slug: string) => {
+    setPendingDuplicate(slug);
     libraryFetcher.submit(
       { intent: "install-library-task", slug },
       { method: "POST" },
     );
   };
 
-  const handleLibraryUninstall = (taskId: string, slug: string) => {
-    setPendingRemove(slug);
-    libraryFetcher.submit(
-      { intent: "uninstall-library-task", taskId },
-      { method: "POST" },
-    );
-  };
+  const previewTask = libraryTasks.find((t) => t.slug === previewSlug) ?? null;
 
   const tabs = [
     {
@@ -321,10 +284,10 @@ export default function TasksIndex() {
       )}
 
       {activeTab === "library" && (
-        <div className="flex flex-1 justify-center overflow-y-auto px-5 pt-3">
-          <div className="w-full max-w-3xl space-y-5 pb-8">
+        <div className="flex flex-1 overflow-y-auto">
+          <div className="w-full pb-8">
             {libraryTasks.length === 0 ? (
-              <Card className="bg-background-2 w-full">
+              <Card className="bg-background-2 mx-3 mt-3 w-auto">
                 <CardContent className="flex justify-center py-16">
                   <div className="text-center">
                     <LoaderCircle className="text-primary mx-auto mb-3 h-5 w-5 animate-spin" />
@@ -335,103 +298,208 @@ export default function TasksIndex() {
                 </CardContent>
               </Card>
             ) : (
-              Object.entries(libraryByCategory).map(([category, tasksInCat]) => (
-                <div key={category} className="space-y-2">
-                  <h3 className="text-muted-foreground/80 text-sm font-medium">
-                    {category}
-                  </h3>
-                  <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
+              Object.entries(libraryByCategory).map(
+                ([category, tasksInCat]) => (
+                  <div key={category}>
+                    <Button
+                      className="text-accent-foreground bg-grayAlpha-100 my-2 ml-2 mt-3 flex w-fit cursor-default items-center rounded-2xl"
+                      size="lg"
+                      variant="ghost"
+                    >
+                      <Clock size={16} className="h-4 w-4" />
+                      <h3 className="pl-2">{category}</h3>
+                    </Button>
                     {tasksInCat.map((task) => (
-                      <LibraryTaskCard
+                      <LibraryTaskRow
                         key={task.slug}
                         task={task}
-                        installedTaskId={installedLibrarySlugs[task.slug]}
-                        isInstalling={pendingInstall === task.slug}
-                        isRemoving={pendingRemove === task.slug}
-                        onInstall={() => handleLibraryInstall(task.slug)}
-                        onUninstall={() =>
-                          handleLibraryUninstall(
-                            installedLibrarySlugs[task.slug],
-                            task.slug,
-                          )
-                        }
+                        isPending={pendingDuplicate === task.slug}
+                        onDuplicate={() => handleLibraryDuplicate(task.slug)}
+                        onPreview={() => setPreviewSlug(task.slug)}
                       />
                     ))}
                   </div>
-                </div>
-              ))
+                ),
+              )
             )}
           </div>
         </div>
       )}
+
+      <LibraryTaskPreviewDialog
+        task={previewTask}
+        open={!!previewTask}
+        onOpenChange={(open) => !open && setPreviewSlug(null)}
+        isPending={previewTask ? pendingDuplicate === previewTask.slug : false}
+        onDuplicate={() =>
+          previewTask && handleLibraryDuplicate(previewTask.slug)
+        }
+      />
     </div>
   );
 }
 
-function LibraryTaskCard({
+const RRULE_DAY_LABELS: Record<string, string> = {
+  MO: "Mon",
+  TU: "Tue",
+  WE: "Wed",
+  TH: "Thu",
+  FR: "Fri",
+  SA: "Sat",
+  SU: "Sun",
+};
+
+function formatScheduleLabel(rrule?: string): string {
+  if (!rrule) return "One-shot";
+  const body = rrule.replace(/^RRULE:/, "");
+  const parts: Record<string, string> = {};
+  for (const seg of body.split(";")) {
+    const [k, v] = seg.split("=");
+    if (k && v) parts[k] = v;
+  }
+
+  const freq = parts.FREQ;
+  const days = parts.BYDAY
+    ? parts.BYDAY.split(",")
+        .map((d) => RRULE_DAY_LABELS[d] ?? d)
+        .join("/")
+    : null;
+
+  let time: string | null = null;
+  if (parts.BYHOUR) {
+    const h = parseInt(parts.BYHOUR, 10);
+    const m = parts.BYMINUTE ? parseInt(parts.BYMINUTE, 10) : 0;
+    const ampm = h >= 12 ? "pm" : "am";
+    const h12 = ((h + 11) % 12) + 1;
+    time =
+      m === 0 ? `${h12}${ampm}` : `${h12}:${String(m).padStart(2, "0")}${ampm}`;
+  }
+
+  const freqLabel =
+    freq === "DAILY"
+      ? "Daily"
+      : freq === "WEEKLY"
+        ? days
+          ? days
+          : "Weekly"
+        : freq === "MONTHLY"
+          ? "Monthly"
+          : freq
+            ? freq.charAt(0) + freq.slice(1).toLowerCase()
+            : null;
+
+  return [freqLabel, time].filter(Boolean).join(" · ") || "Scheduled";
+}
+
+function LibraryTaskRow({
   task,
-  installedTaskId,
-  isInstalling,
-  isRemoving,
-  onInstall,
-  onUninstall,
+  isPending,
+  onDuplicate,
+  onPreview,
 }: {
   task: LibraryTask;
-  installedTaskId?: string;
-  isInstalling: boolean;
-  isRemoving: boolean;
-  onInstall: () => void;
-  onUninstall: () => void;
+  isPending: boolean;
+  onDuplicate: () => void;
+  onPreview: () => void;
 }) {
-  const isInstalled = !!installedTaskId;
   const isScheduled = !!task.schedule;
+  const scheduleLabel = formatScheduleLabel(task.schedule);
 
   return (
-    <Card className="hover:border-primary/50 flex flex-col transition-all">
-      <div className="flex flex-1 flex-col gap-2 p-4">
-        <div className="flex items-center justify-between">
-          <Badge
-            variant="secondary"
-            className="flex items-center gap-1 rounded text-xs"
+    <div className="group flex cursor-pointer gap-2 pr-4" onClick={onPreview}>
+      <div className="flex w-full items-center">
+        <div className="group-hover:bg-grayAlpha-100 ml-4 flex min-w-[0px] shrink grow items-start gap-2 rounded-xl pl-2 pr-2">
+          <div className="text-muted-foreground shrink-0 pt-3">
+            {isScheduled ? <Clock size={16} /> : <Calendar size={16} />}
+          </div>
+
+          <div
+            className={cn(
+              "border-border flex w-full min-w-[0px] shrink flex-col border-b py-2",
+            )}
           >
-            {isScheduled ? <Clock size={10} /> : <Calendar size={10} />}
-            {isScheduled ? "Scheduled" : "One-shot"}
-          </Badge>
-          {isInstalled && (
-            <Badge className="text-success rounded bg-green-100 text-xs">
-              <Check size={10} />
-              Installed
-            </Badge>
-          )}
-        </div>
+            <div className="flex w-full items-center gap-2">
+              <div className="inline-flex min-w-[0px] shrink items-center justify-start gap-2">
+                <div className="truncate text-left">{task.title}</div>
+                <Badge
+                  variant="secondary"
+                  className="shrink-0 gap-1 rounded text-xs font-normal"
+                >
+                  {scheduleLabel}
+                </Badge>
+              </div>
 
-        <div className="text-md font-medium">{task.title}</div>
-        <p className="text-muted-foreground line-clamp-4 flex-1 text-sm">
-          {task.description}
-        </p>
-
-        <div className="mt-auto flex justify-end pt-2">
-          {isInstalled ? (
-            <Button
-              variant="destructive"
-              className="rounded"
-              onClick={onUninstall}
-              disabled={isRemoving}
-            >
-              {isRemoving ? "Removing..." : "Remove"}
-            </Button>
-          ) : (
-            <Button
-              variant="secondary"
-              className="rounded"
-              onClick={onInstall}
-              disabled={isInstalling}
-            >
-              {isInstalling ? "Installing..." : "Install"}
-            </Button>
-          )}
+              <div
+                className="ml-auto flex shrink-0 items-center gap-1.5"
+                onClick={(e) => e.stopPropagation()}
+              >
+                <Button
+                  variant="secondary"
+                  size="sm"
+                  className="rounded text-xs"
+                  onClick={onDuplicate}
+                  disabled={isPending}
+                >
+                  {isPending ? "Copying..." : "Copy"}
+                </Button>
+              </div>
+            </div>
+          </div>
         </div>
       </div>
-    </Card>
+    </div>
+  );
+}
+
+function LibraryTaskPreviewDialog({
+  task,
+  open,
+  onOpenChange,
+  isPending,
+  onDuplicate,
+}: {
+  task: LibraryTask | null;
+  open: boolean;
+  onOpenChange: (open: boolean) => void;
+  isPending: boolean;
+  onDuplicate: () => void;
+}) {
+  return (
+    <Dialog open={open} onOpenChange={onOpenChange}>
+      <DialogContent className="sm:max-w-2xl md:min-w-[640px]">
+        {task && (
+          <>
+            <DialogHeader>
+              <div className="flex items-center gap-2 pr-8">
+                <DialogTitle className="text-lg">{task.title}</DialogTitle>
+                <Badge
+                  variant="secondary"
+                  className="shrink-0 gap-1 rounded text-xs font-normal"
+                >
+                  {formatScheduleLabel(task.schedule)}
+                </Badge>
+              </div>
+            </DialogHeader>
+
+            <div
+              className="prose prose-sm max-h-[60vh] max-w-none overflow-y-auto dark:prose-invert"
+              // eslint-disable-next-line react/no-danger
+              dangerouslySetInnerHTML={{ __html: task.description }}
+            />
+
+            <DialogFooter>
+              <Button
+                variant="secondary"
+                className="rounded"
+                onClick={onDuplicate}
+                disabled={isPending}
+              >
+                {isPending ? "Copying..." : "Copy to my tasks"}
+              </Button>
+            </DialogFooter>
+          </>
+        )}
+      </DialogContent>
+    </Dialog>
   );
 }
