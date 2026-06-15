@@ -51,6 +51,13 @@ import {
 import { type ModelMessage } from "ai";
 import { reconcileCredits } from "../credit_utils";
 import { processAspectResolution } from "./aspect-resolution.logic";
+import { sendTownEvent } from "~/services/town-webhook.server";
+import {
+  buildTopicsForLabels,
+  getIdentityAspectsForEpisode,
+  getSummaryForSession,
+} from "~/services/town-webhook-payload.server";
+import crypto from "crypto";
 
 export interface GraphResolutionPayload {
   episodeUuid: string;
@@ -85,6 +92,31 @@ export async function processGraphResolution(
     const episode = await getEpisode(payload.episodeUuid, false);
     if (!episode) {
       throw new Error(`Episode ${payload.episodeUuid} not found in graph`);
+    }
+
+    // Decide town webhook kind UP FRONT — before compaction (which runs
+    // in parallel) may have written a Document. If no Document exists at
+    // this moment, treat the session as new → "memory.added". Otherwise
+    // it's an extension → "memory.updated". We compute it here so the
+    // signal isn't disturbed by races with compaction.
+    let townEventKind: "memory.added" | "memory.updated" = "memory.added";
+    if (episode.sessionId) {
+      try {
+        const existingDoc = await prisma.document.findUnique({
+          where: {
+            sessionId_workspaceId: {
+              sessionId: episode.sessionId,
+              workspaceId: payload.workspaceId,
+            },
+          },
+          select: { id: true },
+        });
+        townEventKind = existingDoc ? "memory.updated" : "memory.added";
+      } catch (err: any) {
+        logger.warn(
+          `[town-webhook] kind probe failed for session ${episode.sessionId}: ${err?.message ?? err}`,
+        );
+      }
     }
 
     // Step 0: Deduplicate entities with same name before resolution
@@ -259,6 +291,58 @@ export async function processGraphResolution(
       logger.warn(`Aspect resolution failed (non-blocking):`, {
         error: aspectError.message,
       });
+    }
+
+    // Step 7b: Town webhook — fire memory.added / memory.updated. Fully
+    // non-blocking: a bad URL, slow town webapp, or missing env vars must
+    // never fail graph resolution. The emitter itself no-ops when
+    // TOWN_WEBHOOK_URL is unset.
+    if (episode.sessionId) {
+      try {
+        const sessionId = episode.sessionId;
+        const labelIds = (episode.labelIds ?? []) as string[];
+        const [topics, summary, identityAspects] = await Promise.all([
+          buildTopicsForLabels(labelIds, payload.workspaceId),
+          getSummaryForSession(sessionId, payload.workspaceId),
+          getIdentityAspectsForEpisode(payload.episodeUuid, payload.userId),
+        ]);
+
+        const occurredAt = new Date().toISOString();
+        const id = crypto.randomUUID();
+        const basePayload = {
+          memoryUuid: sessionId,
+          summary,
+          identityAspects,
+        };
+
+        const envelope =
+          townEventKind === "memory.added"
+            ? ({
+                id,
+                userId: payload.userId,
+                type: "memory.added" as const,
+                occurredAt,
+                version: 1 as const,
+                payload: { ...basePayload, topics },
+              })
+            : ({
+                id,
+                userId: payload.userId,
+                type: "memory.updated" as const,
+                occurredAt,
+                version: 1 as const,
+                payload: { ...basePayload, topicsAdded: topics },
+              });
+
+        const ok = await sendTownEvent(envelope);
+        logger.info(
+          `[town-webhook] ${townEventKind} session=${sessionId} ok=${ok} topics=${topics.length} aspects=${identityAspects.length}`,
+        );
+      } catch (townErr: any) {
+        logger.warn(`[town-webhook] send failed (non-blocking):`, {
+          error: townErr?.message ?? townErr,
+        });
+      }
     }
 
     // Step 8: Update ingestion queue with resolution token usage

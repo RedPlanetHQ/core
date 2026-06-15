@@ -246,6 +246,14 @@ const EnvironmentSchema = z
 
     // Sentry
     SENTRY_DSN: z.string().optional(),
+
+    // Town webhook (apps/web in town-next). When TOWN_WEBHOOK_URL is set,
+    // graph-resolution fires a memory.added / memory.updated event to town
+    // after voice aspects are resolved. TOWN_WEBHOOK_SECRET signs the body
+    // with HMAC-SHA256 in the `X-Town-Signature` header. Both unset = the
+    // emitter no-ops, so existing deployments keep working without config.
+    TOWN_WEBHOOK_URL: z.string().optional(),
+    TOWN_WEBHOOK_SECRET: z.string().optional(),
   })
   .refine(
     (data) => {
