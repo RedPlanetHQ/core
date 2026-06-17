@@ -13,7 +13,6 @@ type SessionItem = {
   createdAt: Date;
   prompt: string | null;
   gatewayName: string | null;
-  dir: string | null;
 };
 
 type CodingActionsValue = {
@@ -108,13 +107,15 @@ function CodingSessionsPopover({
                       {session.agent}
                     </Badge>
                   </div>
-                  <span className={cn("flex items-center gap-1 text-xs", session.gatewayName === null ? "text-destructive" : "text-muted-foreground")}>
+                  {session.gatewayName === null ? (
+                    <span className="text-destructive flex items-center gap-1 text-xs">
                       <Monitor size={11} />
-                      {session.gatewayName === null ? "Gateway not available" : session.gatewayName}
+                      Gateway not available
                     </span>
-                  {session.dir ? (
-                    <span className="text-muted-foreground truncate font-mono text-[11px]" title={session.dir}>
-                      {session.dir}
+                  ) : session.gatewayName ? (
+                    <span className="text-muted-foreground flex items-center gap-1 text-xs">
+                      <Monitor size={11} />
+                      {session.gatewayName}
                     </span>
                   ) : null}
                   {session.prompt && (
