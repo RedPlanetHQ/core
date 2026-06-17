@@ -141,6 +141,12 @@ Query: "What decisions and goals came up last month?"
 Query: "Give me an overview of last week — topics, people, and what I decided"
 → aspects: ["Decision"], queryType: "temporal_facets", temporal: {type: "recent", days: 7, startDate: null, endDate: null}, entityHints: [], selectedLabels: [], lookupMode: "broad", attributeHint: null, facets: ["topics", "entities", "aspects"], shouldSearch: true
 
+Query: "Give me an overview of the last 7 days (2026-06-09 to 2026-06-16) — topics, people, and what was learned. Return topics with episode counts, entities with mention counts, and aspects grouped by type (Identity, Event, Task, Knowledge, Relationship, Decision, Problem)."
+→ aspects: ["Identity", "Event", "Task", "Knowledge", "Relationship", "Decision", "Problem"], queryType: "temporal_facets", temporal: {type: "range", days: 7, startDate: "2026-06-09", endDate: "2026-06-16"}, entityHints: [], selectedLabels: [], lookupMode: "broad", attributeHint: null, facets: ["topics", "entities", "aspects"], shouldSearch: true
+
+Query: "Weekly digest: last 7 days topics, people, decisions. Include any existing summaries already generated."
+→ aspects: ["Decision", "Knowledge"], queryType: "temporal_facets", temporal: {type: "recent", days: 7, startDate: null, endDate: null}, entityHints: [], selectedLabels: [], lookupMode: "broad", attributeHint: null, facets: ["topics", "entities", "aspects"], shouldSearch: true
+
 Query: "search implementation in CORE"
 → aspects: ["Knowledge", "Habit", "Decision"], queryType: "exploratory", temporal: {type: "all", days: null, startDate: null, endDate: null}, entityHints: ["search", "CORE"], selectedLabels: [], lookupMode: "broad", attributeHint: null, facets: [], shouldSearch: true
 
