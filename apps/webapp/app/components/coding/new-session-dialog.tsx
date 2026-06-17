@@ -1,12 +1,5 @@
-import { useEffect, useMemo, useRef, useState } from "react";
-import {
-  Check,
-  ChevronsUpDown,
-  FolderOpen,
-  Loader2,
-  Plus,
-  Trash2,
-} from "lucide-react";
+import { useEffect, useMemo, useState } from "react";
+import { Check, ChevronsUpDown, FolderOpen, Loader2, Plus } from "lucide-react";
 import {
   Dialog,
   DialogContent,
@@ -38,22 +31,6 @@ import {
 } from "~/components/ui/popover";
 import { Input } from "~/components/ui/input";
 import { Label } from "~/components/ui/label";
-import {
-  DropdownMenu,
-  DropdownMenuContent,
-  DropdownMenuItem,
-  DropdownMenuTrigger,
-} from "~/components/ui/dropdown-menu";
-import {
-  AlertDialog,
-  AlertDialogAction,
-  AlertDialogCancel,
-  AlertDialogContent,
-  AlertDialogDescription,
-  AlertDialogFooter,
-  AlertDialogHeader,
-  AlertDialogTitle,
-} from "~/components/ui/alert-dialog";
 
 interface GatewayListItem {
   id: string;
@@ -144,23 +121,6 @@ export function NewSessionDialog({
   const [submitting, setSubmitting] = useState(false);
   const [submitError, setSubmitError] = useState<string | null>(null);
 
-  // Tracks folders removed via context menu so they disappear immediately
-  // without waiting for a full gateway info refetch.
-  const [removedFolderIds, setRemovedFolderIds] = useState<Set<string>>(
-    new Set(),
-  );
-
-  // Right-click context menu state — virtual anchor positioned at cursor.
-  const contextMenuAnchorRef = useRef<HTMLSpanElement>(null);
-  const [contextMenuOpen, setContextMenuOpen] = useState(false);
-  const [contextMenuFolder, setContextMenuFolder] =
-    useState<GatewayFolder | null>(null);
-
-  // Folder being confirmed for deletion.
-  const [folderToConfirmDelete, setFolderToConfirmDelete] =
-    useState<GatewayFolder | null>(null);
-  const [deletingFolderId, setDeletingFolderId] = useState<string | null>(null);
-
   // Reset when the dialog opens; load gateways.
   useEffect(() => {
     if (!open) return;
@@ -176,9 +136,6 @@ export function NewSessionDialog({
     setSubmitError(null);
     setGateways(null);
     setGatewaysError(null);
-    setRemovedFolderIds(new Set());
-    setFolderToConfirmDelete(null);
-    setDeletingFolderId(null);
 
     (async () => {
       try {
@@ -242,11 +199,8 @@ export function NewSessionDialog({
   }, [open, selectedGatewayId]);
 
   const codingFolders = useMemo(
-    () =>
-      (info?.folders ?? []).filter(
-        (f) => f.scopes.includes("coding") && !removedFolderIds.has(f.id),
-      ),
-    [info, removedFolderIds],
+    () => (info?.folders ?? []).filter((f) => f.scopes.includes("coding")),
+    [info],
   );
 
   // Default to the first registered coding folder when info arrives and
@@ -305,39 +259,6 @@ export function NewSessionDialog({
     }
     if (blocks.length === 0) return null;
     return blocks.join("\n\n");
-  };
-
-  const handleContextMenu = (
-    e: React.MouseEvent,
-    folder: GatewayFolder,
-  ) => {
-    e.preventDefault();
-    if (contextMenuAnchorRef.current) {
-      contextMenuAnchorRef.current.style.left = `${e.clientX}px`;
-      contextMenuAnchorRef.current.style.top = `${e.clientY}px`;
-    }
-    setContextMenuFolder(folder);
-    setContextMenuOpen(true);
-  };
-
-  const handleDeleteFolder = async (folder: GatewayFolder) => {
-    setDeletingFolderId(folder.id);
-    try {
-      const res = await fetch(
-        `/api/v1/gateways/${selectedGatewayId}/folders/${encodeURIComponent(folder.id)}`,
-        { method: "DELETE" },
-      );
-      if (!res.ok) throw new Error(`delete failed (${res.status})`);
-      const next = new Set([...removedFolderIds, folder.id]);
-      setRemovedFolderIds(next);
-      if (selectedFolderId === folder.id) {
-        const remaining = codingFolders.filter((f) => f.id !== folder.id);
-        setSelectedFolderId(remaining[0]?.id ?? "");
-      }
-    } finally {
-      setDeletingFolderId(null);
-      setFolderToConfirmDelete(null);
-    }
   };
 
   const handleSubmit = async () => {
@@ -527,13 +448,11 @@ export function NewSessionDialog({
                             size={14}
                             className="text-muted-foreground shrink-0"
                           />
-                          <span className="min-w-0 flex-1 overflow-hidden">
-                            <span className="font-medium">
-                              {selectedFolder.name}
-                            </span>
-                            <span className="text-muted-foreground ml-2 font-mono text-xs">
-                              {selectedFolder.path}
-                            </span>
+                          <span className="truncate font-medium">
+                            {selectedFolder.name}
+                          </span>
+                          <span className="text-muted-foreground truncate font-mono text-xs">
+                            {selectedFolder.path}
                           </span>
                         </>
                       ) : (
@@ -569,7 +488,6 @@ export function NewSessionDialog({
                                 setSelectedFolderId(f.id);
                                 setFolderPopoverOpen(false);
                               }}
-                              onContextMenu={(e) => handleContextMenu(e, f)}
                               className="flex items-center gap-2"
                             >
                               <FolderOpen
@@ -625,17 +543,6 @@ export function NewSessionDialog({
                 </PopoverContent>
               </Popover>
             )}
-
-            {!infoLoading &&
-              !infoError &&
-              selectedGatewayId &&
-              codingFolders.length === 0 &&
-              selectedFolderId !== CUSTOM_FOLDER_ID && (
-                <p className="text-muted-foreground text-xs">
-                  No registered folders. Choose "Use a different folder…" to
-                  add one.
-                </p>
-              )}
 
             {selectedFolderId === CUSTOM_FOLDER_ID && (
               <div className="mt-1 flex flex-col gap-2 rounded border p-2">
@@ -734,70 +641,6 @@ export function NewSessionDialog({
             {submitting ? "Starting…" : "Start session"}
           </Button>
         </DialogFooter>
-
-        {/* Virtual anchor positioned at cursor so the context menu appears
-            where the user right-clicked. Kept inside DialogContent so it
-            stays within the dialog's focus scope — Radix portal layers
-            handle the rest. */}
-        <DropdownMenu open={contextMenuOpen} onOpenChange={setContextMenuOpen}>
-          <DropdownMenuTrigger asChild>
-            <span
-              ref={contextMenuAnchorRef}
-              className="pointer-events-none fixed opacity-0"
-              style={{ left: 0, top: 0, width: 0, height: 0 }}
-            />
-          </DropdownMenuTrigger>
-          <DropdownMenuContent align="start" sideOffset={0}>
-            <DropdownMenuItem
-              className="text-destructive gap-2 text-sm"
-              onSelect={() => {
-                setContextMenuOpen(false);
-                setFolderToConfirmDelete(contextMenuFolder);
-              }}
-            >
-              <Trash2 size={14} />
-              Delete folder
-            </DropdownMenuItem>
-          </DropdownMenuContent>
-        </DropdownMenu>
-
-        <AlertDialog
-          open={folderToConfirmDelete !== null}
-          onOpenChange={(open) => {
-            if (!open && !deletingFolderId) setFolderToConfirmDelete(null);
-          }}
-        >
-          <AlertDialogContent>
-            <AlertDialogHeader>
-              <AlertDialogTitle>Delete folder?</AlertDialogTitle>
-              <AlertDialogDescription>
-                This will unregister{" "}
-                <strong>{folderToConfirmDelete?.name}</strong> from the
-                gateway. Files on disk will not be deleted.
-              </AlertDialogDescription>
-            </AlertDialogHeader>
-            <AlertDialogFooter>
-              <AlertDialogCancel disabled={!!deletingFolderId}>
-                Cancel
-              </AlertDialogCancel>
-              <AlertDialogAction
-                className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
-                disabled={!!deletingFolderId}
-                onClick={(e) => {
-                  e.preventDefault();
-                  if (folderToConfirmDelete) {
-                    handleDeleteFolder(folderToConfirmDelete);
-                  }
-                }}
-              >
-                {deletingFolderId ? (
-                  <Loader2 size={14} className="mr-2 animate-spin" />
-                ) : null}
-                Delete
-              </AlertDialogAction>
-            </AlertDialogFooter>
-          </AlertDialogContent>
-        </AlertDialog>
       </DialogContent>
     </Dialog>
   );

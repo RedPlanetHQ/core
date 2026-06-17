@@ -147,7 +147,8 @@ function GatewayDetailShell() {
   const activePath = navigation.location?.pathname ?? location.pathname;
   const isTerminal = activePath.endsWith("/terminal");
   const isBrowser = /\/browser(\/|$)/.test(activePath);
-  const isFiles = !isTerminal && !isBrowser;
+  const isFiles = /\/files(\/|$)/.test(activePath);
+  const isInfo = !isTerminal && !isBrowser && !isFiles;
 
   // Periodic re-run of the layout loader so the connection indicator,
   // manifest data, and DB-synced name/description stay current while the
@@ -188,6 +189,12 @@ function GatewayDetailShell() {
             value: "browser",
             isActive: isBrowser,
             onClick: () => navigate(`/home/gateways/${gw.id}/browser`),
+          },
+          {
+            label: "Files",
+            value: "files",
+            isActive: isFiles,
+            onClick: () => navigate(`/home/gateways/${gw.id}/files`),
           },
         ]}
         actionsNode={
@@ -246,4 +253,3 @@ function GatewayDetailShell() {
     </div>
   );
 }
-

@@ -153,7 +153,6 @@ function CodingLayout() {
         createdAt: s.createdAt,
         prompt: s.prompt,
         gatewayName: s.gateway?.name ?? null,
-        dir: s.dir ?? null,
       })),
       selectedId: sessionId ?? null,
       onSelectSession: (id) => navigate(`/home/tasks/${taskId}/coding/${id}`),
