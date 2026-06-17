@@ -242,9 +242,11 @@ export async function createCoreTools(
 
   // Skill tools
   tools["get_skill"] = getSkillTool(workspaceId);
-  if (!readOnly && !isBackgroundExecution) {
-    tools["create_skill"] = createSkillTool(workspaceId, userId);
+  if (!readOnly) {
     tools["update_skill"] = updateSkillTool(workspaceId, userId);
+    if (!isBackgroundExecution) {
+      tools["create_skill"] = createSkillTool(workspaceId, userId);
+    }
   }
 
   // Session lookup tools — replace the previous prompt-injection of last

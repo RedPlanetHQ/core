@@ -1,0 +1,183 @@
+---
+title: "Weekly Learning Summary"
+description: "Generate a narrative summary of what CORE learned about you over the past week. Covers topics discussed, people mentioned, new facts learned, and key conversation threads. Trigger with 'what did you learn about me', 'weekly summary', 'weekly digest', 'summarize last week', or 'what's new in my memory'."
+category: Planning
+integrations: []
+---
+
+**Goal:** Produce a concise, personal recap of what CORE learned about you over a given time period — written like an intelligent personal assistant giving a debrief, not a data dump.
+
+**Tools Required:** `gather_context` (routes to `memory_search` → `temporal_facets` mode internally). No external integrations.
+
+**Trigger:** On-demand ("what did you learn this week") or via a weekly reminder. Deliver in the channel the skill was triggered from.
+
+**Channel constraint:** If the channel has a message length limit (e.g. WhatsApp), split the summary into shorter messages. Send the opening line first, then one message per major section.
+
+---
+
+## Step 1 — Fetch the Data
+
+Call `gather_context` once per window using the canonical template below. Splitting into windows is what keeps the response complete on busy weeks — a single 30-day call gets truncated.
+
+### Canonical query template (load-bearing — do NOT paraphrase)
+
+For each window, compute `startDate` and `endDate` as ISO dates (`YYYY-MM-DD`) and call `gather_context` with EXACTLY this query string (substitute `N` and the two dates):
+
+```
+Give me an overview of the last N days (YYYY-MM-DD to YYYY-MM-DD) — topics, people, and what was learned. Return topics with episode counts, entities with mention counts, and aspects grouped by type (Identity, Event, Task, Knowledge, Relationship, Decision, Problem).
+```
+
+The string is load-bearing for router classification. Do not paraphrase, do not add extra clauses ("include any existing summaries…"), do not drop the parenthetical date range or the seven-aspect list. Deviating risks the router returning ranked episodes instead of faceted counts.
+
+### Window breakdown
+
+| Range requested | Calls | Per-call window |
+|---|---|---|
+| 3 days | 1 call | 3 days |
+| 7 days (default) | 3 calls | 2 days + 2 days + 3 days |
+| 14 days | 5 calls | 3 + 3 + 3 + 3 + 2 |
+| 30 days | 10 calls | 3 days each |
+| 60+ days | Group by week | Summarize at week granularity |
+
+Make the calls, then merge: union the topic counts, deduplicate people/entities, and union the fact statements before writing.
+
+### What each response contains
+
+- **Topics** — subjects with episode counts
+- **People & Entities** — entities with mention counts
+- **By Aspect** — facts grouped by the seven types:
+  - **Identity** — who you are, preferences, habits, personal attributes
+  - **Event** — things that happened
+  - **Task** — action items, pending work
+  - **Knowledge** — what you learned, technical details
+  - **Relationship** — connections between people and orgs
+  - **Decision** — choices made, directions taken
+  - **Problem** — issues, blockers, friction
+- **Conversation highlights** — latest content per top topic (up to 10 topics, ~2000 chars each)
+- **Stats** — N conversations · N new facts · N topics
+
+### Empty data
+
+If the merged response has no topics AND no facts, reply:
+
+> "Quiet week — I didn't pick up anything new. Want me to check a longer time range?"
+
+Do not generate a summary from empty data.
+
+---
+
+## Step 2 — Filter Before Writing
+
+Before drafting anything, pass the merged data through these filters.
+
+### Sensitivity filter (hard rule)
+
+Never surface these in the summary, even if they came up:
+
+- **Financial:** transaction amounts, account/policy/IBAN/SWIFT numbers
+- **Security:** sign-in locations, recovery emails, 2FA codes, auth alerts
+- **Tax:** GST/PAN/ARN numbers, filing reference IDs
+- **Insurance:** policy numbers, claim IDs, service request numbers
+
+If the topic came up, reference the category only: *"You dealt with some tax filings"*, *"A few banking threads came through"* — never the specifics.
+
+### Deduplication
+
+If the same fact appears across multiple windows or episodes, surface it once. Only mention the recurrence if the pattern is itself the insight (e.g. *"MCP disconnection came up across three different users — that's a recurring theme"*).
+
+### Noise filter
+
+Drop entirely: automated reminder pings (drink water, polling), system health checks, repetitive automation. These inflate episode counts without adding signal. Adjust counts mentally before writing.
+
+---
+
+## Step 3 — Write the Summary
+
+**Tone:** Thoughtful personal assistant doing a debrief. Warm, concise, first person ("I noticed", "I picked up", "You spent"). Never "The data shows", never "Here are your topics".
+
+Follow this structure. Sections 1, 2, and the closing stats always render; the rest are conditional — skip any that have nothing meaningful.
+
+### 1. Opening line (always)
+
+One sentence capturing the feel of the period. Reference stats naturally, don't lead with them.
+
+**Good:** "Busy week — most of your time went into positioning and the website rewrite, with the product engine humming underneath."
+**Good:** "Lighter week. Twelve conversations, mostly two themes."
+**Bad:** "This was a busy week — I tracked 47 conversations across 11 topics." *(Stats-forward, says nothing about you.)*
+
+### 2. What you were focused on (always)
+
+Top 3–5 topics by episode count. For each, use the conversation highlights to add 1–2 sentences of what actually happened. Weave people in naturally rather than listing separately.
+
+**Good:** "Integrations took the most time (24 conversations) — Granola scaffold shipped, Meta Ads iterated, and you spent a chunk debugging Composio's tool-not-found error. Muskan came up mostly in the dashboard design thread."
+**Bad:** "Top topics: Integrations (24), Email (15), Health (8). Top people: Muskan (5), Matt (6)."
+
+The goal is to reflect attention versus where you might *think* attention went. If the distribution is surprising, name it.
+
+### 3. Decisions & how your thinking evolved (skip if empty)
+
+Pull from **Decision** aspect. Don't list isolated decisions — connect them into arcs that show how thinking changed.
+
+**Good:** "You moved email triage from Todoist to CORE Tasks, then switched from scheduled to manual invocation. Two changes in one direction — you're pulling triage closer to CORE itself."
+**Bad:** "Decision: replaced Todoist. Decision: chose hero direction B."
+
+### 4. Something new I picked up about you (skip if empty)
+
+1–2 observations max. Pull from **Identity** aspect. New or meaningfully changed personal signals — preferences, communication style, workflow shifts.
+
+**Good:** "First time I have a clear picture of your training direction: heart-healthy diet, form over load in the gym, 30–45 min strength plus zone 2."
+**Bad:** "New facts: you use Inkle, Apollo, Claude, Metabase, PostHog, Cal.com..."
+
+### 5. People in the picture (skip if empty)
+
+Pull from **Relationship** aspect. Changes in relationships — not mention counts. Who's new, who churned, who gave meaningful feedback, who you're waiting on.
+
+**Good:** "Matt Starfield churned — MCP disconnections were the breaking point, you closed it out gracefully. Divyaansh brought a YC F25 intro on the growth side."
+**Bad:** "Matt was mentioned 6 times. Muskan was mentioned 5 times."
+
+### 6. Friction & open threads (skip if empty)
+
+Pull from **Problem** and **Task** aspects. Recurring blockers (one-offs don't count) plus 2–4 unresolved threads worth surfacing.
+
+**Good:** "The asgard gateway wouldn't attach across multiple attempts — that's blocking the Blinkit browser experiments. Still waiting on Ashok for HDFC docs, and Thomas hasn't replied about credits."
+
+### 7. By the numbers (always)
+
+Single compact stats line, summed across all `gather_context` windows:
+
+```
+[totalEpisodes] conversations · [newFacts] new facts · [activeTopics] topics
+```
+
+---
+
+## Step 4 — Present
+
+Deliver the summary directly. Don't ask for confirmation.
+
+**Email:** When delivering via email, lead with `**Subject:**` then the body. The subject is content-derived, not skill-derived. Under 80 chars, lowercase feel, no generic titles like "Weekly Summary" or "What CORE Learned".
+
+**Good:** `**Subject:** This week: positioning locked, Matt churned, four new onboardings`
+**Good:** `**Subject:** Quiet week — mostly integrations and inbox triage`
+
+---
+
+## Writing Rules
+
+- **Synthesis, not inventory.** Show what CORE understood, not what CORE stored.
+- **First person always.** "I noticed", "You spent." Never "The data shows", never "The following topics were discussed."
+- **Map sections to aspect types.** Decisions → Decision facts. Identity section → Identity facts. People → Relationship facts. Friction → Problem + Task facts. Knowledge and Event feed the "what you were focused on" narrative.
+- **Skip empty sections silently.** Don't write "No new preferences this week" — just leave it out.
+- **Group related topics.** "CORE Product" + "CORE Development" → one thread.
+- **Length:** under 500 words for 7-day default. 150 words is fine for a light week. Proportional for shorter ranges.
+
+---
+
+## Edge Cases
+
+- **< 5 episodes:** 2–3 sentences total. Don't pad.
+- **One topic > 70% of episodes:** Lead with it, mention others in one sentence. Acknowledge the concentration: *"Almost entirely on X this week."*
+- **No new facts but many conversations:** Focus on attention distribution and decision arcs. Note: *"No new preferences picked up — mostly continuing existing threads."*
+- **30+ day range:** Summarize at higher granularity. Group by week if needed. Mention older details may be less precise.
+- **Heavy automation noise:** Don't count reminder pings, polling, drink-water notifications. These are system hygiene, not activity.
+- **Truncated response despite windowing:** Note in summary: *"Dense period — some details compressed."*
