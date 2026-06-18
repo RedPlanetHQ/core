@@ -1,15 +1,23 @@
-//! Global hotkey: hold Ctrl+Option to talk to butler (push-to-talk).
+//! Global hotkey: hold Ctrl+Option for 2 s to enter butler's "active"
+//! conversation mode. Tap Ctrl alone to commit a turn / barge in.
+//! Double-tap Ctrl to exit active mode (or open the expanded panel
+//! when no active session is running).
 //!
 //! Uses NSEvent's `addGlobalMonitorForEventsMatchingMask:handler:` —
 //! fires when modifier keys change in any *other* foreground app.
 //! Calling install() must happen on the main thread (Tauri's setup()
 //! satisfies this).
 //!
-//! When the user presses Ctrl+Option (and *only* those modifiers — no
-//! Cmd/Shift/Function/CapsLock), we capture the frontmost-app context
-//! and emit `voice:invoke`. When the chord drops (either key released
-//! OR a foreign modifier joins) we emit `voice:hold-end`. The widget
-//! uses the two events to drive a hold-to-talk lifecycle.
+//! Emitted events (consumed by lib.rs and forwarded to the widget):
+//!   voice:invoke         → user held Ctrl+Option for HOLD_ACTIVATE_MS.
+//!                          Triggers panel show + active-mode start.
+//!   voice:ctrl-tap       → single Ctrl tap (fires DOUBLE_TAP_WINDOW_MS
+//!                          after release, only if no second tap arrives).
+//!                          Widget treats as "commit turn" while listening
+//!                          or "barge in" while the assistant speaks.
+//!   voice:invoke-expand  → double-tap Ctrl. Widget treats as "exit
+//!                          active mode" if a session is running; opens
+//!                          the expanded text panel otherwise.
 //!
 //! We install both a global monitor (events delivered to *other* apps)
 //! and a local monitor (events delivered to CORE itself), so the same
@@ -26,9 +34,11 @@ use block::ConcreteBlock;
 use objc::runtime::Object;
 use objc::{class, msg_send, sel, sel_impl};
 use serde::Serialize;
-use tauri::{AppHandle, Emitter, Runtime};
+use tauri::{AppHandle, Emitter, Manager, Runtime};
 
 const DOUBLE_TAP_WINDOW_MS: u64 = 300;
+/// How long Ctrl+Option must be held before active mode is entered.
+const HOLD_ACTIVATE_MS: u64 = 2000;
 
 // NSEventMask for flagsChanged
 // (1 << NSEventTypeFlagsChanged) where NSEventTypeFlagsChanged = 12
@@ -61,6 +71,12 @@ pub struct ScreenFrame {
 struct DetectorState {
     /// Are Ctrl+Option both currently held (with no foreign modifiers)?
     is_holding: AtomicBool,
+    /// Bumped on every chord start AND chord end. The 2 s activation
+    /// timer snapshots this on spawn and only fires when the value is
+    /// unchanged at wake-up — i.e. the chord has been continuously held
+    /// for the full window. Any release (or a fresh re-press) invalidates
+    /// in-flight timers.
+    hold_generation: AtomicU64,
     /// Is Ctrl currently held? (independent of other modifiers)
     ctrl_held: AtomicBool,
     /// During the current ctrl-held period, was Option ever pressed?
@@ -70,6 +86,15 @@ struct DetectorState {
     /// Timestamp of the last clean ctrl-only release (no foreign mods,
     /// no Option ever joined). 0 = never / disqualified.
     last_clean_ctrl_up_ms: AtomicU64,
+    /// Bumped on every clean ctrl-only press AND release. The deferred
+    /// single-tap fire (which waits DOUBLE_TAP_WINDOW_MS to disambiguate
+    /// from a double-tap) checks this on wake and emits only if the
+    /// generation is unchanged — i.e. no second tap arrived.
+    ctrl_tap_generation: AtomicU64,
+    /// True when the next clean ctrl-release should NOT schedule a
+    /// single-tap timer because it's the release of the *second* tap of
+    /// a double-tap (the double has already been emitted on the press).
+    suppress_next_release_timer: AtomicBool,
 }
 
 /// Install the global flagsChanged monitor. Must run on the main thread.
@@ -79,9 +104,12 @@ pub fn install<R: Runtime>(app: AppHandle<R>) {
 
     let state = Arc::new(DetectorState {
         is_holding: AtomicBool::new(false),
+        hold_generation: AtomicU64::new(0),
         ctrl_held: AtomicBool::new(false),
         option_seen_during_ctrl: AtomicBool::new(false),
         last_clean_ctrl_up_ms: AtomicU64::new(0),
+        ctrl_tap_generation: AtomicU64::new(0),
+        suppress_next_release_timer: AtomicBool::new(false),
     });
 
     let ctx = Box::leak(Box::new(MonitorContext { state, app })) as *mut MonitorContext<R>
@@ -172,38 +200,87 @@ unsafe fn handle_flags_changed_event<R: Runtime>(
     let option_down = flags & NS_EVENT_MODIFIER_FLAG_OPTION != 0;
     let foreign = flags & NS_EVENT_MODIFIER_FOREIGN_MASK != 0;
 
-    // ── Hold-Ctrl+Option chord (push-to-talk) ─────────────────────────
+    // ── Hold-Ctrl+Option chord → active mode at 2 s ──────────────────
     let chord_held = control_down && option_down && !foreign;
     let was_holding = ctx.state.is_holding.load(Ordering::SeqCst);
     if chord_held && !was_holding {
         ctx.state.is_holding.store(true, Ordering::SeqCst);
-        log::info!("[voice_hotkey] HOLD start (Ctrl+Option) — emitting voice:invoke");
-        fire_event(&ctx.app, "voice:invoke", capture_frontmost());
+        let gen = ctx
+            .state
+            .hold_generation
+            .fetch_add(1, Ordering::SeqCst)
+            .wrapping_add(1);
+        log::info!(
+            "[voice_hotkey] HOLD start (Ctrl+Option) — arming {HOLD_ACTIVATE_MS}ms active-mode timer (gen={gen})"
+        );
+        let payload = capture_frontmost();
+        let state = ctx.state.clone();
+        let app = ctx.app.clone();
+        std::thread::spawn(move || {
+            std::thread::sleep(Duration::from_millis(HOLD_ACTIVATE_MS));
+            if state.hold_generation.load(Ordering::SeqCst) != gen {
+                log::info!(
+                    "[voice_hotkey] active-mode timer cancelled — chord re-armed (gen={gen})"
+                );
+                return;
+            }
+            if !state.is_holding.load(Ordering::SeqCst) {
+                log::info!(
+                    "[voice_hotkey] active-mode timer fired but chord already released (gen={gen})"
+                );
+                return;
+            }
+            log::info!(
+                "[voice_hotkey] active-mode timer elapsed — emitting voice:invoke (gen={gen})"
+            );
+            // The voice:invoke listener calls voice_panel::show(), which
+            // touches Cocoa. The emit chain runs the listener synchronously
+            // on the calling thread, so we must hop back to main before
+            // firing or AppKit aborts ("modifying autolayout engine from a
+            // background thread").
+            let app_for_event = app.clone();
+            if let Err(e) = app.run_on_main_thread(move || {
+                fire_event(&app_for_event, "voice:invoke", payload);
+            }) {
+                log::warn!("[voice_hotkey] run_on_main_thread(invoke) failed: {e}");
+            }
+        });
     } else if !chord_held && was_holding {
         ctx.state.is_holding.store(false, Ordering::SeqCst);
-        log::info!("[voice_hotkey] HOLD end — emitting voice:hold-end");
-        fire_event(&ctx.app, "voice:hold-end", ());
+        // Bump generation so any pending 2 s timer wakes up to a mismatch
+        // and aborts cleanly. No hold-end event is emitted — once active
+        // mode is on, the widget owns the session lifecycle.
+        ctx.state.hold_generation.fetch_add(1, Ordering::SeqCst);
+        log::info!("[voice_hotkey] HOLD end");
     }
 
-    // ── Double-tap Ctrl (open expanded panel, no listening) ───────────
+    // ── Ctrl tap detection: single (delayed) vs double (immediate) ────
     let ctrl_was = ctx.state.ctrl_held.load(Ordering::SeqCst);
     if control_down && !ctrl_was {
-        // Ctrl just pressed
+        // Ctrl just pressed.
         ctx.state.ctrl_held.store(true, Ordering::SeqCst);
-        // If Option is already down at the moment of press, this isn't a
-        // clean ctrl-only sequence — note that for the upcoming up.
         ctx.state
             .option_seen_during_ctrl
             .store(option_down || foreign, Ordering::SeqCst);
+        // Any new press supersedes a pending single-tap fire from the
+        // previous release: bump the generation so the waiting timer
+        // wakes to a mismatch.
+        ctx.state.ctrl_tap_generation.fetch_add(1, Ordering::SeqCst);
 
-        // Double-tap check: only trigger when this press is clean
-        // (no Option, no foreign).
+        // Double-tap check: only triggers when this press is clean
+        // (no Option, no foreign) AND a prior clean release sits within
+        // the window.
         if !option_down && !foreign {
             let last_up = ctx.state.last_clean_ctrl_up_ms.load(Ordering::SeqCst);
             let now_ms = now_ms();
             let dt = now_ms.saturating_sub(last_up);
             if last_up != 0 && dt <= DOUBLE_TAP_WINDOW_MS {
                 ctx.state.last_clean_ctrl_up_ms.store(0, Ordering::SeqCst);
+                // The release of this second press must NOT schedule its
+                // own single-tap timer.
+                ctx.state
+                    .suppress_next_release_timer
+                    .store(true, Ordering::SeqCst);
                 log::info!(
                     "[voice_hotkey] DOUBLE-TAP Ctrl — emitting voice:invoke-expand"
                 );
@@ -211,23 +288,61 @@ unsafe fn handle_flags_changed_event<R: Runtime>(
             }
         }
     } else if !control_down && ctrl_was {
-        // Ctrl released
+        // Ctrl released.
         ctx.state.ctrl_held.store(false, Ordering::SeqCst);
         let dirty = ctx.state.option_seen_during_ctrl.load(Ordering::SeqCst);
+        let suppressed = ctx
+            .state
+            .suppress_next_release_timer
+            .swap(false, Ordering::SeqCst);
         if dirty {
             // Disqualified — Option (or another modifier) joined during
-            // this ctrl-down period.
+            // this ctrl-down period. Not a tap.
+            ctx.state.last_clean_ctrl_up_ms.store(0, Ordering::SeqCst);
+        } else if suppressed {
+            // Release of the second tap of a double — double-tap event
+            // already fired on the press. Don't seed another double-tap
+            // window from this release and don't schedule a single-tap.
             ctx.state.last_clean_ctrl_up_ms.store(0, Ordering::SeqCst);
         } else {
             ctx.state
                 .last_clean_ctrl_up_ms
                 .store(now_ms(), Ordering::SeqCst);
+            // Schedule deferred single-tap fire. If a second tap arrives
+            // first, the press handler bumps the generation and this
+            // wakeup becomes a no-op.
+            let gen = ctx
+                .state
+                .ctrl_tap_generation
+                .fetch_add(1, Ordering::SeqCst)
+                .wrapping_add(1);
+            let state = ctx.state.clone();
+            let app = ctx.app.clone();
+            std::thread::spawn(move || {
+                std::thread::sleep(Duration::from_millis(DOUBLE_TAP_WINDOW_MS));
+                if state.ctrl_tap_generation.load(Ordering::SeqCst) != gen {
+                    return;
+                }
+                log::info!("[voice_hotkey] SINGLE-TAP Ctrl — emitting voice:ctrl-tap");
+                // Same main-thread requirement as the active-mode timer:
+                // downstream listeners may touch Tauri windows / AppKit.
+                let app_for_event = app.clone();
+                if let Err(e) = app.run_on_main_thread(move || {
+                    fire_event(&app_for_event, "voice:ctrl-tap", ());
+                }) {
+                    log::warn!("[voice_hotkey] run_on_main_thread(ctrl-tap) failed: {e}");
+                }
+            });
         }
     } else if control_down && (option_down || foreign) {
         // Option (or another mod) arrived during a ctrl-down period.
+        // This ctrl press is no longer a tap candidate.
         ctx.state
             .option_seen_during_ctrl
             .store(true, Ordering::SeqCst);
+        // Cancel any single-tap timer that might have been scheduled by
+        // a prior release within the same hotkey burst.
+        ctx.state.ctrl_tap_generation.fetch_add(1, Ordering::SeqCst);
     }
 }
 

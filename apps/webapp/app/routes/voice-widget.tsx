@@ -1,16 +1,25 @@
 /**
- * Voice widget — push-to-talk pill for the Tauri "voice" window.
+ * Voice widget — continuous-conversation pill for the Tauri "voice"
+ * window.
  *
  * Default state: a small pill (FlickeringGrid + label) at the top-right
  * of the floating voice window.
  *
  * Lifecycle (driven by Rust hotkey events):
- *   voice:invoke           → user pressed Ctrl+Option → start listening
- *   voice:partial          → audio detected; pill flips to "Listening…"
- *   voice:hold-end-payload → user released the chord → finalize the
- *                            recognition; pill enters "Thinking…" once
- *                            we've sent the turn
- *   stream complete + TTS  → pill shows "Speaking…" then auto-hides
+ *   voice:invoke-payload         → user held Ctrl+Option for 2 s →
+ *                                  enter active mode + start listening
+ *   voice:partial                → audio detected; pill flips to
+ *                                  "Listening…"
+ *   voice:silence-timeout        → ~500 ms of silence after speech →
+ *                                  auto-commit the turn (→ "Thinking…")
+ *   voice:ctrl-tap-payload       → single Ctrl tap: commit the current
+ *                                  turn while listening; barge in
+ *                                  while the assistant is speaking
+ *   stream complete + TTS        → "Speaking…" then mic auto-reopens
+ *                                  for the next turn (active mode)
+ *   voice:invoke-expand-payload  → double-tap Ctrl: exits active mode
+ *                                  if running, otherwise opens the
+ *                                  expanded text panel
  *
  * Click the pill → panel expands to show the full conversation. Esc on
  * the expanded panel collapses back to the pill.
@@ -67,6 +76,13 @@ interface Turn {
 
 const SENTENCE_BOUNDARY = /([.!?])\s/;
 const AUTO_HIDE_DELAY_MS = 1200;
+/**
+ * Active-mode auto-exit: if the mic is open and we don't hear the user
+ * say anything for this long, drop active mode rather than sitting hot
+ * forever. Reset whenever speech is detected (so it only counts
+ * end-of-conversation idleness, not normal pauses).
+ */
+const ACTIVE_IDLE_TIMEOUT_MS = 30_000;
 
 export default function VoiceWidget() {
   const [status, setStatus] = useState<Status>("idle");
@@ -95,15 +111,25 @@ export default function VoiceWidget() {
   const elActiveRef = useRef<HTMLAudioElement | null>(null);
   /** toolCallIds of progress_update events already spoken — dedupe across retries. */
   const spokenProgressRef = useRef<Set<string>>(new Set());
-  /** True while the user has the chord held — controls "armed" vs "listening" transition */
-  const chordHeldRef = useRef<boolean>(false);
-  /** Did we receive any partial transcript during this hold? Drives finalization. */
+  /** True while butler is in an active continuous-conversation session. */
+  const activeModeRef = useRef<boolean>(false);
+  /** Did we receive any partial transcript during the current turn? */
   const heardSpeechRef = useRef<boolean>(false);
   const expandedRef = useRef<boolean>(false);
+  /** Mirror of `status` for use inside Tauri event callbacks (which
+   * capture state at first render). */
+  const statusRef = useRef<Status>("idle");
+  /** Auto-exit timer for active mode — armed when the mic opens
+   * without speech, cleared on first speech. */
+  const idleTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   useEffect(() => {
     expandedRef.current = expanded;
   }, [expanded]);
+
+  useEffect(() => {
+    statusRef.current = status;
+  }, [status]);
 
   // ── Make the host html/body transparent so the pill / rounded panel
   //    has no surrounding solid frame. Scoped to this route via cleanup.
@@ -127,23 +153,29 @@ export default function VoiceWidget() {
 
     const unsubs: Array<Promise<() => void>> = [];
 
+    // Held Ctrl+Option for 2 s → enter active conversation mode.
     unsubs.push(
       tauriListen<{ screenContext: ScreenContext | null }>(
         "voice:invoke-payload",
         (event) => {
           screenContextRef.current = event.payload?.screenContext ?? null;
-          startHoldSession();
+          enterActiveMode();
         },
       ),
     );
 
-    // Double-tap Ctrl: open in expanded mode without starting to listen.
-    // Stays open until Esc.
+    // Double-tap Ctrl: exit active mode if a session is running,
+    // otherwise open the expanded text panel. Stays open until Esc.
     unsubs.push(
       tauriListen<{ screenContext: ScreenContext | null }>(
         "voice:invoke-expand-payload",
         (event) => {
           screenContextRef.current = event.payload?.screenContext ?? null;
+          if (activeModeRef.current) {
+            console.log("[voice-widget] double-ctrl → exit active mode");
+            exitActiveMode();
+            return;
+          }
           clearHideTimer();
           setError(null);
           setExpanded(true);
@@ -151,9 +183,33 @@ export default function VoiceWidget() {
       ),
     );
 
+    // Single Ctrl tap during an active session: commit the current
+    // turn while listening, or barge in if butler is speaking.
     unsubs.push(
-      tauriListen("voice:hold-end-payload", () => {
-        endHoldSession();
+      tauriListen("voice:ctrl-tap-payload", () => {
+        if (!activeModeRef.current) return;
+        const s = statusRef.current;
+        if (s === "listening" || (s === "armed" && heardSpeechRef.current)) {
+          commitTurn();
+        } else if (s === "speaking" || ttsActiveRef.current) {
+          bargeIn();
+        }
+        // armed-without-speech and thinking are intentional no-ops:
+        // there's nothing yet to commit, and we don't want to abort a
+        // turn that's already in flight.
+      }),
+    );
+
+    // VAD fired: ~500 ms of silence after the user finished speaking.
+    // Treated as an implicit "I'm done with this turn" in active mode.
+    unsubs.push(
+      tauriListen("voice:silence-timeout", () => {
+        if (!activeModeRef.current) return;
+        const s = statusRef.current;
+        if (s === "listening" || (s === "armed" && heardSpeechRef.current)) {
+          console.log("[voice-widget] silence-timeout → commit");
+          commitTurn();
+        }
       }),
     );
 
@@ -163,6 +219,11 @@ export default function VoiceWidget() {
         (event) => {
           const text = event.payload?.text ?? "";
           if (text.trim().length > 0) {
+            if (!heardSpeechRef.current) {
+              // First speech this turn — user is engaged, cancel the
+              // active-mode idle timer.
+              clearIdleTimer();
+            }
             heardSpeechRef.current = true;
             // First partial transitions "armed" → "listening".
             setStatus((s) => (s === "armed" ? "listening" : s));
@@ -198,16 +259,14 @@ export default function VoiceWidget() {
         // Stream still flowing (subagent mid-work between progress
         // beats, or main reply not yet complete). Stay in "thinking"
         // and do NOT arm the hide timer — the end-of-stream path
-        // schedules the hide once sendTurn drops inFlightRef.
+        // takes the next step once sendTurn drops inFlightRef.
         if (inFlightRef.current) {
           console.log("[voice-widget] tts-ended (stream in flight) → stay thinking");
           setStatus("thinking");
           clearHideTimer();
           return;
         }
-        console.log("[voice-widget] tts-ended → scheduling auto-hide");
-        setStatus("idle");
-        scheduleAutoHide();
+        finishAssistantTurn("tts-ended");
       }),
     );
 
@@ -229,10 +288,12 @@ export default function VoiceWidget() {
     if (!isTauri()) return;
     void tauriInvoke("voice_request_permissions");
     return () => {
+      activeModeRef.current = false;
       inFlightRef.current?.abort();
       cancelAllTTS();
       void tauriInvoke("voice_cancel_listening");
       clearHideTimer();
+      clearIdleTimer();
     };
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
@@ -262,44 +323,112 @@ export default function VoiceWidget() {
   }, [expanded]);
 
   function closeWidget() {
+    // Esc / X / explicit dismiss always ends a running active session
+    // so the mic isn't left hot after the panel goes away.
+    if (activeModeRef.current) {
+      exitActiveMode();
+      return;
+    }
     setExpanded(false);
     void hideWindow();
   }
 
-  // ── Lifecycle helpers ────────────────────────────────────────────────────
-  function startHoldSession() {
-    chordHeldRef.current = true;
+  // ── Active-mode lifecycle ────────────────────────────────────────────────
+  function enterActiveMode() {
+    activeModeRef.current = true;
     heardSpeechRef.current = false;
     clearHideTimer();
     setError(null);
     setPartialText("");
-    // Each new push-to-talk session starts in pill (collapsed) mode —
-    // any leftover expanded state from a previous conversation is reset.
+    // Each fresh active session starts in pill (collapsed) mode.
     setExpanded(false);
-    // Cancel any in-flight TTS — barge-in into a fresh turn.
-    if (ttsActiveRef.current) {
-      cancelAllTTS();
-    }
+    // If butler was mid-sentence from a prior conversation, drop it —
+    // the user just opened a new session.
+    if (ttsActiveRef.current) cancelAllTTS();
+    inFlightRef.current?.abort();
+    inFlightRef.current = null;
     setStatus("armed");
     void tauriInvoke("voice_start_listening");
+    armIdleTimer();
   }
 
-  function endHoldSession() {
-    chordHeldRef.current = false;
-    if (heardSpeechRef.current) {
-      // Heard speech — finalize. Recognizer will emit one last `final`
-      // and we'll process it through to TTS. Pill stays visible
-      // through the thinking → speaking cycle, then auto-hides.
-      setStatus("thinking");
-      void tauriInvoke("voice_stop_listening");
+  function exitActiveMode() {
+    activeModeRef.current = false;
+    clearIdleTimer();
+    clearHideTimer();
+    inFlightRef.current?.abort();
+    inFlightRef.current = null;
+    cancelAllTTS();
+    void tauriInvoke("voice_cancel_listening");
+    heardSpeechRef.current = false;
+    setStatus("idle");
+    setPartialText("");
+    if (!expandedRef.current) void hideWindow();
+  }
+
+  /** Commit the current turn: stop the recognizer, which will emit
+   * one last `voice:final` → `sendTurn` → assistant reply. */
+  function commitTurn() {
+    clearIdleTimer();
+    setStatus("thinking");
+    void tauriInvoke("voice_stop_listening");
+  }
+
+  /** Cut the assistant off mid-speech and open the mic for the user's
+   * next turn. */
+  function bargeIn() {
+    cancelAllTTS();
+    inFlightRef.current?.abort();
+    inFlightRef.current = null;
+    heardSpeechRef.current = false;
+    setPartialText("");
+    setStatus("armed");
+    void tauriInvoke("voice_start_listening");
+    armIdleTimer();
+  }
+
+  /** After the assistant finishes speaking, hand the floor back to the
+   * user — opens the mic and arms the idle timer. */
+  function reopenMicForNextTurn() {
+    heardSpeechRef.current = false;
+    setPartialText("");
+    setError(null);
+    setStatus("armed");
+    void tauriInvoke("voice_start_listening");
+    armIdleTimer();
+  }
+
+  /** Decide what happens once an assistant turn (stream + TTS) is
+   * fully drained: active mode reopens the mic, idle mode schedules
+   * the auto-hide. Shared by all three drain code paths. */
+  function finishAssistantTurn(source: string) {
+    if (activeModeRef.current) {
+      console.log(`[voice-widget] ${source} → reopen mic (active)`);
+      reopenMicForNextTurn();
     } else {
-      // Silent release — hide immediately unless the user has
-      // expanded the panel (they're actively reading history).
-      void tauriInvoke("voice_cancel_listening");
+      console.log(`[voice-widget] ${source} → scheduling auto-hide`);
       setStatus("idle");
-      if (!expandedRef.current) {
-        void hideWindow();
-      }
+      scheduleAutoHide();
+    }
+  }
+
+  function armIdleTimer() {
+    clearIdleTimer();
+    idleTimerRef.current = setTimeout(() => {
+      if (!activeModeRef.current) return;
+      // Only fire when we genuinely never heard speech this turn. If
+      // the user already started talking, the partial handler cleared
+      // this timer; if they finished, the commit path did.
+      if (heardSpeechRef.current) return;
+      console.log("[voice-widget] active-mode idle timeout — exiting");
+      exitActiveMode();
+    }, ACTIVE_IDLE_TIMEOUT_MS);
+  }
+
+  function clearIdleTimer() {
+    if (idleTimerRef.current) {
+      clearTimeout(idleTimerRef.current);
+      idleTimerRef.current = null;
     }
   }
 
@@ -454,11 +583,12 @@ export default function VoiceWidget() {
     }
 
     inFlightRef.current = null;
-    // Re-arm auto-hide: scheduleAutoHide calls during the stream
-    // no-op'd while inFlightRef was set, so the panel could otherwise
-    // stay open forever once the last TTS chunk finished.
+    // Stream is done and no TTS chunks are still in flight: time to
+    // either hand the floor back (active mode) or schedule the
+    // auto-hide. The TTS-end paths short-circuit on inFlight!=null
+    // while we were streaming, so this is the catch-up for them.
     if (currentTurnModeRef.current === "voice" && !ttsActiveRef.current) {
-      scheduleAutoHide();
+      finishAssistantTurn("sendTurn-end");
     }
   }
 
@@ -560,7 +690,8 @@ export default function VoiceWidget() {
           void next.play();
         } else {
           // Queue drained — surface the same end-of-speech transition the
-          // Swift helper emits, so scheduleAutoHide / status updates run.
+          // Swift helper emits, so the active-mode reopen / idle auto-hide
+          // path runs.
           ttsActiveRef.current = false;
           // Mirror the tts-ended gate: stream still flowing → stay
           // visible as "thinking" and don't arm the hide timer.
@@ -568,8 +699,7 @@ export default function VoiceWidget() {
             setStatus("thinking");
             clearHideTimer();
           } else {
-            setStatus("idle");
-            scheduleAutoHide();
+            finishAssistantTurn("11labs-queue-drained");
           }
         }
       });
@@ -714,7 +844,9 @@ export default function VoiceWidget() {
       <div className="flex flex-1 flex-col gap-1.5 overflow-y-auto pr-1">
         {turns.length === 0 && !error && (
           <div className="text-muted-foreground my-auto text-center text-xs">
-            Type below, or hold <kbd>Ctrl</kbd>+<kbd>Option</kbd> and speak.
+            Type below, or hold <kbd>Ctrl</kbd>+<kbd>Option</kbd> for 2 s to
+            start a voice conversation. Tap <kbd>Ctrl</kbd> to commit or
+            barge in; double-tap to exit.
           </div>
         )}
         {turns.map((t, i) => {
