@@ -15,7 +15,6 @@ import { Button } from "../ui";
 import {
   ChevronDown,
   ChevronRight,
-  Clock,
   LayoutGrid,
   LoaderCircle,
   Search,
@@ -406,17 +405,6 @@ export const Tool = ({
       toolName === "update_task"
     ) {
       return <Task size={16} />;
-    }
-
-    if (
-      toolName === "add_reminder" ||
-      toolName === "update_reminder" ||
-      toolName === "delete_reminder" ||
-      toolName === "list_reminders" ||
-      toolName === "confirm_reminder" ||
-      toolName === "set_timezone"
-    ) {
-      return <Clock size={16} />;
     }
 
     if (

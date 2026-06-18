@@ -25,9 +25,9 @@ interface GetMessageToolsParams {
   userId: string;
   userEmail: string;
   userPhoneNumber?: string;
-  /** Channel name/type from the trigger's reminder config */
+  /** Channel name/type from the triggering task's config */
   triggerChannel?: string;
-  /** Channel ID from the trigger's reminder config */
+  /** Channel ID from the triggering task's config */
   triggerChannelId?: string | null;
   /** Task this send_message is happening inside (if any) — recorded on the
    *  inbox row so the summariser can say "task X is in review". */

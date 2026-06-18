@@ -207,12 +207,7 @@ export async function runCASEPipeline(
               break;
             }
             case "update_state": {
-              await executeStateUpdate(
-                action,
-                trigger.userId,
-                entityId,
-                !!taskId,
-              );
+              await executeStateUpdate(action, trigger.userId, entityId);
               break;
             }
             default:
@@ -269,32 +264,26 @@ export async function runCASEPipeline(
 // ============================================================================
 
 /**
- * Execute state update — updates reminder metadata in database
+ * Execute state update — updates task metadata in database
  */
 async function executeStateUpdate(
   action: { description: string; data?: Record<string, unknown> },
   userId: string,
   defaultEntityId: string,
-  isTask: boolean = false,
 ) {
   const data = action.data || {};
-  const targetId =
-    (data.targetReminderId as string) ||
-    (data.targetTaskId as string) ||
-    defaultEntityId;
+  const targetId = (data.targetTaskId as string) || defaultEntityId;
 
   logger.info(`[silent] State update: ${action.description}`, {
     userId,
     targetId,
-    isTask,
   });
 
   const updateData: Record<string, unknown> = {};
 
   // Handle metadata merge
   if (data.metadata && typeof data.metadata === "object") {
-    const table = isTask ? prisma.task : prisma.reminder;
-    const existing = await (table as any).findUnique({
+    const existing = await prisma.task.findUnique({
       where: { id: targetId },
       select: { metadata: true },
     });
@@ -323,13 +312,10 @@ async function executeStateUpdate(
   }
 
   if (Object.keys(updateData).length > 0) {
-    const table = isTask ? prisma.task : prisma.reminder;
-    await (table as any).update({
+    await prisma.task.update({
       where: { id: targetId },
       data: updateData,
     });
-    logger.info(
-      `[silent] State updated for ${isTask ? "task" : "reminder"} ${targetId}`,
-    );
+    logger.info(`[silent] State updated for task ${targetId}`);
   }
 }

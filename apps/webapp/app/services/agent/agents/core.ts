@@ -3,7 +3,7 @@
  *
  * Two entry points:
  *  - `createCoreTools()` — builds all non-orchestrator tools (sleep, acknowledge,
- *    reminders, tasks, skills).
+ *    tasks, skills).
  *  - `createCoreAgents()` — builds gather_context, take_action, and optionally
  *    think subagents via Mastra's native `agents: {}` mechanism.
  */
@@ -65,9 +65,9 @@ interface CreateCoreToolsParams {
   isOnboardingMode?: boolean;
   /** Task ID when running as a background task (for reschedule_self tool) */
   currentTaskId?: string;
-  /** Channel name from trigger's reminder config (for send_message tool) */
+  /** Channel name from the trigger's task config (for send_message tool) */
   triggerChannel?: string;
-  /** Channel ID from trigger's reminder config (for send_message tool) */
+  /** Channel ID from the trigger's task config (for send_message tool) */
   triggerChannelId?: string | null;
   /** User email for send_message fallback */
   userEmail?: string;
@@ -208,7 +208,7 @@ export async function createCoreTools(
   const minRecurrenceMinutes =
     subscription?.planType === "FREE" || !subscription ? 60 : 30;
 
-  // Unified task tools (includes scheduling / recurring — replaces reminder tools)
+  // Unified task tools (includes scheduling / recurring)
   const taskTools = readOnly
     ? {}
     : getTaskTools(
@@ -462,7 +462,7 @@ export async function createCoreAgents(
     ),
   ]);
 
-  // Think agent — only when triggered (reminders, webhooks, scheduled jobs)
+  // Think agent — only when triggered (scheduled tasks, webhooks, integration jobs)
   const channel =
     source === "whatsapp"
       ? "whatsapp"

@@ -1,6 +1,6 @@
 ---
 title: "TUI"
-description: "Interactive terminal UI for chatting with CORE and managing reminders, integrations, and conversations"
+description: "Interactive terminal UI for chatting with CORE and managing tasks, integrations, and conversations"
 ---
 
 ## Overview
@@ -20,7 +20,7 @@ You get a persistent chat session with an editor at the bottom. Type `/` to see 
 | Command | Description |
 |---------|-------------|
 | `/resume` | Browse and resume a previous conversation |
-| `/reminders` | View your reminders |
+| `/tasks` | View and manage your tasks |
 | `/integrations` | View and manage connected integrations |
 | `/dashboard` | Open the CORE web dashboard in your browser |
 | `/clear` | Clear the current conversation and start fresh |
@@ -40,18 +40,6 @@ You get a persistent chat session with an editor at the bottom. Type `/` to see 
 - Press `esc` to cancel
 
 Conversations paginate automatically — more load as you scroll toward the end of the list.
-
----
-
-### Reminders
-
-`/reminders` shows all your scheduled reminders with their schedule, channel, and next run time.
-
-- Navigate with `↑↓`
-- Press `f` to cycle through **All → Active → Inactive** filters
-- Press `esc` to close
-
-Each reminder shows its recurrence (e.g. "Daily at 9AM"), the channel it fires on, and how long until the next run. The list paginates automatically as you scroll.
 
 ---
 

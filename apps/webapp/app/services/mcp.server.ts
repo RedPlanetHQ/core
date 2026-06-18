@@ -14,7 +14,6 @@ import { z } from "zod";
 import { MCPSessionManager } from "~/utils/mcp/session-manager";
 import { TransportManager } from "~/utils/mcp/transport-manager";
 import { callMemoryTool, memoryTools } from "~/utils/mcp/memory";
-import { reminderTools, callReminderTool } from "~/utils/mcp/reminder";
 import { skillTools, callSkillTool } from "~/utils/mcp/skill";
 import { logger } from "~/services/logger.service";
 import { type Response, type Request } from "express";
@@ -24,7 +23,6 @@ import {
   getGatewayMCPTools,
   handleGatewayToolCall,
 } from "~/services/agent/gateway-operations";
-import { getUserTimezone } from "~/models/user.server";
 
 const QueryParams = z.object({
   source: z.string().optional(),
@@ -86,9 +84,6 @@ async function createMcpServer(
     } catch (error) {
       logger.error("Error loading gateway tools:", { error });
     }
-
-    // Add reminder tools
-    tools = tools.concat(reminderTools as any);
 
     // Add skill tools
     tools = tools.concat(skillTools as any);
@@ -154,20 +149,6 @@ async function createMcpServer(
         userId,
         source,
       );
-    }
-
-    // Handle reminder tools
-    const reminderToolNames = [
-      "add_reminder",
-      "update_reminder",
-      "delete_reminder",
-      "list_reminders",
-      "confirm_reminder",
-      "set_timezone",
-    ];
-    if (reminderToolNames.includes(name)) {
-      const timezone = await getUserTimezone(userId);
-      return await callReminderTool(name, args, workspaceId, timezone);
     }
 
     // Handle skill tools

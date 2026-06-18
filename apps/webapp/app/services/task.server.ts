@@ -615,11 +615,11 @@ export async function deleteTask(
 }
 
 // ============================================================================
-// Scheduled Task Functions (absorbed from reminder.server.ts)
+// Scheduled Task Functions
 // ============================================================================
 
 /**
- * Create a scheduled task (replaces addReminder).
+ * Create a scheduled task.
  * Schedule is stored as-is (in user's local timezone).
  * nextRunAt is computed and stored in UTC.
  */

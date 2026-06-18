@@ -51,12 +51,6 @@ import {
   processIntegrationRun,
 } from "~/jobs/integrations/integration-run.logic";
 import {
-  type ReminderJobData,
-  type FollowUpJobData,
-  processReminderJob,
-  processFollowUpJob,
-} from "~/jobs/reminder/reminder.logic";
-import {
   createActivities,
   createIntegrationAccount,
   saveIntegrationAccountState,
@@ -64,12 +58,6 @@ import {
 } from "~/trigger/utils/message-utils";
 import { extractMessagesFromOutput } from "~/trigger/utils/cli-message-handler";
 import {
-  scheduleNextOccurrence,
-  deactivateReminder,
-} from "~/services/reminder.server";
-import {
-  reminderQueue,
-  followUpQueue,
   taskQueue,
   scheduledTaskQueue,
   scratchpadScanQueue,
@@ -272,44 +260,6 @@ export const integrationRunWorker = new Worker(
 );
 
 /**
- * Reminder worker
- * Processes scheduled reminders
- */
-export const reminderWorker = new Worker(
-  "reminder-queue",
-  async (job) => {
-    const payload = job.data as ReminderJobData;
-
-    return await processReminderJob(
-      payload,
-      scheduleNextOccurrence,
-      deactivateReminder,
-    );
-  },
-  {
-    connection: getRedisConnection(),
-    concurrency: env.BULLMQ_CONCURRENCY_REMINDER, // Process reminders in parallel
-  },
-);
-
-/**
- * Follow-up worker
- * Processes follow-up reminders
- */
-export const followUpWorker = new Worker(
-  "followup-queue",
-  async (job) => {
-    const payload = job.data as FollowUpJobData;
-
-    return await processFollowUpJob(payload);
-  },
-  {
-    connection: getRedisConnection(),
-    concurrency: env.BULLMQ_CONCURRENCY_FOLLOW_UP, // Process follow-ups in parallel
-  },
-);
-
-/**
  * CASE pipeline worker — single worker for every non-user trigger that flows
  * through the decision pipeline. Dispatch happens inside `processCase` based
  * on `payload.type` ("activity" | "memory_ingest").
@@ -328,7 +278,7 @@ export const caseWorker = new Worker(
 
 /**
  * Scheduled task worker
- * Processes scheduled/recurring tasks (unified with reminders)
+ * Processes scheduled/recurring tasks
  */
 export const scheduledTaskWorker = new Worker(
   "scheduled-task-queue",
@@ -405,13 +355,9 @@ export async function closeAllWorkers(): Promise<void> {
     personaGenerationWorker.close(),
     graphResolutionWorker.close(),
     integrationRunWorker.close(),
-    reminderWorker.close(),
-    followUpWorker.close(),
     caseWorker.close(),
     scheduledTaskWorker.close(),
     taskWorker.close(),
-    reminderQueue.close(),
-    followUpQueue.close(),
     scheduledTaskQueue.close(),
     taskQueue.close(),
     scratchpadScanWorker.close(),

@@ -328,7 +328,7 @@ export default function ChannelsSettings() {
     <div className="md:w-3xl mx-auto flex w-auto flex-col gap-4 px-4 py-6">
       <SettingSection
         title="Channels"
-        description="Configure notification channels for reminders and agent replies."
+        description="Configure notification channels for agent replies and scheduled tasks."
       >
         <div className="flex flex-col">
           <div className="mb-4 flex justify-between">

@@ -77,7 +77,7 @@ export async function processTask(payload: TaskPayload): Promise<TaskResult> {
     const timeoutId = setTimeout(() => abortController.abort(), timeoutMs);
 
     // Prefix intent with task context so the agent knows its own taskId
-    // and can embed it in any reminders it creates (e.g. after starting a coding session)
+    // and can embed it in any follow-up tasks it creates (e.g. after starting a coding session)
     const metadata = (task.metadata as Record<string, unknown>) ?? {};
     const rescheduleCount = (metadata.rescheduleCount as number) ?? 0;
     const rescheduleNote = rescheduleCount > 0 ? ` [reschedule:${rescheduleCount}/10]` : "";

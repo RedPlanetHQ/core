@@ -21,7 +21,6 @@ import {
   scratchpadScanWorker,
   caseWorker,
 } from "./workers";
-import { initializeReminderScheduler } from "~/services/reminder-scheduler";
 import { initializeScheduledTaskScheduler } from "~/services/task-scheduler";
 import {
   ingestQueue,
@@ -133,9 +132,6 @@ export async function initWorkers(): Promise<void> {
     60000, // Log metrics every 60 seconds
   );
 
-  // Initialize reminder scheduler (starts its own workers + recovers missed jobs)
-  await initializeReminderScheduler();
-
   // Initialize scheduled task scheduler (recovers missed scheduled task jobs)
   await initializeScheduledTaskScheduler();
 
@@ -163,7 +159,6 @@ export async function initWorkers(): Promise<void> {
   );
   logger.log(`✓ Scratchpad scan worker: ${scratchpadScanWorker.name} (concurrency: 5)`);
   logger.log(`✓ Case worker: ${caseWorker.name} (concurrency: 5)`);
-  logger.log(`✓ Reminder scheduler: reminder-queue + followup-queue`);
   logger.log(`✓ Scheduled task scheduler: scheduled-task-queue`);
   logger.log("─".repeat(80));
   logger.log("✅ All BullMQ workers started and listening for jobs");

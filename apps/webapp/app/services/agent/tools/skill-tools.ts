@@ -23,7 +23,7 @@ import {
 export function getSkillTool(workspaceId: string): Tool {
   return tool({
     description:
-      "Load a user-defined skill's full instructions by ID. Use this when a skill is attached to a reminder or when the user asks to run a skill. Returns the skill's step-by-step instructions.",
+      "Load a user-defined skill's full instructions by ID. Use this when a skill is attached to a task or when the user asks to run a skill. Returns the skill's step-by-step instructions.",
     inputSchema: z.object({
       skill_id: z.string().describe("The skill ID to load"),
     }),
