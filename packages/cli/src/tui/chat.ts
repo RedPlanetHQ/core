@@ -19,7 +19,6 @@ import {editorTheme, markdownTheme} from './themes.js';
 import {createConversation} from './hooks/use-conversation.js';
 import {ToolCallItem} from './components/tool-call-item.js';
 import {ConversationSelector} from './components/conversation-selector.js';
-import {ReminderList} from './components/reminder-list.js';
 import {TaskList} from './components/task-list.js';
 import {TaskDetail} from './components/task-detail.js';
 import type {TaskSummary} from './utils/stream.js';
@@ -69,7 +68,6 @@ export function startTuiApp(
 			[
 				{name: 'clear', description: 'Clear conversation and start fresh'},
 				{name: 'resume', description: 'Resume a previous conversation'},
-				{name: 'reminders', description: 'View your reminders'},
 				{name: 'tasks', description: 'View and manage your tasks'},
 				{name: 'integrations', description: 'View and connect integrations'},
 				{name: 'widgets', description: 'Configure widgets (below-input & overview)'},
@@ -326,11 +324,6 @@ export function startTuiApp(
 			return;
 		}
 
-		if (trimmed === '/reminders') {
-			showReminderList();
-			return;
-		}
-
 		if (trimmed === '/tasks') {
 			showTaskList();
 			return;
@@ -564,22 +557,6 @@ export function startTuiApp(
 			loadConversationHistoryIntoMessages(conv.id);
 		};
 	}
-
-	function showReminderList(): void {
-		hideMainUI();
-
-		const list = new ReminderList(baseUrl, apiKey, tui, () =>
-			tui.requestRender(),
-		);
-		tui.addChild(list);
-		tui.setFocus(list);
-
-		list.onCancel = () => {
-			tui.removeChild(list);
-			restoreMainUI();
-		};
-	}
-
 
 	function showTaskList(): void {
 		hideMainUI();

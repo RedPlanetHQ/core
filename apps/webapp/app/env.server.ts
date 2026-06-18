@@ -199,8 +199,6 @@ const EnvironmentSchema = z
       .int()
       .positive()
       .default(3),
-    BULLMQ_CONCURRENCY_REMINDER: z.coerce.number().int().positive().default(10),
-    BULLMQ_CONCURRENCY_FOLLOW_UP: z.coerce.number().int().positive().default(5),
 
     // Search-v2 label match tuning
     // Default keeps current behavior; lower for embedding providers with lower cosine ranges.

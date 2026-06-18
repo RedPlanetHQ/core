@@ -2,7 +2,7 @@
  * Decision Agent Types
  *
  * Core types for the Decision Agent system that handles non-user triggers
- * (reminders, webhooks, scheduled jobs) with intelligent reasoning.
+ * (scheduled tasks, webhooks, integration jobs) with intelligent reasoning.
  */
 
 import type { MessageChannel } from "~/services/agent/types";
@@ -12,8 +12,6 @@ import type { MessageChannel } from "~/services/agent/types";
 // ============================================================================
 
 export type TriggerType =
-  | "reminder_fired"
-  | "reminder_followup"
   | "scheduled_task_fired"
   | "daily_sync"
   | "integration_webhook"
@@ -33,16 +31,6 @@ export interface BaseTrigger {
   channelId?: string | null;
 }
 
-export interface ReminderTriggerData {
-  reminderId: string;
-  action: string;
-  goal?: GoalInfo;
-  occurrenceNumber: number;
-  previousResponses: ResponseSummary[];
-  unrespondedCount: number;
-  confirmedActive: boolean;
-}
-
 export interface WebhookTriggerData {
   integration: string; // "gmail" | "calendar" | "github" etc.
   integrationAccountId: string; // internal UUID of the integration account
@@ -55,11 +43,6 @@ export interface WebhookTriggerData {
 export interface SyncTriggerData {
   syncType: "daily" | "weekly";
   scheduledTime: Date;
-}
-
-export interface ReminderTrigger extends BaseTrigger {
-  type: "reminder_fired" | "reminder_followup";
-  data: ReminderTriggerData;
 }
 
 export interface WebhookTrigger extends BaseTrigger {
@@ -129,7 +112,6 @@ export interface MemoryIngestTrigger extends BaseTrigger {
 }
 
 export type Trigger =
-  | ReminderTrigger
   | ScheduledTaskTrigger
   | WebhookTrigger
   | SyncTrigger
@@ -222,22 +204,7 @@ export interface UserState {
   availableChannels?: MessageChannel[];
 }
 
-export interface ReminderSummary {
-  id: string;
-  action: string;
-  sentAt: Date;
-  acknowledged: boolean;
-  hasGoal: boolean;
-}
-
 export interface TodayState {
-  remindersSent: ReminderSummary[];
-  remindersAcknowledged: number;
-  pendingFollowUps: Array<{
-    reminderId: string;
-    action: string;
-    sentAt: Date;
-  }>;
   goalProgress: GoalProgress[];
 }
 
@@ -252,9 +219,7 @@ export interface RelevantHistory {
 
 export interface UserPatterns {
   avgResponseTimeMinutes?: number;
-  preferredReminderTimes?: string[];
   commonSkipReasons?: string[];
-  reminderCompletionRate?: number;
 }
 
 export interface GatheredData {

@@ -652,13 +652,12 @@ This IS the task — don't create or search for other tasks about this topic. If
   // Trigger context — butler needs to think first before acting
   if (triggerContext) {
     const isTriggerFollowUp =
-      triggerContext.trigger.type === "reminder_followup" ||
       (triggerContext.trigger.data as any)?.isFollowUp === true;
     const isRecurring =
       (triggerContext.trigger.data as any)?.isRecurring === true;
     // Inbound observation triggers (external noise the system is deciding
     // whether to surface) get the "surfacing ≠ acting" rule. User-authored
-    // triggers (scheduled tasks, reminders, daily sync) treat the description
+    // triggers (scheduled tasks, daily sync) treat the description
     // as a pre-authorized runbook and execute it as written.
     const isObservationTrigger =
       triggerContext.trigger.type === "integration_webhook" ||

@@ -350,60 +350,6 @@ export async function fetchConversations(
 	};
 }
 
-// ── Fetch reminders ───────────────────────────────────────────────────────────
-
-export interface ReminderSummary {
-	id: string;
-	text: string;
-	schedule: string;
-	channel: string;
-	isActive: boolean;
-	nextRunAt: string | null;
-	occurrenceCount: number;
-	maxOccurrences: number | null;
-	createdAt: string;
-}
-
-export interface RemindersPage {
-	reminders: ReminderSummary[];
-	hasMore: boolean;
-	nextCursor: string | null;
-}
-
-export async function fetchReminders(
-	baseUrl: string,
-	apiKey: string,
-	cursor?: string,
-	isActive?: 'true' | 'false',
-	limit = 25,
-): Promise<RemindersPage> {
-	const params = new URLSearchParams({limit: String(limit)});
-	if (cursor) params.set('cursor', cursor);
-	if (isActive !== undefined) params.set('isActive', isActive);
-
-	const response = await fetch(
-		`${baseUrl}/api/v1/reminders?${params.toString()}`,
-		{
-			headers: {Authorization: `Bearer ${apiKey}`},
-		},
-	);
-
-	if (!response.ok) {
-		throw new Error(`Failed to fetch reminders: ${response.statusText}`);
-	}
-
-	const data = (await response.json()) as {
-		reminders: ReminderSummary[];
-		hasMore: boolean;
-		nextCursor: string | null;
-	};
-	return {
-		reminders: data.reminders ?? [],
-		hasMore: data.hasMore ?? false,
-		nextCursor: data.nextCursor ?? null,
-	};
-}
-
 // ── Tasks ─────────────────────────────────────────────────────────────────────
 
 // The 6 user-settable statuses. The DB also has a `Recurring` enum value but

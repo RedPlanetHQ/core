@@ -101,7 +101,7 @@ export function computeNextRun(
       return null;
     }
 
-    // For non-time-specific rules (no BYHOUR), these are relative time reminders
+    // For non-time-specific rules (no BYHOUR), these are relative-time tasks
     // "in 2 min", "in 1 hour", "in 1 day" - add interval to now
     const interval = options.interval || 1;
     let nextRun: DateTime;

@@ -225,7 +225,7 @@ export async function deleteChannel(
 }
 
 // ---------------------------------------------------------------------------
-// Channel context — single source of truth for agent / reminder code
+// Channel context — single source of truth for agent and task delivery
 // ---------------------------------------------------------------------------
 
 export interface ChannelRecord {

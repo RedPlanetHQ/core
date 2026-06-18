@@ -1,7 +1,7 @@
 /**
  * Decision Agent (CASE)
  *
- * Handles non-user triggers (reminders, webhooks, scheduled jobs) with intelligent reasoning.
+ * Handles non-user triggers (scheduled tasks, webhooks, integration jobs) with intelligent reasoning.
  * Uses CASE framework to analyze context and produce action plans.
  *
  * Key differences from Sol:
@@ -198,43 +198,6 @@ export async function createThinkAgent(
  */
 export function createFallbackPlan(trigger: Trigger): ActionPlan {
   switch (trigger.type) {
-    case "reminder_fired":
-      return {
-        shouldMessage: true,
-        message: {
-          intent: `Execute reminder: ${trigger.data.action}`,
-          context: {
-            action: trigger.data.action,
-            reminderId: trigger.data.reminderId,
-          },
-          tone: "neutral",
-        },
-        createFollowUps: [],
-        updateTasks: [],
-        silentActions: [],
-        reasoning:
-          "Fallback: Decision Agent failed, defaulting to message for reminder",
-      };
-
-    case "reminder_followup":
-      return {
-        shouldMessage: true,
-        message: {
-          intent: `Follow up on reminder: ${trigger.data.action}`,
-          context: {
-            action: trigger.data.action,
-            reminderId: trigger.data.reminderId,
-            isFollowUp: true,
-          },
-          tone: "casual",
-        },
-        createFollowUps: [],
-        updateTasks: [],
-        silentActions: [],
-        reasoning:
-          "Fallback: Decision Agent failed, defaulting to follow-up message",
-      };
-
     case "daily_sync":
       return {
         shouldMessage: true,
