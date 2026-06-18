@@ -19,6 +19,7 @@ import Speech
 //   {"event": "final", "text": "..."}
 //   {"event": "tts-started"}
 //   {"event": "tts-ended"}
+//   {"event": "silence-timeout"}
 //   {"event": "error", "message": "..."}
 //
 // The binary stays alive across many turns. lib.rs spawns it once on app
@@ -145,6 +146,27 @@ final class VoiceController: NSObject, AVSpeechSynthesizerDelegate {
     /// pending rebuild and re-schedules ~150ms out, so the rebuild fires
     /// once after the flurry quiets down.
     private var pendingRouteRebuild: DispatchWorkItem?
+
+    // ── VAD (voice activity detection) ─────────────────────────────────
+    // Coarse RMS-based silence detection on the converted recognizer
+    // buffer (mono 16 kHz float32). Drives the auto-commit signal in
+    // active mode — the widget sees `silence-timeout` and stops the
+    // recognizer. Apple's own no-speech error fires only after ~2-3 s
+    // of silence, which is too sluggish for back-and-forth dialogue.
+    private static let vadRmsThreshold: Float = 0.015
+    private static let vadSilenceDuration: TimeInterval = 0.5
+    /// Has any above-threshold buffer arrived during this session? We
+    /// gate the silence timer on this so a slow speaker doesn't trip it
+    /// before they've said the first word.
+    private var vadHeardSpeech: Bool = false
+    /// When silence began (post-speech), or nil while we're still
+    /// hearing audio above the threshold.
+    private var vadSilenceStartedAt: Date?
+    /// Latch so the event fires at most once per listening session.
+    /// Cleared on each user-initiated startListening (not on Apple's
+    /// internal restarts — the prior fire still applies to the same
+    /// user-perceived session).
+    private var vadFiredSilenceTimeout: Bool = false
 
     override init() {
         super.init()
@@ -276,6 +298,12 @@ final class VoiceController: NSObject, AVSpeechSynthesizerDelegate {
         hasDeliveredFinal = false
         if !internalRestart {
             preservedPrefix = ""
+            // Fresh user-initiated session — VAD starts clean. Internal
+            // restarts inherit the prior gating so we don't fire twice
+            // for the same logical pause.
+            vadHeardSpeech = false
+            vadSilenceStartedAt = nil
+            vadFiredSilenceTimeout = false
         }
         // Seed latestPartialText with whatever we've already preserved so
         // a stop()/error path that delivers `latestPartialText` before the
@@ -729,6 +757,10 @@ final class VoiceController: NSObject, AVSpeechSynthesizerDelegate {
                 return
             }
             self.request?.append(outBuffer)
+            // VAD silence-commit is intentionally disabled for now while
+            // we shake out the ctrl-tap-only commit path. Re-enable by
+            // uncommenting this line; thresholds live in `processVAD`.
+            // self.processVAD(outBuffer)
         }
 
         audioEngine.prepare()
@@ -745,6 +777,42 @@ final class VoiceController: NSObject, AVSpeechSynthesizerDelegate {
             // from scratch.
             stderrLog("audio engine failed to start: \(error.localizedDescription)")
             return false
+        }
+    }
+
+    /// Coarse RMS gate over the mono-16 kHz recognizer buffer. Emits a
+    /// one-shot `silence-timeout` event when speech has been heard at
+    /// least once and the trailing silence exceeds `vadSilenceDuration`.
+    /// The widget consumes the event to auto-commit a turn in active
+    /// mode without waiting for Apple's much slower no-speech error.
+    private func processVAD(_ buffer: AVAudioPCMBuffer) {
+        if vadFiredSilenceTimeout { return }
+        guard let data = buffer.floatChannelData?[0] else { return }
+        let n = Int(buffer.frameLength)
+        if n == 0 { return }
+        var sum: Float = 0
+        for i in 0..<n {
+            let s = data[i]
+            sum += s * s
+        }
+        let rms = sqrtf(sum / Float(n))
+        if rms >= Self.vadRmsThreshold {
+            vadHeardSpeech = true
+            vadSilenceStartedAt = nil
+            return
+        }
+        guard vadHeardSpeech else { return }
+        let now = Date()
+        if vadSilenceStartedAt == nil {
+            vadSilenceStartedAt = now
+            return
+        }
+        if now.timeIntervalSince(vadSilenceStartedAt!) >= Self.vadSilenceDuration {
+            vadFiredSilenceTimeout = true
+            stderrLog("VAD silence \(Int(Self.vadSilenceDuration * 1000))ms — emitting silence-timeout")
+            DispatchQueue.main.async {
+                emit(["event": "silence-timeout"])
+            }
         }
     }
 

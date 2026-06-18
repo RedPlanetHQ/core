@@ -957,21 +957,24 @@ pub fn run() {
                     reposition_inbox_window(&follow_app, payload);
                 });
 
-                // Hold-end (Ctrl+Option released): forward to the widget so it
-                // can finalize the recognition and submit the turn.
-                let hold_end_app = app.handle().clone();
-                let _hold_end_id = app.listen("voice:hold-end", move |_event| {
-                    log::info!("[voice] voice:hold-end received");
-                    if let Some(window) = hold_end_app.get_webview_window("voice") {
-                        let _ = window.emit("voice:hold-end-payload", ());
+                // Single Ctrl tap (in-session signal): forward to the
+                // widget. The widget interprets the tap based on its
+                // current state — commit the turn while listening,
+                // barge in while the assistant is speaking, no-op
+                // otherwise.
+                let ctrl_tap_app = app.handle().clone();
+                let _ctrl_tap_id = app.listen("voice:ctrl-tap", move |_event| {
+                    log::info!("[voice] voice:ctrl-tap received");
+                    if let Some(window) = ctrl_tap_app.get_webview_window("voice") {
+                        let _ = window.emit("voice:ctrl-tap-payload", ());
                     }
                 });
 
                 log::info!(
-                    "[voice] listeners registered (invoke={:?} follow={:?} hold-end={:?})",
+                    "[voice] listeners registered (invoke={:?} follow={:?} ctrl-tap={:?})",
                     _id,
                     _follow_id,
-                    _hold_end_id
+                    _ctrl_tap_id
                 );
             }
 
