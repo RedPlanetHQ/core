@@ -1,6 +1,7 @@
 import { schedules } from "@trigger.dev/sdk";
 import { prisma } from "~/db.server";
 import { processContactSync } from "~/jobs/contacts/contact-sync.logic";
+import { logger } from "~/services/logger.service";
 import { initializeProvider } from "../utils/provider";
 
 export const contactSyncSchedule = schedules.task({
@@ -10,17 +11,27 @@ export const contactSyncSchedule = schedules.task({
   run: async () => {
     await initializeProvider();
     const workspaces = await prisma.workspace.findMany({
-      include: { UserWorkspace: true },
+      include: { UserWorkspace: { include: { user: true } } },
     });
     for (const workspace of workspaces) {
       for (const uw of workspace.UserWorkspace) {
-        const user = await prisma.user.findUnique({ where: { id: uw.userId } });
+        const user = uw.user;
         if (!user) continue;
-        await processContactSync({
-          userId: uw.userId,
-          workspaceId: workspace.id,
-          userName: user.name ?? user.email ?? "the user",
-        });
+        try {
+          await processContactSync({
+            userId: uw.userId,
+            workspaceId: workspace.id,
+            userName: user.name ?? user.email ?? "the user",
+          });
+        } catch (error) {
+          // Isolate per-user failures so one bad user/workspace does not
+          // abort the entire nightly sync.
+          logger.error("Contact sync failed for user", {
+            userId: uw.userId,
+            workspaceId: workspace.id,
+            error,
+          });
+        }
       }
     }
   },
