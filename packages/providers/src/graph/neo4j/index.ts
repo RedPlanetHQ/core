@@ -28,6 +28,8 @@ export class Neo4jGraphProvider extends Neo4jCore implements IGraphProvider {
   deduplicateEntitiesByName!: IGraphProvider["deduplicateEntitiesByName"];
   deleteOrphanedEntities!: IGraphProvider["deleteOrphanedEntities"];
   getOnboardingEntities!: IGraphProvider["getOnboardingEntities"];
+  getPersonContactCandidates!: IGraphProvider["getPersonContactCandidates"];
+  getEntityFacts!: IGraphProvider["getEntityFacts"];
 
   saveEpisode!: IGraphProvider["saveEpisode"];
   getEpisode!: IGraphProvider["getEpisode"];

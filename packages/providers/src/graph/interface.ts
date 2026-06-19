@@ -150,6 +150,35 @@ export interface IGraphProvider {
     workspaceId: string
   ): Promise<{ predicate: string; object: string }[]>;
 
+  /**
+   * List Person entities for a user, each with how many (valid) statements
+   * reference it and the most recent referencing statement time.
+   * Used to reconcile contacts.
+   */
+  getPersonContactCandidates(
+    userId: string,
+    workspaceId: string,
+  ): Promise<
+    Array<{
+      uuid: string;
+      name: string;
+      attributes: Record<string, any>;
+      factCount: number;
+      latestFactAt: Date | null;
+    }>
+  >;
+
+  /**
+   * Get the facts (statement text + aspect + validAt) referencing an entity,
+   * newest first. Used to generate a contact's compact summary.
+   */
+  getEntityFacts(
+    entityUuid: string,
+    userId: string,
+    workspaceId: string,
+    limit: number,
+  ): Promise<Array<{ fact: string; aspect: string | null; validAt: Date }>>;
+
   // ===== EPISODES =====
 
   /**
