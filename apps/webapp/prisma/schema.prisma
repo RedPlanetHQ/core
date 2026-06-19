@@ -1056,6 +1056,7 @@ model Workspace {
   codingSessions          CodingSession[]
   browserSessions         BrowserSession[]
   voiceInboxMessages      VoiceInboxMessage[]
+  Contact                 Contact[]
 
   taskRootCounter Int @default(0)
 }
@@ -1344,4 +1345,55 @@ model BrowserSession {
   @@index([workspaceId])
   @@index([gatewayId, sessionName])
   @@index([gatewayId, profileName])
+}
+
+enum ContactStatus {
+  Researching
+  Active
+  Hidden
+}
+
+enum ContactSource {
+  Auto
+  Manual
+}
+
+model Contact {
+  id        String   @id @default(uuid())
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  workspace   Workspace @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+  workspaceId String
+  userId      String
+
+  entityUuid String?
+
+  name     String
+  category String?
+
+  emails   String[] @default([])
+  phones   String[] @default([])
+  company  String?
+  role     String?
+  location String?
+  handles  String[] @default([])
+
+  headline          String?
+  description       String?
+  descriptionEdited Boolean   @default(false)
+  editedAt          DateTime?
+
+  status ContactStatus @default(Researching)
+  source ContactSource @default(Auto)
+
+  lastMemoryAt     DateTime?
+  lastSummarizedAt DateTime?
+
+  avatarUrl String?
+
+  @@unique([workspaceId, entityUuid])
+  @@index([workspaceId])
+  @@index([workspaceId, status])
+  @@index([userId])
 }
