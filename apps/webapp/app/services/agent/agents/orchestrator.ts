@@ -353,6 +353,22 @@ export async function createOrchestratorAgent(
     },
   });
 
+  // contact_search — compact profile lookup for a known person
+  tools.contact_search = createTool({
+    id: "contact_search",
+    description:
+      "Look up a known person in the user's People/contacts and return their compact profile (identity, relationship to the user, recent context, contact details). Use this FIRST for questions about a specific person. For an exhaustive deep dive across raw memory, use memory_search instead.",
+    inputSchema: z.object({
+      query: z
+        .string()
+        .describe("The person's name, or a short description of who to find"),
+    }),
+    execute: async (inputData) => {
+      logger.info(`Orchestrator: contact search - ${inputData.query}`);
+      return executor.searchContacts(inputData.query, userId, workspaceId);
+    },
+  });
+
   // get_skill — available in both modes when skills exist
   if (skills && skills.length > 0) {
     tools.get_skill = createTool({

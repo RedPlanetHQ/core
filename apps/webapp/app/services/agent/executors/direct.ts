@@ -6,6 +6,8 @@
  */
 
 import { searchMemoryWithAgent } from "../memory";
+import { listContacts } from "~/services/contacts/contact.server";
+import { formatContactsForAgent } from "~/services/agent/tools/contact-search";
 import { IntegrationLoader } from "~/utils/mcp/integration-loader";
 import { listGateways } from "~/services/gateway.server";
 import {
@@ -53,6 +55,15 @@ export class DirectOrchestratorTools extends OrchestratorTools {
       logger.warn("DirectOrchestratorTools: memory search failed", { error });
       return "nothing found";
     }
+  }
+
+  async searchContacts(
+    query: string,
+    _userId: string,
+    workspaceId: string,
+  ): Promise<string> {
+    const contacts = await listContacts(workspaceId, query);
+    return formatContactsForAgent(contacts);
   }
 
   async getIntegrations(
