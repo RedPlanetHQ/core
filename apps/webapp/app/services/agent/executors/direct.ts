@@ -62,8 +62,13 @@ export class DirectOrchestratorTools extends OrchestratorTools {
     _userId: string,
     workspaceId: string,
   ): Promise<string> {
-    const contacts = await listContacts(workspaceId, query);
-    return formatContactsForAgent(contacts);
+    try {
+      const contacts = await listContacts(workspaceId, query);
+      return formatContactsForAgent(contacts);
+    } catch (error) {
+      logger.warn("DirectOrchestratorTools: contact search failed", { error });
+      return "No matching contact found in People.";
+    }
   }
 
   async getIntegrations(
