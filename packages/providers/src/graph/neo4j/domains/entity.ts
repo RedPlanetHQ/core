@@ -331,7 +331,7 @@ export function createEntityMethods(core: Neo4jCore) {
       const wsFilter = workspaceId ? ", workspaceId: $workspaceId" : "";
       const query = `
         MATCH (ent:Entity { userId: $userId, type: 'Person'${wsFilter} })
-        OPTIONAL MATCH (ent)-[:HAS_SUBJECT|HAS_OBJECT]-(s:Statement { userId: $userId })
+        OPTIONAL MATCH (ent)-[:HAS_SUBJECT|HAS_OBJECT]-(s:Statement { userId: $userId${wsFilter} })
         WHERE s.invalidAt IS NULL
         RETURN ent.uuid AS uuid, ent.name AS name, ent.attributes AS attributes,
                count(s) AS factCount, max(s.validAt) AS latestFactAt
