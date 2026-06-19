@@ -49,10 +49,10 @@ export async function updateContactFields(
   workspaceId: string,
   contactId: string,
   data: Prisma.ContactUpdateInput,
-): Promise<Contact> {
-  return prisma.contact.update({
-    where: { id: contactId },
-    data: { ...data },
+): Promise<void> {
+  await prisma.contact.updateMany({
+    where: { id: contactId, workspaceId },
+    data,
   });
 }
 
