@@ -141,3 +141,19 @@ export async function deleteOrphanedEntities(
 ): Promise<{ count: number; deletedUuids: string[] }> {
   return graphProvider().deleteOrphanedEntities(userId, workspaceId ?? "");
 }
+
+export async function getPersonContactCandidates(
+  userId: string,
+  workspaceId?: string,
+) {
+  return graphProvider().getPersonContactCandidates(userId, workspaceId ?? "");
+}
+
+export async function getEntityFacts(
+  entityUuid: string,
+  userId: string,
+  workspaceId?: string,
+  limit = 60,
+) {
+  return graphProvider().getEntityFacts(entityUuid, userId, workspaceId ?? "", limit);
+}

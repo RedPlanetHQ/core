@@ -315,5 +315,80 @@ export function createEntityMethods(core: Neo4jCore) {
 
       return result.map((record) => ({ predicate: record.get("predicate") as string, object: record.get("object") as string }));
     },
+
+    async getPersonContactCandidates(
+      userId: string,
+      workspaceId?: string
+    ): Promise<
+      Array<{
+        uuid: string;
+        name: string;
+        attributes: Record<string, any>;
+        factCount: number;
+        latestFactAt: Date | null;
+      }>
+    > {
+      const wsFilter = workspaceId ? ", workspaceId: $workspaceId" : "";
+      const query = `
+        MATCH (ent:Entity { userId: $userId, type: 'Person'${wsFilter} })
+        OPTIONAL MATCH (ent)-[:HAS_SUBJECT|HAS_OBJECT]-(s:Statement { userId: $userId })
+        WHERE s.invalidAt IS NULL
+        RETURN ent.uuid AS uuid, ent.name AS name, ent.attributes AS attributes,
+               count(s) AS factCount, max(s.validAt) AS latestFactAt
+      `;
+
+      const result = await core.runQuery(query, {
+        userId,
+        ...(workspaceId && { workspaceId }),
+      });
+
+      return result.map((record) => {
+        const rawAttributes = record.get("attributes");
+        const rawFactCount = record.get("factCount");
+        const latestFactAt = record.get("latestFactAt");
+
+        return {
+          uuid: record.get("uuid") as string,
+          name: record.get("name") as string,
+          attributes:
+            typeof rawAttributes === "string" ? JSON.parse(rawAttributes) : {},
+          factCount:
+            typeof rawFactCount === "bigint"
+              ? Number(rawFactCount)
+              : (rawFactCount?.toNumber?.() ?? Number(rawFactCount) ?? 0),
+          latestFactAt: latestFactAt ? new Date(latestFactAt) : null,
+        };
+      });
+    },
+
+    async getEntityFacts(
+      entityUuid: string,
+      userId: string,
+      workspaceId: string,
+      limit: number
+    ): Promise<Array<{ fact: string; aspect: string | null; validAt: Date }>> {
+      const wsFilter = workspaceId ? ", workspaceId: $workspaceId" : "";
+      const query = `
+        MATCH (ent:Entity { userId: $userId, uuid: $entityUuid })-[:HAS_SUBJECT|HAS_OBJECT]-(s:Statement { userId: $userId${wsFilter} })
+        WITH DISTINCT s
+        WHERE s.invalidAt IS NULL
+        RETURN s.fact AS fact, s.aspect AS aspect, s.validAt AS validAt
+        ORDER BY s.validAt DESC
+        LIMIT toInteger($limit)
+      `;
+
+      const result = await core.runQuery(query, {
+        entityUuid,
+        userId,
+        ...(workspaceId && { workspaceId }),
+        limit,
+      });
+
+      return result.map((record) => ({
+        fact: record.get("fact") as string,
+        aspect: (record.get("aspect") as string | null) ?? null,
+        validAt: new Date(record.get("validAt")),
+      }));
+    },
   };
 }
