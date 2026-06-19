@@ -20,6 +20,8 @@ import {
 import { logger } from "../../logger.service";
 import { getChannel } from "~/services/channels";
 import { prisma } from "~/db.server";
+import { listContacts } from "~/services/contacts/contact.server";
+import { formatContactsForAgent } from "~/services/agent/tools/contact-search";
 
 export class HttpOrchestratorTools extends OrchestratorTools {
   constructor(private client: CoreClient) {
@@ -44,6 +46,15 @@ export class HttpOrchestratorTools extends OrchestratorTools {
       logger.warn("HttpOrchestratorTools: memory search failed", { error });
       return "nothing found";
     }
+  }
+
+  async searchContacts(
+    query: string,
+    _userId: string,
+    workspaceId: string,
+  ): Promise<string> {
+    const contacts = await listContacts(workspaceId, query);
+    return formatContactsForAgent(contacts);
   }
 
   async getIntegrations(

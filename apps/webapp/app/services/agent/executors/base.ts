@@ -64,6 +64,13 @@ export abstract class OrchestratorTools {
     source: string,
   ): Promise<string>;
 
+  /** Look up a known person and return their compact profile. */
+  abstract searchContacts(
+    query: string,
+    userId: string,
+    workspaceId: string,
+  ): Promise<string>;
+
   /** Get connected integration accounts for the workspace. */
   abstract getIntegrations(
     userId: string,
