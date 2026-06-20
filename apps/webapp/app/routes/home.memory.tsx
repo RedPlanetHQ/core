@@ -12,6 +12,7 @@ export default function MemoryLayout() {
   const isGraph = activePath.includes("/home/memory/graph");
   const isDocuments = activePath.includes("/home/memory/documents");
   const isLabels = activePath.includes("/home/memory/labels");
+  const isPeople = activePath.includes("/home/memory/people");
   const params = useParams();
 
   const tabs = [
@@ -26,6 +27,12 @@ export default function MemoryLayout() {
       value: "documents",
       isActive: isDocuments,
       onClick: () => navigate("/home/memory/documents"),
+    },
+    {
+      label: "People",
+      value: "people",
+      isActive: isPeople,
+      onClick: () => navigate("/home/memory/people"),
     },
     {
       label: "Labels",

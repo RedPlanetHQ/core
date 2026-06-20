@@ -17,7 +17,6 @@ import {
   CalendarDays,
   LayoutDashboard,
   MessageSquare,
-  Users,
   ArrowLeft,
   ArrowRight,
 } from "lucide-react";
@@ -57,11 +56,6 @@ const data = {
       title: "Memory",
       url: "/home/memory",
       icon: Brain,
-    },
-    {
-      title: "People",
-      url: "/home/people",
-      icon: Users,
     },
     {
       title: "Tasks",

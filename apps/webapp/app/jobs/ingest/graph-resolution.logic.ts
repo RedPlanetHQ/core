@@ -51,6 +51,7 @@ import {
 import { type ModelMessage } from "ai";
 import { reconcileCredits } from "../credit_utils";
 import { processAspectResolution } from "./aspect-resolution.logic";
+import { syncContactForEntity } from "~/jobs/contacts/contact-sync.logic";
 import { sendTownEvent } from "~/services/town-webhook.server";
 import {
   buildTopicsForLabels,
@@ -275,6 +276,55 @@ export async function processGraphResolution(
       logger.info(
         `Deleted ${orphanedEntityUuids.length} embeddings for orphaned entities`,
       );
+    }
+
+    // Step 6.5: Contact sync — project Person entities touched by this
+    // episode into the Contacts table and (re)generate summaries.
+    // New contacts summarize immediately; existing ones are throttled to
+    // once per 24h (bypass via the Refresh button on /home/memory/people).
+    // Failures must not break ingest.
+    try {
+      const personEntities = new Map<string, string>();
+      for (const triple of resolvedTriples) {
+        for (const ent of [triple.subject, triple.predicate, triple.object]) {
+          if (ent.type === "Person") personEntities.set(ent.uuid, ent.name);
+        }
+      }
+      for (const m of entityMerges) personEntities.delete(m.sourceUuid);
+      for (const uuid of orphanedEntityUuids) personEntities.delete(uuid);
+
+      if (personEntities.size > 0) {
+        const user = await prisma.user.findUnique({
+          where: { id: payload.userId },
+          select: { name: true, email: true },
+        });
+        const userName = user?.name ?? user?.email ?? "the user";
+        const latestFactAt = episode.validAt;
+
+        const results = await Promise.allSettled(
+          Array.from(personEntities.entries()).map(([entityUuid, name]) =>
+            syncContactForEntity({
+              workspaceId: payload.workspaceId,
+              userId: payload.userId,
+              userName,
+              entityUuid,
+              name,
+              latestFactAt,
+            }),
+          ),
+        );
+        const rejections = results.filter((r) => r.status === "rejected");
+        if (rejections.length > 0) {
+          logger.warn(
+            `Contact sync (ingest hook) had ${rejections.length} failures`,
+            { firstError: (rejections[0] as PromiseRejectedResult).reason },
+          );
+        }
+      }
+    } catch (contactErr: any) {
+      logger.warn(`Contact sync (ingest hook) failed (non-blocking):`, {
+        error: contactErr?.message ?? contactErr,
+      });
     }
 
     // Step 7: Voice aspect resolution (dedup/evolution)
