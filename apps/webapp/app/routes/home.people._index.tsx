@@ -48,6 +48,15 @@ export default function PeopleIndex() {
           </tr>
         </thead>
         <tbody>
+          {contacts.length === 0 && (
+            <tr>
+              <td colSpan={4} className="text-muted-foreground py-6">
+                {q
+                  ? `No people match "${q}".`
+                  : "No people yet. They appear here as CORE learns about the people you interact with."}
+              </td>
+            </tr>
+          )}
           {contacts.map((c) => (
             <tr key={c.id} className="border-t">
               <td className="py-2">
