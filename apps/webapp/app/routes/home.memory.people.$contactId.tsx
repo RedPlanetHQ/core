@@ -4,13 +4,14 @@ import {
   type LoaderFunctionArgs,
   type ActionFunctionArgs,
 } from "@remix-run/node";
-import { useLoaderData, Form } from "@remix-run/react";
+import { useLoaderData, Form, useNavigation } from "@remix-run/react";
 import { getWorkspaceId, requireUser } from "~/services/session.server";
 import {
   getContact,
   updateContactFields,
   hideContact,
 } from "~/services/contacts/contact.server";
+import { syncContactForEntity } from "~/jobs/contacts/contact-sync.logic";
 
 export async function loader({ request, params }: LoaderFunctionArgs) {
   const user = await requireUser(request);
@@ -40,7 +41,22 @@ export async function action({ request, params }: ActionFunctionArgs) {
 
   if (intent === "hide") {
     await hideContact(workspaceId, contactId);
-    return redirect("/home/people");
+    return redirect("/home/memory/people");
+  }
+
+  if (intent === "refresh") {
+    const contact = await getContact(workspaceId, contactId);
+    if (!contact) throw new Response("Not found", { status: 404 });
+    await syncContactForEntity({
+      workspaceId,
+      userId: contact.userId,
+      userName: user.name ?? user.email ?? "the user",
+      entityUuid: contact.entityUuid,
+      name: contact.name,
+      latestFactAt: contact.lastMemoryAt ?? new Date(),
+      force: true,
+    });
+    return redirect(`/home/memory/people/${contactId}`);
   }
 
   const emails = String(form.get("emails") ?? "")
@@ -62,15 +78,35 @@ export async function action({ request, params }: ActionFunctionArgs) {
     descriptionEdited: true,
     editedAt: new Date(),
   });
-  return redirect(`/home/people/${contactId}`);
+  return redirect(`/home/memory/people/${contactId}`);
 }
 
 export default function ContactDetail() {
   const { contact } = useLoaderData<typeof loader>();
+  const navigation = useNavigation();
+  const refreshing =
+    navigation.state !== "idle" &&
+    navigation.formData?.get("intent") === "refresh";
+
   return (
     <div className="p-6 max-w-2xl">
-      <h1 className="text-2xl font-semibold">{contact.name}</h1>
-      <p className="text-muted-foreground">{contact.headline}</p>
+      <div className="flex items-start justify-between gap-4">
+        <div>
+          <h1 className="text-2xl font-semibold">{contact.name}</h1>
+          <p className="text-muted-foreground">{contact.headline}</p>
+        </div>
+        <Form method="post">
+          <button
+            type="submit"
+            name="intent"
+            value="refresh"
+            disabled={refreshing}
+            className="border rounded px-3 py-1 disabled:opacity-50"
+          >
+            {refreshing ? "Refreshing..." : "Refresh"}
+          </button>
+        </Form>
+      </div>
 
       <Form method="post" className="mt-4 space-y-3">
         <label className="block">

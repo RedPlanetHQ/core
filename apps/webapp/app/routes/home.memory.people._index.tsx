@@ -22,10 +22,9 @@ export default function PeopleIndex() {
 
   return (
     <div className="p-6">
-      <h1 className="text-2xl font-semibold">People</h1>
       <p className="text-muted-foreground mb-4">
         Profiles of the people you interact with, drawn from your memory.
-        Updates periodically.
+        Updated as new memory arrives.
       </p>
       <input
         className="border rounded px-3 py-2 mb-4 w-full max-w-md"
@@ -61,7 +60,7 @@ export default function PeopleIndex() {
             <tr key={c.id} className="border-t">
               <td className="py-2">
                 <Link
-                  to={`/home/people/${c.id}`}
+                  to={`/home/memory/people/${c.id}`}
                   className="font-medium hover:underline"
                 >
                   {c.name}
