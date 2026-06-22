@@ -1,7 +1,7 @@
 import { logger } from "~/services/logger.service";
 import { prisma } from "~/db.server";
 import { getPersonContactCandidates } from "~/services/graphModels/entity";
-import { getEpisodesForEntity } from "~/services/graphModels/episode";
+import { getEpisodesForEntity, getEpisode } from "~/services/graphModels/episode";
 import {
   upsertContactForEntity,
   updateContactFields,
@@ -42,6 +42,9 @@ export interface SyncContactForEntityInput {
   name: string;
   latestFactAt: Date | null;
   force?: boolean;
+  // UUID of the episode that triggered this sync — guaranteed to be included
+  // in the context window even if the provenance link isn't indexed yet.
+  episodeUuid?: string;
 }
 
 export type SyncOutcome = "skipped" | "created" | "refreshed";
@@ -49,7 +52,7 @@ export type SyncOutcome = "skipped" | "created" | "refreshed";
 export async function syncContactForEntity(
   input: SyncContactForEntityInput,
 ): Promise<SyncOutcome> {
-  const { workspaceId, userId, userName, entityUuid, name, latestFactAt, force } = input;
+  const { workspaceId, userId, userName, entityUuid, name, latestFactAt, force, episodeUuid } = input;
 
   if (isSelf(userName, name)) return "skipped";
 
@@ -67,7 +70,16 @@ export async function syncContactForEntity(
     return "skipped";
   }
 
-  const episodes = await getEpisodesForEntity(entityUuid, userId, workspaceId, 30);
+  const episodes = await getEpisodesForEntity(entityUuid, userId, workspaceId, 5);
+
+  // Guarantee the triggering episode is always in the context window.
+  // If the provenance link isn't indexed yet it may be missing from the query.
+  if (episodeUuid && !episodes.some((e) => e.uuid === episodeUuid)) {
+    const current = await getEpisode(episodeUuid);
+    if (current) episodes.unshift(current);
+    if (episodes.length > 5) episodes.length = 5;
+  }
+
   if (episodes.length === 0) {
     // Nothing to summarize yet — leave the row in place and retry on the next episode.
     return isNew ? "created" : "skipped";

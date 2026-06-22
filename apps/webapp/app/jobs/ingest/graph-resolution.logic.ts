@@ -310,6 +310,7 @@ export async function processGraphResolution(
               entityUuid,
               name,
               latestFactAt,
+              episodeUuid: payload.episodeUuid,
             }),
           ),
         );
