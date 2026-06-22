@@ -4,14 +4,20 @@ import {
   type LoaderFunctionArgs,
   type ActionFunctionArgs,
 } from "@remix-run/node";
-import { useLoaderData, Form, useNavigation } from "@remix-run/react";
+import { useLoaderData, useFetcher } from "@remix-run/react";
+import { ClientOnly } from "remix-utils/client-only";
+import { LoaderCircle } from "lucide-react";
 import { getWorkspaceId, requireUser } from "~/services/session.server";
 import {
   getContact,
   updateContactFields,
-  hideContact,
+  deleteContact,
 } from "~/services/contacts/contact.server";
 import { syncContactForEntity } from "~/jobs/contacts/contact-sync.logic";
+import {
+  ContactDetailFull,
+  type ContactForDetail,
+} from "~/components/people/contact-detail-full.client";
 
 export async function loader({ request, params }: LoaderFunctionArgs) {
   const user = await requireUser(request);
@@ -20,12 +26,21 @@ export async function loader({ request, params }: LoaderFunctionArgs) {
     user?.id as string,
     user.workspaceId,
   );
-  const contact = await getContact(
-    workspaceId as string,
-    params.contactId as string,
-  );
+  const contactId = params.contactId as string;
+  const contact = await getContact(workspaceId as string, contactId);
   if (!contact) throw new Response("Not found", { status: 404 });
-  return json({ contact });
+  return json({
+    contact: {
+      id: contact.id,
+      name: contact.name,
+      headline: contact.headline,
+      emails: contact.emails,
+      phones: contact.phones,
+      category: contact.category,
+      description: contact.description,
+      status: contact.status,
+    } satisfies ContactForDetail,
+  });
 }
 
 export async function action({ request, params }: ActionFunctionArgs) {
@@ -39,8 +54,8 @@ export async function action({ request, params }: ActionFunctionArgs) {
   const form = await request.formData();
   const intent = form.get("intent");
 
-  if (intent === "hide") {
-    await hideContact(workspaceId, contactId);
+  if (intent === "delete") {
+    await deleteContact(workspaceId, contactId);
     return redirect("/home/memory/people");
   }
 
@@ -56,106 +71,91 @@ export async function action({ request, params }: ActionFunctionArgs) {
       latestFactAt: contact.lastMemoryAt ?? new Date(),
       force: true,
     });
-    return redirect(`/home/memory/people/${contactId}`);
+    return json({ ok: true });
   }
 
-  const emails = String(form.get("emails") ?? "")
-    .split(",")
-    .map((s) => s.trim())
-    .filter(Boolean);
-  const phones = String(form.get("phones") ?? "")
-    .split(",")
-    .map((s) => s.trim())
-    .filter(Boolean);
-  const description = String(form.get("description") ?? "");
-  const category = String(form.get("category") ?? "") || null;
+  // Partial update — only touch fields the client sent.
+  const data: Parameters<typeof updateContactFields>[2] = {};
 
-  await updateContactFields(workspaceId, contactId, {
-    emails: { set: emails },
-    phones: { set: phones },
-    category,
-    description,
-    descriptionEdited: true,
-    editedAt: new Date(),
-  });
-  return redirect(`/home/memory/people/${contactId}`);
+  if (form.has("emails")) {
+    const emails = String(form.get("emails") ?? "")
+      .split(",")
+      .map((s) => s.trim())
+      .filter(Boolean);
+    data.emails = { set: emails };
+  }
+  if (form.has("phones")) {
+    const phones = String(form.get("phones") ?? "")
+      .split(",")
+      .map((s) => s.trim())
+      .filter(Boolean);
+    data.phones = { set: phones };
+  }
+  if (form.has("category")) {
+    const raw = String(form.get("category") ?? "").trim();
+    data.category = raw || null;
+  }
+  if (form.has("description")) {
+    data.description = String(form.get("description") ?? "");
+    data.descriptionEdited = true;
+  }
+
+  if (Object.keys(data).length > 0) {
+    data.editedAt = new Date();
+    await updateContactFields(workspaceId, contactId, data);
+  }
+
+  return json({ ok: true });
 }
 
-export default function ContactDetail() {
+export default function ContactDetailRoute() {
   const { contact } = useLoaderData<typeof loader>();
-  const navigation = useNavigation();
-  const refreshing =
-    navigation.state !== "idle" &&
-    navigation.formData?.get("intent") === "refresh";
+  const updateFetcher = useFetcher();
+  const refreshFetcher = useFetcher();
+  const deleteFetcher = useFetcher();
+
+  const handleUpdate = (fields: {
+    emails?: string[];
+    phones?: string[];
+    category?: string | null;
+    description?: string;
+  }) => {
+    const fd = new FormData();
+    if (fields.emails !== undefined) fd.set("emails", fields.emails.join(","));
+    if (fields.phones !== undefined) fd.set("phones", fields.phones.join(","));
+    if (fields.category !== undefined) fd.set("category", fields.category ?? "");
+    if (fields.description !== undefined)
+      fd.set("description", fields.description);
+    if ([...fd.keys()].length === 0) return;
+    updateFetcher.submit(fd, { method: "POST" });
+  };
+
+  const handleRefresh = () => {
+    refreshFetcher.submit({ intent: "refresh" }, { method: "POST" });
+  };
+
+  const handleDelete = () => {
+    deleteFetcher.submit({ intent: "delete" }, { method: "POST" });
+  };
 
   return (
-    <div className="p-6 max-w-2xl">
-      <div className="flex items-start justify-between gap-4">
-        <div>
-          <h1 className="text-2xl font-semibold">{contact.name}</h1>
-          <p className="text-muted-foreground">{contact.headline}</p>
+    <ClientOnly
+      fallback={
+        <div className="flex h-full w-full items-center justify-center">
+          <LoaderCircle className="h-4 w-4 animate-spin" />
         </div>
-        <Form method="post">
-          <button
-            type="submit"
-            name="intent"
-            value="refresh"
-            disabled={refreshing}
-            className="border rounded px-3 py-1 disabled:opacity-50"
-          >
-            {refreshing ? "Refreshing..." : "Refresh"}
-          </button>
-        </Form>
-      </div>
-
-      <Form method="post" className="mt-4 space-y-3">
-        <label className="block">
-          <span className="text-sm">Emails (comma separated)</span>
-          <input
-            name="emails"
-            defaultValue={contact.emails.join(", ")}
-            className="border rounded px-2 py-1 w-full"
-          />
-        </label>
-        <label className="block">
-          <span className="text-sm">Phones (comma separated)</span>
-          <input
-            name="phones"
-            defaultValue={contact.phones.join(", ")}
-            className="border rounded px-2 py-1 w-full"
-          />
-        </label>
-        <label className="block">
-          <span className="text-sm">Category</span>
-          <input
-            name="category"
-            defaultValue={contact.category ?? ""}
-            className="border rounded px-2 py-1 w-full"
-          />
-        </label>
-        <label className="block">
-          <span className="text-sm">Description</span>
-          <textarea
-            name="description"
-            defaultValue={contact.description ?? ""}
-            rows={8}
-            className="border rounded px-2 py-1 w-full"
-          />
-        </label>
-        <div className="flex gap-2">
-          <button type="submit" className="border rounded px-3 py-1">
-            Save
-          </button>
-          <button
-            type="submit"
-            name="intent"
-            value="hide"
-            className="border rounded px-3 py-1"
-          >
-            Hide
-          </button>
-        </div>
-      </Form>
-    </div>
+      }
+    >
+      {() => (
+        <ContactDetailFull
+          contact={contact}
+          onUpdate={handleUpdate}
+          onRefresh={handleRefresh}
+          onDelete={handleDelete}
+          isRefreshing={refreshFetcher.state !== "idle"}
+          isDeleting={deleteFetcher.state !== "idle"}
+        />
+      )}
+    </ClientOnly>
   );
 }

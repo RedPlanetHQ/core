@@ -65,3 +65,12 @@ export async function hideContact(
     data: { status: "Hidden" },
   });
 }
+
+export async function deleteContact(
+  workspaceId: string,
+  contactId: string,
+): Promise<void> {
+  await prisma.contact.deleteMany({
+    where: { id: contactId, workspaceId },
+  });
+}
