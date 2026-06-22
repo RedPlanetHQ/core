@@ -5,7 +5,7 @@
   "remote": {
     "urls": ["https://app.getcore.me"]
   },
-  "windows": ["main", "voice", "inbox"],
+  "windows": ["main", "voice", "inbox", "scratchpad-pill", "scratchpad-hud"],
   "permissions": [
     "core:default",
     "shell:allow-open",

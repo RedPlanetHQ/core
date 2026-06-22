@@ -2,7 +2,7 @@
   "$schema": "../gen/schemas/desktop-schema.json",
   "identifier": "default",
   "description": "Local dev permissions",
-  "windows": ["main", "voice", "inbox"],
+  "windows": ["main", "voice", "inbox", "scratchpad-pill", "scratchpad-hud"],
   "permissions": [
     "core:default",
     "shell:allow-open",

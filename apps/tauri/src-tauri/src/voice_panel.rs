@@ -104,6 +104,21 @@ pub fn install<R: Runtime>(app: &AppHandle<R>) -> Result<(), String> {
 /// the underlying `WebviewWindow` was still hidden from the prior
 /// `window.hide()`, so nothing actually rendered).
 pub fn show<R: Runtime>(app: &AppHandle<R>) {
+    // Re-apply the all-Spaces collection behavior + ScreenSaver
+    // level defensively on every show. macOS sometimes drops these
+    // across Space transitions (Mission Control, new Space, fullscreen
+    // crossings) which manifests as the panel only appearing in
+    // whichever Space it was last visible in. Re-setting is cheap and
+    // idempotent.
+    if let Ok(panel) = app.get_webview_panel(VOICE_PANEL_LABEL) {
+        let behavior = CollectionBehavior::new()
+            .can_join_all_spaces()
+            .stationary()
+            .full_screen_auxiliary();
+        panel.set_collection_behavior(behavior.value());
+        panel.set_level(PanelLevel::ScreenSaver.into());
+    }
+
     if let Some(window) = app.get_webview_window(VOICE_PANEL_LABEL) {
         match window.show() {
             Ok(()) => log::info!("[voice_panel] WebviewWindow.show() ok"),
