@@ -1,4 +1,4 @@
-import { Extension } from "@tiptap/core";
+import { Extension, Node, mergeAttributes } from "@tiptap/core";
 import { PluginKey } from "@tiptap/pm/state";
 import { ReactRenderer } from "@tiptap/react";
 import Suggestion from "@tiptap/suggestion";
@@ -92,6 +92,43 @@ const SkillCommandList = forwardRef<any, SkillListProps>(
 );
 SkillCommandList.displayName = "SkillCommandList";
 
+export const SkillMention = Node.create({
+  name: "skillMention",
+  group: "inline",
+  inline: true,
+  selectable: false,
+  atom: true,
+
+  addAttributes() {
+    return {
+      slug: {
+        default: null,
+        parseHTML: (el) => el.getAttribute("data-slug"),
+        renderHTML: (attrs) => ({ "data-slug": attrs.slug }),
+      },
+    };
+  },
+
+  parseHTML() {
+    return [{ tag: 'span[data-type="skill-mention"]' }];
+  },
+
+  renderHTML({ node, HTMLAttributes }) {
+    return [
+      "span",
+      mergeAttributes({ "data-type": "skill-mention" }, HTMLAttributes, {
+        class:
+          "skill-mention rounded px-1.5 py-0.5 text-primary bg-primary/15 font-medium text-sm",
+      }),
+      `/${node.attrs.slug}`,
+    ];
+  },
+
+  renderText({ node }) {
+    return `/${node.attrs.slug}`;
+  },
+});
+
 export const SkillSlashPluginKey = new PluginKey("skillSlashCommand");
 
 export function createSkillSlashCommand(
@@ -111,7 +148,10 @@ export function createSkillSlashCommand(
               .chain()
               .focus()
               .deleteRange(range)
-              .insertContent(`/${props.slug} `)
+              .insertContent([
+                { type: "skillMention", attrs: { slug: props.slug } },
+                { type: "text", text: " " },
+              ])
               .run();
           },
           items: ({ query }: { query: string }) => {

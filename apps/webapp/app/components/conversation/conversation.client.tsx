@@ -41,6 +41,7 @@ const MAX_ATTACHMENT_BYTES = 20 * 1024 * 1024;
 import { SamAvatar } from "../ui/sam-avatar";
 import {
   createSkillSlashCommand,
+  SkillMention,
   SkillSlashPluginKey,
 } from "./slash-command-extension";
 
@@ -207,6 +208,7 @@ export const ConversationNew = ({
       Text,
       HardBreak.configure({ keepMarks: true }),
       History,
+      SkillMention,
       createSkillSlashCommand(skillsRef),
     ],
     immediatelyRender: false,
