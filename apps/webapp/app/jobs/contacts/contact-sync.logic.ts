@@ -1,9 +1,7 @@
 import { logger } from "~/services/logger.service";
 import { prisma } from "~/db.server";
-import {
-  getPersonContactCandidates,
-  getEntityFacts,
-} from "~/services/graphModels/entity";
+import { getPersonContactCandidates } from "~/services/graphModels/entity";
+import { getEpisodesForEntity } from "~/services/graphModels/episode";
 import {
   upsertContactForEntity,
   updateContactFields,
@@ -69,40 +67,42 @@ export async function syncContactForEntity(
     return "skipped";
   }
 
-  const facts = await getEntityFacts(entityUuid, userId, workspaceId);
-  if (facts.length === 0) {
-    // Nothing to summarize. Leave the row in place (it was just created or
-    // already exists) and try again on the next fact.
+  const episodes = await getEpisodesForEntity(entityUuid, userId, workspaceId, 30);
+  if (episodes.length === 0) {
+    // Nothing to summarize yet — leave the row in place and retry on the next episode.
     return isNew ? "created" : "skipped";
   }
 
-  const { headline, description } = await generateContactSummary(
+  const { headline, description, extractedFields } = await generateContactSummary(
     {
       userName,
       personName: name,
       today: new Date(),
-      contactFields: {
-        emails: contact.emails,
-        phones: contact.phones,
-        company: contact.company ?? null,
-        role: contact.role ?? null,
-        location: contact.location ?? null,
-        handles: contact.handles,
-      },
-      facts,
+      episodes: episodes.map((e) => ({ content: e.content, validAt: e.validAt })),
       priorDescription: contact.description ?? null,
       descriptionEdited: contact.descriptionEdited,
     },
     workspaceId,
   );
 
-  await updateContactFields(workspaceId, contact.id, {
+  // Build field updates: only overwrite a structured field when the LLM
+  // extracted a non-empty value, so manually edited values aren't cleared.
+  const fieldUpdates: Record<string, any> = {
     headline,
     description,
     status: "Active",
     lastMemoryAt: latestFactAt ?? new Date(),
     lastSummarizedAt: new Date(),
-  });
+  };
+  if (extractedFields.email) fieldUpdates.emails = [extractedFields.email];
+  if (extractedFields.phone) fieldUpdates.phones = [extractedFields.phone];
+  if (extractedFields.company) fieldUpdates.company = extractedFields.company;
+  if (extractedFields.role) fieldUpdates.role = extractedFields.role;
+  if (extractedFields.location) fieldUpdates.location = extractedFields.location;
+  const newHandles = [extractedFields.linkedin, extractedFields.twitter].filter(Boolean);
+  if (newHandles.length > 0) fieldUpdates.handles = newHandles;
+
+  await updateContactFields(workspaceId, contact.id, fieldUpdates);
 
   return isNew ? "created" : "refreshed";
 }

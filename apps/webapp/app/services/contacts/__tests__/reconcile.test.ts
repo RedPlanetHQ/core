@@ -11,7 +11,9 @@ vi.mock("~/lib/model.server", () => ({
 }));
 vi.mock("~/services/graphModels/entity", () => ({
   getPersonContactCandidates: vi.fn(),
-  getEntityFacts: vi.fn(),
+}));
+vi.mock("~/services/graphModels/episode", () => ({
+  getEpisodesForEntity: vi.fn(),
 }));
 vi.mock("~/services/contacts/contact.server", () => ({
   upsertContactForEntity: vi.fn(),

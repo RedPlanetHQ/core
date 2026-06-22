@@ -8,20 +8,21 @@ vi.mock("~/lib/model.server", () => ({
 }));
 
 import {
-  ContactSummarySchema,
   buildSummaryMessages,
   renderDescription,
 } from "../contact-summary.server";
 
 describe("buildSummaryMessages", () => {
-  it("includes the user name, person name, today's date and the facts", () => {
+  it("includes the user name, person name, today's date and episode content", () => {
     const messages = buildSummaryMessages({
       userName: "Manik",
       personName: "Abhishek",
       today: new Date("2026-06-19T00:00:00Z"),
-      contactFields: { emails: ["a@b.com"], phones: [], company: null, role: null, location: null, handles: [] },
-      facts: [
-        { fact: "Abhishek is a college friend", aspect: "Relationship", validAt: new Date("2026-01-01T00:00:00Z") },
+      episodes: [
+        {
+          content: "Abhishek is a college friend who works as an ML engineer.",
+          validAt: new Date("2026-01-01T00:00:00Z"),
+        },
       ],
       priorDescription: null,
       descriptionEdited: false,
@@ -33,13 +34,12 @@ describe("buildSummaryMessages", () => {
     expect(text).toContain("college friend");
   });
 
-  it("marks prior description as authoritative when userEdited is true", () => {
+  it("marks prior description as authoritative when descriptionEdited is true", () => {
     const messages = buildSummaryMessages({
       userName: "Manik",
       personName: "Abhishek",
       today: new Date("2026-06-19T00:00:00Z"),
-      contactFields: { emails: [], phones: [], company: null, role: null, location: null, handles: [] },
-      facts: [],
+      episodes: [],
       priorDescription: "Founder of Morsebiz.",
       descriptionEdited: true,
     });
@@ -50,18 +50,39 @@ describe("buildSummaryMessages", () => {
 });
 
 describe("renderDescription", () => {
-  it("renders only the sections that have content, labeled", () => {
+  it("renders Basic Info section with contact details", () => {
     const body = renderDescription({
-      whoTheyAre: "ML engineer at Observe.ai",
-      relationshipToYou: "Close college friend",
-      recentAndOpen: "",
-      cadenceChannel: "",
-      communicationStyle: "",
-      sharedGroups: "",
+      email: "abhishek@observe.ai",
+      phone: "",
+      linkedin: "linkedin.com/in/abhishek",
+      twitter: "",
+      company: "Observe.ai",
+      role: "ML Engineer",
+      location: "Bangalore",
+      relationshipWithUser: "Close college friend",
+      additionalInformation: "",
     });
-    expect(body).toContain("Who they are: ML engineer at Observe.ai");
-    expect(body).toContain("Relationship: Close college friend");
-    expect(body).not.toContain("Recent");
-    expect(body).not.toContain("Cadence");
+    expect(body).toContain("### Basic Info");
+    expect(body).toContain("- Email: abhishek@observe.ai");
+    expect(body).toContain("- LinkedIn: linkedin.com/in/abhishek");
+    expect(body).toContain("- Company: Observe.ai");
+    expect(body).toContain("### Relationship with User");
+    expect(body).toContain("Close college friend");
+    expect(body).not.toContain("### Additional Information");
+  });
+
+  it("omits sections that have no content", () => {
+    const body = renderDescription({
+      email: "",
+      phone: "",
+      linkedin: "",
+      twitter: "",
+      company: "",
+      role: "",
+      location: "",
+      relationshipWithUser: "",
+      additionalInformation: "",
+    });
+    expect(body).toBe("");
   });
 });
