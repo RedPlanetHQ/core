@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import {
   ChevronRight,
   Download,
@@ -6,6 +6,7 @@ import {
   EyeOff,
   Loader2,
   RefreshCcw,
+  Trash2,
 } from "lucide-react";
 import type { Folder } from "@redplanethq/gateway-protocol";
 import { Button } from "~/components/ui/button";
@@ -16,6 +17,22 @@ import {
   SelectTrigger,
   SelectValue,
 } from "~/components/ui/select";
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuTrigger,
+} from "~/components/ui/dropdown-menu";
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+} from "~/components/ui/alert-dialog";
 import { cn } from "~/lib/utils";
 import { FileViewer, triggerGatewayDownload } from "~/components/file-viewers";
 import type { FsEntry } from "~/services/gateway/fs-scripts.server";
@@ -28,6 +45,8 @@ interface FilesPaneProps {
   roots: Folder[];
   selectedRootId: string | null;
   onSelectRoot: (id: string) => void;
+  /** Right-click on a folder in the picker; e.g. to show a remove menu. */
+  onFolderContextMenu?: (e: React.MouseEvent, folder: Folder) => void;
   currentPath: string | null;
   onNavigate: (path: string) => void;
   selectedEntryName: string | null;
@@ -48,6 +67,7 @@ export function FilesPane({
   roots,
   selectedRootId,
   onSelectRoot,
+  onFolderContextMenu,
   currentPath,
   onNavigate,
   selectedEntryName,
@@ -69,6 +89,53 @@ export function FilesPane({
   // Set of entry names currently downloading. Per-row spinner replaces
   // the Download icon while the chunked /fs/download fetch runs.
   const [downloading, setDownloading] = useState<Set<string>>(new Set());
+
+  // Right-click on a row opens a virtual-anchor DropdownMenu at the
+  // cursor. We track the targeted entry separately from the open flag
+  // so the menu content keeps the right label after the dialog opens.
+  const [rowMenuOpen, setRowMenuOpen] = useState(false);
+  const [rowMenuEntry, setRowMenuEntry] = useState<FsEntry | null>(null);
+  const [entryToDelete, setEntryToDelete] = useState<FsEntry | null>(null);
+  const [deletingEntry, setDeletingEntry] = useState(false);
+  const rowAnchorRef = useRef<HTMLSpanElement>(null);
+
+  const handleRowContextMenu = (e: React.MouseEvent, entry: FsEntry) => {
+    e.preventDefault();
+    e.stopPropagation();
+    if (rowAnchorRef.current) {
+      rowAnchorRef.current.style.left = `${e.clientX}px`;
+      rowAnchorRef.current.style.top = `${e.clientY}px`;
+    }
+    setRowMenuEntry(entry);
+    setRowMenuOpen(true);
+  };
+
+  const handleDeleteEntryConfirm = async () => {
+    const entry = entryToDelete;
+    if (!entry || !currentPath) return;
+    const fullPath = joinPath(currentPath, entry.name);
+    setDeletingEntry(true);
+    try {
+      const res = await fetch(`/api/v1/gateways/${gatewayId}/fs/delete`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ path: fullPath }),
+      });
+      if (!res.ok) {
+        const body = (await res.json().catch(() => ({}))) as { error?: string };
+        // eslint-disable-next-line no-alert
+        alert(body.error ?? `Failed (${res.status})`);
+        return;
+      }
+      // If the deleted entry was selected or being previewed, clear that.
+      if (selectedEntryName === entry.name) onSelectEntry(null);
+      if (viewingFilePath === fullPath) onCloseFile();
+      setReloadCounter((n) => n + 1);
+    } finally {
+      setDeletingEntry(false);
+      setEntryToDelete(null);
+    }
+  };
 
   const markDownloading = (name: string, on: boolean) => {
     setDownloading((prev) => {
@@ -176,7 +243,15 @@ export function FilesPane({
               </SelectTrigger>
               <SelectContent>
                 {roots.map((f) => (
-                  <SelectItem key={f.id} value={f.id}>
+                  <SelectItem
+                    key={f.id}
+                    value={f.id}
+                    onContextMenu={
+                      onFolderContextMenu
+                        ? (e) => onFolderContextMenu(e, f)
+                        : undefined
+                    }
+                  >
                     <span className="font-medium">{f.name}</span>
                   </SelectItem>
                 ))}
@@ -276,6 +351,7 @@ export function FilesPane({
                         : "hover:bg-background-3",
                     )}
                     onClick={() => onSelectEntry(entry)}
+                    onContextMenu={(e) => handleRowContextMenu(e, entry)}
                     onDoubleClick={() => {
                       setNavigatingName(entry.name);
                       if (isDir) {
@@ -361,6 +437,83 @@ export function FilesPane({
           </ul>
         )}
       </div>
+
+      {/* Virtual anchor for the row right-click context menu. */}
+      <DropdownMenu open={rowMenuOpen} onOpenChange={setRowMenuOpen}>
+        <DropdownMenuTrigger asChild>
+          <span
+            ref={rowAnchorRef}
+            style={{
+              position: "fixed",
+              width: 0,
+              height: 0,
+              pointerEvents: "none",
+            }}
+          />
+        </DropdownMenuTrigger>
+        <DropdownMenuContent align="start">
+          {rowMenuEntry && rowMenuEntry.type !== "dir" ? (
+            <DropdownMenuItem
+              className="gap-2"
+              onSelect={() => {
+                const entry = rowMenuEntry;
+                if (!entry || !currentPath) return;
+                const fullPath = joinPath(currentPath, entry.name);
+                setRowMenuOpen(false);
+                void handleDownload(entry.name, fullPath);
+              }}
+            >
+              <Download size={13} />
+              Download
+            </DropdownMenuItem>
+          ) : null}
+          <DropdownMenuItem
+            className="text-destructive focus:text-destructive gap-2"
+            onSelect={() => {
+              setEntryToDelete(rowMenuEntry);
+              setRowMenuOpen(false);
+            }}
+          >
+            <Trash2 size={13} />
+            Delete
+          </DropdownMenuItem>
+        </DropdownMenuContent>
+      </DropdownMenu>
+
+      {/* Delete confirmation dialog. */}
+      <AlertDialog
+        open={entryToDelete !== null}
+        onOpenChange={(open) => {
+          if (!open && !deletingEntry) setEntryToDelete(null);
+        }}
+      >
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>
+              Delete {entryToDelete?.type === "dir" ? "folder" : "file"}?
+            </AlertDialogTitle>
+            <AlertDialogDescription>
+              <strong>{entryToDelete?.name}</strong>{" "}
+              {entryToDelete?.type === "dir"
+                ? "and all its contents will be permanently removed from disk."
+                : "will be permanently removed from disk."}{" "}
+              This cannot be undone.
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel disabled={deletingEntry}>
+              Cancel
+            </AlertDialogCancel>
+            <AlertDialogAction
+              className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
+              disabled={deletingEntry}
+              onClick={handleDeleteEntryConfirm}
+            >
+              {deletingEntry ? "Deleting…" : "Delete"}
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
     </div>
   );
 }
