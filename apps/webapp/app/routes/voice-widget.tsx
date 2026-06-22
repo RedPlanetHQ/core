@@ -18,8 +18,9 @@
  *   stream complete + TTS        → "Speaking…" then mic auto-reopens
  *                                  for the next turn (active mode)
  *   voice:invoke-expand-payload  → double-tap Ctrl: exits active mode
- *                                  if running, otherwise opens the
- *                                  expanded text panel
+ *                                  if a session is running (no-op
+ *                                  otherwise — the old "open chat box"
+ *                                  behavior was removed)
  *
  * Click the pill → panel expands to show the full conversation. Esc on
  * the expanded panel collapses back to the pill.
@@ -164,8 +165,9 @@ export default function VoiceWidget() {
       ),
     );
 
-    // Double-tap Ctrl: exit active mode if a session is running,
-    // otherwise open the expanded text panel. Stays open until Esc.
+    // Double-tap Ctrl: only used to exit an in-flight active session.
+    // The previous "open the expanded text chat box" branch was removed
+    // — double-tapping with no session does nothing now.
     unsubs.push(
       tauriListen<{ screenContext: ScreenContext | null }>(
         "voice:invoke-expand-payload",
@@ -174,11 +176,7 @@ export default function VoiceWidget() {
           if (activeModeRef.current) {
             console.log("[voice-widget] double-ctrl → exit active mode");
             exitActiveMode();
-            return;
           }
-          clearHideTimer();
-          setError(null);
-          setExpanded(true);
         },
       ),
     );
@@ -673,10 +671,27 @@ export default function VoiceWidget() {
       });
 
       if (res.status === 204 || !res.ok) {
+        void tauriInvoke("voice_log_tts_backend", {
+          backend: "apple-swift",
+          chars: text.length,
+        });
+        // Flip TTS-active synchronously so the sendTurn-end check
+        // doesn't reopen the mic before Swift has even started
+        // playback (it dispatches `voice:tts-started` asynchronously,
+        // and in the gap the recognizer would happily transcribe the
+        // assistant's own voice through the mic). The `voice:tts-ended`
+        // handler is what reopens the floor once playback finishes.
+        ttsActiveRef.current = true;
+        clearHideTimer();
+        setStatus("speaking");
         await tauriInvoke("voice_speak", { text });
         return;
       }
 
+      void tauriInvoke("voice_log_tts_backend", {
+        backend: "elevenlabs",
+        chars: text.length,
+      });
       const blob = await res.blob();
       const url = URL.createObjectURL(blob);
       const audio = new Audio(url);
@@ -719,6 +734,15 @@ export default function VoiceWidget() {
       }
     } catch (err) {
       console.warn("[voice-widget] elevenlabs speak failed, falling back", err);
+      void tauriInvoke("voice_log_tts_backend", {
+        backend: "apple-swift",
+        chars: text.length,
+      });
+      // Same synchronous flip as the 204 branch — keep the mic shut
+      // until Swift's tts-ended event arrives.
+      ttsActiveRef.current = true;
+      clearHideTimer();
+      setStatus("speaking");
       void tauriInvoke("voice_speak", { text });
     }
   }
@@ -775,7 +799,15 @@ export default function VoiceWidget() {
       partialText.trim().length > 0;
 
     return (
-      <div className="flex h-screen w-screen flex-col items-end gap-1 p-2">
+      <div className="flex h-screen w-screen flex-col items-start justify-end gap-1 p-2">
+        {showTranscript && (
+          <div
+            className="border-border bg-background-3 text-foreground max-w-[320px] rounded-lg border px-2.5 py-1.5 text-xs leading-snug shadow-md"
+            aria-live="polite"
+          >
+            {partialText}
+          </div>
+        )}
         <button
           type="button"
           onClick={() => setExpanded(true)}
@@ -795,14 +827,6 @@ export default function VoiceWidget() {
           </div>
           {stateLabel}
         </button>
-        {showTranscript && (
-          <div
-            className="border-border bg-background-3 text-foreground max-w-[320px] rounded-lg border px-2.5 py-1.5 text-xs leading-snug shadow-md"
-            aria-live="polite"
-          >
-            {partialText}
-          </div>
-        )}
       </div>
     );
   }

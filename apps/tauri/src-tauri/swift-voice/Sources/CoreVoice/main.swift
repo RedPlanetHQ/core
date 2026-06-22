@@ -168,6 +168,19 @@ final class VoiceController: NSObject, AVSpeechSynthesizerDelegate {
     /// user-perceived session).
     private var vadFiredSilenceTimeout: Bool = false
 
+    // ── Restart backoff ────────────────────────────────────────────────
+    // Apple's recognizer occasionally fires no-speech / isFinal-mid-session
+    // *immediately* on a fresh task (recognizer disabled, dictation off,
+    // entitlement issue, broken on-device model). Without throttling the
+    // synchronous cancel+restart loop pegs a core and floods the log at
+    // hundreds of restarts per second. We rate-limit restarts and bail
+    // out after a cap of consecutive empty restarts.
+    private var consecutiveEmptyRestarts: Int = 0
+    private var lastRestartAt: Date?
+    private var pendingRestart: DispatchWorkItem?
+    private static let restartMinIntervalSec: TimeInterval = 0.35
+    private static let restartMaxConsecutive: Int = 6
+
     override init() {
         super.init()
         synthesizer.delegate = self
@@ -304,6 +317,12 @@ final class VoiceController: NSObject, AVSpeechSynthesizerDelegate {
             vadHeardSpeech = false
             vadSilenceStartedAt = nil
             vadFiredSilenceTimeout = false
+            // Fresh session — the recognizer earned a clean slate of
+            // restart attempts.
+            consecutiveEmptyRestarts = 0
+            lastRestartAt = nil
+            pendingRestart?.cancel()
+            pendingRestart = nil
         }
         // Seed latestPartialText with whatever we've already preserved so
         // a stop()/error path that delivers `latestPartialText` before the
@@ -331,11 +350,22 @@ final class VoiceController: NSObject, AVSpeechSynthesizerDelegate {
                 }
                 self.lastRawInTask = raw
                 let combined = self.combineWithPrefix(raw)
-                self.latestPartialText = combined
+                // Apple sometimes delivers `isFinal=true` *after* endAudio
+                // with an empty `bestTranscription.formattedString` even
+                // when there's a perfectly good in-flight partial. Don't
+                // let that empty payload wipe what we already have.
+                if !combined.isEmpty {
+                    self.latestPartialText = combined
+                }
                 if result.isFinal {
+                    // Commit the richer of the two: a non-empty
+                    // `combined` from this result, otherwise whatever
+                    // partial we had right before endAudio.
+                    let committed = combined.isEmpty ? self.latestPartialText : combined
+                    stderrLog("recognizer result isFinal=true (combined=\(combined.count) chars, latestPartial=\(self.latestPartialText.count) chars, hasEndAudioed=\(self.hasEndAudioed))")
                     if self.hasEndAudioed {
                         // User released keys → commit.
-                        self.deliverFinalIfNeeded(combined)
+                        self.deliverFinalIfNeeded(committed)
                     } else {
                         // Recognizer decided we're done mid-hold (e.g.
                         // long pause). User is still holding keys, so
@@ -347,15 +377,14 @@ final class VoiceController: NSObject, AVSpeechSynthesizerDelegate {
                             // running. Re-check before reopening the mic —
                             // otherwise we restart into silence and the
                             // final is never delivered.
+                            let payload = committed
                             if self.hasEndAudioed {
-                                stderrLog("recognizer isFinal mid-session, but user released — committing \(combined.count) chars")
-                                self.deliverFinalIfNeeded(combined)
+                                stderrLog("recognizer isFinal mid-session, but user released — committing \(payload.count) chars")
+                                self.deliverFinalIfNeeded(payload)
                                 return
                             }
-                            stderrLog("recognizer isFinal mid-session — preserving \(combined.count) chars and restarting")
-                            self.cancelListening()
-                            self.preservedPrefix = combined
-                            self.startListening(internalRestart: true)
+                            stderrLog("recognizer isFinal mid-session — preserving \(payload.count) chars and restarting")
+                            self.scheduleRestart(preserving: payload, reason: "isFinal mid-session")
                         }
                     }
                 } else {
@@ -373,6 +402,8 @@ final class VoiceController: NSObject, AVSpeechSynthesizerDelegate {
                     || error.code == 301
                     || error.code == 1101
                     || error.code == 1110
+
+                stderrLog("recognizer error code=\(error.code) isNoSpeech=\(isNoSpeech) hasEndAudioed=\(self.hasEndAudioed) hasDeliveredFinal=\(self.hasDeliveredFinal) msg=\"\(error.localizedDescription)\"")
 
                 if self.hasEndAudioed {
                     self.deliverFinalIfNeeded(self.latestPartialText)
@@ -400,9 +431,7 @@ final class VoiceController: NSObject, AVSpeechSynthesizerDelegate {
                             return
                         }
                         stderrLog("recognizer no-speech mid-session — preserving \(saved.count) chars and restarting")
-                        self.cancelListening()
-                        self.preservedPrefix = saved
-                        self.startListening(internalRestart: true)
+                        self.scheduleRestart(preserving: saved, reason: "no-speech mid-session")
                     }
                 } else if !isNoSpeech {
                     emitError("recognition: \(error.localizedDescription)")
@@ -449,9 +478,13 @@ final class VoiceController: NSObject, AVSpeechSynthesizerDelegate {
 
     /// Emit the final transcript at most once per session.
     private func deliverFinalIfNeeded(_ text: String) {
-        guard !hasDeliveredFinal else { return }
+        if hasDeliveredFinal {
+            stderrLog("deliverFinalIfNeeded skipped — final already delivered")
+            return
+        }
         let trimmed = text.trimmingCharacters(in: .whitespacesAndNewlines)
         guard !trimmed.isEmpty else {
+            stderrLog("deliverFinalIfNeeded skipped — empty text after trim (latestPartial=\(text.count) chars)")
             hasDeliveredFinal = true
             return
         }
@@ -480,6 +513,64 @@ final class VoiceController: NSObject, AVSpeechSynthesizerDelegate {
         armFinalFallback()
     }
 
+    /// Re-enter the recognizer after a mid-session no-speech / isFinal,
+    /// preserving whatever text has accumulated so far. Rate-limits the
+    /// restart and bails out after a cap of consecutive empty restarts —
+    /// without this guard a recognizer that fires no-speech instantly on
+    /// every fresh task (entitlement/model/permission issue) drives an
+    /// unbounded synchronous cancel/start loop. See `restartMaxConsecutive`
+    /// / `restartMinIntervalSec` for the bounds.
+    private func scheduleRestart(preserving: String, reason: String) {
+        // Cancel any restart that didn't fire yet — only the latest
+        // request matters.
+        pendingRestart?.cancel()
+        pendingRestart = nil
+
+        // An "empty" restart preserved zero characters of speech. That's
+        // the signature of a recognizer that's not actually transcribing
+        // anything — count those toward the bail-out cap.
+        if preserving.isEmpty {
+            consecutiveEmptyRestarts += 1
+        } else {
+            consecutiveEmptyRestarts = 0
+        }
+
+        if consecutiveEmptyRestarts > Self.restartMaxConsecutive {
+            stderrLog("restart bailout: \(consecutiveEmptyRestarts) consecutive empty restarts (\(reason)) — giving up")
+            cancelListening()
+            emitError("recognition restarted with no speech \(consecutiveEmptyRestarts) times — check Dictation/Siri permissions")
+            return
+        }
+
+        // Tear the current task down right now so the recognizer/audio
+        // engine are quiesced before the next start. The actual restart
+        // is deferred so we don't spin within the same tick.
+        cancelListening()
+        preservedPrefix = preserving
+
+        let now = Date()
+        let elapsed = lastRestartAt.map { now.timeIntervalSince($0) } ?? .greatestFiniteMagnitude
+        let delay = max(0, Self.restartMinIntervalSec - elapsed)
+        lastRestartAt = now
+
+        let work = DispatchWorkItem { [weak self] in
+            guard let self else { return }
+            self.pendingRestart = nil
+            // Re-check that the user hasn't released keys in the gap.
+            if self.hasEndAudioed {
+                stderrLog("restart skipped — user released keys during backoff (\(reason))")
+                return
+            }
+            self.startListening(internalRestart: true)
+        }
+        pendingRestart = work
+        if delay <= 0 {
+            DispatchQueue.main.async(execute: work)
+        } else {
+            DispatchQueue.main.asyncAfter(deadline: .now() + delay, execute: work)
+        }
+    }
+
     /// Hard-cancel — used when the user dismisses the widget without
     /// wanting a final transcript.
     func cancelListening() {
@@ -488,6 +579,10 @@ final class VoiceController: NSObject, AVSpeechSynthesizerDelegate {
         fallbackFinalWorkItem = nil
         pendingRouteRebuild?.cancel()
         pendingRouteRebuild = nil
+        // If we're tearing down, any deferred restart belongs to the
+        // previous session and must not reopen the mic.
+        pendingRestart?.cancel()
+        pendingRestart = nil
         hasDeliveredFinal = true // suppress any late callback
         task?.cancel()
         task = nil
@@ -514,9 +609,11 @@ final class VoiceController: NSObject, AVSpeechSynthesizerDelegate {
             guard let self else { return }
             // If the recognizer hasn't called back within the window,
             // commit the latest partial as the final transcript.
+            stderrLog("fallbackFinal firing — latestPartial=\(self.latestPartialText.count) chars, hasDeliveredFinal=\(self.hasDeliveredFinal)")
             self.deliverFinalIfNeeded(self.latestPartialText)
         }
         fallbackFinalWorkItem = work
+        stderrLog("fallbackFinal armed (1.8s) — latestPartial=\(self.latestPartialText.count) chars")
         DispatchQueue.main.asyncAfter(deadline: .now() + 1.8, execute: work)
     }
 

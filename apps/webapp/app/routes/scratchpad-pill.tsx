@@ -24,7 +24,7 @@ import {
   type LoaderFunctionArgs,
   type MetaFunction,
 } from "@remix-run/node";
-import { Check, Inbox, Square, StickyNote } from "lucide-react";
+import { Check, Inbox, Square, StickyNote, X } from "lucide-react";
 
 import { Button } from "~/components/ui";
 import { SamAvatar } from "~/components/ui/sam-avatar";
@@ -84,6 +84,11 @@ export default function ScratchpadLauncher() {
   const [summary, setSummary] = useState("");
   const [inCorner, setInCorner] = useState(false);
   const [hudOpen, setHudOpen] = useState(false);
+  // User explicitly dismissed the launcher card (X button or opened
+  // Today). Suppresses launcher mode without killing the ambient
+  // glow — the corner still nudges if new messages arrive. Re-armed
+  // when the cursor leaves the corner or a new message comes in.
+  const [dismissed, setDismissed] = useState(false);
 
   // ── Derived mode ───────────────────────────────────────────────────
   const mode: Mode = useMemo(() => {
@@ -100,10 +105,25 @@ export default function ScratchpadLauncher() {
     // HUD is up — the corner is occupied by something the user is
     // already engaging with. Don't hint toward it.
     if (hudOpen) return "hidden";
+    if (dismissed) return count > 0 ? "glow" : "hidden";
     if (inCorner) return "launcher";
     if (count > 0) return "glow";
     return "hidden";
-  }, [count, status, inCorner, hudOpen]);
+  }, [count, status, inCorner, hudOpen, dismissed]);
+
+  // Re-arm dismissal when the cursor leaves the corner so re-entering
+  // surfaces the launcher again.
+  useEffect(() => {
+    if (!inCorner) setDismissed(false);
+  }, [inCorner]);
+
+  // Re-arm dismissal when a new message arrives — it's a fresh signal
+  // worth re-surfacing.
+  const prevCountRef = useRef(count);
+  useEffect(() => {
+    if (count > prevCountRef.current) setDismissed(false);
+    prevCountRef.current = count;
+  }, [count]);
 
   // Stable refs for poll closures.
   const statusRef = useRef<InboxStatus>("idle");
@@ -308,6 +328,10 @@ export default function ScratchpadLauncher() {
         return;
       }
 
+      void tauriInvoke("voice_log_tts_backend", {
+        backend: "elevenlabs",
+        chars: text.length,
+      });
       const blob = await res.blob();
       const url = URL.createObjectURL(blob);
       audioUrlRef.current = url;
@@ -340,6 +364,10 @@ export default function ScratchpadLauncher() {
       return;
     }
     try {
+      void tauriInvoke("voice_log_tts_backend", {
+        backend: "apple-swift",
+        chars: text.length,
+      });
       await tauriInvoke("voice_speak", { text });
     } catch (err) {
       // eslint-disable-next-line no-console
@@ -350,6 +378,9 @@ export default function ScratchpadLauncher() {
 
   // ── Click handlers ─────────────────────────────────────────────────
   async function openToday() {
+    // Dismiss preemptively so closing the HUD doesn't pop the
+    // launcher back open if the cursor is still in the corner.
+    setDismissed(true);
     if (!isTauri()) return;
     try {
       await tauriInvoke("scratchpad_hud_make_panel_key");
@@ -491,7 +522,20 @@ export default function ScratchpadLauncher() {
             : "pointer-events-none translate-y-2 opacity-0",
         )}
       >
-        <div className="border-border bg-background-3 flex w-[224px] flex-col gap-1 rounded-xl border p-1.5 shadow-xl">
+        <div className="border-border bg-background-3 relative flex w-[224px] flex-col gap-1 rounded-xl border p-1.5 shadow-xl">
+          {!inCatchup && (
+            <Button
+              variant="ghost"
+              size="xs"
+              onClick={() => setDismissed(true)}
+              className="text-muted-foreground hover:text-foreground absolute right-1 top-1 z-10 h-5 w-5"
+              title="Dismiss"
+              aria-label="Dismiss launcher"
+            >
+              <X size={12} />
+            </Button>
+          )}
+
           {!inCatchup && (
             <Button
               variant="ghost"

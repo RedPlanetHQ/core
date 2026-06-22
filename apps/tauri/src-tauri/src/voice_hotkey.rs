@@ -1,7 +1,8 @@
-//! Global hotkey: hold Ctrl+Option for 2 s to enter butler's "active"
+//! Global hotkey: hold Ctrl+Option for 1 s to enter butler's "active"
 //! conversation mode. Tap Ctrl alone to commit a turn / barge in.
-//! Double-tap Ctrl to exit active mode (or open the expanded panel
-//! when no active session is running).
+//! Double-tap Ctrl to exit active mode (no-op when no session is
+//! running — the old "open the expanded chat panel" behavior was
+//! removed).
 //!
 //! Uses NSEvent's `addGlobalMonitorForEventsMatchingMask:handler:` —
 //! fires when modifier keys change in any *other* foreground app.
@@ -16,8 +17,8 @@
 //!                          Widget treats as "commit turn" while listening
 //!                          or "barge in" while the assistant speaks.
 //!   voice:invoke-expand  → double-tap Ctrl. Widget treats as "exit
-//!                          active mode" if a session is running; opens
-//!                          the expanded text panel otherwise.
+//!                          active mode" if a session is running, no-op
+//!                          otherwise.
 //!
 //! We install both a global monitor (events delivered to *other* apps)
 //! and a local monitor (events delivered to CORE itself), so the same
@@ -38,7 +39,7 @@ use tauri::{AppHandle, Emitter, Manager, Runtime};
 
 const DOUBLE_TAP_WINDOW_MS: u64 = 300;
 /// How long Ctrl+Option must be held before active mode is entered.
-const HOLD_ACTIVATE_MS: u64 = 2000;
+const HOLD_ACTIVATE_MS: u64 = 1000;
 
 // NSEventMask for flagsChanged
 // (1 << NSEventTypeFlagsChanged) where NSEventTypeFlagsChanged = 12

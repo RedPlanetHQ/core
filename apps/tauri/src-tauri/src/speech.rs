@@ -369,6 +369,16 @@ pub fn voice_speak<R: Runtime>(
     send_command(&app, &mut proc, json!({"cmd": "speak", "text": text}))
 }
 
+/// Surface the frontend's TTS backend choice in the desktop log stream.
+/// The widget picks between the ElevenLabs cloud route and Apple's local
+/// `AVSpeechSynthesizer` per sentence; this command exists purely so
+/// that pick is visible alongside the other `[voice/*]` log lines.
+#[tauri::command]
+pub fn voice_log_tts_backend(backend: String, chars: usize) -> Result<(), String> {
+    log::info!("[voice/tts] using backend={backend} chars={chars}");
+    Ok(())
+}
+
 #[tauri::command]
 pub fn voice_cancel_speech<R: Runtime>(
     app: AppHandle<R>,

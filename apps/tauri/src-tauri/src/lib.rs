@@ -822,6 +822,7 @@ pub fn run() {
         speech::voice_stop_dictation,
         speech::voice_cancel_dictation,
         speech::voice_speak,
+        speech::voice_log_tts_backend,
         speech::voice_cancel_speech,
         speech::voice_list_voices,
         speech::voice_set_voice,
