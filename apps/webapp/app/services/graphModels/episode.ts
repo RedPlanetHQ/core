@@ -190,6 +190,20 @@ export async function getStatementsInvalidatedByEpisode(params: {
   );
 }
 
+export async function getEpisodesForEntity(
+  entityUuid: string,
+  userId: string,
+  workspaceId: string,
+  maxEpisodes: number = 30,
+): Promise<EpisodicNode[]> {
+  return graphProvider().getEpisodesForEntities({
+    entityUuids: [entityUuid],
+    userId,
+    workspaceId,
+    maxEpisodes,
+  });
+}
+
 export async function getEpisodesByUserId(params: {
   userId: string;
   startTime?: string;
