@@ -24,6 +24,7 @@ import { deductCredits } from "~/trigger/utils/utils";
 import { addToQueue } from "~/lib/ingest.server";
 import {
   selectModelMessages,
+  compactSurvivedInModelMessages,
   generateWithRetry,
   describeAgentError,
   prepareHistoryParts,
@@ -122,12 +123,13 @@ export async function noStreamProcess(
         history.role ?? (history.userType === "Agent" ? "assistant" : "user");
       const normalized = normalizeParts(history.parts);
       const parts = prepareHistoryParts(role, normalized);
-      return { parts, role, id: history.id };
+      return { parts, role, id: history.id, createdAt: history.createdAt };
     })
     .filter((m) => hasNonEmptyParts(m.parts));
 
   const message = body.message?.parts[0].text;
   let finalMessages: MessageEntry[];
+  let selectionMode: string | undefined;
 
   if (!isAssistantApproval) {
     const id = body.message?.id;
@@ -152,6 +154,7 @@ export async function noStreamProcess(
       compactTokens: selection.stats.compactTokens,
     });
     finalMessages = selection.messages;
+    selectionMode = selection.mode;
   } else {
     finalMessages = body.messages as any;
   }
@@ -184,6 +187,23 @@ export async function noStreamProcess(
     modelConfig,
     scratchpadPageId: body.scratchpadPageId,
   });
+
+  // Delivery invariant: in compact+recent mode the compact summary MUST reach
+  // the model — it is the agent's only view of everything older than the recent
+  // window. If a converter/provider change ever drops it, surface it loudly
+  // instead of silently losing context and re-asking.
+  if (selectionMode === "compact+recent") {
+    const compactPresent = compactSurvivedInModelMessages(
+      modelMessages as any[],
+    );
+    if (!compactPresent) {
+      logger.error("Compact summary missing from model messages", {
+        conversationId: body.id,
+        mode: selectionMode,
+        modelMessageCount: (modelMessages as any[]).length,
+      });
+    }
+  }
 
   // Create core agent with subagents — think only present for triggered flows
   const subagents: Record<string, Agent> = {

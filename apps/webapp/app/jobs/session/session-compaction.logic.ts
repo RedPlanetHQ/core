@@ -270,6 +270,7 @@ async function upsertDocumentFromCompaction(
   userId: string,
   workspaceId: string,
   episodes: EpisodicNode[],
+  priorCoveredUntil?: string | null,
 ): Promise<Document | undefined> {
   try {
     // Extract label IDs from first episode (if available)
@@ -282,6 +283,30 @@ async function upsertDocumentFromCompaction(
       episodes,
       workspaceId,
     );
+
+    // Coverage watermark (consumed by selectModelMessages, #2): the latest
+    // episode time folded into this summary. Monotonic — never regress below a
+    // prior watermark even if an older episode arrives late, so the consumer
+    // never under-reports coverage and opens a gap.
+    const batchMaxValidAtMs = episodes.reduce((max, e) => {
+      const t = new Date(e.validAt as unknown as string).getTime();
+      return Number.isFinite(t) && t > max ? t : max;
+    }, 0);
+    const priorMs = priorCoveredUntil
+      ? new Date(priorCoveredUntil).getTime()
+      : 0;
+    const coveredUntilMs = Math.max(
+      Number.isFinite(priorMs) ? priorMs : 0,
+      batchMaxValidAtMs,
+    );
+    const coveredUntil =
+      coveredUntilMs > 0 ? new Date(coveredUntilMs).toISOString() : undefined;
+
+    const metadata = {
+      episodeCount: episodes.length,
+      compactedAt: new Date().toISOString(),
+      ...(coveredUntil ? { coveredUntil } : {}),
+    };
 
     const document = await prisma.document.upsert({
       where: {
@@ -297,10 +322,7 @@ async function upsertDocumentFromCompaction(
         labelIds,
         source,
         type: "conversation",
-        metadata: {
-          episodeCount: episodes.length,
-          compactedAt: new Date().toISOString(),
-        },
+        metadata,
         editedBy: userId,
         workspaceId,
       },
@@ -309,10 +331,7 @@ async function upsertDocumentFromCompaction(
         sessionId,
         content: summary,
         updatedAt: new Date(),
-        metadata: {
-          episodeCount: episodes.length,
-          compactedAt: new Date().toISOString(),
-        },
+        metadata,
       },
     });
 
@@ -390,6 +409,14 @@ async function updateCompaction(
     workspaceId,
   );
 
+  // Carry the prior coverage watermark forward so it stays monotonic across
+  // incremental merges (see upsertDocumentFromCompaction).
+  const priorMeta = existingCompact.metadata as Record<string, unknown> | null;
+  const priorCoveredUntil =
+    typeof priorMeta?.coveredUntil === "string"
+      ? priorMeta.coveredUntil
+      : undefined;
+
   // Update graph, vector DB, and Document table in parallel
   const document = await upsertDocumentFromCompaction(
     existingCompact.sessionId as string,
@@ -398,6 +425,7 @@ async function updateCompaction(
     userId,
     workspaceId,
     newEpisodes,
+    priorCoveredUntil,
   );
 
   logger.info(`Compaction updated and stored in vector DB and Document table`, {
