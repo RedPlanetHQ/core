@@ -35,6 +35,7 @@ import { type OutputProcessor, type Processor } from "@mastra/core/processors";
 import { patchArgsDeep } from "~/services/agent/tool-args-patch-processor";
 import {
   selectModelMessages,
+  compactSurvivedInModelMessages,
   describeAgentError,
   prepareHistoryParts,
   type MessageEntry,
@@ -223,7 +224,7 @@ const { loader, action } = createHybridActionApiRoute(
           history.role ?? (history.userType === "Agent" ? "assistant" : "user");
         const normalized = normalizeParts(history.parts);
         const parts = prepareHistoryParts(role, normalized);
-        return { parts, role, id: history.id };
+        return { parts, role, id: history.id, createdAt: history.createdAt };
       },
     );
 
@@ -232,6 +233,7 @@ const { loader, action } = createHybridActionApiRoute(
     );
 
     let finalMessages: MessageEntry[];
+    let selectionMode: string | undefined;
     if (isAssistantApproval) {
       // Resume path: use exactly what the client sent — the suspended run
       // already has its own message list and we mustn't change it.
@@ -284,6 +286,7 @@ const { loader, action } = createHybridActionApiRoute(
         compactTokens: selection.stats.compactTokens,
       });
       finalMessages = selection.messages;
+      selectionMode = selection.mode;
     }
 
     logHeap("handler:context-selected", {
@@ -327,6 +330,24 @@ const { loader, action } = createHybridActionApiRoute(
       modelConfig,
       mode: body.mode,
     });
+
+    // Delivery invariant: in compact+recent mode the compact summary MUST reach
+    // the model. It is the agent's only view of everything older than the recent
+    // window — if a converter/provider change ever drops it again, the agent
+    // silently loses that context and re-asks. Surface it loudly rather than
+    // letting it regress unnoticed.
+    if (selectionMode === "compact+recent") {
+      const compactPresent = compactSurvivedInModelMessages(
+        modelMessages as any[],
+      );
+      if (!compactPresent) {
+        logger.error("Compact summary missing from model messages (stream)", {
+          conversationId: body.id,
+          mode: selectionMode,
+          modelMessageCount: (modelMessages as any[]).length,
+        });
+      }
+    }
 
     const subagents: Record<string, Agent> = {
       gather_context: gatherContextAgent,

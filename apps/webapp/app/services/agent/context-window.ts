@@ -26,6 +26,12 @@ export interface MessageEntry {
   id: string;
   role: "user" | "assistant" | "system";
   parts: MessagePart[];
+  /**
+   * When the message was created (ConversationHistory.createdAt). Optional —
+   * used to bridge the compact's coverage watermark to the verbatim tail. When
+   * absent, selection falls back to the fixed recent window.
+   */
+  createdAt?: string | Date;
 }
 
 /**
@@ -64,6 +70,8 @@ export interface SelectionResult {
     keptMessages: number;
     estimatedTokens: number;
     compactTokens: number | null;
+    /** Compact coverage watermark (ISO) when known — observability for #2. */
+    coveredUntil?: string | null;
   };
 }
 
@@ -94,6 +102,15 @@ export const IMAGE_TOKEN_COST = 1500;
 
 /** Max retries on context-length errors inside generateWithRetry. */
 export const CONTEXT_RETRY_MAX = 2;
+
+/**
+ * Header prepended to the compact summary when it is injected into the prompt.
+ * Exported so the delivery invariant (compactSurvivedInModelMessages) and the
+ * retry-path pin (dropOldestRound) can recognise the compact AFTER it has been
+ * through convertMessages — its `id` is lost in that conversion, but this
+ * marker text survives.
+ */
+export const COMPACT_PROMPT_MARKER = "Earlier in this conversation";
 
 // ─── Token estimation ───────────────────────────────────────────────
 
@@ -132,7 +149,20 @@ export function estimateMessageTokens(message: MessageEntry): number {
   return total;
 }
 
-// ─── Stubs (filled in by later tasks) ───────────────────────────────
+/**
+ * Read the compact's coverage watermark from Document.metadata — the max
+ * episode validAt folded into the summary at the last compaction, written by
+ * session-compaction. Returns epoch ms, or null if absent/unparseable (e.g.
+ * documents compacted before #2 shipped), in which case selection falls back to
+ * the fixed recent window.
+ */
+export function parseCoveredUntil(metadata: unknown): number | null {
+  if (!metadata || typeof metadata !== "object") return null;
+  const raw = (metadata as Record<string, unknown>).coveredUntil;
+  if (typeof raw !== "string" && typeof raw !== "number") return null;
+  const t = new Date(raw).getTime();
+  return Number.isFinite(t) ? t : null;
+}
 
 export async function selectModelMessages(params: {
   workspaceId: string;
@@ -163,16 +193,19 @@ export async function selectModelMessages(params: {
   }
 
   // Over threshold: try compact+recent, fall back to budget-trim.
-  let compact: { content: string } | null = null;
+  let compact: { content: string; coveredUntil: number | null } | null = null;
   try {
     const doc = await prisma.document.findUnique({
       where: {
         sessionId_workspaceId: { sessionId: conversationId, workspaceId },
       },
-      select: { content: true },
+      select: { content: true, metadata: true },
     });
     if (doc && typeof doc.content === "string" && doc.content.length > 0) {
-      compact = { content: doc.content };
+      compact = {
+        content: doc.content,
+        coveredUntil: parseCoveredUntil(doc.metadata),
+      };
     }
   } catch (error) {
     logger.warn("selectModelMessages: compact lookup failed, falling through", {
@@ -182,19 +215,80 @@ export async function selectModelMessages(params: {
   }
 
   if (compact) {
-    const compactText = `## Earlier in this conversation\n\n${compact.content}`;
+    const coveredUntil = compact.coveredUntil;
+    const compactText = `## ${COMPACT_PROMPT_MARKER}\n\n${compact.content}`;
+    // Deliver the compact as a leading USER message, NOT a system message.
+    // (See COMPACT_PROMPT_MARKER: convertMessages strips role:"system" entries,
+    // so a system-role compact never reaches the model. A user-role context
+    // block survives, mirroring how a /compact summary becomes the leading turn.)
     const compactMessage: MessageEntry = {
       id: `compact-${conversationId}`,
-      role: "system",
+      role: "user",
       parts: [{ type: "text", text: compactText }],
     };
-    const recent = history.slice(-RECENT_MESSAGE_WINDOW);
-    const messages = [compactMessage, ...recent, currentMessage];
+
+    // Hybrid verbatim tail: always keep the last RECENT_MESSAGE_WINDOW messages
+    // for recency fidelity, AND extend further back to bridge any gap between
+    // what the compact actually covers (coveredUntil) and that window — so a
+    // lagging compaction can never drop messages that are in neither the compact
+    // nor the verbatim tail. Biases to overlap (safe), never to a gap. When the
+    // watermark is absent (docs compacted before #2), this is exactly the old
+    // last-N behaviour.
+    let tailStart = Math.max(0, history.length - RECENT_MESSAGE_WINDOW);
+    if (coveredUntil != null) {
+      const firstUncovered = history.findIndex(
+        (m) =>
+          m.createdAt != null &&
+          new Date(m.createdAt).getTime() > coveredUntil,
+      );
+      if (firstUncovered >= 0) {
+        tailStart = Math.min(tailStart, firstUncovered);
+      }
+    }
+
+    // Budget cap: keep the tail newest-first under BUDGET_TRIM_TOKENS (minus the
+    // compact + current). If the cap forces dropping messages the compact does
+    // NOT cover, that is real context loss — surface it loudly (it must not
+    // regress silently the way the original delivery bug did).
     const compactTokens = estimateMessageTokens(compactMessage);
-    const estimatedTokens = messages.reduce(
-      (sum, m) => sum + estimateMessageTokens(m),
-      0,
-    );
+    const currentTokens = estimateMessageTokens(currentMessage);
+    const tailBudget = BUDGET_TRIM_TOKENS - compactTokens - currentTokens;
+    const fullTail = history.slice(tailStart);
+    const keptTail: MessageEntry[] = [];
+    let tailUsed = 0;
+    let droppedOldest = 0;
+    for (let i = fullTail.length - 1; i >= 0; i--) {
+      const cost = estimateMessageTokens(fullTail[i]);
+      if (keptTail.length > 0 && tailUsed + cost > tailBudget) {
+        droppedOldest = i + 1;
+        break;
+      }
+      keptTail.unshift(fullTail[i]);
+      tailUsed += cost;
+    }
+
+    if (droppedOldest > 0 && coveredUntil != null) {
+      const lostUncovered = fullTail
+        .slice(0, droppedOldest)
+        .some(
+          (m) =>
+            m.createdAt != null &&
+            new Date(m.createdAt).getTime() > coveredUntil,
+        );
+      if (lostUncovered) {
+        logger.error(
+          "selectModelMessages: budget cap dropped messages not covered by the compact (context gap)",
+          {
+            conversationId,
+            droppedOldest,
+            coveredUntil: new Date(coveredUntil).toISOString(),
+          },
+        );
+      }
+    }
+
+    const messages = [compactMessage, ...keptTail, currentMessage];
+    const estimatedTokens = compactTokens + currentTokens + tailUsed;
     return {
       messages,
       mode: "compact+recent",
@@ -203,6 +297,8 @@ export async function selectModelMessages(params: {
         keptMessages: messages.length,
         estimatedTokens,
         compactTokens,
+        coveredUntil:
+          coveredUntil != null ? new Date(coveredUntil).toISOString() : null,
       },
     };
   }
@@ -235,16 +331,58 @@ export async function selectModelMessages(params: {
 }
 
 /**
- * Drop the oldest user-assistant pair from a message array. Preserves the
- * first message (system/compact) and the last message (current user turn).
- * If no pair exists to drop, returns the input unchanged.
+ * Does this message carry the compact summary? Recognises both the pre-convert
+ * UI shape (`parts: [{ text }]`) and the post-convert model shape
+ * (`content: string` or `content: [{ text }]`), since the compact's `id` does
+ * not survive convertMessages but COMPACT_PROMPT_MARKER does.
+ */
+function messageHasCompactMarker(message: any): boolean {
+  if (!message) return false;
+  const { content, parts } = message;
+  if (typeof content === "string" && content.includes(COMPACT_PROMPT_MARKER)) {
+    return true;
+  }
+  for (const list of [content, parts]) {
+    if (Array.isArray(list)) {
+      for (const p of list) {
+        if (typeof p?.text === "string" && p.text.includes(COMPACT_PROMPT_MARKER)) {
+          return true;
+        }
+      }
+    }
+  }
+  return false;
+}
+
+/**
+ * Defense-in-depth: confirm the compact summary actually survived into the
+ * messages handed to the model. convertMessages / provider adapters have been
+ * observed silently dropping messages (notably mid-array role:"system"); when
+ * that happens in compact+recent mode the agent loses everything older than the
+ * recent window and re-asks for things it was already told. Only meaningful when
+ * the selection mode is "compact+recent". Short-circuits on the first match
+ * (the compact is the leading message), so it is cheap.
+ */
+export function compactSurvivedInModelMessages(modelMessages: any[]): boolean {
+  for (const m of modelMessages ?? []) {
+    if (messageHasCompactMarker(m)) return true;
+  }
+  return false;
+}
+
+/**
+ * Drop the oldest user-assistant pair from a message array. Preserves leading
+ * pinned messages — system prompts AND the injected compact summary (a leading
+ * user message identified by COMPACT_PROMPT_MARKER) — and the last message
+ * (current user turn). If no droppable pair exists, returns the input unchanged.
  */
 function dropOldestRound(messages: any[]): any[] {
   if (messages.length <= 2) return messages;
-  // Find the oldest non-system message index (skip leading system prompts).
+  // Find the oldest droppable message — skip leading system prompts and the
+  // pinned compact summary so context-length retries never evict them.
   let firstUserIdx = -1;
   for (let i = 0; i < messages.length - 1; i++) {
-    if (messages[i].role !== "system") {
+    if (messages[i].role !== "system" && !messageHasCompactMarker(messages[i])) {
       firstUserIdx = i;
       break;
     }
