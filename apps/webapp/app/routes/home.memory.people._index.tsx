@@ -4,7 +4,6 @@ import { User, Mail, Phone } from "lucide-react";
 import { getWorkspaceId, requireUser } from "~/services/session.server";
 import { listContacts } from "~/services/contacts/contact.server";
 import { Input } from "~/components/ui/input";
-import { Badge } from "~/components/ui/badge";
 import { cn } from "~/lib/utils";
 
 export async function loader({ request }: LoaderFunctionArgs) {
@@ -75,7 +74,6 @@ function PersonRow({
     headline: string | null;
     emails: string[];
     phones: string[];
-    status: string;
   };
   onClick: () => void;
 }) {
@@ -85,7 +83,6 @@ function PersonRow({
     : contact.phones[0]
       ? Phone
       : null;
-  const isResearching = contact.status === "Researching";
 
   return (
     <a onClick={onClick} className={cn("group flex cursor-default gap-2 pr-4")}>
@@ -120,12 +117,6 @@ function PersonRow({
                     </span>
                   </div>
                 )}
-                <Badge
-                  variant="secondary"
-                  className="shrink-0 gap-1 rounded text-xs font-normal"
-                >
-                  {isResearching ? "Researching" : "Active"}
-                </Badge>
               </div>
             </div>
             {contact.headline && (
