@@ -190,12 +190,6 @@ function GatewayDetailShell() {
             isActive: isBrowser,
             onClick: () => navigate(`/home/gateways/${gw.id}/browser`),
           },
-          {
-            label: "Files",
-            value: "files",
-            isActive: isFiles,
-            onClick: () => navigate(`/home/gateways/${gw.id}/files`),
-          },
         ]}
         actionsNode={
           isFiles ? (

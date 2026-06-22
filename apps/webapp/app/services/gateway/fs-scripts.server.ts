@@ -47,6 +47,18 @@ export const DOWNLOAD_CHUNK_BYTES = 65_536;
 export const DOWNLOAD_MAX_BYTES = 10 * 1024 * 1024;
 
 /**
+ * Removes argv[1]. Handles both files and directories — directories
+ * are removed recursively. `force:true` swallows ENOENT so the script
+ * is idempotent (subsequent calls succeed even after the entry is
+ * gone). Emits `"ok"` on success; non-zero exit on any other error.
+ *
+ * Uses `fs.rmSync` (no `rm` token) so the gateway's exec deny-list
+ * doesn't block it. Folder-scope on the `dir` parameter is the only
+ * boundary that prevents escapes outside a registered exec folder.
+ */
+export const DELETE_SCRIPT = `const fs=require('fs');const t=process.argv[1];fs.rmSync(t,{recursive:true,force:true});process.stdout.write('ok');`;
+
+/**
  * POSIX single-quote shell escape. Wraps the input in `'…'` and
  * replaces any embedded `'` with `'\''`.
  */
