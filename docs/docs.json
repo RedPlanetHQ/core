@@ -145,7 +145,8 @@
               "skills/notify_emails",
               "skills/account_research",
               "skills/engineering_analytics",
-              "skills/journaling"
+              "skills/journaling",
+              "skills/money_categorization"
             ]
           }
         ]

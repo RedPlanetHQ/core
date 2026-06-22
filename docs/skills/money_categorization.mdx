@@ -1,0 +1,207 @@
+---
+title: "How I Categorize My Money"
+description: My personal lens for reading money emails — what counts as a charge, receipt, subscription, renewal, refund, or True Expense, which category it belongs in, when it's notable, and how I want splits and edge cases handled. Loaded by tasks that classify my spend, identify subscriptions, surface big charges, watch renewals, and forecast monthly expenses. Trigger with "how I think about my money", "set my spending categories", or "tell CORE what counts as a subscription".
+category: Finance
+integrations: '[{"name":"Gmail","slug":"gmail"}]'
+---
+
+**What this is:** A reusable lens for understanding any money-related email that lands in my inbox. This is *how I look at my spending* — the categories I care about, what counts as a subscription, what's a True Expense, what's "big" enough to flag, and how I want messy cases (splits, refunds, transfers) handled. Tasks (a weekly subscription identifier, a weekly money brief, a monthly True Expense forecast) apply this lens. The lens itself does not run on a schedule.
+
+**Tools touched (when this lens is applied):** CORE memory (always first), Gmail (the primary signal), and any connected finance integrations (YNAB, banks) when present.
+
+---
+
+### Order of operations
+
+1. **CORE memory first** — search what I already know: my category list, payee→category mappings I've confirmed, subscriptions I've already identified, my own notes on past spend. If memory has it, trust it before re-deriving from email.
+2. **Gmail** — the primary source. Receipts, charge alerts, renewal reminders, refund confirmations, statements, fraud alerts, payroll, transfer confirmations.
+3. **YNAB or other finance integration** — if connected, reconcile against transactions for completeness and authoritative category history. Without it, Gmail alone is enough.
+
+> Memory is not optional. Re-categorizing the same Spotify charge from scratch every week is the fastest way to drift from my actual preferences.
+
+---
+
+### 1. Types of money emails I receive
+
+Every money email falls into one of these. Classify the *type* before the *category*:
+
+| Type | What it looks like | What I want done |
+|---|---|---|
+| **Charge alert** | "A charge of $X was made at Y" from card issuer | Categorize, check against subscription/notable rules |
+| **Receipt** | Itemized from merchant (Amazon, Stripe, Apple) | Categorize using line items; richer than the charge alert |
+| **Renewal reminder** | "Your subscription renews in N days" | Add to renewal watch; flag if cancel candidate |
+| **Refund / reversal** | "Refund of $X processed" | Net against original charge in the same category |
+| **Statement ready** | "Your monthly statement is available" | Use as authoritative source for the closed month |
+| **Fraud / security alert** | "Unrecognized charge" from card issuer | Always notable. Notify immediately. |
+| **Payroll / income** | Salary deposit, Stripe payout, invoice paid | Income — feeds the brief, not the spend categories |
+| **Transfer / internal** | Moving money between my own accounts | Not spend. Exclude from category totals. |
+| **Bill due** | Utility, rent, credit card statement due | Track due date; not yet a charge until paid |
+
+> When a single email could be two types (e.g. a receipt that also confirms a subscription renewal), prefer the more specific type — renewal beats receipt.
+
+---
+
+### 2. My categories
+
+The taxonomy. Store the active list in memory; refresh when I add or rename one. Seed defaults if memory is empty, then ask once for corrections.
+
+Default seed (group → category):
+
+- **Fixed obligations** — Rent / Mortgage, Utilities, Insurance, Loan payments
+- **True Expenses** (annual or quarterly, sliced monthly) — Domain renewals, Annual software, Insurance premiums, Tax, Car maintenance, Gifts
+- **Recurring services** — Streaming, AI tools, Cloud / Infra (AWS, Vercel), SaaS, Phone, Internet
+- **Daily life** — Groceries, Dining out, Transport, Coffee
+- **Health** — Gym, Medical, Pharmacy, Therapy
+- **Travel** — Flights, Hotels, Trains, Local transit while travelling
+- **Shopping** — Household, Electronics, Clothing, Personal care
+- **Just for fun** — Entertainment, Hobbies, Books, Gaming
+- **Income** — Salary, Side income, Refunds (negative spend)
+- **Transfers** — Between my own accounts (excluded from spend)
+
+> Skip any category that doesn't apply to me. Add ones that do. Ask once if uncertain; do not invent silently.
+
+---
+
+### 3. Payee → category rules
+
+Memory holds a `payee → category` map. Build it incrementally:
+
+1. **Known payee in memory** → use the stored category. Don't re-ask.
+2. **Unknown payee, obvious mapping** (Spotify → Streaming, Uber → Transport, Apollo → SaaS) → assign and store, with a flag that it was auto-assigned so I can correct later.
+3. **Unknown payee, ambiguous** (e.g. "ABC Corp $47") → leave uncategorized, surface in the next brief, ask me once.
+4. **Known merchant, variable category** (Amazon, Costco, Target) → see Section 7 (Splits).
+5. **Conflicting signals** (payee is "Stripe" but receipt shows "Cursor Pro") → prefer the merchant in the receipt body over the payment processor on the charge alert.
+
+> Confidence matters. Auto-assign confidently mapped charges; leave ambiguous ones for review. Reviewing one charge is cheaper than untangling a wrong category later.
+
+---
+
+### 4. What counts as a subscription
+
+A charge is a **subscription** when all three are true:
+
+1. **Same payee, same or nearly-same amount** (±5% to absorb FX and tax changes)
+2. **Recurring cadence** — weekly, monthly, quarterly, or yearly. At least **two prior occurrences** before treating as confirmed recurring.
+3. **Receipt or renewal email language** matches subscription/service intent (not a re-order of a one-time good)
+
+Subscription **state**:
+
+- **Watching** — 1 or 2 occurrences seen. Not yet confirmed; not surfaced.
+- **Active** — at least 3 occurrences, with at least one charge in the expected window (last cadence + 7 days grace)
+- **Cancel candidate** — confirmed but flagged for review. *Any one* of:
+  - Monthly cost > $10 AND I haven't logged in / used the service in 60+ days (use connected integration signals if available — Spotify play count, GitHub activity, Calendar attendance for gym)
+  - I previously tagged it as "cancel"
+  - Renewal email arrives but I have no recent usage signal
+- **Possible cancellation** — confirmed sub whose expected charge didn't arrive past the grace window. Not yet confirmed cancelled.
+- **Cancelled** — confirmed cancellation. *Any one* of:
+  - I confirmed the cancellation
+  - Cancellation confirmation email seen from the merchant
+  - Two consecutive expected windows passed with no charge (after possible-cancellation state)
+- **Trial about to convert** — renewal email mentions a trial ending; cost > $0
+
+> Single occurrence is never a subscription. Two = watching. Three = confirmed. Don't surface a "new subscription" alert until the third occurrence, otherwise every one-time purchase looks recurring.
+
+**What I store in memory per subscription** (active and cancelled both retain these):
+
+| Field | Meaning |
+|---|---|
+| Payee | The merchant name as it appears on charges (e.g. Spotify, Cursor, Substack) |
+| What it's for | Short human-readable description (Spotify → "Music streaming"; Cursor → "AI code editor"; Substack → "Lenny's Newsletter"). Derive from the receipt body or product name on first sighting; refine if I correct it. |
+| Amount + cadence | e.g. $9.99/month, $120/year |
+| Started | Date of the first occurrence in my history |
+| Last charged | Date of most recent confirmed charge |
+| Total spent to date | Sum across all observed occurrences |
+| State | watching, active, cancel-candidate, possible-cancellation, cancelled, trial |
+| Cancelled date | If state is cancelled, the date the cancellation was confirmed |
+| Cancel reason | If cancelled, the captured reason (no longer used, price hike, replaced by X, cancelled by me, etc.) |
+
+> Cancelled subscriptions are kept in memory, not deleted. The historical record matters — total spent on a cancelled sub answers "was that worth it?" and surfaces patterns ("you've cancelled 4 AI tools in 6 months").
+
+---
+
+### 5. What counts as a True Expense
+
+Borrowed from YNAB but useful even without YNAB. A charge is a **True Expense** when:
+
+- It's **predictable but not monthly** — annual, quarterly, semi-annual
+- It's **large enough to disrupt a normal month** if I don't anticipate it (> ~$100 for me; user may adjust)
+- It's **non-discretionary** in the sense that I'm going to pay it (insurance, domain, AWS reserved instances, taxes), or it's a recurring lump (gifts at year-end, family travel)
+
+For each True Expense, the lens stores:
+
+- Payee, amount, cadence (annual / quarterly / etc.)
+- Next expected date (from receipt history or scheduled email)
+- Monthly slice = total / months between occurrences
+
+> True Expense Forecast tasks read this list to tell me "this month, $X of True Expenses are due — set them aside now."
+
+---
+
+### 6. What "notable" or "big" means
+
+Thresholds are **per category, not flat**. $500 at Best Buy is big; $500 in Rent is not. Defaults (override per user):
+
+- **Fixed obligations** — only notable if amount changes >10% from prior month
+- **Recurring services** — notable if a *new* one appears, or an existing one's price jumps >15%
+- **Daily life** — single charge > $100 is notable
+- **Health, Travel, Shopping** — single charge > $200 is notable
+- **Just for fun** — single charge > $75 is notable
+- **Any category** — any charge > $500 is always notable
+
+Also always notable:
+
+- Any charge from a payee never seen before (first-seen alert)
+- Any duplicate charge within 24h from the same payee (possible double-bill)
+- Any charge from a foreign currency / unusual country if I'm not travelling
+- Any fraud alert email regardless of amount
+
+> "Notable" feeds the Weekly Brief. Don't conflate notable with fraud — most notable charges are legitimate. The brief surfaces them so I can confirm.
+
+---
+
+### 7. Splits and multi-category merchants
+
+Some payees are categorically ambiguous and need splits:
+
+- **Amazon** — default to Shopping. If receipt line items are present, split by item type (Household, Electronics, Books, Gifts). If no line items in the email, leave as Shopping and let me reassign.
+- **Costco / Target / Walmart** — same pattern. Default Groceries; split if line items show Electronics, Household, etc.
+- **Travel charges** — flights to Travel-Flights, hotels to Travel-Hotels, local transport while travelling to Travel-Local (not Daily Transport)
+- **Restaurants on a trip** — Travel-Dining (not Dining out)
+
+> For splits, prefer "leave whole, surface in brief for my review" over "guess and split silently." Wrong silent splits are worse than uncategorized whole charges.
+
+---
+
+### 8. Refunds, returns, transfers
+
+- **Refunds** — net against the *original* charge category. If the original is in a prior closed month, log as negative spend in the current month against the same category. Memo it as "refund of $X from {date}".
+- **Returns without refund yet** — note as pending; do not adjust spend until the refund email arrives.
+- **Transfers between my own accounts** — never spend. Exclude from category totals. Detected by matching debit/credit on the same date between accounts I own.
+- **Reimbursements from a person** (Venmo, Splitwise) — net against the original category, same as refunds.
+
+---
+
+### How this lens is used
+
+Tasks consume this lens:
+
+- **Weekly Subscription Identifier** — applies sections 1, 3, 4 to identify and surface active subs, new subs, cancel candidates
+- **Weekly Money Brief** — applies sections 1, 3, 6, plus reads upcoming renewals from Section 4 — surfaces big charges, renewal watch, weekly category totals
+- **Monthly True Expense Forecast** — applies Section 5 — tells me what's due this month and the monthly slice to set aside
+- **Inbound triage / notify flows** — when a money email arrives, classify type (Section 1), apply payee rule (Section 3), check notable (Section 6) — route to notify if matched
+- **Chat queries** ("did I pay for Cursor this month?", "what's my Spotify subscription doing?") — answer against memory + this lens
+
+Each task is responsible for *when* and *how often* it runs — this skill only defines *what to look for* and *how to categorize*.
+
+---
+
+### Edge cases
+
+- **No payee in receipt** — fall back to the email sender domain. If still unknown, leave uncategorized.
+- **Multi-currency** — convert to my home currency using the receipt's exchange rate. If no rate is given, use the date's market rate. Surface non-home-currency charges in the brief.
+- **Statement email vs the charges that built it** — prefer per-charge data. Only use the statement total as a sanity check.
+- **Card issuer "we're upgrading your card" emails** — not money events. Skip.
+- **Pre-authorization / hold** (e.g. hotel deposit) — track separately. The actual charge arrives later; reconcile then.
+- **Charge from me to myself** (Stripe payout to my bank, ACH transfer) — transfer, not spend.
+- **First time seeing a known payee in a new category** (Apple App Store → previously Apps, now Music subscription) — surface as ambiguous; do not silently re-category.
+- **Receipt with no amount in the body** (some platforms link to a hosted receipt) — categorize what I can; flag for review.
