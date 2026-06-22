@@ -12,6 +12,8 @@ mod voice_hotkey;
 mod voice_panel;
 #[cfg(target_os = "macos")]
 mod inbox_panel;
+#[cfg(target_os = "macos")]
+mod scratchpad_panel;
 mod coding_config;
 
 use std::collections::HashSet;
@@ -175,7 +177,7 @@ fn install_dynamic_remote_capability<R: tauri::Runtime>(app: &tauri::AppHandle<R
         "identifier": "user-frontend-remote",
         "description": "User-configured frontend URL (from ~/.corebrain/config.json)",
         "remote": { "urls": [url.clone()] },
-        "windows": ["main", "voice"],
+        "windows": ["main", "voice", "inbox", "scratchpad-pill", "scratchpad-hud"],
         "permissions": [
             "core:default",
             "shell:allow-open",
@@ -510,15 +512,20 @@ fn position_voice_window<R: tauri::Runtime>(
     window: &tauri::WebviewWindow<R>,
     sx: f64,
     sy: f64,
-    sw: f64,
-    _sh: f64,
+    _sw: f64,
+    sh: f64,
 ) {
     // NSScreen.frame is in logical points; pass logical coordinates to
     // Tauri so it scales for the display's backing factor (Retina = 2x).
+    //
+    // Anchored to the BOTTOM-LEFT of the active screen, matching the
+    // scratchpad launcher's home base — every floating affordance in
+    // the app now shares the same corner. The 24px inset keeps a
+    // hair of breathing room from the dock and edge of the screen.
     let inset: f64 = 24.0;
-    let win_w: f64 = 360.0;
-    let target_x = sx + sw - win_w - inset;
-    let target_y = sy + inset;
+    let win_h: f64 = 320.0;
+    let target_x = sx + inset;
+    let target_y = sy + sh - win_h - inset;
     log::info!(
         "[voice] set_position logical=({}, {})",
         target_x,
@@ -677,14 +684,29 @@ fn handle_voice_invoke<R: tauri::Runtime>(
         return;
     };
 
-    // Yield the floor to Ctrl+Option: if the inbox pill is mid-catchup,
-    // stop its speech and hide it so the voice widget owns audio
-    // + the top-right screen real estate. The React side reacts to the
-    // resulting voice:tts-ended event from Swift didCancel and cleans
-    // up its own state (status -> idle, summary cleared).
-    if let Some(inbox_window) = app.get_webview_window(inbox_panel::INBOX_PANEL_LABEL) {
-        if inbox_window.is_visible().unwrap_or(false) {
-            log::info!("[voice] inbox pill is up — cancelling speech + hiding before voice invoke");
+    // Yield the bottom-left floor to Ctrl+Option. Both the scratchpad
+    // launcher (which now subsumes the catchup pill) and the HUD live
+    // at the bottom-left, so hide them before showing the voice
+    // widget. Cancel any in-flight Swift speech first so the React
+    // side cleans up its catchup state via the resulting voice:tts-ended.
+    {
+        let pill_label = scratchpad_panel::SCRATCHPAD_PILL_LABEL;
+        let hud_label = scratchpad_panel::SCRATCHPAD_HUD_LABEL;
+        let pill_visible = app
+            .get_webview_window(pill_label)
+            .and_then(|w| w.is_visible().ok())
+            .unwrap_or(false);
+        let hud_visible = app
+            .get_webview_window(hud_label)
+            .and_then(|w| w.is_visible().ok())
+            .unwrap_or(false);
+
+        if pill_visible || hud_visible {
+            log::info!(
+                "[voice] bottom-left occupied (pill={} hud={}) — clearing before voice invoke",
+                pill_visible,
+                hud_visible
+            );
             // Cancel any in-flight Swift speech (catchup readout).
             if let Some(state) = app.try_state::<speech::SharedSpeech>() {
                 if let Ok(mut proc) = state.lock() {
@@ -695,7 +717,12 @@ fn handle_voice_invoke<R: tauri::Runtime>(
                     );
                 }
             }
-            inbox_panel::hide(app);
+            if pill_visible {
+                scratchpad_panel::pill_hide(app);
+            }
+            if hud_visible {
+                scratchpad_panel::hud_hide(app);
+            }
         }
     }
 
@@ -805,6 +832,13 @@ pub fn run() {
         inbox_panel::inbox_hide_panel,
         inbox_panel::inbox_make_panel_key,
         inbox_panel::inbox_position_top_right,
+        scratchpad_panel::scratchpad_pill_show,
+        scratchpad_panel::scratchpad_pill_hide,
+        scratchpad_panel::scratchpad_pill_make_panel_key,
+        scratchpad_panel::scratchpad_pill_set_clickthrough,
+        scratchpad_panel::scratchpad_hud_show,
+        scratchpad_panel::scratchpad_hud_hide,
+        scratchpad_panel::scratchpad_hud_make_panel_key,
         get_current_screen_text,
     ]);
 
@@ -874,25 +908,22 @@ pub fn run() {
                 .devtools(true)
                 .build()?;
 
-                // Inbox pill window — small floating badge that surfaces
-                // unread VoiceInboxMessage rows. Same URL resolution as
-                // main + voice so cookies (session) are shared, which
-                // is how the React poller authenticates without us
-                // having to plumb the PAT through Rust.
-                let _inbox_window = WebviewWindowBuilder::new(
+                // Inbox functionality (poll + catchup TTS) is now part of
+                // the bottom-left scratchpad launcher built below; the
+                // standalone top-right inbox window has been retired.
+
+                // Scratchpad HUD pair — tiny corner pill that appears when
+                // the cursor approaches the bottom-left of any screen, plus
+                // a larger panel that renders today's scratchpad when the
+                // pill is clicked. Cookie session is shared with the main
+                // window so React routes can authenticate without a PAT.
+                let _scratchpad_pill = WebviewWindowBuilder::new(
                     app,
-                    "inbox",
-                    resolve_webview_url("/inbox-pill"),
+                    scratchpad_panel::SCRATCHPAD_PILL_LABEL,
+                    resolve_webview_url("/scratchpad-pill"),
                 )
-                .title("Inbox")
-                // 360×160 — pill (~28px) + 100px-capped scrollable
-                // summary card + 16px padding. Tight enough that the
-                // window doesn't reserve a click-blocking dead zone
-                // under the visible content. The summary card itself
-                // caps height at 100px with overflow-y-auto, so
-                // longer catchups scroll inside the card instead of
-                // pushing the window taller.
-                .inner_size(360.0, 160.0)
+                .title("Scratchpad launcher")
+                .inner_size(240.0, 300.0)
                 .resizable(false)
                 .decorations(false)
                 .transparent(true)
@@ -901,6 +932,26 @@ pub fn run() {
                 .visible(false)
                 .focused(false)
                 .shadow(false)
+                .visible_on_all_workspaces(true)
+                .accept_first_mouse(true)
+                .devtools(true)
+                .build()?;
+
+                let _scratchpad_hud = WebviewWindowBuilder::new(
+                    app,
+                    scratchpad_panel::SCRATCHPAD_HUD_LABEL,
+                    resolve_webview_url("/scratchpad-hud"),
+                )
+                .title("Scratchpad")
+                .inner_size(400.0, 600.0)
+                .resizable(false)
+                .decorations(false)
+                .transparent(true)
+                .always_on_top(true)
+                .skip_taskbar(true)
+                .visible(false)
+                .focused(false)
+                .shadow(true)
                 .visible_on_all_workspaces(true)
                 .accept_first_mouse(true)
                 .devtools(true)
@@ -922,9 +973,23 @@ pub fn run() {
                     log::warn!("[voice_panel] install failed: {e}");
                 }
 
-                if let Err(e) = inbox_panel::install(app.handle()) {
-                    log::warn!("[inbox_panel] install failed: {e}");
+                // inbox_panel::install intentionally skipped — see comment
+                // where the inbox window used to be built. The module's
+                // commands and helpers remain compiled (and registered
+                // in invoke_handler) so any in-flight references from
+                // the React side fail soft instead of hard.
+
+                if let Err(e) = scratchpad_panel::install_pill(app.handle()) {
+                    log::warn!("[scratchpad_panel] pill install failed: {e}");
                 }
+                if let Err(e) = scratchpad_panel::install_hud(app.handle()) {
+                    log::warn!("[scratchpad_panel] hud install failed: {e}");
+                }
+
+                // Background cursor-poll thread: emits scratchpad:corner-enter
+                // / corner-leave events that the /scratchpad-pill route
+                // listens for and uses to show/hide itself.
+                scratchpad_panel::start_cursor_corner_poll(app.handle().clone());
 
                 // Liveness for the hidden inbox webview comes from the
                 // sidebar pill running in the main webapp window: when
@@ -955,6 +1020,7 @@ pub fn run() {
                     let payload = event.payload();
                     reposition_voice_window(&follow_app, payload);
                     reposition_inbox_window(&follow_app, payload);
+                    scratchpad_panel::reposition_for_active_screen(&follow_app);
                 });
 
                 // Single Ctrl tap (in-session signal): forward to the
