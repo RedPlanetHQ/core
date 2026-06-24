@@ -11,6 +11,7 @@ export const ContactSummarySchema = z.object({
   company: z.string().default("").describe("employer or organization if found"),
   role: z.string().default("").describe("job title or role if found"),
   location: z.string().default("").describe("city, country, or region if found"),
+  category: z.string().default("").describe("relationship category: one of Friend, Colleague, Family, Investor, Vendor — infer from relationship context, empty string if unclear"),
   relationshipWithUser: z.string().default("").describe("how the user knows this person — how they met, shared history, nature of relationship"),
   additionalInformation: z.string().default("").describe("recent interactions with timing, open loops, communication patterns, shared groups"),
 });
@@ -25,13 +26,15 @@ export interface ExtractedContactFields {
   company: string;
   role: string;
   location: string;
+  category: string;
 }
 
 export interface BuildSummaryInput {
   userName: string;
   personName: string;
   today: Date;
-  episodes: Array<{ content: string; validAt: Date }>;
+  // validAt can be a Date or an ISO string (raw Neo4j string values are accepted)
+  episodes: Array<{ content: string; validAt: Date | string }>;
   priorDescription: string | null;
   descriptionEdited: boolean;
 }
@@ -43,6 +46,9 @@ RULES
 - If a field is not present in the episodes, leave it as an empty string "".
 - Address the user as "you". Give recent interactions rough timing relative to today.
 - For email/phone/linkedin/twitter: copy the exact value as written in the episodes.
+- Keep structured fields (email, phone, linkedin, twitter, company, role, location) strictly
+  in their own fields. Do NOT repeat or mention them inside relationshipWithUser or
+  additionalInformation — those two fields are for narrative only.
 - If a prior profile is marked AUTHORITATIVE, preserve its facts in
   relationshipWithUser and additionalInformation, folding in new details without
   contradicting it. Structured fields (email, phone, etc.) should still be
@@ -57,13 +63,14 @@ twitter: X/Twitter handle (e.g. "@johnsmith"), empty string if not found
 company: employer or organization name, empty string if not found
 role: job title or role, empty string if not found
 location: city, country, or region, empty string if not found
-relationshipWithUser: 2–4 sentences on how the user knows this person — how they met, shared history, nature of the relationship
-additionalInformation: recent interactions with timing, any open loops or follow-ups needed, communication frequency and channel, shared groups or mutual connections`;
+category: relationship category — exactly one of: Friend, Colleague, Family, Investor, Vendor. Infer from the nature of the relationship described in episodes. Empty string if the relationship is unclear.
+relationshipWithUser: 2–4 sentences covering ONLY how the user knows this person — how they met, shared history, nature of the relationship. No contact details here.
+additionalInformation: ONLY recent interactions with timing, open loops or follow-ups needed, communication frequency and channel, shared groups or mutual connections. No contact details here.`;
 
 export function buildSummaryMessages(input: BuildSummaryInput): ModelMessage[] {
   const today = input.today.toISOString().slice(0, 10);
   const episodeLines = input.episodes
-    .map((e) => `[${e.validAt.toISOString().slice(0, 10)}]\n${e.content}`)
+    .map((e) => `[${new Date(e.validAt).toISOString().slice(0, 10)}]\n${e.content}`)
     .join("\n\n---\n\n");
 
   const prior = input.priorDescription
@@ -127,6 +134,7 @@ export async function generateContactSummary(
       company: object.company,
       role: object.role,
       location: object.location,
+      category: object.category,
     },
   };
 }
