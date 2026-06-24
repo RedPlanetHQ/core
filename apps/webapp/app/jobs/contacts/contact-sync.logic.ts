@@ -90,7 +90,12 @@ export async function syncContactForEntity(
       userName,
       personName: name,
       today: new Date(),
-      episodes: episodes.map((e) => ({ content: e.content, validAt: e.validAt })),
+      episodes: episodes.map((e) => ({
+        content: e.content,
+        // Provider returns raw Cypher results where dates come back as ISO strings.
+        // Coerce so the summary builder can call .toISOString() safely.
+        validAt: e.validAt instanceof Date ? e.validAt : new Date(e.validAt as unknown as string),
+      })),
       priorDescription: contact.description ?? null,
       descriptionEdited: contact.descriptionEdited,
     },
