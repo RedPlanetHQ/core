@@ -116,6 +116,7 @@ export async function syncContactForEntity(
   if (extractedFields.company) fieldUpdates.company = extractedFields.company;
   if (extractedFields.role) fieldUpdates.role = extractedFields.role;
   if (extractedFields.location) fieldUpdates.location = extractedFields.location;
+  if (extractedFields.category) fieldUpdates.category = extractedFields.category;
   const newHandles = [extractedFields.linkedin, extractedFields.twitter].filter(Boolean);
   if (newHandles.length > 0) fieldUpdates.handles = newHandles;
 

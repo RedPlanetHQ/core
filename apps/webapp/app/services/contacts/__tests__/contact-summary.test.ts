@@ -86,3 +86,43 @@ describe("renderDescription", () => {
     expect(body).toBe("");
   });
 });
+
+describe("buildSummaryMessages date handling", () => {
+  it("handles validAt as ISO string from unparsed Neo4j results without throwing", () => {
+    const messages = buildSummaryMessages({
+      userName: "Manik",
+      personName: "Abhishek",
+      today: new Date("2026-06-19T00:00:00Z"),
+      episodes: [
+        {
+          content: "Abhishek is a close friend.",
+          validAt: "2026-01-15T00:00:00.000Z" as any,
+        },
+      ],
+      priorDescription: null,
+      descriptionEdited: false,
+    });
+    const text = JSON.stringify(messages);
+    expect(text).toContain("2026-01-15");
+  });
+});
+
+describe("category extraction", () => {
+  it("includes category instruction in the system prompt", () => {
+    const messages = buildSummaryMessages({
+      userName: "Manik",
+      personName: "Abhishek",
+      today: new Date("2026-06-19T00:00:00Z"),
+      episodes: [
+        {
+          content: "Abhishek is a close college friend from IIT KGP.",
+          validAt: new Date("2026-01-01T00:00:00Z"),
+        },
+      ],
+      priorDescription: null,
+      descriptionEdited: false,
+    });
+    const systemMessage = JSON.stringify(messages[0]);
+    expect(systemMessage).toContain("category");
+  });
+});
