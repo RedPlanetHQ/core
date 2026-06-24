@@ -398,12 +398,24 @@ function tryParseJsonFromText(raw: string): unknown | undefined {
   }
 }
 
-function needsTolerantParsing(): boolean {
+/**
+ * Whether to skip native structured-output enforcement and instead prompt for
+ * JSON manually, parse leniently, and repair on failure.
+ *
+ * Required for Ollama and self-hosted OpenAI-compatible proxies, which don't
+ * support the Responses API's structured output. Also required for OpenRouter:
+ * it routes to a huge range of third-party models with wildly inconsistent
+ * tool-calling/JSON-schema support, so the app can't assume any given
+ * OpenRouter model honors strict structured output the way OpenAI does.
+ */
+function needsTolerantParsing(model: string): boolean {
+  const provider = getProvider(model);
   const openaiConfig = getProviderConfig("openai");
   const apiMode = openaiConfig.apiMode ?? "responses";
   const isProxyChatMode = apiMode === "chat_completions" && !!openaiConfig.baseUrl;
-  const isOllama = getDefaultChatProviderType() === "ollama";
-  return isProxyChatMode || isOllama;
+  const isOllama = provider === "ollama" || getDefaultChatProviderType() === "ollama";
+  const isOpenRouter = provider === "openrouter";
+  return isProxyChatMode || isOllama || isOpenRouter;
 }
 
 export async function makeStructuredModelCall<T extends z.ZodType>(
@@ -425,8 +437,8 @@ export async function makeStructuredModelCall<T extends z.ZodType>(
 
   const agentApiOptions = apiKey ? { apiKey, ...(baseUrl && { baseUrl }) } : undefined;
 
-  // Proxy/Ollama: manual JSON extraction (no structured output support)
-  if (needsTolerantParsing()) {
+  // Proxy/Ollama/OpenRouter: manual JSON extraction (no guaranteed structured output support)
+  if (needsTolerantParsing(model)) {
     const { object, usage } = await structuredCallWithTolerantParsing(
       schema,
       messages,
