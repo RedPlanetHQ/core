@@ -119,9 +119,10 @@ export async function generateContactSummary(
     ContactSummarySchema,
     messages,
     "medium",
-    undefined,
+    "contact-summary",
     undefined,
     workspaceId,
+    "memory",
   );
   return {
     headline: object.headline,
