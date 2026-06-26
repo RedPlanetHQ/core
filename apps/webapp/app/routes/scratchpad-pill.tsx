@@ -538,11 +538,11 @@ export default function ScratchpadLauncher() {
               variant="ghost"
               size="xs"
               onClick={() => setDismissed(true)}
-              className="text-muted-foreground hover:text-foreground absolute right-1 top-1 z-10 h-5 w-5"
+              className="bg-background-2 border-border text-muted-foreground hover:text-foreground hover:bg-background-3 absolute -right-1.5 -top-1.5 z-10 h-5 w-5 rounded border p-0 shadow-sm"
               title="Dismiss"
               aria-label="Dismiss launcher"
             >
-              <X size={12} />
+              <X size={11} />
             </Button>
           )}
 

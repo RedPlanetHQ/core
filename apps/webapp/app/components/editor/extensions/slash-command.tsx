@@ -4,7 +4,13 @@ import { ReactRenderer } from "@tiptap/react";
 import Suggestion from "@tiptap/suggestion";
 
 const SlashCommandPluginKey = new PluginKey("slashCommand");
-import React, { forwardRef, useEffect, useImperativeHandle, useState } from "react";
+import React, {
+  forwardRef,
+  useEffect,
+  useImperativeHandle,
+  useRef,
+  useState,
+} from "react";
 import tippy, { type Instance as TippyInstance } from "tippy.js";
 import {
   Type,
@@ -25,6 +31,7 @@ interface CommandItem {
   description: string;
   icon: React.ElementType;
   command: (editor: any) => void;
+  group?: string;
 }
 
 const STATIC_COMMANDS: CommandItem[] = [
@@ -102,53 +109,78 @@ interface CommandListProps {
   command: (item: CommandItem) => void;
 }
 
-const CommandList = forwardRef<any, CommandListProps>(({ items, command }, ref) => {
-  const [selectedIndex, setSelectedIndex] = useState(0);
+const CommandList = forwardRef<any, CommandListProps>(
+  ({ items, command }, ref) => {
+    const [selectedIndex, setSelectedIndex] = useState(0);
+    const itemRefs = useRef<Array<HTMLButtonElement | null>>([]);
 
-  useEffect(() => setSelectedIndex(0), [items]);
+    useEffect(() => setSelectedIndex(0), [items]);
 
-  useImperativeHandle(ref, () => ({
-    onKeyDown({ event }: { event: KeyboardEvent }) {
-      if (event.key === "ArrowUp") {
-        setSelectedIndex((i) => (i + items.length - 1) % items.length);
-        return true;
-      }
-      if (event.key === "ArrowDown") {
-        setSelectedIndex((i) => (i + 1) % items.length);
-        return true;
-      }
-      if (event.key === "Enter") {
-        if (items[selectedIndex]) command(items[selectedIndex]);
-        return true;
-      }
-      return false;
-    },
-  }));
+    useEffect(() => {
+      itemRefs.current[selectedIndex]?.scrollIntoView({ block: "nearest" });
+    }, [selectedIndex]);
 
-  return (
-    <div className="bg-popover border border-border rounded-lg shadow-lg overflow-hidden p-1 z-50 w-56">
-      {items.length === 0 ? (
-        <div className="text-sm text-muted-foreground px-2 py-1.5">No results</div>
-      ) : (
-        items.map((item, index) => (
-          <button
-            key={item.title}
-            className={`flex w-full items-center gap-2 rounded px-2 py-1.5 text-sm text-left transition-colors ${
-              index === selectedIndex ? "bg-accent" : "hover:bg-accent/50"
-            }`}
-            onClick={() => command(item)}
-          >
-            <item.icon size={14} className="shrink-0 text-muted-foreground" />
-            <div>
-              <div className="font-medium leading-none">{item.title}</div>
-              <div className="text-xs text-muted-foreground mt-0.5">{item.description}</div>
-            </div>
-          </button>
-        ))
-      )}
-    </div>
-  );
-});
+    useImperativeHandle(ref, () => ({
+      onKeyDown({ event }: { event: KeyboardEvent }) {
+        if (event.key === "ArrowUp") {
+          setSelectedIndex((i) => (i + items.length - 1) % items.length);
+          return true;
+        }
+        if (event.key === "ArrowDown") {
+          setSelectedIndex((i) => (i + 1) % items.length);
+          return true;
+        }
+        if (event.key === "Enter") {
+          if (items[selectedIndex]) command(items[selectedIndex]);
+          return true;
+        }
+        return false;
+      },
+    }));
+
+    return (
+      <div className="bg-popover border-border z-50 max-h-[260px] w-56 overflow-y-auto rounded-lg border p-1 shadow-lg">
+        {items.length === 0 ? (
+          <div className="text-muted-foreground px-2 py-1.5 text-sm">
+            No results
+          </div>
+        ) : (
+          items.map((item, index) => {
+            const prevGroup = index > 0 ? items[index - 1].group : undefined;
+            const showHeader = item.group && item.group !== prevGroup;
+            return (
+              <React.Fragment key={`${item.group ?? "_"}-${item.title}`}>
+                {showHeader && (
+                  <div className="text-muted-foreground px-2 pb-1 pt-2 text-[10px] font-medium uppercase tracking-wide">
+                    {item.group}
+                  </div>
+                )}
+                <button
+                  ref={(el) => (itemRefs.current[index] = el)}
+                  className={`flex w-full items-center gap-2 rounded px-2 py-1.5 text-left text-sm transition-colors ${
+                    index === selectedIndex ? "bg-accent" : "hover:bg-accent/50"
+                  }`}
+                  onClick={() => command(item)}
+                >
+                  <item.icon
+                    size={14}
+                    className="text-muted-foreground shrink-0"
+                  />
+                  <div>
+                    <div className="font-medium leading-none">{item.title}</div>
+                    <div className="text-muted-foreground mt-0.5 text-xs">
+                      {item.description}
+                    </div>
+                  </div>
+                </button>
+              </React.Fragment>
+            );
+          })
+        )}
+      </div>
+    );
+  },
+);
 CommandList.displayName = "CommandList";
 
 function makeSuggestionRender() {
@@ -197,6 +229,7 @@ export const buildSlashCommand = (widgetOptions: WidgetOption[] = []) => {
     title: opt.widgetName,
     description: `${opt.integrationName} widget`,
     icon: Plug,
+    group: "Widgets",
     command: (editor: any) => {
       editor
         .chain()
@@ -241,6 +274,3 @@ export const buildSlashCommand = (widgetOptions: WidgetOption[] = []) => {
     },
   });
 };
-
-// Backward-compat export (no widgets)
-export const SlashCommand = buildSlashCommand([]);

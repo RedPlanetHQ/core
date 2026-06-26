@@ -1,15 +1,10 @@
-import { json } from "@remix-run/node";
-import type {
-  ActionFunctionArgs,
-  LoaderFunctionArgs,
-} from "@remix-run/server-runtime";
-import { useCallback, useMemo } from "react";
-import { useLoaderData, useFetcher, type MetaFunction } from "@remix-run/react";
+import type { LoaderFunctionArgs } from "@remix-run/server-runtime";
+import { useMemo } from "react";
+import { useLoaderData, type MetaFunction } from "@remix-run/react";
 import { typedjson } from "remix-typedjson";
 import { requireUser, requireWorkpace } from "~/services/session.server";
 import { ClientOnly } from "remix-utils/client-only";
 import { DailyPage } from "~/components/daily/daily-page.client";
-import { DailyWidgetPanel } from "~/components/daily/daily-widget-panel.client";
 import { PageHeader } from "~/components/common/page-header";
 import { generateCollabToken } from "~/services/collab-token.server";
 import {
@@ -21,18 +16,6 @@ import {
   getOrCreateWidgetPat,
 } from "~/services/widgets.server";
 import { WidgetContext } from "~/components/editor/extensions/widget-node-extension";
-import { useLocalCommonState } from "~/hooks/use-local-state";
-import { Prisma } from "@prisma/client";
-import { prisma } from "~/db.server";
-import type { OverviewCell } from "~/components/overview/types";
-import { LayoutGrid } from "lucide-react";
-import {
-  ResizablePanelGroup,
-  ResizablePanel,
-  ResizableHandle,
-} from "~/components/ui/resizable";
-
-const STORAGE_SIZE_KEY = "daily-widget-panel-size";
 
 export const meta: MetaFunction = () => [{ title: "Daily" }];
 
@@ -45,15 +28,6 @@ export const loader = async ({ request }: LoaderFunctionArgs) => {
   const todayUTC = todayUTCMidnightInTimezone(timezone);
 
   const workspaceId = workspace?.id ?? "";
-
-  const workspaceMeta = (workspace?.metadata ?? {}) as Record<string, unknown>;
-  // `null` distinguishes "never customized" (apply defaults client-side) from
-  // `[]` ("user removed everything"). Collapsing both into `[]` caused the
-  // default widgets to re-add themselves on every load.
-  const dailyWidgetCells =
-    "dailyWidgetLayout" in workspaceMeta
-      ? ((workspaceMeta.dailyWidgetLayout ?? []) as OverviewCell[])
-      : null;
 
   const [todayPage, widgetOptions, widgetPat] = await Promise.all([
     findOrCreateDailyPage(workspaceId, user.id, todayUTC),
@@ -70,38 +44,8 @@ export const loader = async ({ request }: LoaderFunctionArgs) => {
     widgetOptions,
     widgetPat,
     baseUrl: new URL(request.url).origin,
-    dailyWidgetCells,
   });
 };
-
-export async function action({ request }: ActionFunctionArgs) {
-  const workspace = await requireWorkpace(request);
-  if (!workspace) return json({ error: "No workspace" }, { status: 400 });
-
-  const formData = await request.formData();
-  const intent = formData.get("intent");
-
-  if (intent === "save-daily-widgets") {
-    const cells = JSON.parse(formData.get("cells") as string) as OverviewCell[];
-    const existing = await prisma.workspace.findFirst({
-      where: { id: workspace.id },
-      select: { metadata: true },
-    });
-    const existingMeta = (existing?.metadata ?? {}) as Record<string, unknown>;
-    await prisma.workspace.update({
-      where: { id: workspace.id },
-      data: {
-        metadata: {
-          ...existingMeta,
-          dailyWidgetLayout: cells,
-        } as unknown as Prisma.InputJsonValue,
-      },
-    });
-    return json({ ok: true });
-  }
-
-  return json({ error: "Unknown intent" }, { status: 400 });
-}
 
 export default function DailyRoute() {
   const {
@@ -113,26 +57,7 @@ export default function DailyRoute() {
     widgetOptions,
     widgetPat,
     baseUrl,
-    dailyWidgetCells,
   } = useLoaderData<typeof loader>() as any;
-
-  const fetcher = useFetcher();
-
-  const [panelOpen, setPanelOpen] = useLocalCommonState<boolean>(
-    "daily-widget-panel-open",
-    false,
-  );
-
-  const openWidgetPanel = useCallback(() => {
-    setPanelOpen(true);
-  }, [setPanelOpen]);
-
-  const handleSaveWidgets = (cells: OverviewCell[]) => {
-    fetcher.submit(
-      { intent: "save-daily-widgets", cells: JSON.stringify(cells) },
-      { method: "POST" },
-    );
-  };
 
   const widgetCtxValue = useMemo(
     () =>
@@ -145,82 +70,25 @@ export default function DailyRoute() {
 
   const page = (
     <div className="flex h-full flex-col overflow-hidden">
-      <PageHeader
-        title="Scratchpad"
-        actions={[
-          {
-            label: "Widgets",
-            icon: <LayoutGrid size={14} />,
-            onClick: panelOpen ? () => setPanelOpen(false) : openWidgetPanel,
-            variant: panelOpen ? "secondary" : "ghost",
-          },
-        ]}
-      />
+      <PageHeader title="Scratchpad" />
 
-      <ResizablePanelGroup
-        orientation="horizontal"
-        className="flex-1 overflow-hidden"
-      >
-        {/* Main daily content */}
-        <ResizablePanel minSize="40%">
-          <div className="flex h-full flex-col items-center overflow-y-auto p-2 pl-3 pr-0">
-            <ClientOnly
-              fallback={
-                <div className="text-muted-foreground p-6 text-sm">
-                  Loading…
-                </div>
-              }
-            >
-              {() => (
-                <DailyPage
-                  butlerName={butlerName}
-                  workspaceId={workspaceId}
-                  userId={userId}
-                  collabToken={collabToken}
-                  todayPage={todayPage}
-                />
-              )}
-            </ClientOnly>
-          </div>
-        </ResizablePanel>
-
-        {panelOpen && <ResizableHandle withHandle />}
-
-        {panelOpen && (
-          <ResizablePanel
-            defaultSize={`${Number(localStorage.getItem(STORAGE_SIZE_KEY)) || 35}%`}
-            minSize="25%"
-            collapsible
-            collapsedSize={0}
-            onResize={(size) => {
-              // react-resizable-panels v4 removed onCollapse; detect collapse
-              // by checking the resized size and route it through the same
-              // setPanelOpen path.
-              const percent =
-                typeof size === "object" && size !== null
-                  ? (size as { percentage?: number }).percentage ?? 0
-                  : Number(size);
-              if (percent === 0) {
-                setPanelOpen(false);
-                return;
-              }
-              localStorage.setItem(STORAGE_SIZE_KEY, String(percent));
-            }}
-          >
-            <ClientOnly fallback={null}>
-              {() => (
-                <DailyWidgetPanel
-                  initialCells={dailyWidgetCells}
-                  widgetOptions={widgetOptions ?? []}
-                  onSave={handleSaveWidgets}
-                  widgetPat={widgetPat}
-                  baseUrl={baseUrl}
-                />
-              )}
-            </ClientOnly>
-          </ResizablePanel>
-        )}
-      </ResizablePanelGroup>
+      <div className="flex h-full flex-1 flex-col items-center overflow-y-auto p-2 pl-3 pr-0">
+        <ClientOnly
+          fallback={
+            <div className="text-muted-foreground p-6 text-sm">Loading…</div>
+          }
+        >
+          {() => (
+            <DailyPage
+              butlerName={butlerName}
+              workspaceId={workspaceId}
+              userId={userId}
+              collabToken={collabToken}
+              todayPage={todayPage}
+            />
+          )}
+        </ClientOnly>
+      </div>
     </div>
   );
 
