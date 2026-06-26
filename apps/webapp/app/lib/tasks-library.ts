@@ -14,6 +14,7 @@ const LibraryTaskSchema = z.object({
   // RRule string in the user's local timezone, or absent for one-shot tasks.
   schedule: z.string().min(1).optional(),
   category: z.string().min(1),
+  silent: z.boolean().optional(),
 });
 
 const TasksFileSchema = z.object({
