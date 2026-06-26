@@ -481,14 +481,24 @@ export default function ScratchpadLauncher() {
       <style dangerouslySetInnerHTML={{ __html: GLOW_KEYFRAMES }} />
 
       {/* Ambient Siri-style corner glow — three primary-colored blobs
-          drifting under a heavy blur. Pure CSS, no JS animation loop. */}
+          drifting under a heavy blur. Pure CSS, no JS animation loop.
+          The radial-gradient mask fades the glow's edges into the
+          screen so it doesn't hard-cut against the NSPanel's right
+          and top bounds — the densest tint stays anchored at the
+          bottom-left corner. */}
       <div
         aria-hidden
         className={cn(
           "pointer-events-none absolute bottom-0 left-0 h-[260px] w-[260px] transition-opacity duration-500 ease-out",
           showGlow ? "opacity-100" : "opacity-0",
         )}
-        style={{ filter: "blur(22px)" }}
+        style={{
+          filter: "blur(22px)",
+          maskImage:
+            "radial-gradient(circle at 0% 100%, rgba(0,0,0,1) 0%, rgba(0,0,0,0.92) 35%, rgba(0,0,0,0.5) 65%, rgba(0,0,0,0.18) 85%, transparent 100%)",
+          WebkitMaskImage:
+            "radial-gradient(circle at 0% 100%, rgba(0,0,0,1) 0%, rgba(0,0,0,0.92) 35%, rgba(0,0,0,0.5) 65%, rgba(0,0,0,0.18) 85%, transparent 100%)",
+        }}
       >
         <div
           className="bg-primary absolute -bottom-12 -left-12 h-[180px] w-[180px] rounded-full"
@@ -513,10 +523,12 @@ export default function ScratchpadLauncher() {
         />
       </div>
 
-      {/* Launcher card */}
+      {/* Launcher card — sits 8px in from the corner so the card has
+          breathing room from the screen edge now that the panel
+          itself is positioned flush at bottom-left. */}
       <div
         className={cn(
-          "absolute bottom-0 left-0 transition-all duration-200 ease-out",
+          "absolute bottom-2 left-2 transition-all duration-200 ease-out",
           showCard
             ? "translate-y-0 opacity-100"
             : "pointer-events-none translate-y-2 opacity-0",

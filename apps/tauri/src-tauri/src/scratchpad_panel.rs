@@ -37,11 +37,13 @@ const PILL_W: f64 = 240.0;
 const PILL_H: f64 = 300.0;
 const HUD_W: f64 = 400.0;
 const HUD_H: f64 = 600.0;
-// Tight gap from the screen edge. The corner-trigger is already an
-// Apple-Hot-Corners-style hot zone, so the launcher itself can sit
-// flush — a thin gap reads as "anchored to the corner" instead of
-// "floating near it".
-const EDGE_INSET: f64 = 8.0;
+// Pill sits flush with the bottom-left of the visible screen so the
+// ambient blue glow can fade naturally into the screen corner rather
+// than getting hard-cut by the panel edge. The launcher card inside
+// adds its own visual inset (bottom-2 left-2) for breathing room.
+// The HUD keeps a small gap so its card doesn't kiss the screen edge.
+const PILL_EDGE_INSET: f64 = 0.0;
+const HUD_EDGE_INSET: f64 = 8.0;
 
 // Corner-trigger geometry — matches the Apple Hot Corners model:
 // the cursor has to *reach the actual screen corner* (within a few
@@ -200,7 +202,7 @@ fn hide_window<R: Runtime>(app: &AppHandle<R>, label: &str) {
 }
 
 pub fn pill_show<R: Runtime>(app: &AppHandle<R>) {
-    position_bottom_left::<R>(app, SCRATCHPAD_PILL_LABEL, PILL_H);
+    position_bottom_left::<R>(app, SCRATCHPAD_PILL_LABEL, PILL_H, PILL_EDGE_INSET);
     show_window(app, SCRATCHPAD_PILL_LABEL);
 }
 
@@ -209,7 +211,7 @@ pub fn pill_hide<R: Runtime>(app: &AppHandle<R>) {
 }
 
 pub fn hud_show<R: Runtime>(app: &AppHandle<R>) {
-    position_bottom_left::<R>(app, SCRATCHPAD_HUD_LABEL, HUD_H);
+    position_bottom_left::<R>(app, SCRATCHPAD_HUD_LABEL, HUD_H, HUD_EDGE_INSET);
     show_window(app, SCRATCHPAD_HUD_LABEL);
     // Tell the pill webview the HUD is up so it can suppress its glow
     // (no point hinting toward a corner already occupied by the HUD).
@@ -229,7 +231,12 @@ pub fn hud_hide<R: Runtime>(app: &AppHandle<R>) {
 
 // ── Positioning ───────────────────────────────────────────────────────────────
 
-fn position_bottom_left<R: Runtime>(app: &AppHandle<R>, label: &str, win_h: f64) {
+fn position_bottom_left<R: Runtime>(
+    app: &AppHandle<R>,
+    label: &str,
+    win_h: f64,
+    edge_inset: f64,
+) {
     let Some(window) = app.get_webview_window(label) else {
         return;
     };
@@ -237,8 +244,8 @@ fn position_bottom_left<R: Runtime>(app: &AppHandle<R>, label: &str, win_h: f64)
     // Tauri's LogicalPosition matches the convention used by
     // voice_panel / inbox_panel here: pass logical points derived from
     // the NSScreen frame directly.
-    let target_x = frame.x + EDGE_INSET;
-    let target_y = frame.y + frame.height - win_h - EDGE_INSET;
+    let target_x = frame.x + edge_inset;
+    let target_y = frame.y + frame.height - win_h - edge_inset;
     if let Err(e) = window.set_position(LogicalPosition::new(target_x, target_y)) {
         log::warn!("[scratchpad_panel] {label} set_position failed: {e}");
     }
@@ -247,12 +254,12 @@ fn position_bottom_left<R: Runtime>(app: &AppHandle<R>, label: &str, win_h: f64)
 pub fn reposition_for_active_screen<R: Runtime>(app: &AppHandle<R>) {
     if let Some(pill) = app.get_webview_window(SCRATCHPAD_PILL_LABEL) {
         if pill.is_visible().unwrap_or(false) {
-            position_bottom_left::<R>(app, SCRATCHPAD_PILL_LABEL, PILL_H);
+            position_bottom_left::<R>(app, SCRATCHPAD_PILL_LABEL, PILL_H, PILL_EDGE_INSET);
         }
     }
     if let Some(hud) = app.get_webview_window(SCRATCHPAD_HUD_LABEL) {
         if hud.is_visible().unwrap_or(false) {
-            position_bottom_left::<R>(app, SCRATCHPAD_HUD_LABEL, HUD_H);
+            position_bottom_left::<R>(app, SCRATCHPAD_HUD_LABEL, HUD_H, HUD_EDGE_INSET);
         }
     }
     // Width is fixed at creation in lib.rs; positioning helper takes
