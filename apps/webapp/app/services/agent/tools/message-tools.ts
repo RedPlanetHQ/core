@@ -54,7 +54,11 @@ export function getMessageTools(
   return {
     send_message: tool({
       description:
-        "Send a message to the user on their messaging channel. Use this to notify, update, or deliver results. Compose a natural, concise message — not a system notification.",
+        "Send a message to the user on their messaging channel. Use this to notify, update, or deliver results. " +
+        "Open with a one-line context anchor naming WHAT the message is about — task title, PR / branch, or topic — because this lands in a feed (Slack, WhatsApp, email) alongside many other notifications and the user has no prior context loaded. " +
+        'Format: first line "Re: <task / PR / topic>" (or natural equivalent like "On <task title>:"), then the actual update. ' +
+        'Do NOT open with the conclusion alone (e.g. "Fix is in and pushed") — the user can\'t tell which fix. ' +
+        "Compose a natural, concise message — not a system notification.",
       inputSchema: z.object({
         message: z.string().describe("The message to send to the user"),
         subject: z

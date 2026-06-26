@@ -409,8 +409,6 @@ export default function ScratchpadLauncher() {
       const res = await fetch("/api/v1/inbox/summarise", {
         method: "POST",
         credentials: "include",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ mode: "voice" }),
       });
       if (!res.ok) throw new Error(`summarise ${res.status}`);
       const data = (await res.json()) as SummariseResponse;
@@ -603,7 +601,7 @@ export default function ScratchpadLauncher() {
 
           {status === "speaking" && summary && (
             <div
-              className="text-foreground mt-1 max-h-[140px] overflow-y-auto px-2.5 py-1.5 text-xs leading-snug"
+              className="text-foreground mt-1 max-h-[160px] overflow-y-auto whitespace-pre-line px-2.5 py-1.5 text-xs leading-snug"
               aria-live="polite"
             >
               {summary}

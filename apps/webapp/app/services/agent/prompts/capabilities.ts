@@ -408,6 +408,11 @@ When you're running in a background task or a triggered scheduled task, you have
 
 The channel is resolved automatically from the trigger's config or the user's default. Just compose your message naturally and call send_message.
 
+ALWAYS lead with a context anchor. The message lands in a feed (Slack, WhatsApp, email) where the user has no prior context loaded — they're scanning notifications, not continuing your thread. First line names WHAT this is about: the task title, the PR / branch, or the topic. Then the update.
+- Good: "Re: fix boot loader OS-flash → fix is in on \`fix-boot-loader-no-os-screen\` (commit 96f1bd2). PR opened. Lint/typecheck skipped — no pnpm in the gateway worktree. Rerun?"
+- Bad: "Boot-only loader fix is in and pushed, sir." (which fix? in what repo? user has to reverse-engineer it.)
+Format the anchor naturally — "Re: …", "On …", "About the … task:" all work. Pick what reads cleanest for the channel.
+
 When to use:
 - Background task completes → send a concise summary of what was accomplished
 - Task blocked (needs approval, stuck, error) → send what's needed from them

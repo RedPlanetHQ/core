@@ -392,8 +392,6 @@ export default function InboxPill() {
       const res = await fetch("/api/v1/inbox/summarise", {
         method: "POST",
         credentials: "include",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ mode: "voice" }),
       });
       if (!res.ok) throw new Error(`summarise ${res.status}`);
       const data = (await res.json()) as SummariseResponse;
@@ -478,7 +476,7 @@ export default function InboxPill() {
 
       {status === "speaking" && summary && (
         <div
-          className="border-border bg-background-3 text-foreground max-h-[100px] max-w-[320px] overflow-y-auto rounded-lg border px-2.5 py-1.5 leading-snug shadow-md"
+          className="border-border bg-background-3 text-foreground max-h-[140px] max-w-[320px] overflow-y-auto whitespace-pre-line rounded-lg border px-2.5 py-1.5 leading-snug shadow-md"
           aria-live="polite"
         >
           {summary}
