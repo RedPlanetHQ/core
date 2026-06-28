@@ -12,7 +12,7 @@ import { buildAgentContext } from "./context";
 import { getMastra } from "./mastra";
 import { logger } from "~/services/logger.service";
 import {
-  getDefaultChatModelId,
+  resolveDefaultChatModelId,
   resolveModelConfig,
 } from "~/services/llm-provider.server";
 import {
@@ -159,7 +159,7 @@ export async function noStreamProcess(
     finalMessages = body.messages as any;
   }
 
-  const modelString = getDefaultChatModelId();
+  const modelString = await resolveDefaultChatModelId(workspaceId);
   const { modelConfig, isBYOK } = await resolveModelConfig(
     modelString,
     workspaceId,

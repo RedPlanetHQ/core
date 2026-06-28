@@ -10,7 +10,7 @@ import {
   clearActiveStreamId,
 } from "~/services/conversation.server";
 import {
-  getDefaultChatModelId,
+  resolveDefaultChatModelId,
   resolveModelConfig,
 } from "~/services/llm-provider.server";
 import { UserTypeEnum } from "@core/types";
@@ -305,7 +305,8 @@ const { loader, action } = createHybridActionApiRoute(
       conversationHistory.length === 0 && !isTaskConversation;
 
     const workspaceId = authentication.workspaceId as string;
-    const modelString = body.modelId ?? getDefaultChatModelId();
+    const modelString =
+      body.modelId ?? (await resolveDefaultChatModelId(workspaceId));
 
     const { modelConfig, isBYOK } = await resolveModelConfig(
       modelString,

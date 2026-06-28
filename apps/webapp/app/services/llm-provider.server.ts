@@ -1,6 +1,7 @@
 import { prisma } from "~/db.server";
 import { env } from "~/env.server";
 import { logger } from "~/services/logger.service";
+import { isBillingEnabled, isPaidPlan } from "~/config/billing.server";
 import seedData from "~/config/llm-models.json";
 
 // ---------------------------------------------------------------------------
@@ -265,18 +266,28 @@ export async function getEmbeddingDimensions(): Promise<number> {
  *   1. workspace.metadata.modelConfig[useCase].modelId  (explicit workspace override)
  *   2. LLMModel with env.CHAT_PROVIDER + complexity     (DB complexity routing)
  *   3. env.MODEL                                        (final fallback)
+ *
+ * Plan tiering: when billing is enabled, a workspace on a free plan is forced
+ * to the "low" complexity tier (step 2) regardless of the requested complexity.
+ * Explicit overrides (step 1) still win; paid plans and self-hosted instances
+ * (billing disabled) are unaffected.
  */
 export async function getModelForUseCase(
   useCase: UseCase,
   workspaceId: string | null | undefined,
   complexity: ModelComplexity = "medium",
 ): Promise<string> {
+  let effectiveComplexity = complexity;
+
   // 1. Workspace override — always check when workspace has explicit model config.
   // This ensures BYOK workspaces use their chosen model at every complexity tier.
   if (workspaceId) {
     const workspace = await prisma.workspace.findUnique({
       where: { id: workspaceId },
-      select: { metadata: true },
+      select: {
+        metadata: true,
+        Subscription: { select: { planType: true } },
+      },
     });
     const meta = (workspace?.metadata ?? {}) as Record<string, any>;
     const modelConfig = meta.modelConfig as
@@ -284,6 +295,18 @@ export async function getModelForUseCase(
       | undefined;
     const modelId = modelConfig?.[useCase]?.modelId;
     if (modelId) return modelId;
+
+    // Free plans are capped to the low tier. Explicit overrides above win;
+    // paid plans and self-hosted (billing disabled) keep the requested tier.
+    if (isBillingEnabled()) {
+      const planType = (workspace?.Subscription?.planType ?? "FREE") as
+        | "FREE"
+        | "PRO"
+        | "MAX";
+      if (!isPaidPlan(planType)) {
+        effectiveComplexity = "low";
+      }
+    }
   }
 
   // 2. DB complexity routing via env.CHAT_PROVIDER
@@ -294,7 +317,7 @@ export async function getModelForUseCase(
     const model = await prisma.lLMModel.findFirst({
       where: {
         providerId: provider.id,
-        complexity,
+        complexity: effectiveComplexity,
         capabilities: { has: "chat" },
         isEnabled: true,
         isDeprecated: false,
@@ -305,6 +328,32 @@ export async function getModelForUseCase(
 
   // 3. env fallback
   return env.MODEL;
+}
+
+/**
+ * Resolve the default chat model id for a workspace, applying plan tiering.
+ *
+ * The main conversational agent historically used env.MODEL for every plan.
+ * Paid plans, self-hosted (billing disabled), and call sites without a
+ * workspace keep that behavior. Free workspaces drop to a low-tier chat model,
+ * honoring an explicit modelConfig.chat override first (via getModelForUseCase).
+ */
+export async function resolveDefaultChatModelId(
+  workspaceId: string | null | undefined,
+): Promise<string> {
+  if (!workspaceId || !isBillingEnabled()) return env.MODEL;
+
+  const workspace = await prisma.workspace.findUnique({
+    where: { id: workspaceId },
+    select: { Subscription: { select: { planType: true } } },
+  });
+  const planType = (workspace?.Subscription?.planType ?? "FREE") as
+    | "FREE"
+    | "PRO"
+    | "MAX";
+  if (isPaidPlan(planType)) return env.MODEL;
+
+  return getModelForUseCase("chat", workspaceId, "low");
 }
 
 // ---------------------------------------------------------------------------
