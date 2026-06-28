@@ -27,7 +27,7 @@ import {
   clearActiveStreamId,
 } from "~/services/conversation.server";
 import {
-  getDefaultChatModelId,
+  resolveDefaultChatModelId,
   resolveModelConfig,
 } from "~/services/llm-provider.server";
 import { buildAgentContext } from "~/services/agent/context";
@@ -99,7 +99,8 @@ const { loader, action } = createHybridActionApiRoute(
       },
     );
 
-    const modelString = body.modelId ?? getDefaultChatModelId();
+    const modelString =
+      body.modelId ?? (await resolveDefaultChatModelId(workspaceId));
     const { modelConfig, isBYOK } = await resolveModelConfig(
       modelString,
       workspaceId,
