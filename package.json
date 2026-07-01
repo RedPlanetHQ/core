@@ -2,10 +2,6 @@
   "name": "core",
   "private": true,
   "version": "0.7.17",
-  "workspaces": [
-    "apps/*",
-    "packages/*"
-  ],
   "scripts": {
     "build": "dotenv -- turbo run build",
     "dev": "dotenv -- turbo run dev",
