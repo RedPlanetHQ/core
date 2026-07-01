@@ -40,6 +40,7 @@ export function parseEpisodicNode(raw: any): EpisodicNode {
     labelIds: raw.labelIds || [],
     userId: raw.userId,
     workspaceId: raw.workspaceId || undefined,
+    endUserId: raw.endUserId || undefined,
     sessionId: raw.sessionId,
     queueId: raw.queueId,
     type: raw.type,

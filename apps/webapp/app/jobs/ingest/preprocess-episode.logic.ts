@@ -419,6 +419,7 @@ export async function processEpisodePreprocessing(
           labelIds: chunk.labelIds || [],
           userId: payload.userId,
           workspaceId: payload.workspaceId,
+          endUserId: chunk.endUserId,
           sessionId: chunk.sessionId!,
           queueId: payload.queueId,
           type: chunk.type,

@@ -44,6 +44,7 @@ export interface VectorSearchFilter {
   userId?: string;       // Required for most namespaces (entity, statement, episode, compacted_session)
   workspaceId?: string;  // Required for label namespace
   labelIds?: string[];   // Optional: Filter by labels/spaces
+  endUserIds?: string[]; // Optional (episode namespace only): Filter by counterparty endUserId
   excludeIds?: string[]; // Optional: Exclude specific IDs from results
   sessionId?: string;    // Optional: Filter by session ID
   version?: number;      // Optional: Filter by version

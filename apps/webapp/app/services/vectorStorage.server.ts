@@ -264,6 +264,7 @@ export async function storeEpisodeEmbedding(
   sessionId?: string,
   version?: number,
   chunkIndex?: number,
+  endUserId?: string,
 ): Promise<void> {
   try {
     await vectorProvider().upsert({
@@ -280,6 +281,7 @@ export async function storeEpisodeEmbedding(
         version: version,
         chunkIndex,
         workspaceId,
+        endUserId,
       },
     });
   } catch (error) {

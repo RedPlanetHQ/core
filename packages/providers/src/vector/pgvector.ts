@@ -269,10 +269,11 @@ export class PgVectorProvider implements IVectorProvider {
       const sessionId = params.metadata?.sessionId;
       const version = params.metadata?.version;
       const chunkIndex = params.metadata?.chunkIndex;
+      const endUserId = params.metadata?.endUserId ?? null;
 
       await this.prisma.$executeRaw`
-        INSERT INTO ${Prisma.raw(tableName)} (id, "userId", "workspaceId", vector, metadata, ${Prisma.raw(`"${contentName}"`)}, "ingestionQueueId", "labelIds", "sessionId", "version", "chunkIndex", "createdAt", "updatedAt")
-        VALUES (${params.id}, ${userId}, ${workspaceId}, ${vectorString}::vector, ${metadataString}::jsonb, ${params.content}, ${ingestionQueueId}, ${labelIds}, ${sessionId}, ${version}, ${chunkIndex}, NOW(), NOW())
+        INSERT INTO ${Prisma.raw(tableName)} (id, "userId", "workspaceId", vector, metadata, ${Prisma.raw(`"${contentName}"`)}, "ingestionQueueId", "labelIds", "sessionId", "version", "chunkIndex", "endUserId", "createdAt", "updatedAt")
+        VALUES (${params.id}, ${userId}, ${workspaceId}, ${vectorString}::vector, ${metadataString}::jsonb, ${params.content}, ${ingestionQueueId}, ${labelIds}, ${sessionId}, ${version}, ${chunkIndex}, ${endUserId}, NOW(), NOW())
         ON CONFLICT (id) DO UPDATE
         SET vector = EXCLUDED.vector,
             ${Prisma.raw(`"${contentName}"`)} = EXCLUDED.${Prisma.raw(`"${contentName}"`)},
@@ -282,6 +283,7 @@ export class PgVectorProvider implements IVectorProvider {
             "sessionId" = EXCLUDED."sessionId",
             "version" = EXCLUDED."version",
             "chunkIndex" = EXCLUDED."chunkIndex",
+            "endUserId" = EXCLUDED."endUserId",
             "updatedAt" = NOW()
       `;
     } else if (params.namespace === "voice_aspect") {
@@ -392,7 +394,7 @@ export class PgVectorProvider implements IVectorProvider {
     const tableName = this.getTableName(params.namespace);
     const limit = params.limit || 10;
     const threshold = params.threshold || 0;
-    const { userId, labelIds, excludeIds, sessionId, version, workspaceId } = params.filter;
+    const { userId, labelIds, endUserIds, excludeIds, sessionId, version, workspaceId } = params.filter;
 
     // Use $queryRaw for vector similarity search
     // pgvector uses <=> for cosine distance
@@ -478,6 +480,13 @@ export class PgVectorProvider implements IVectorProvider {
 
     const versionCondition = version ? Prisma.sql`AND "version" = ${version}` : Prisma.empty;
 
+    // endUserId lives on episode_embeddings only. For other namespaces
+    // the column doesn't exist, so silently ignore the filter there.
+    const endUserIdsCondition =
+      params.namespace === "episode" && endUserIds && endUserIds.length > 0
+        ? Prisma.sql`AND "endUserId" IN (${Prisma.join(endUserIds.map((id) => Prisma.sql`${id}`))})`
+        : Prisma.empty;
+
     // const startTime = Date.now();
 
     // Now run the actual query
@@ -500,6 +509,7 @@ export class PgVectorProvider implements IVectorProvider {
           ${sessionIdCondition}
           ${versionCondition}
           ${workspaceIdCondition}
+          ${endUserIdsCondition}
         ORDER BY ${vectorCast} <=> ${vectorLiteral}
         LIMIT ${expandedLimit}
       )
