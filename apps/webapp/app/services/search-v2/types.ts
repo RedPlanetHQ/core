@@ -310,6 +310,11 @@ export interface SearchV2Options {
   // Label filters (if already known, skip vector search)
   labelIds?: string[];
 
+  // Counterparty filters — scope results to episodes tagged with these
+  // endUserId values (the human on the other side of the assistant —
+  // visitor, customer, contact). Empty / omitted → no scoping.
+  endUserIds?: string[];
+
   // Output format
   structured?: boolean; // true = RecallResult, false = markdown string
 

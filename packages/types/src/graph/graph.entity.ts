@@ -39,6 +39,11 @@ export interface EpisodicNode {
   userId: string;
   workspaceId?: string;
 
+  // Identifier for the human counterparty this episode is about
+  // (the "user" on the other side of the account owner — visitor,
+  // customer, contact). Optional; owner-only episodes leave it null.
+  endUserId?: string;
+
   // Grouping and chunking
   sessionId: string; // Required - groups chunks together (replaces documentId)
   queueId?: string; // Ingestion queue ID - useful for grouping chunks of same message/document ingestion
@@ -74,6 +79,7 @@ export const EPISODIC_NODE_PROPERTIES = `{
   createdAt: e.createdAt,
   userId: e.userId,
   workspaceId: e.workspaceId,
+  endUserId: e.endUserId,
   sessionId: e.sessionId,
   queueId: e.queueId,
   labelIds: e.labelIds,
@@ -308,6 +314,11 @@ export type AddEpisodeParams = {
   sessionId: string;
   queueId: string;
   type?: EpisodeType;
+
+  // Optional external identifier for the counterparty this episode is
+  // about (see EpisodicNode.endUserId). Stored on the Episode node and
+  // the EpisodeEmbedding row so search can scope by it.
+  endUserId?: string;
 
   // Chunking metadata
   chunkIndex?: number;

@@ -275,6 +275,9 @@ async function upsertDocumentFromCompaction(
   try {
     // Extract label IDs from first episode (if available)
     const labelIds = episodes[0]?.labelIds || [];
+    // Every episode in a compacted session shares the same counterparty,
+    // so grab endUserId from the first one and stamp it on the Document.
+    const endUserId = episodes[0]?.endUserId ?? null;
 
     // Get title using smart title generation
     const title = await getTitleForCompactedSession(
@@ -325,6 +328,7 @@ async function upsertDocumentFromCompaction(
         metadata,
         editedBy: userId,
         workspaceId,
+        endUserId,
       },
       update: {
         title,
@@ -332,6 +336,7 @@ async function upsertDocumentFromCompaction(
         content: summary,
         updatedAt: new Date(),
         metadata,
+        endUserId,
       },
     });
 

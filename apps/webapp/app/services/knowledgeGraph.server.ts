@@ -116,6 +116,7 @@ export class KnowledgeGraphService {
           labelIds: params.labelIds || [],
           userId: params.userId,
           workspaceId: params.workspaceId,
+          endUserId: params.endUserId,
           sessionId: params.sessionId,
           queueId: params.queueId,
           type: params.type,
@@ -269,6 +270,7 @@ export class KnowledgeGraphService {
         params.sessionId,
         params.version,
         params.chunkIndex,
+        params.endUserId,
       );
 
       const episodeUpdatedTime = Date.now();

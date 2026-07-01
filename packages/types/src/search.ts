@@ -15,6 +15,7 @@ export interface SearchOptions {
   scoreThreshold?: number;
   minResults?: number;
   labelIds?: string[]; // Filter results by specific spaces
+  endUserIds?: string[]; // Filter results by counterparty endUserId (episode.endUserId)
   adaptiveFiltering?: boolean;
   structured?: boolean; // Return structured JSON instead of markdown (default: false)
   useLLMValidation?: boolean; // Use LLM to validate episodes for borderline confidence cases (default: false)

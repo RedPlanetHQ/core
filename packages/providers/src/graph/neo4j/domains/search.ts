@@ -18,6 +18,7 @@ export interface BM25SearchParams {
   startTime?: Date;
   includeInvalidated: boolean;
   labelIds: string[];
+  endUserIds?: string[];
   statementLimit: number;
 }
 
@@ -36,6 +37,7 @@ export interface GetEpisodesForStatementsParams {
   startTime?: Date;
   includeInvalidated: boolean;
   labelIds: string[];
+  endUserIds?: string[];
 }
 
 export interface GetEpisodesForStatementsResult {
@@ -51,6 +53,7 @@ export interface GetEpisodesByIdsWithStatementsParams {
   startTime?: Date;
   includeInvalidated: boolean;
   labelIds: string[];
+  endUserIds?: string[];
 }
 
 export interface GetEpisodesByIdsWithStatementsResult {
@@ -102,6 +105,7 @@ export interface EpisodeGraphSearchParams {
   startTime?: Date;
   includeInvalidated: boolean;
   labelIds: string[];
+  endUserIds?: string[];
 }
 
 export interface EpisodeGraphSearchResult {
@@ -118,6 +122,7 @@ export interface FetchEpisodesByIdsParams {
   userId: string;
   workspaceId?: string;
   labelIds: string[];
+  endUserIds?: string[];
 }
 
 /**
@@ -148,14 +153,25 @@ export function createSearchMethods(core: Neo4jCore) {
       }
 
       // Build episode label filter condition
-      let episodeLabelCondition = "";
-      if (params.labelIds.length > 0) {
-        episodeLabelCondition = `
+      const episodeLabelCondition =
+        params.labelIds.length > 0
+          ? `
           AND e.labelIds IS NOT NULL
           AND size(e.labelIds) > 0
           AND ANY(labelId IN $labelIds WHERE labelId IN e.labelIds)
-        `;
-      }
+        `
+          : "";
+
+      // Build episode endUser filter condition
+      const episodeEndUserCondition =
+        params.endUserIds && params.endUserIds.length > 0
+          ? `
+          AND e.endUserId IS NOT NULL
+          AND e.endUserId IN $endUserIds
+        `
+          : "";
+
+      const combinedEpisodeConditions = `${episodeLabelCondition}${episodeEndUserCondition}`;
 
       const cypher = `
         // BM25 fulltext search on statements
@@ -171,7 +187,7 @@ export function createSearchMethods(core: Neo4jCore) {
 
         // Find episodes containing these statements
         MATCH (s)<-[:HAS_PROVENANCE]-(e:Episode {userId: $userId${wsFilter}})
-        ${episodeLabelCondition ? "WHERE " + episodeLabelCondition.replace("AND ", "") : ""}
+        ${combinedEpisodeConditions ? "WHERE " + combinedEpisodeConditions.trim().replace(/^AND\s+/, "") : ""}
 
         // Aggregate scores per episode
         WITH e,
@@ -195,6 +211,7 @@ export function createSearchMethods(core: Neo4jCore) {
         validAt: params.validAt.toISOString(),
         ...(params.startTime && { startTime: params.startTime.toISOString() }),
         ...(params.labelIds.length > 0 && { labelIds: params.labelIds }),
+        ...(params.endUserIds && params.endUserIds.length > 0 && { endUserIds: params.endUserIds }),
       };
 
       const records = await core.runQuery(cypher, cypherParams);
@@ -238,14 +255,25 @@ export function createSearchMethods(core: Neo4jCore) {
       }
 
       // Build episode label filter condition
-      let episodeLabelCondition = "";
-      if (params.labelIds.length > 0) {
-        episodeLabelCondition = `
+      const episodeLabelCondition =
+        params.labelIds.length > 0
+          ? `
           AND e.labelIds IS NOT NULL
           AND size(e.labelIds) > 0
           AND ANY(labelId IN $labelIds WHERE labelId IN e.labelIds)
-        `;
-      }
+        `
+          : "";
+
+      // Build episode endUser filter condition
+      const episodeEndUserCondition =
+        params.endUserIds && params.endUserIds.length > 0
+          ? `
+          AND e.endUserId IS NOT NULL
+          AND e.endUserId IN $endUserIds
+        `
+          : "";
+
+      const combinedEpisodeConditions = `${episodeLabelCondition}${episodeEndUserCondition}`;
 
       const cypher = `
         // Use IN for efficient index lookup of statements
@@ -255,7 +283,7 @@ export function createSearchMethods(core: Neo4jCore) {
 
         // Find episodes containing these statements
         MATCH (s)<-[:HAS_PROVENANCE]-(e:Episode {userId: $userId${wsFilter}})
-        ${episodeLabelCondition ? "WHERE " + episodeLabelCondition.replace("AND ", "") : ""}
+        ${combinedEpisodeConditions ? "WHERE " + combinedEpisodeConditions.trim().replace(/^AND\s+/, "") : ""}
 
         // Group by episode with distinct statements
         WITH e, COLLECT(DISTINCT ${STATEMENT_NODE_PROPERTIES}) as statements
@@ -269,6 +297,7 @@ export function createSearchMethods(core: Neo4jCore) {
         validAt: params.validAt.toISOString(),
         ...(params.startTime && { startTime: params.startTime.toISOString() }),
         ...(params.labelIds.length > 0 && { labelIds: params.labelIds }),
+        ...(params.endUserIds && params.endUserIds.length > 0 && { endUserIds: params.endUserIds }),
       };
 
       const records = await core.runQuery(cypher, cypherParams);
@@ -294,14 +323,23 @@ export function createSearchMethods(core: Neo4jCore) {
       const wsFilter = params.workspaceId ? ", workspaceId: $workspaceId" : "";
 
       // Build episode label filter condition
-      let episodeLabelCondition = "";
-      if (params.labelIds.length > 0) {
-        episodeLabelCondition = `
+      const episodeLabelCondition =
+        params.labelIds.length > 0
+          ? `
           AND ep.labelIds IS NOT NULL
           AND size(ep.labelIds) > 0
           AND ANY(labelId IN $labelIds WHERE labelId IN ep.labelIds)
-        `;
-      }
+        `
+          : "";
+
+      // Build episode endUser filter condition
+      const episodeEndUserCondition =
+        params.endUserIds && params.endUserIds.length > 0
+          ? `
+          AND ep.endUserId IS NOT NULL
+          AND ep.endUserId IN $endUserIds
+        `
+          : "";
 
       // Build timeframe condition for episodes
       let episodeTimeframeCondition = `
@@ -314,7 +352,7 @@ export function createSearchMethods(core: Neo4jCore) {
       const cypher = `
         MATCH (ep:Episode {userId: $userId${wsFilter}})
         WHERE ep.uuid IN $episodeUuids
-          ${episodeTimeframeCondition} ${episodeLabelCondition}
+          ${episodeTimeframeCondition} ${episodeLabelCondition} ${episodeEndUserCondition}
 
         // Get statements from matching episodes
         MATCH (ep)-[:HAS_PROVENANCE]->(s:Statement {userId: $userId${wsFilter}})
@@ -334,6 +372,7 @@ export function createSearchMethods(core: Neo4jCore) {
         validAt: params.validAt.toISOString(),
         ...(params.startTime && { startTime: params.startTime.toISOString() }),
         ...(params.labelIds.length > 0 && { labelIds: params.labelIds }),
+        ...(params.endUserIds && params.endUserIds.length > 0 && { endUserIds: params.endUserIds }),
       };
 
       const records = await core.runQuery(cypher, cypherParams);
@@ -469,14 +508,23 @@ export function createSearchMethods(core: Neo4jCore) {
       }
 
       // Build episode label filter condition
-      let episodeLabelCondition = "";
-      if (params.labelIds.length > 0) {
-        episodeLabelCondition = `
+      const episodeLabelCondition =
+        params.labelIds.length > 0
+          ? `
           AND ep.labelIds IS NOT NULL
           AND size(ep.labelIds) > 0
           AND ANY(labelId IN $labelIds WHERE labelId IN ep.labelIds)
-        `;
-      }
+        `
+          : "";
+
+      // Build episode endUser filter condition
+      const episodeEndUserCondition =
+        params.endUserIds && params.endUserIds.length > 0
+          ? `
+          AND ep.endUserId IS NOT NULL
+          AND ep.endUserId IN $endUserIds
+        `
+          : "";
 
       const cypher = `
         // Find statements connected to query entities (deduplicate early)
@@ -487,7 +535,7 @@ export function createSearchMethods(core: Neo4jCore) {
 
         // Find episodes containing these statements
         MATCH (s)<-[:HAS_PROVENANCE]-(ep:Episode)
-        WHERE true ${episodeLabelCondition}
+        WHERE true ${episodeLabelCondition} ${episodeEndUserCondition}
 
         // Get total statement count efficiently (count instead of collecting all)
         OPTIONAL MATCH (ep)-[:HAS_PROVENANCE]->(allStmt:Statement{userId: $userId${wsFilter}})
@@ -530,6 +578,7 @@ export function createSearchMethods(core: Neo4jCore) {
         validAt: params.validAt.toISOString(),
         ...(params.startTime && { startTime: params.startTime.toISOString() }),
         ...(params.labelIds.length > 0 && { labelIds: params.labelIds }),
+        ...(params.endUserIds && params.endUserIds.length > 0 && { endUserIds: params.endUserIds }),
       };
 
       const records = await core.runQuery(cypher, cypherParams);
@@ -560,19 +609,29 @@ export function createSearchMethods(core: Neo4jCore) {
       const wsFilter = params.workspaceId ? ", workspaceId: $workspaceId" : "";
 
       // Build episode label filter condition
-      let episodeLabelCondition = "";
-      if (params.labelIds.length > 0) {
-        episodeLabelCondition = `
+      const episodeLabelCondition =
+        params.labelIds.length > 0
+          ? `
           AND e.labelIds IS NOT NULL
           AND size(e.labelIds) > 0
           AND ANY(labelId IN $labelIds WHERE labelId IN e.labelIds)
-        `;
-      }
+        `
+          : "";
+
+      // Build episode endUser filter condition
+      const episodeEndUserCondition =
+        params.endUserIds && params.endUserIds.length > 0
+          ? `
+          AND e.endUserId IS NOT NULL
+          AND e.endUserId IN $endUserIds
+        `
+          : "";
 
       const cypher = `
         MATCH (e:Episode{userId: $userId${wsFilter}})
         WHERE e.uuid IN $episodeIds
           ${episodeLabelCondition}
+          ${episodeEndUserCondition}
         RETURN ${EPISODIC_NODE_PROPERTIES} as episode
       `;
 
@@ -581,6 +640,7 @@ export function createSearchMethods(core: Neo4jCore) {
         userId: params.userId,
         ...(params.workspaceId && { workspaceId: params.workspaceId }),
         ...(params.labelIds.length > 0 && { labelIds: params.labelIds }),
+        ...(params.endUserIds && params.endUserIds.length > 0 && { endUserIds: params.endUserIds }),
       });
 
       return records.map((record) => parseEpisodicNode(record.get("episode")));

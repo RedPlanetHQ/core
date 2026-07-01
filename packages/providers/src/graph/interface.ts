@@ -658,6 +658,7 @@ export interface IGraphProvider {
     startTime?: Date;
     includeInvalidated: boolean;
     labelIds: string[];
+    endUserIds?: string[];
   }): Promise<
     Array<{
       episode: EpisodicNode;
@@ -677,6 +678,7 @@ export interface IGraphProvider {
     startTime?: Date;
     includeInvalidated: boolean;
     labelIds: string[];
+    endUserIds?: string[];
   }): Promise<
     Array<{
       episode: EpisodicNode;
@@ -695,6 +697,7 @@ export interface IGraphProvider {
     startTime?: Date;
     includeInvalidated: boolean;
     labelIds: string[];
+    endUserIds?: string[];
     statementLimit: number;
   }): Promise<
     Array<{
@@ -753,6 +756,7 @@ export interface IGraphProvider {
     startTime?: Date;
     includeInvalidated: boolean;
     labelIds: string[];
+    endUserIds?: string[];
   }): Promise<
     Array<{
       episode: EpisodicNode;
@@ -772,6 +776,7 @@ export interface IGraphProvider {
     userId: string;
     workspaceId: string;
     labelIds: string[];
+    endUserIds?: string[];
   }): Promise<EpisodicNode[]>;
 
   getClusteredGraphData(
@@ -790,6 +795,7 @@ export interface IGraphProvider {
     userId: string;
     workspaceId: string;
     labelIds: string[];
+    endUserIds?: string[];
     aspects: string[];
     temporalStart?: Date;
     temporalEnd?: Date;
@@ -804,6 +810,7 @@ export interface IGraphProvider {
     entityUuids: string[];
     userId: string;
     workspaceId: string;
+    endUserIds?: string[];
     maxEpisodes: number;
     aspects?: string[];
   }): Promise<EpisodicNode[]>;
@@ -815,6 +822,7 @@ export interface IGraphProvider {
   getTopicsForFacets(params: {
     userId: string;
     workspaceId?: string;
+    endUserIds?: string[];
     startTime: Date;
     endTime?: Date;
     limit?: number;
@@ -827,6 +835,7 @@ export interface IGraphProvider {
   getEntitiesForFacets(params: {
     userId: string;
     workspaceId?: string;
+    endUserIds?: string[];
     startTime: Date;
     endTime?: Date;
     limit?: number;
@@ -839,6 +848,7 @@ export interface IGraphProvider {
   getAspectsForFacets(params: {
     userId: string;
     workspaceId?: string;
+    endUserIds?: string[];
     startTime: Date;
     endTime?: Date;
     aspects?: string[];
@@ -858,6 +868,7 @@ export interface IGraphProvider {
     userId: string;
     workspaceId: string;
     labelIds: string[];
+    endUserIds?: string[];
     aspects: string[];
     startTime: Date;
     endTime?: Date;
@@ -871,6 +882,7 @@ export interface IGraphProvider {
   getStatementsConnectingEntities(params: {
     userId: string;
     workspaceId: string;
+    endUserIds?: string[];
     entityUuids: string[];
     maxStatements: number;
   }): Promise<StatementNode[]>;

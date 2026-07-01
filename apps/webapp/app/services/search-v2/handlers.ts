@@ -198,6 +198,7 @@ async function getEpisodesViaEntityHints(
     entityUuids: uniqueUuids,
     userId: ctx.userId,
     workspaceId: ctx.workspaceId,
+    endUserIds: ctx.options.endUserIds,
     maxEpisodes,
   });
 }
@@ -231,7 +232,7 @@ async function getEpisodesViaVectorSearch(
     vector: queryEmbedding,
     namespace: VECTOR_NAMESPACES.EPISODE,
     limit: maxEpisodes,
-    filter: { userId: ctx.userId },
+    filter: { userId: ctx.userId, endUserIds: ctx.options.endUserIds },
     threshold: 0.3,
   });
 
@@ -272,6 +273,7 @@ export async function handleAspectQuery(
       userId: ctx.userId,
       workspaceId: ctx.workspaceId,
       labelIds,
+      endUserIds: ctx.options.endUserIds,
       aspects,
       temporalStart,
       temporalEnd,
@@ -458,6 +460,7 @@ export async function handleEntityLookup(
     entityUuids,
     userId: ctx.userId,
     workspaceId: ctx.workspaceId,
+    endUserIds: ctx.options.endUserIds,
     maxEpisodes,
     aspects,
   });
@@ -501,6 +504,7 @@ export async function handleTemporal(
       userId: ctx.userId,
       workspaceId: ctx.workspaceId,
       labelIds,
+      endUserIds: ctx.options.endUserIds,
       aspects: ctx.routerOutput.aspects,
       startTime: effectiveStart,
       endTime: temporalEnd,
@@ -564,6 +568,8 @@ export async function handleExploratory(
     `[Handler:exploratory] Labels: [${labelIds.join(", ")}], MaxSessions: ${maxSessions}`,
   );
 
+  const endUserIds = ctx.options.endUserIds;
+
   // Label path: query Document table directly — one compacted row per session, no grouping needed
   const labelSessionsPromise = prisma.document.findMany({
     where: {
@@ -571,6 +577,9 @@ export async function handleExploratory(
       type: "conversation",
       deleted: null,
       ...(labelIds.length > 0 ? { labelIds: { hasSome: labelIds } } : {}),
+      ...(endUserIds && endUserIds.length > 0
+        ? { endUserId: { in: endUserIds } }
+        : {}),
     },
     orderBy: { updatedAt: "desc" },
     take: maxSessions,
@@ -682,6 +691,7 @@ export async function handleRelationship(
   const statements = await graphProvider.getStatementsConnectingEntities({
     userId: ctx.userId,
     workspaceId: ctx.workspaceId,
+    endUserIds: ctx.options.endUserIds,
     entityUuids,
     maxStatements: limit,
   });
@@ -901,13 +911,20 @@ async function replaceWithCompacts(
     `[replaceWithCompacts] Found ${sessionGroups.size} sessions to check for compacts`,
   );
 
-  // Fetch compacted session documents from Document table
+  // Fetch compacted session documents from Document table. If the caller
+  // scoped the search by endUserIds, honor that when pulling compacts —
+  // otherwise a compact stamped with a different counterparty could
+  // sneak in for a session whose episodes matched the filter upstream.
+  const endUserIds = ctx.options.endUserIds;
   const compactDocs = await prisma.document.findMany({
     where: {
       sessionId: { in: Array.from(sessionGroups.keys()) },
       workspaceId: ctx.workspaceId,
       type: "conversation", // Compacted sessions have type "conversation"
       deleted: null,
+      ...(endUserIds && endUserIds.length > 0
+        ? { endUserId: { in: endUserIds } }
+        : {}),
     },
   });
 
@@ -1102,6 +1119,7 @@ async function getBroadRecallBackstopEpisodes(
         useLLMValidation: false,
         skipRecallLog: true,
         tokenBudget: ctx.options.tokenBudget,
+        endUserIds: ctx.options.endUserIds,
       },
       source,
     );
@@ -1208,6 +1226,7 @@ export async function handleTemporalFacets(
         ? graphProvider.getTopicsForFacets({
             userId: ctx.userId,
             workspaceId: ctx.workspaceId,
+            endUserIds: ctx.options.endUserIds,
             startTime: effectiveStart,
             endTime: temporalEnd,
           })
@@ -1216,6 +1235,7 @@ export async function handleTemporalFacets(
         ? graphProvider.getEntitiesForFacets({
             userId: ctx.userId,
             workspaceId: ctx.workspaceId,
+            endUserIds: ctx.options.endUserIds,
             startTime: effectiveStart,
             endTime: temporalEnd,
           })
@@ -1224,6 +1244,7 @@ export async function handleTemporalFacets(
         ? graphProvider.getAspectsForFacets({
             userId: ctx.userId,
             workspaceId: ctx.workspaceId,
+            endUserIds: ctx.options.endUserIds,
             startTime: effectiveStart,
             endTime: temporalEnd,
             aspects:
@@ -1286,6 +1307,9 @@ export async function handleTemporalFacets(
         deleted: null,
         updatedAt: { gte: effectiveStart },
         labelIds: { hasSome: topLabelIds },
+        ...(ctx.options.endUserIds && ctx.options.endUserIds.length > 0
+          ? { endUserId: { in: ctx.options.endUserIds } }
+          : {}),
       },
       select: { labelIds: true, content: true, updatedAt: true },
       orderBy: { updatedAt: "desc" },
