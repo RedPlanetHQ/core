@@ -166,6 +166,11 @@ model Document {
   contentHash String?
   chunkHashes String[]
 
+  // External identifier for the counterparty this compacted session is
+  // about (mirrors EpisodicNode.endUserId — inherited from the session's
+  // episodes at compaction time). Nullable; indexed for search filtering.
+  endUserId String?
+
   editedBy    String
   workspaceId String
   workspace   Workspace @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
@@ -173,6 +178,7 @@ model Document {
   @@unique([sessionId, workspaceId])
   @@index([workspaceId])
   @@index([sessionId, workspaceId])
+  @@index([workspaceId, endUserId])
 }
 
 model EntityEmbedding {
@@ -225,6 +231,11 @@ model EpisodeEmbedding {
   chunkHash       String?
   version         Int?
 
+  // External identifier for the counterparty this episode is about
+  // (e.g. a visitor, customer, or contact). Nullable — owner-only
+  // episodes leave it null. Indexed so search can filter by it.
+  endUserId String?
+
   ingestionQueueId String
   ingestionQueue   IngestionQueue @relation(fields: [ingestionQueueId], references: [id], onDelete: Cascade)
 
@@ -238,6 +249,7 @@ model EpisodeEmbedding {
   @@index([userId, workspaceId, labelIds])
   @@index([userId, workspaceId, sessionId])
   @@index([userId, workspaceId, sessionId, version])
+  @@index([userId, workspaceId, endUserId])
   @@map("episode_embeddings")
 }
 

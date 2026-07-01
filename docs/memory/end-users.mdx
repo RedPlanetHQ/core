@@ -1,0 +1,76 @@
+---
+title: "End users"
+description: "Per-episode counterparty identifier for filtering memory by the person on the other side of the assistant"
+---
+
+## What `endUserId` is
+
+`endUserId` is an optional identifier attached to an episode at ingestion time. It names the human on the OTHER side of the account owner — the visitor, customer, contact, or student that the episode is *about* — as distinct from `userId`, which identifies the workspace user whose memory this is.
+
+The concept mirrors the OpenAI Chat Completions `user` field and Anthropic Messages `metadata.user_id`: same idea, applied to memory graph scoping.
+
+## When to set it
+
+Set `endUserId` on ingest whenever the episode's counterparty matters for later recall. Typical use cases:
+
+- **Assistants with visitors**: an AI NPC in a town, a support agent handling a customer chat, a coaching bot working with a client. Stamp each ingested turn with the visitor / customer / client identifier so future searches can scope to "conversations with Alice" without pulling in owner-only or other-visitor memory.
+- **CRM-style workflows**: episodes derived from calls, emails, or meeting notes with a specific contact — stamp with the contact identifier.
+- **Multi-tenant assistants**: when one workspace owner runs conversations on behalf of many end users, keep each user's context separated.
+
+Leave `endUserId` unset for episodes that are purely about the workspace owner (personal notes, self-reflection, integration-sourced facts about the owner).
+
+## Ingesting with `endUserId`
+
+Pass `endUserId` alongside `episodeBody` to `POST /api/v1/add`:
+
+```json
+{
+  "episodeBody": "user: what did we discuss last time?\nassistant: ...",
+  "referenceTime": "2026-07-01T10:00:00Z",
+  "source": "town:npc-chat",
+  "type": "CONVERSATION",
+  "endUserId": "visitor:alice-abc123"
+}
+```
+
+The value is stored:
+
+- On the Neo4j `Episode` node as `e.endUserId`.
+- On the Postgres `episode_embeddings` row as an indexed column (`(userId, workspaceId, endUserId)`).
+
+You do not need to pre-register end users anywhere; any string works. Use whatever stable identifier you already have for the counterparty in your application (a user id, an email, a phone number, a `<type>:<id>` composite — your call).
+
+## Filtering search by `endUserId`
+
+Both `/api/v1/search` and `/api/v2/search` accept an optional `endUserIds` array:
+
+```json
+{
+  "query": "what does Alice remember about the wedding planning?",
+  "endUserIds": ["visitor:alice-abc123"]
+}
+```
+
+Semantics:
+
+- Omitted / empty → no counterparty scoping (default). Results include episodes with any `endUserId` and episodes with none.
+- Non-empty → episodes are hard-filtered to those whose `endUserId` matches one of the values in the array. Episodes with `endUserId = NULL` are excluded when a filter is set.
+- Multiple values OR together — pass `["visitor:alice", "visitor:bob"]` to search across two counterparties at once.
+
+The filter is applied at both the vector layer (pgvector WHERE clause on `episode_embeddings`) and the graph layer (Cypher WHERE clause on `Episode.endUserId`), so candidate sets stay tight throughout the pipeline.
+
+## Interaction with labels and sessions
+
+`endUserId` is orthogonal to `labelIds` and `sessionId`:
+
+- `labelIds` groups episodes by topic (workspace-scoped, finite, semantic).
+- `sessionId` groups chunks of one conversation (drives compaction).
+- `endUserId` scopes episodes by *who* the counterparty is (unbounded, per-person identity).
+
+They compose. You can pass `labelIds` and `endUserIds` on the same search to get "episodes about Project Atlas *with* Alice."
+
+## Related
+
+- [Labels](/memory/labels)
+- [Memory reference](/memory/reference)
+- [How CORE searches](/memory/how-core-searches)

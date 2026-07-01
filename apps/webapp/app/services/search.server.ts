@@ -83,6 +83,7 @@ export class SearchService {
       scoreThreshold: options.scoreThreshold || 0.7,
       minResults: options.minResults || 10,
       labelIds: options.labelIds || [],
+      endUserIds: options.endUserIds || [],
       adaptiveFiltering: options.adaptiveFiltering || false,
       structured: options.structured || false,
       useLLMValidation: options.useLLMValidation ?? true,
@@ -659,7 +660,14 @@ export class SearchService {
       }
     });
 
-    // Fetch session compacts
+    // Fetch session compacts.
+    //
+    // endUserId note: the sessionIds we look up here come from episodes
+    // that already passed the caller's endUserIds filter (applied at the
+    // searcher / graph-provider layer). endUserId is stamped once at
+    // ingest and is stable per sessionId (one session = one conversation
+    // with one counterparty), so the compact for that session was built
+    // from episodes with the same endUserId. No secondary filter needed.
     const compactMap = new Map<string, any>();
     await Promise.all(
       Array.from(sessionGroups.keys()).map(async (sessionId) => {

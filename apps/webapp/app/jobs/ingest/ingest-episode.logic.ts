@@ -16,6 +16,10 @@ export const IngestBodyRequest = z.object({
     .optional(),
   source: z.string(),
   labelIds: z.array(z.string()).optional(),
+  // Optional external identifier for the counterparty this episode is
+  // about (e.g. a visitor, customer, or contact). Stored on the Episode
+  // node so /api/v1/search can filter by endUserIds later.
+  endUserId: z.string().optional(),
   sessionId: z.string().optional(),
   type: z
     .enum([EpisodeType.CONVERSATION, EpisodeType.DOCUMENT])

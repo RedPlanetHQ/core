@@ -263,6 +263,9 @@ interface SearchMemoryOptions {
   endTime?: Date;
   limit?: number;
   labelIds?: string[];
+  // Scope results to episodes tagged with these endUserId values
+  // (the counterparty this episode is about). See EpisodicNode.endUserId.
+  endUserIds?: string[];
   structured?: boolean;
   sortBy?: "relevance" | "recency";
   fallbackThreshold?: number;
@@ -311,6 +314,7 @@ export async function searchMemoryWithAgent(
       startTime: options.startTime,
       endTime: options.endTime,
       labelIds: options.labelIds,
+      endUserIds: options.endUserIds,
       sortBy: options.sortBy,
       fallbackThreshold: options.fallbackThreshold,
     });

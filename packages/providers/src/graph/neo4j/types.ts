@@ -49,6 +49,7 @@ export const EPISODIC_NODE_PROPERTIES = `{
   createdAt: e.createdAt,
   userId: e.userId,
   workspaceId: e.workspaceId,
+  endUserId: e.endUserId,
   sessionId: e.sessionId,
   queueId: e.queueId,
   labelIds: e.labelIds,

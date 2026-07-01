@@ -18,18 +18,24 @@ export function createSearchV2Methods(core: Neo4jCore) {
       userId: string;
       workspaceId?: string;
       labelIds: string[];
+      endUserIds?: string[];
       aspects: string[];
       temporalStart?: Date;
       temporalEnd?: Date;
       maxEpisodes: number;
     }): Promise<EpisodicNode[]> {
       const wsFilter = params.workspaceId ? ", workspaceId: $workspaceId" : "";
+      const endUserFilter =
+        params.endUserIds && params.endUserIds.length > 0
+          ? "AND e.endUserId IS NOT NULL AND e.endUserId IN $endUserIds"
+          : "";
 
       // s.validAt and s.invalidAt are stored as ISO strings — use string comparison
       const query = `
                 MATCH (e:Episode{userId: $userId${wsFilter}})-[:HAS_PROVENANCE]->(s:Statement)
                 WHERE TRUE
                 ${params.labelIds.length > 0 ? "AND ANY(lid IN e.labelIds WHERE lid IN $labelIds)" : ""}
+                ${endUserFilter}
                 ${params.aspects.length > 0 ? "AND s.aspect IN $aspects" : ""}
                 AND (s.invalidAt IS NULL OR s.invalidAt > $now)
                 ${
@@ -61,6 +67,7 @@ export function createSearchV2Methods(core: Neo4jCore) {
         now: new Date().toISOString(),
         startTime: params.temporalStart?.toISOString() || null,
         endTime: params.temporalEnd?.toISOString() || null,
+        ...(params.endUserIds && params.endUserIds.length > 0 && { endUserIds: params.endUserIds }),
       };
 
       const results = await core.runQuery(query, queryParams);
@@ -75,12 +82,17 @@ export function createSearchV2Methods(core: Neo4jCore) {
       entityUuids: string[];
       userId: string;
       workspaceId?: string;
+      endUserIds?: string[];
       maxEpisodes: number;
       aspects?: string[];
     }): Promise<EpisodicNode[]> {
       const wsFilter = params.workspaceId ? ", workspaceId: $workspaceId" : "";
       const aspectFilter =
         params.aspects && params.aspects.length > 0 ? "AND s1.aspect IN $aspects" : "";
+      const endUserFilter =
+        params.endUserIds && params.endUserIds.length > 0
+          ? "WHERE e.endUserId IS NOT NULL AND e.endUserId IN $endUserIds"
+          : "";
 
       const query = `
                 UNWIND $entityUuids as entityUuid
@@ -95,6 +107,7 @@ export function createSearchV2Methods(core: Neo4jCore) {
                 WHERE s IS NOT NULL
 
                 MATCH (e:Episode{userId: $userId${wsFilter}})-[:HAS_PROVENANCE]->(s)
+                ${endUserFilter}
                 MATCH (s)-[:HAS_SUBJECT]->(sub:Entity)
                 MATCH (s)-[:HAS_PREDICATE]->(pred:Entity)
                 MATCH (s)-[:HAS_OBJECT]->(obj:Entity)
@@ -112,6 +125,7 @@ export function createSearchV2Methods(core: Neo4jCore) {
         ...(params.workspaceId && { workspaceId: params.workspaceId }),
         now: new Date().toISOString(),
         ...(params.aspects && params.aspects.length > 0 && { aspects: params.aspects }),
+        ...(params.endUserIds && params.endUserIds.length > 0 && { endUserIds: params.endUserIds }),
       });
 
       return results.map((r) => r.get("episode")).filter((ep: any) => ep != null);
@@ -125,12 +139,17 @@ export function createSearchV2Methods(core: Neo4jCore) {
       userId: string;
       workspaceId?: string;
       labelIds: string[];
+      endUserIds?: string[];
       aspects: string[];
       startTime: Date;
       endTime?: Date;
       maxEpisodes: number;
     }): Promise<EpisodicNode[]> {
       const wsFilter = params.workspaceId ? ", workspaceId: $workspaceId" : "";
+      const endUserFilter =
+        params.endUserIds && params.endUserIds.length > 0
+          ? "AND e.endUserId IS NOT NULL AND e.endUserId IN $endUserIds"
+          : "";
 
       // s.validAt and s.invalidAt are stored as ISO strings — use string comparison
       const query = `
@@ -146,6 +165,7 @@ export function createSearchV2Methods(core: Neo4jCore) {
                 ${params.endTime ? "AND datetime(apoc.convert.fromJsonMap(s.attributes).event_date) <= datetime($endTime)" : ""})
                 )
                 ${params.labelIds.length > 0 ? "AND ANY(lid IN e.labelIds WHERE lid IN $labelIds)" : ""}
+                ${endUserFilter}
                 ${params.aspects.length > 0 ? "AND s.aspect IN $aspects" : ""}
                 AND (s.invalidAt IS NULL OR s.invalidAt > $now)
 
@@ -164,6 +184,7 @@ export function createSearchV2Methods(core: Neo4jCore) {
         now: new Date().toISOString(),
         startTime: params.startTime.toISOString(),
         endTime: params.endTime?.toISOString() || null,
+        ...(params.endUserIds && params.endUserIds.length > 0 && { endUserIds: params.endUserIds }),
       });
 
       return results.map((r) => r.get("episode")).filter((ep: any) => ep != null);
@@ -176,10 +197,15 @@ export function createSearchV2Methods(core: Neo4jCore) {
     async getStatementsConnectingEntities(params: {
       userId: string;
       workspaceId?: string;
+      endUserIds?: string[];
       entityUuids: string[];
       maxStatements: number;
     }): Promise<StatementNode[]> {
       const wsFilter = params.workspaceId ? ", workspaceId: $workspaceId" : "";
+      const endUserFilter =
+        params.endUserIds && params.endUserIds.length > 0
+          ? "WHERE e.endUserId IS NOT NULL AND e.endUserId IN $endUserIds"
+          : "";
 
       const query = `
                 MATCH (e1:Entity {userId: $userId${wsFilter}})
@@ -197,6 +223,7 @@ export function createSearchV2Methods(core: Neo4jCore) {
                 AND (s.invalidAt IS NULL OR s.invalidAt > $now)
 
                 MATCH (e:Episode)-[:HAS_PROVENANCE]->(s)
+                ${endUserFilter}
                 MATCH (s)-[:HAS_SUBJECT]->(sub:Entity)
                 MATCH (s)-[:HAS_PREDICATE]->(pred:Entity)
                 MATCH (s)-[:HAS_OBJECT]->(obj:Entity)
@@ -213,6 +240,7 @@ export function createSearchV2Methods(core: Neo4jCore) {
         ...(params.workspaceId && { workspaceId: params.workspaceId }),
         now: new Date().toISOString(),
         entityUuids: params.entityUuids,
+        ...(params.endUserIds && params.endUserIds.length > 0 && { endUserIds: params.endUserIds }),
       });
 
       return results.map((r) => r.get("statement")).filter((r: any) => r != null);
@@ -225,11 +253,16 @@ export function createSearchV2Methods(core: Neo4jCore) {
     async getTopicsForFacets(params: {
       userId: string;
       workspaceId?: string;
+      endUserIds?: string[];
       startTime: Date;
       endTime?: Date;
       limit?: number;
     }): Promise<{ labelId: string; episodeCount: number }[]> {
       const wsFilter = params.workspaceId ? ", workspaceId: $workspaceId" : "";
+      const endUserFilter =
+        params.endUserIds && params.endUserIds.length > 0
+          ? "AND e.endUserId IS NOT NULL AND e.endUserId IN $endUserIds"
+          : "";
       const limit = params.limit || 20;
 
       // e.createdAt is stored as an ISO string — use string comparison
@@ -238,6 +271,7 @@ export function createSearchV2Methods(core: Neo4jCore) {
         WHERE e.createdAt >= $startTime
           ${params.endTime ? "AND e.createdAt <= $endTime" : ""}
           AND e.labelIds IS NOT NULL AND size(e.labelIds) > 0
+          ${endUserFilter}
         UNWIND e.labelIds AS labelId
         RETURN DISTINCT labelId, count(DISTINCT e) AS episodeCount
         ORDER BY episodeCount DESC
@@ -249,6 +283,7 @@ export function createSearchV2Methods(core: Neo4jCore) {
         ...(params.workspaceId && { workspaceId: params.workspaceId }),
         startTime: params.startTime.toISOString(),
         ...(params.endTime && { endTime: params.endTime.toISOString() }),
+        ...(params.endUserIds && params.endUserIds.length > 0 && { endUserIds: params.endUserIds }),
       });
 
       return results.map((r) => ({
@@ -264,11 +299,16 @@ export function createSearchV2Methods(core: Neo4jCore) {
     async getEntitiesForFacets(params: {
       userId: string;
       workspaceId?: string;
+      endUserIds?: string[];
       startTime: Date;
       endTime?: Date;
       limit?: number;
     }): Promise<{ entityUuid: string; entityName: string; mentionCount: number }[]> {
       const wsFilter = params.workspaceId ? ", workspaceId: $workspaceId" : "";
+      const endUserFilter =
+        params.endUserIds && params.endUserIds.length > 0
+          ? "AND e.endUserId IS NOT NULL AND e.endUserId IN $endUserIds"
+          : "";
       const limit = params.limit || 20;
 
       // s.validAt and s.invalidAt are stored as ISO strings — use string comparison
@@ -277,6 +317,7 @@ export function createSearchV2Methods(core: Neo4jCore) {
         WHERE s.validAt >= $startTime
           ${params.endTime ? "AND s.validAt <= $endTime" : ""}
           AND (s.invalidAt IS NULL OR s.invalidAt > $now)
+          ${endUserFilter}
         MATCH (s)-[:HAS_SUBJECT]->(subject:Entity {userId: $userId${wsFilter}})
         WHERE subject.name IS NOT NULL
         RETURN DISTINCT subject.uuid AS entityUuid, subject.name AS entityName, count(DISTINCT s) AS mentionCount
@@ -290,6 +331,7 @@ export function createSearchV2Methods(core: Neo4jCore) {
         now: new Date().toISOString(),
         startTime: params.startTime.toISOString(),
         ...(params.endTime && { endTime: params.endTime.toISOString() }),
+        ...(params.endUserIds && params.endUserIds.length > 0 && { endUserIds: params.endUserIds }),
       });
 
       return results.map((r) => ({
@@ -306,6 +348,7 @@ export function createSearchV2Methods(core: Neo4jCore) {
     async getAspectsForFacets(params: {
       userId: string;
       workspaceId?: string;
+      endUserIds?: string[];
       startTime: Date;
       endTime?: Date;
       aspects?: string[];
@@ -317,6 +360,10 @@ export function createSearchV2Methods(core: Neo4jCore) {
       }[]
     > {
       const wsFilter = params.workspaceId ? ", workspaceId: $workspaceId" : "";
+      const endUserFilter =
+        params.endUserIds && params.endUserIds.length > 0
+          ? "AND e.endUserId IS NOT NULL AND e.endUserId IN $endUserIds"
+          : "";
 
       const queryParams = {
         userId: params.userId,
@@ -324,6 +371,7 @@ export function createSearchV2Methods(core: Neo4jCore) {
         now: new Date().toISOString(),
         startTime: params.startTime.toISOString(),
         ...(params.endTime && { endTime: params.endTime.toISOString() }),
+        ...(params.endUserIds && params.endUserIds.length > 0 && { endUserIds: params.endUserIds }),
       };
 
       // Only graph/statement aspects live in Neo4j — voice aspects (Directive, Preference, Habit, Belief, Goal)
@@ -346,6 +394,7 @@ export function createSearchV2Methods(core: Neo4jCore) {
           AND s.validAt >= $startTime
           ${params.endTime ? "AND s.validAt <= $endTime" : ""}
           AND (s.invalidAt IS NULL OR s.invalidAt > $now)
+          ${endUserFilter}
         WITH s, e
         ORDER BY s.validAt DESC
         LIMIT 20

@@ -43,6 +43,7 @@ export async function performBM25Search(
       startTime: options.startTime ?? undefined,
       includeInvalidated: options.includeInvalidated,
       labelIds: options.labelIds,
+      endUserIds: options.endUserIds,
       statementLimit: STATEMENT_LIMIT,
     });
 
@@ -113,6 +114,7 @@ export async function performVectorSearch(
       startTime: options.startTime ?? undefined,
       includeInvalidated: options.includeInvalidated,
       labelIds: options.labelIds,
+      endUserIds: options.endUserIds,
     });
 
     if (episodeData.length === 0) {
@@ -188,6 +190,7 @@ export async function performEpisodeVectorSearch(
       startTime: options.startTime ?? undefined,
       includeInvalidated: options.includeInvalidated,
       labelIds: options.labelIds,
+      endUserIds: options.endUserIds,
     });
 
     if (episodeData.length === 0) {
@@ -301,6 +304,7 @@ export async function performBfsSearch(
       userId,
       workspaceId,
       labelIds: options.labelIds,
+      endUserIds: options.endUserIds,
     });
 
     // Build results with aggregated scores (in-memory aggregation)
@@ -641,6 +645,7 @@ export async function performEpisodeGraphSearch(
       startTime: options.startTime ?? undefined,
       includeInvalidated: options.includeInvalidated,
       labelIds: options.labelIds,
+      endUserIds: options.endUserIds,
     });
 
     if (graphResults.length === 0) {

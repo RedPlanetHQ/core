@@ -11,6 +11,10 @@ export const SearchBodyRequest = z.object({
 
   // These are not supported yet, but need to support these
   labelIds: z.array(z.string()).default([]),
+  // Filter to episodes tagged with these endUserId values (the human on
+  // the other side of the assistant — visitor, customer, contact).
+  // Empty / omitted → no counterparty scoping.
+  endUserIds: z.array(z.string()).optional(),
   limit: z.number().optional(),
   maxBfsDepth: z.number().optional(),
   includeInvalidated: z.boolean().optional(),
@@ -47,6 +51,7 @@ const { action, loader } = createHybridActionApiRoute(
         scoreThreshold: body.scoreThreshold,
         minResults: body.minResults,
         labelIds: body.labelIds,
+        endUserIds: body.endUserIds,
         adaptiveFiltering: body.adaptiveFiltering,
         structured: body.structured,
         sortBy: body.sortBy,
