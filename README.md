@@ -30,7 +30,7 @@
 
 <div align="center">
   <a href="https://getcore.me">
-    <img width="240px" alt="CORE butler — attentive" src="docs/images/attentive.gif" />
+    <img width="140px" alt="CORE butler — attentive" src="docs/images/attentive.gif" />
   </a>
 
 
