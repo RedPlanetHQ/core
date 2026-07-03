@@ -4,6 +4,50 @@ export async function integrationCreate(
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   data: any
 ) {
+  if (data?.service_account_json) {
+    return await createServiceAccountIntegration(data.service_account_json);
+  }
+
+  return await createOAuthIntegration(data);
+}
+
+async function createServiceAccountIntegration(rawJson: string) {
+  let parsed: Record<string, string>;
+  try {
+    parsed = JSON.parse(rawJson);
+  } catch {
+    throw new Error('service_account_json must be a valid JSON string');
+  }
+
+  if (parsed.type !== 'service_account' || !parsed.client_email || !parsed.private_key) {
+    throw new Error(
+      'service_account_json is not a valid Google service account key (expected type=service_account with client_email and private_key)'
+    );
+  }
+
+  const integrationConfiguration = {
+    auth_mode: 'service_account',
+    service_account_json: rawJson,
+    userEmail: parsed.client_email,
+    projectId: parsed.project_id,
+  };
+
+  return [
+    {
+      type: 'account',
+      data: {
+        settings: { auth_mode: 'service_account' },
+        accountId: parsed.client_email,
+        config: integrationConfiguration,
+      },
+    },
+  ];
+}
+
+async function createOAuthIntegration(
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  data: any
+) {
   const { oauthResponse, oauthParams } = data;
 
   // Fetch user information using the access token
@@ -23,8 +67,8 @@ export async function integrationCreate(
     console.error('Error fetching user info:', error);
   }
 
-  // For Gmail OAuth2, we need to store the tokens and user info
   const integrationConfiguration = {
+    auth_mode: 'oauth',
     access_token: oauthResponse.access_token,
     refresh_token: oauthResponse.refresh_token,
     client_id: oauthResponse.client_id,

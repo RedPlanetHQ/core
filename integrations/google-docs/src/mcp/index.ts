@@ -4,16 +4,35 @@ import { CallToolRequestSchema, ListToolsRequestSchema } from '@modelcontextprot
 import { google, docs_v1 } from 'googleapis';
 import { z } from 'zod';
 import { zodToJsonSchema } from 'zod-to-json-schema';
-import { OAuth2Client } from 'google-auth-library';
+import { OAuth2Client, GoogleAuth } from 'google-auth-library';
 import { generatedTools, handleGeneratedTool } from './generated-tools';
+
+const SERVICE_ACCOUNT_SCOPES = [
+  'https://www.googleapis.com/auth/documents',
+  'https://www.googleapis.com/auth/drive',
+];
+
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+type AuthClient = OAuth2Client | any;
 
 async function loadCredentials(
   client_id: string,
   client_secret: string,
   callback: string,
   config: Record<string, string>
-): Promise<{ oauth2Client: OAuth2Client; docs: docs_v1.Docs }> {
+): Promise<{ authClient: AuthClient; docs: docs_v1.Docs; authMode: 'oauth' | 'service_account' }> {
   try {
+    if (config.service_account_json) {
+      const credentials = JSON.parse(config.service_account_json);
+      const auth = new GoogleAuth({
+        credentials,
+        scopes: SERVICE_ACCOUNT_SCOPES,
+      });
+      const authClient = await auth.getClient();
+      const docs = google.docs({ version: 'v1', auth: authClient as OAuth2Client });
+      return { authClient, docs, authMode: 'service_account' };
+    }
+
     const credentials = {
       refresh_token: config.refresh_token,
       expiry_date:
@@ -30,11 +49,30 @@ async function loadCredentials(
     oauth2Client.setCredentials(credentials);
     oauth2Client.refreshAccessToken();
     const docs = google.docs({ version: 'v1', auth: oauth2Client });
-    return { oauth2Client, docs };
+    return { authClient: oauth2Client, docs, authMode: 'oauth' };
   } catch (error) {
     console.error('Error loading credentials:', error);
     process.exit(1);
   }
+}
+
+// Accepts a full docs URL or a raw file ID and returns the file ID.
+function extractDocumentId(input: string): string {
+  const trimmed = input.trim();
+  const match = trimmed.match(/\/document\/d\/([a-zA-Z0-9-_]+)/);
+  if (match) return match[1];
+  // Fallback: assume the caller passed the raw ID.
+  return trimmed;
+}
+
+async function shareFilePublicly(
+  drive: ReturnType<typeof google.drive>,
+  fileId: string
+): Promise<void> {
+  await drive.permissions.create({
+    fileId,
+    requestBody: { role: 'reader', type: 'anyone' },
+  });
 }
 
 // Custom tool schemas for common operations
@@ -42,6 +80,30 @@ const ListDocumentsSchema = z.object({});
 
 const CreateDocumentSchema = z.object({
   title: z.string().describe('Title for the new document'),
+  makePublic: z
+    .boolean()
+    .optional()
+    .describe(
+      'If true, share the created document publicly (anyone with the link can view). Required for service-account auth so the resulting URL is reachable by end users. Defaults to true when using service-account auth, false otherwise.'
+    ),
+});
+
+const CloneDocumentSchema = z.object({
+  source: z
+    .string()
+    .describe(
+      'Source document — either a Google Docs URL (e.g. https://docs.google.com/document/d/ABC.../edit) or a raw document ID.'
+    ),
+  title: z
+    .string()
+    .optional()
+    .describe('Title for the cloned copy. Defaults to "Copy of <original title>".'),
+  makePublic: z
+    .boolean()
+    .optional()
+    .describe(
+      'If true, share the cloned document publicly (anyone with the link can view). Defaults to true when using service-account auth, false otherwise.'
+    ),
 });
 
 const ReadDocumentSchema = z.object({
@@ -120,8 +182,16 @@ export async function getTools() {
     },
     {
       name: 'create_document',
-      description: 'Creates a new Google Doc with optional title',
+      description:
+        'Creates a new Google Doc with a title. Optionally shares it publicly (anyone with the link can view).',
       inputSchema: zodToJsonSchema(CreateDocumentSchema),
+      annotations: { readOnlyHint: false, destructiveHint: true, idempotentHint: false },
+    },
+    {
+      name: 'clone_document',
+      description:
+        'Clones an existing Google Doc into a new document. Accepts either a docs.google.com URL or a raw document ID. The source must be readable by the authenticated account (public link, shared with the account, or owned by it).',
+      inputSchema: zodToJsonSchema(CloneDocumentSchema),
       annotations: { readOnlyHint: false, destructiveHint: true, idempotentHint: false },
     },
     {
@@ -176,7 +246,12 @@ export async function callTool(
   callback: string,
   credentials: Record<string, string>
 ) {
-  const { oauth2Client, docs } = await loadCredentials(client_id, client_secret, callback, credentials);
+  const { authClient, docs, authMode } = await loadCredentials(
+    client_id,
+    client_secret,
+    callback,
+    credentials
+  );
 
   try {
     switch (name) {
@@ -184,7 +259,7 @@ export async function callTool(
         ListDocumentsSchema.parse(args);
 
         // Use Drive API to list all documents
-        const drive = google.drive({ version: 'v3', auth: oauth2Client });
+        const drive = google.drive({ version: 'v3', auth: authClient });
         const response = await drive.files.list({
           q: "mimeType='application/vnd.google-apps.document'",
           fields: 'files(id, name, createdTime, modifiedTime, webViewLink)',
@@ -215,11 +290,54 @@ export async function callTool(
           },
         });
 
+        const documentId = response.data.documentId!;
+        const shouldMakePublic =
+          validatedArgs.makePublic ?? authMode === 'service_account';
+
+        if (shouldMakePublic) {
+          const drive = google.drive({ version: 'v3', auth: authClient });
+          await shareFilePublicly(drive, documentId);
+        }
+
+        const url = `https://docs.google.com/document/d/${documentId}/edit`;
         return {
           content: [
             {
               type: 'text',
-              text: `Document created successfully!\nID: ${response.data.documentId}\nTitle: ${response.data.title}\nURL: https://docs.google.com/document/d/${response.data.documentId}/edit`,
+              text: `Document created successfully!\nID: ${documentId}\nTitle: ${response.data.title}\nURL: ${url}${shouldMakePublic ? '\nVisibility: public (anyone with the link can view)' : ''}`,
+            },
+          ],
+        };
+      }
+
+      case 'clone_document': {
+        const validatedArgs = CloneDocumentSchema.parse(args);
+        const sourceId = extractDocumentId(validatedArgs.source);
+        const drive = google.drive({ version: 'v3', auth: authClient });
+
+        const copyResponse = await drive.files.copy({
+          fileId: sourceId,
+          requestBody: validatedArgs.title ? { name: validatedArgs.title } : {},
+          fields: 'id, name, webViewLink',
+        });
+
+        const newId = copyResponse.data.id!;
+        const shouldMakePublic =
+          validatedArgs.makePublic ?? authMode === 'service_account';
+
+        if (shouldMakePublic) {
+          await shareFilePublicly(drive, newId);
+        }
+
+        const url =
+          copyResponse.data.webViewLink ??
+          `https://docs.google.com/document/d/${newId}/edit`;
+
+        return {
+          content: [
+            {
+              type: 'text',
+              text: `Document cloned successfully!\nSource ID: ${sourceId}\nNew ID: ${newId}\nTitle: ${copyResponse.data.name}\nURL: ${url}${shouldMakePublic ? '\nVisibility: public (anyone with the link can view)' : ''}`,
             },
           ],
         };
