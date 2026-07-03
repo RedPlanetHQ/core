@@ -320,80 +320,69 @@ export async function deductCredits(
   // Get the actual credit cost
   const creditCost = amount || BILLING_CONFIG.creditCosts[operation];
 
-  // Check if user has available credits
-  if (userUsage.availableCredits >= creditCost) {
-    // Deduct from available credits
+  // Spend monthly bucket first, then top-up (persistent, no-expiry) credits.
+  const fromMonthly = Math.min(userUsage.availableCredits, creditCost);
+  const remaining = creditCost - fromMonthly;
+  const fromTopup = Math.min(userUsage.topupCredits, remaining);
+  const shortfall = remaining - fromTopup;
+
+  const usageBreakdown = {
+    ...(operation === "addEpisode" && {
+      episodeCreditsUsed: userUsage.episodeCreditsUsed + creditCost,
+    }),
+    ...(operation === "search" && {
+      searchCreditsUsed: userUsage.searchCreditsUsed + creditCost,
+    }),
+    ...(operation === "chatMessage" && {
+      chatCreditsUsed: userUsage.chatCreditsUsed + creditCost,
+    }),
+  };
+
+  if (shortfall === 0) {
     await prisma.userUsage.update({
       where: { id: userUsage.id },
       data: {
-        availableCredits: userUsage.availableCredits - creditCost,
+        availableCredits: userUsage.availableCredits - fromMonthly,
+        topupCredits: userUsage.topupCredits - fromTopup,
         usedCredits: userUsage.usedCredits + creditCost,
-        // Update usage breakdown
-        ...(operation === "addEpisode" && {
-          episodeCreditsUsed: userUsage.episodeCreditsUsed + creditCost,
-        }),
-        ...(operation === "search" && {
-          searchCreditsUsed: userUsage.searchCreditsUsed + creditCost,
-        }),
-        ...(operation === "chatMessage" && {
-          chatCreditsUsed: userUsage.chatCreditsUsed + creditCost,
-        }),
+        ...usageBreakdown,
       },
     });
-  } else {
-    // Check if usage billing is enabled (Pro/Max plan)
-    if (subscription.enableUsageBilling) {
-      // Calculate overage
-      const overageAmount = creditCost - userUsage.availableCredits;
-      const cost = overageAmount * (subscription.usagePricePerCredit || 0);
+    return;
+  }
 
-      // Deduct remaining available credits and track overage
-      await prisma.$transaction([
-        prisma.userUsage.update({
-          where: { id: userUsage.id },
-          data: {
-            availableCredits: 0,
-            usedCredits: userUsage.usedCredits + creditCost,
-            overageCredits: userUsage.overageCredits + overageAmount,
-            // Update usage breakdown
-            ...(operation === "addEpisode" && {
-              episodeCreditsUsed: userUsage.episodeCreditsUsed + creditCost,
-            }),
-            ...(operation === "search" && {
-              searchCreditsUsed: userUsage.searchCreditsUsed + creditCost,
-            }),
-            ...(operation === "chatMessage" && {
-              chatCreditsUsed: userUsage.chatCreditsUsed + creditCost,
-            }),
-          },
-        }),
-        prisma.subscription.update({
-          where: { id: subscription.id },
-          data: {
-            overageCreditsUsed: subscription.overageCreditsUsed + overageAmount,
-            overageAmount: subscription.overageAmount + cost,
-          },
-        }),
-      ]);
-    } else {
-      await prisma.userUsage.update({
+  // Both buckets are drained and we still owe `shortfall` credits.
+  if (subscription.enableUsageBilling) {
+    const cost = shortfall * (subscription.usagePricePerCredit || 0);
+    await prisma.$transaction([
+      prisma.userUsage.update({
         where: { id: userUsage.id },
         data: {
           availableCredits: 0,
+          topupCredits: 0,
           usedCredits: userUsage.usedCredits + creditCost,
-          // Update usage breakdown
-          ...(operation === "addEpisode" && {
-            episodeCreditsUsed: userUsage.episodeCreditsUsed + creditCost,
-          }),
-          ...(operation === "search" && {
-            searchCreditsUsed: userUsage.searchCreditsUsed + creditCost,
-          }),
-          ...(operation === "chatMessage" && {
-            chatCreditsUsed: userUsage.chatCreditsUsed + creditCost,
-          }),
+          overageCredits: userUsage.overageCredits + shortfall,
+          ...usageBreakdown,
         },
-      });
-    }
+      }),
+      prisma.subscription.update({
+        where: { id: subscription.id },
+        data: {
+          overageCreditsUsed: subscription.overageCreditsUsed + shortfall,
+          overageAmount: subscription.overageAmount + cost,
+        },
+      }),
+    ]);
+  } else {
+    await prisma.userUsage.update({
+      where: { id: userUsage.id },
+      data: {
+        availableCredits: 0,
+        topupCredits: 0,
+        usedCredits: userUsage.usedCredits + creditCost,
+        ...usageBreakdown,
+      },
+    });
   }
 }
 
@@ -434,17 +423,11 @@ export async function hasCredits(
   }
 
   const userUsage = user.UserUsage;
-  // const subscription = workspace.Subscription;
 
-  // If has available credits, return true
-  if (userUsage.availableCredits >= creditCost) {
+  // Monthly bucket + persistent top-up bucket.
+  if (userUsage.availableCredits + userUsage.topupCredits >= creditCost) {
     return true;
   }
-
-  // If overage is enabled (Pro/Max), return true
-  // if (subscription.enableUsageBilling) {
-  //   return true;
-  // }
 
   // Free plan with no credits left
   return false;
@@ -488,22 +471,29 @@ export async function resetMonthlyCredits(
     ? await getSubscriptionAmount(subscription.stripeSubscriptionId)
     : 0;
 
-  // Create billing history record
-  await prisma.billingHistory.create({
-    data: {
-      subscriptionId: subscription.id,
-      periodStart: subscription.currentPeriodStart,
-      periodEnd: subscription.currentPeriodEnd,
-      monthlyCreditsAllocated: subscription.monthlyCredits,
-      creditsUsed: userUsage.usedCredits,
-      overageCreditsUsed: userUsage.overageCredits,
-      subscriptionAmount: subscriptionAmount / 100,
-      usageAmount: subscription.overageAmount,
-      totalAmount: (subscriptionAmount / 100) + subscription.overageAmount,
-    },
-  });
+  const totalAmount = subscriptionAmount / 100 + subscription.overageAmount;
 
-  // Reset credits
+  // Only record a BillingHistory row when there was actual money owed. Free
+  // plans without overage were previously creating $0.00 "pending" rows on
+  // every reset, cluttering the Invoices list.
+  if (totalAmount > 0) {
+    await prisma.billingHistory.create({
+      data: {
+        subscriptionId: subscription.id,
+        periodStart: subscription.currentPeriodStart,
+        periodEnd: subscription.currentPeriodEnd,
+        monthlyCreditsAllocated: subscription.monthlyCredits,
+        creditsUsed: userUsage.usedCredits,
+        overageCreditsUsed: userUsage.overageCredits,
+        subscriptionAmount: subscriptionAmount / 100,
+        usageAmount: subscription.overageAmount,
+        totalAmount,
+      },
+    });
+  }
+
+  // Reset monthly bucket only. topupCredits is intentionally not touched —
+  // top-up credits never expire.
   await prisma.$transaction([
     prisma.userUsage.update({
       where: { id: userUsage.id },

@@ -322,22 +322,26 @@ async function handleInvoicePaymentSucceeded(invoice: Stripe.Invoice) {
     });
 
     if (subscription) {
-      // Create billing history record
-      await prisma.billingHistory.create({
-        data: {
-          subscriptionId: subscription.id,
-          periodStart: subscription.currentPeriodStart,
-          periodEnd: subscription.currentPeriodEnd,
-          monthlyCreditsAllocated: subscription.monthlyCredits,
-          creditsUsed: 0, // Will be updated from UserUsage
-          overageCreditsUsed: subscription.overageCreditsUsed,
-          subscriptionAmount: (invoice.amount_paid - (tax || 0)) / 100,
-          usageAmount: subscription.overageAmount,
-          totalAmount: invoice.amount_paid / 100,
-          stripeInvoiceId: invoice.id,
-          stripePaymentStatus: invoice.status || "paid",
-        },
-      });
+      // Only record a billing history row when there was an actual charge.
+      // FREE plan cancellations and trial invoices come through as $0 and
+      // would otherwise clutter the Invoices list.
+      if (invoice.amount_paid > 0) {
+        await prisma.billingHistory.create({
+          data: {
+            subscriptionId: subscription.id,
+            periodStart: subscription.currentPeriodStart,
+            periodEnd: subscription.currentPeriodEnd,
+            monthlyCreditsAllocated: subscription.monthlyCredits,
+            creditsUsed: 0, // Will be updated from UserUsage
+            overageCreditsUsed: subscription.overageCreditsUsed,
+            subscriptionAmount: (invoice.amount_paid - (tax || 0)) / 100,
+            usageAmount: subscription.overageAmount,
+            totalAmount: invoice.amount_paid / 100,
+            stripeInvoiceId: invoice.id,
+            stripePaymentStatus: invoice.status || "paid",
+          },
+        });
+      }
 
       // Reset overage tracking after successful payment
       await prisma.subscription.update({
@@ -349,6 +353,88 @@ async function handleInvoicePaymentSucceeded(invoice: Stripe.Invoice) {
       });
     }
   }
+}
+
+/**
+ * Handle checkout.session.completed — currently only used for one-time
+ * credit top-ups. Subscription checkouts are handled by
+ * customer.subscription.created.
+ */
+async function handleCheckoutSessionCompleted(session: Stripe.Checkout.Session) {
+  if (session.mode !== "payment") {
+    return;
+  }
+  if (session.metadata?.type !== "topup") {
+    return;
+  }
+  if (session.payment_status !== "paid") {
+    logger.info("Skipping unpaid topup checkout session", {
+      sessionId: session.id,
+      payment_status: session.payment_status,
+    });
+    return;
+  }
+
+  const topupId = session.metadata.topupId as string | undefined;
+  const paymentIntentId =
+    typeof session.payment_intent === "string"
+      ? session.payment_intent
+      : session.payment_intent?.id;
+
+  const topup = topupId
+    ? await prisma.creditTopup.findUnique({ where: { id: topupId } })
+    : await prisma.creditTopup.findUnique({
+        where: { stripeCheckoutSessionId: session.id },
+      });
+
+  if (!topup) {
+    logger.error("Topup row not found for checkout session", {
+      sessionId: session.id,
+      topupId,
+    });
+    return;
+  }
+
+  // Idempotency: if already completed, skip. Webhooks retry on failure.
+  if (topup.status === "completed") {
+    logger.info("Topup already completed, skipping", { topupId: topup.id });
+    return;
+  }
+
+  const userUsage = await prisma.userUsage.findUnique({
+    where: { userId: topup.userId },
+  });
+  if (!userUsage) {
+    logger.error("UserUsage missing for topup", {
+      topupId: topup.id,
+      userId: topup.userId,
+    });
+    return;
+  }
+
+  await prisma.$transaction([
+    prisma.creditTopup.update({
+      where: { id: topup.id },
+      data: {
+        status: "completed",
+        completedAt: new Date(),
+        stripePaymentIntentId: paymentIntentId,
+        stripeCheckoutSessionId: session.id,
+      },
+    }),
+    prisma.userUsage.update({
+      where: { id: userUsage.id },
+      data: {
+        topupCredits: { increment: topup.credits },
+      },
+    }),
+  ]);
+
+  logger.info("Topup completed and credits granted", {
+    topupId: topup.id,
+    userId: topup.userId,
+    credits: topup.credits,
+  });
 }
 
 /**
@@ -470,6 +556,12 @@ export async function action({ request }: ActionFunctionArgs) {
 
       case "invoice.payment_failed":
         await handleInvoicePaymentFailed(event.data.object as Stripe.Invoice);
+        break;
+
+      case "checkout.session.completed":
+        await handleCheckoutSessionCompleted(
+          event.data.object as Stripe.Checkout.Session,
+        );
         break;
 
       default:

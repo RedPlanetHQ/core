@@ -5,7 +5,11 @@ import { type CreditOperation } from "~/trigger/utils/utils";
 
 /**
  * Atomically reserve credits for an operation.
- * Decrements availableCredits upfront to prevent parallel over-spending.
+ *
+ * Spend order:
+ *   1. availableCredits (the monthly bucket, resets each cycle)
+ *   2. topupCredits (persistent, non-expiring — bought via /settings/billing)
+ *
  * Returns the number of credits reserved, or 0 if insufficient.
  */
 export async function reserveCredits(
@@ -46,45 +50,56 @@ export async function reserveCredits(
   }
 
   const userUsage = userWorkspace.user.UserUsage;
+  const totalAvailable = userUsage.availableCredits + userUsage.topupCredits;
 
-  if (userUsage.availableCredits < amount) {
-    // Reserve whatever is available if subscription allows overage
+  // Not enough combined balance — behave like the previous overage logic:
+  // reserve whatever is left if overage billing is enabled, otherwise fail.
+  if (totalAvailable < amount) {
     if (userWorkspace.workspace.Subscription.enableUsageBilling) {
-      // For overage-enabled plans, only deduct what's actually available
-      const actualDeducted = Math.min(amount, userUsage.availableCredits);
+      const actualDeducted = totalAvailable;
       if (actualDeducted > 0) {
-        await prisma.userUsage.update({
+        const result = await prisma.userUsage.updateMany({
           where: {
             id: userUsage.id,
-            availableCredits: userUsage.availableCredits, // optimistic lock
+            availableCredits: userUsage.availableCredits,
+            topupCredits: userUsage.topupCredits,
           },
           data: {
             availableCredits: 0,
+            topupCredits: 0,
           },
         });
+        if (result.count === 0) {
+          // Lost the race — bail; caller will retry.
+          return 0;
+        }
       }
-      // Return only what was actually deducted, so reconciliation math is correct
       return actualDeducted;
     }
     return 0;
   }
 
-  // Atomic decrement with optimistic lock
-  try {
-    await prisma.userUsage.update({
-      where: {
-        id: userUsage.id,
-        availableCredits: { gte: amount }, // only update if still has enough
-      },
-      data: {
-        availableCredits: { decrement: amount },
-      },
-    });
-    return amount;
-  } catch {
-    // Concurrent update — credits no longer available
+  // Split the reservation: monthly first, then top-up.
+  const fromMonthly = Math.min(userUsage.availableCredits, amount);
+  const fromTopup = amount - fromMonthly;
+
+  const result = await prisma.userUsage.updateMany({
+    where: {
+      id: userUsage.id,
+      availableCredits: userUsage.availableCredits,
+      topupCredits: userUsage.topupCredits,
+    },
+    data: {
+      availableCredits: { decrement: fromMonthly },
+      topupCredits: { decrement: fromTopup },
+    },
+  });
+
+  if (result.count === 0) {
+    // Optimistic lock lost — credits changed underneath us.
     return 0;
   }
+  return amount;
 }
 
 /**
@@ -129,7 +144,11 @@ export async function refundCredits(
 
 /**
  * Reconcile reserved credits with actual usage.
- * Adjusts availableCredits for any difference and tracks actual usage in usedCredits breakdown.
+ *
+ * If actual > reserved: charge the extra, monthly-first then top-up.
+ * If actual < reserved: refund the delta into availableCredits (best-effort
+ *   accounting — the tiny amount that may leak from the top-up bucket on a
+ *   refunded overshoot is acceptable and rare).
  */
 export async function reconcileCredits(
   workspaceId: string,
@@ -173,16 +192,31 @@ export async function reconcileCredits(
   const userUsage = userWorkspace.user.UserUsage;
   const difference = actualAmount - reservedAmount;
 
+  let availableDelta = 0;
+  let topupDelta = 0;
+  if (difference > 0) {
+    const extraFromMonthly = Math.min(userUsage.availableCredits, difference);
+    availableDelta = -extraFromMonthly;
+    topupDelta = -(difference - extraFromMonthly);
+  } else if (difference < 0) {
+    availableDelta = -difference; // refund to monthly bucket
+  }
+
   await prisma.userUsage.update({
     where: { id: userUsage.id },
     data: {
-      // If actual > reserved, decrement more; if actual < reserved, increment (refund)
-      availableCredits:
-        difference > 0
-          ? { decrement: difference }
-          : difference < 0
-            ? { increment: Math.abs(difference) }
-            : undefined,
+      ...(availableDelta !== 0 && {
+        availableCredits:
+          availableDelta > 0
+            ? { increment: availableDelta }
+            : { decrement: -availableDelta },
+      }),
+      ...(topupDelta !== 0 && {
+        topupCredits:
+          topupDelta > 0
+            ? { increment: topupDelta }
+            : { decrement: -topupDelta },
+      }),
       usedCredits: { increment: actualAmount },
       ...(operation === "addEpisode" && {
         episodeCreditsUsed: { increment: actualAmount },

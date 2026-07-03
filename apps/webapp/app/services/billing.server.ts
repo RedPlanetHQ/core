@@ -77,20 +77,24 @@ export async function resetMonthlyCredits(
     ? await getSubscriptionAmount(subscription.stripeSubscriptionId)
     : 0;
 
-  // Create billing history record
-  await prisma.billingHistory.create({
-    data: {
-      subscriptionId: subscription.id,
-      periodStart: subscription.currentPeriodStart,
-      periodEnd: subscription.currentPeriodEnd,
-      monthlyCreditsAllocated: subscription.monthlyCredits,
-      creditsUsed: userUsage.usedCredits,
-      overageCreditsUsed: userUsage.overageCredits,
-      subscriptionAmount: subscriptionAmount / 100,
-      usageAmount: subscription.overageAmount,
-      totalAmount: (subscriptionAmount / 100) + subscription.overageAmount,
-    },
-  });
+  const totalAmount = subscriptionAmount / 100 + subscription.overageAmount;
+
+  // Only record a BillingHistory row when there was actual money owed.
+  if (totalAmount > 0) {
+    await prisma.billingHistory.create({
+      data: {
+        subscriptionId: subscription.id,
+        periodStart: subscription.currentPeriodStart,
+        periodEnd: subscription.currentPeriodEnd,
+        monthlyCreditsAllocated: subscription.monthlyCredits,
+        creditsUsed: userUsage.usedCredits,
+        overageCreditsUsed: userUsage.overageCredits,
+        subscriptionAmount: subscriptionAmount / 100,
+        usageAmount: subscription.overageAmount,
+        totalAmount,
+      },
+    });
+  }
 
   // Reset credits
   await prisma.$transaction([
@@ -252,9 +256,13 @@ export async function getUsageSummary(workspaceId: string, userId: string) {
       used: userUsage.usedCredits,
       monthly: subscription.monthlyCredits,
       overage: userUsage.overageCredits,
-      percentageUsed: Math.round(
-        (userUsage.usedCredits / subscription.monthlyCredits) * 100,
-      ),
+      topup: userUsage.topupCredits,
+      total: userUsage.availableCredits + userUsage.topupCredits,
+      percentageUsed: subscription.monthlyCredits
+        ? Math.round(
+            (userUsage.usedCredits / subscription.monthlyCredits) * 100,
+          )
+        : 0,
     },
     usage: {
       episodes: userUsage.episodeCreditsUsed,
@@ -314,17 +322,11 @@ export async function hasCredits(
   }
 
   const userUsage = user.UserUsage;
-  // const subscription = workspace.Subscription;
 
-  // If has available credits, return true
-  if (userUsage.availableCredits >= creditCost) {
+  // Monthly bucket + persistent top-up bucket.
+  if (userUsage.availableCredits + userUsage.topupCredits >= creditCost) {
     return true;
   }
-
-  // If overage is enabled (Pro/Max), return true
-  // if (subscription.enableUsageBilling) {
-  //   return true;
-  // }
 
   // Free plan with no credits left
   return false;

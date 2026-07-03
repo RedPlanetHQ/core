@@ -10,6 +10,7 @@ import {
   BILLING_CONFIG,
   getPlanConfig,
   isStripeConfigured,
+  validateTopupAmount,
 } from "~/config/billing.server";
 
 // Initialize Stripe
@@ -325,6 +326,96 @@ export async function downgradeSubscription({
   });
 
   // The webhook will handle updating the database at period end
+}
+
+/**
+ * Create a one-time checkout session for a credit top-up.
+ *
+ * Top-ups are decoupled from the subscription: they use Stripe Checkout in
+ * `payment` mode with a dynamic price_data line item. A pending CreditTopup
+ * row is created up-front so the webhook can look it up idempotently by
+ * `stripeCheckoutSessionId`.
+ */
+export async function createTopupCheckoutSession({
+  workspaceId,
+  userId,
+  email,
+  amountUsd,
+  successUrl,
+  cancelUrl,
+}: {
+  workspaceId: string;
+  userId: string;
+  email: string;
+  amountUsd: number;
+  successUrl: string;
+  cancelUrl: string;
+}): Promise<string> {
+  if (!stripe || !isStripeConfigured()) {
+    throw new Error("Stripe is not configured");
+  }
+
+  const validated = validateTopupAmount(amountUsd);
+  if (!validated.ok) {
+    throw new Error(validated.error);
+  }
+
+  const customerId = await getOrCreateStripeCustomer(workspaceId, email);
+
+  const topup = await prisma.creditTopup.create({
+    data: {
+      workspaceId,
+      userId,
+      amountUsd: validated.amountUsd,
+      credits: validated.credits,
+      status: "pending",
+    },
+  });
+
+  const session = await stripe.checkout.sessions.create({
+    customer: customerId,
+    mode: "payment",
+    payment_method_types: ["card"],
+    line_items: [
+      {
+        price_data: {
+          currency: "usd",
+          unit_amount: validated.amountUsd * 100,
+          product_data: {
+            name: `CORE credits top-up: ${validated.credits.toLocaleString()} credits`,
+            description: `One-time purchase — credits never expire.`,
+          },
+        },
+        quantity: 1,
+      },
+    ],
+    allow_promotion_codes: false,
+    success_url: successUrl,
+    cancel_url: cancelUrl,
+    metadata: {
+      type: "topup",
+      topupId: topup.id,
+      workspaceId,
+      userId,
+      credits: validated.credits.toString(),
+      amountUsd: validated.amountUsd.toString(),
+    },
+    payment_intent_data: {
+      metadata: {
+        type: "topup",
+        topupId: topup.id,
+        workspaceId,
+        userId,
+      },
+    },
+  });
+
+  await prisma.creditTopup.update({
+    where: { id: topup.id },
+    data: { stripeCheckoutSessionId: session.id },
+  });
+
+  return session.url!;
 }
 
 /**
