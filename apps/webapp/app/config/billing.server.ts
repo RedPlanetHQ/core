@@ -72,7 +72,39 @@ export const BILLING_CONFIG = {
     // When to reset credits (1st of each month by default)
     resetDay: parseInt(process.env.BILLING_RESET_DAY || "1", 10),
   },
+
+  // One-time credit top-ups. Available on every plan; credits never expire.
+  topup: {
+    minUsd: 10,
+    incrementUsd: 10,
+    creditsPerDollar: 100, // $10 -> 1000 credits
+  },
 } as const;
+
+/**
+ * Validate a top-up USD amount against the configured rules.
+ * Returns the credit grant for a valid amount, or an error message.
+ */
+export function validateTopupAmount(
+  amountUsd: number,
+):
+  | { ok: true; amountUsd: number; credits: number }
+  | { ok: false; error: string } {
+  const { minUsd, incrementUsd, creditsPerDollar } = BILLING_CONFIG.topup;
+  if (!Number.isFinite(amountUsd) || !Number.isInteger(amountUsd)) {
+    return { ok: false, error: "Amount must be a whole number of dollars" };
+  }
+  if (amountUsd < minUsd) {
+    return { ok: false, error: `Minimum top-up is $${minUsd}` };
+  }
+  if (amountUsd % incrementUsd !== 0) {
+    return {
+      ok: false,
+      error: `Amount must be a multiple of $${incrementUsd}`,
+    };
+  }
+  return { ok: true, amountUsd, credits: amountUsd * creditsPerDollar };
+}
 
 /**
  * Get plan configuration by plan type

@@ -900,6 +900,7 @@ model User {
   VoiceAspect               VoiceAspect[]
   VoiceAspectEmbedding      VoiceAspectEmbedding[]
   VoiceInboxMessage         VoiceInboxMessage[]
+  CreditTopup               CreditTopup[]
 }
 
 model VoiceInboxMessage {
@@ -936,6 +937,11 @@ model UserUsage {
   usedCredits      Int @default(0)
   overageCredits   Int @default(0) // Credits used beyond monthly allocation
 
+  // Persistent, non-expiring credits purchased via top-up.
+  // Consumed only after availableCredits (monthly bucket) is exhausted.
+  // Never reset by the monthly cycle.
+  topupCredits Int @default(0)
+
   // Last reset tracking
   lastResetAt DateTime  @default(now())
   nextResetAt DateTime?
@@ -947,6 +953,33 @@ model UserUsage {
 
   user   User   @relation(fields: [userId], references: [id], onDelete: Cascade)
   userId String @unique
+}
+
+model CreditTopup {
+  id        String   @id @default(uuid())
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  // Purchase amount in whole USD (e.g. 10, 20, 50)
+  amountUsd Int
+  // Credits granted for this top-up
+  credits   Int
+
+  // Stripe references
+  stripeCheckoutSessionId String? @unique
+  stripePaymentIntentId   String? @unique
+
+  // pending | completed | failed
+  status      String    @default("pending")
+  completedAt DateTime?
+
+  workspace   Workspace @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+  workspaceId String
+  user        User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+  userId      String
+
+  @@index([workspaceId, createdAt])
+  @@index([userId, createdAt])
 }
 
 model UserWorkspace {
@@ -1069,6 +1102,7 @@ model Workspace {
   browserSessions         BrowserSession[]
   voiceInboxMessages      VoiceInboxMessage[]
   Contact                 Contact[]
+  CreditTopup             CreditTopup[]
 
   taskRootCounter Int @default(0)
 }
