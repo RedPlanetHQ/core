@@ -33,6 +33,10 @@
     <img width="200px" alt="CORE logo" src="https://github.com/user-attachments/assets/bd4e5e79-05b8-4d40-9aff-f1cf9e5d70de" />
   </a>
 
+  <p>
+    <img width="240px" alt="CORE butler — attentive" src="docs/images/attentive.gif" />
+  </p>
+
 # Your Personal AI OS
 
 Not a chatbot you open. An AI that is always on, always watching.
