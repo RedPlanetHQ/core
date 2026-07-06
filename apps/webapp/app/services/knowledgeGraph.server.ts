@@ -793,6 +793,7 @@ export class KnowledgeGraphService {
       "normalization",
       undefined,
       workspaceId,
+      "memory",
     );
     let normalizedEpisodeBody = "";
     const outputMatch = responseText.match(/<output>([\s\S]*?)<\/output>/);
