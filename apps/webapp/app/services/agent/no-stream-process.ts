@@ -21,6 +21,7 @@ import {
 } from "~/services/agent/types/decision-agent";
 import { type OrchestratorTools } from "~/services/agent/executors/base";
 import { deductCredits } from "~/trigger/utils/utils";
+import { recordTokenUsage } from "~/services/tokenUsage.server";
 import { addToQueue } from "~/lib/ingest.server";
 import {
   selectModelMessages,
@@ -378,6 +379,19 @@ export async function noStreamProcess(
     if (!isBYOK) {
       await deductCredits(workspaceId, userId, "chatMessage", 1);
     }
+
+    // Roll up real LLM token usage. Trigger flows (reminders, task triggers)
+    // set body.triggerContext — track those separately from user chat so the
+    // daily rollup breaks out task_conversation vs conversation.
+    const usage = agentResult?.usage;
+    await recordTokenUsage({
+      workspaceId,
+      userId,
+      source: body.triggerContext ? "task_conversation" : "conversation",
+      inputTokens: Number(usage?.inputTokens ?? 0),
+      outputTokens: Number(usage?.outputTokens ?? 0),
+      model: modelString,
+    });
   } finally {
     await updateConversationStatus(body.id, "completed");
   }
