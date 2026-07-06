@@ -50,7 +50,6 @@ import {
 } from "~/services/vectorStorage.server";
 import { type ModelMessage } from "ai";
 import { reconcileCredits } from "../credit_utils";
-import { recordTokenUsage } from "~/services/tokenUsage.server";
 import { processAspectResolution } from "./aspect-resolution.logic";
 import { syncContactForEntity } from "~/jobs/contacts/contact-sync.logic";
 import { sendTownEvent } from "~/services/town-webhook.server";
@@ -512,16 +511,8 @@ export async function processGraphResolution(
           );
         }
       }
-
-      // Roll up real LLM token usage for this chunk into the daily bucket.
-      // Independent of billing/BYOK so we always have observability.
-      await recordTokenUsage({
-        workspaceId: payload.workspaceId,
-        userId: payload.userId,
-        source: "memory_ingestion",
-        inputTokens: tokenMetrics.low.input,
-        outputTokens: tokenMetrics.low.output,
-      });
+      // Token rollup happens per-call inside makeModelCall now; no aggregated
+      // recording here (would double-count with the per-call writes).
     } catch (error) {
       logger.warn(`Failed to update ingestion queue with resolution metrics:`, {
         error,
