@@ -983,9 +983,17 @@ model CreditTopup {
   @@index([userId, createdAt])
 }
 
-// Per-day rollup of LLM token consumption, broken down by source.
-// One row per (date, userId, workspaceId, source, model). Written via upsert
-// with incrementing counters so concurrent LLM calls collapse into one row.
+// Per-day rollup of LLM token consumption, broken down by source and
+// operation. Written via upsert-with-increment so concurrent calls in the
+// same bucket collapse into one row.
+//
+// Bucket key: (date, userId, workspaceId, source, model, operationKey).
+// - userId is nullable — background jobs that don't have a per-user actor
+//   record at the workspace level. The unique constraint uses NULLS NOT
+//   DISTINCT (Postgres 15+) so those null-userId rows still dedupe.
+// - operationKey is the makeModelCall `cacheKey` ("reflect-world",
+//   "extract-voice", "conversationTitle", ...) so dashboards can break
+//   down "which prompt is bleeding tokens". "" for chat/streaming turns.
 model DailyTokenUsage {
   id        String   @id @default(uuid())
   createdAt DateTime @default(now())
@@ -994,26 +1002,29 @@ model DailyTokenUsage {
   // UTC day bucket
   date   DateTime         @db.Date
   source TokenUsageSource
-  // Model identifier (e.g. "claude-sonnet-4-6"). Empty string ("") when unknown
-  // or aggregated across models. Non-nullable so the unique constraint dedupes
-  // reliably on Postgres (NULLs are distinct by default).
+  // Model identifier (e.g. "claude-sonnet-4-6"). "" when unknown or
+  // aggregated. Non-null so the unique constraint dedupes reliably.
   model  String           @default("")
+  // makeModelCall `cacheKey` (e.g. "reflect-world"). "" for chat turns
+  // or callers that pass no key.
+  operationKey String       @default("")
 
   inputTokens  Int @default(0)
   outputTokens Int @default(0)
   totalTokens  Int @default(0)
   // Counts recordTokenUsage() invocations that landed in this bucket, not
-  // underlying LLM calls. Ingestion fires once per chunk; conversations fire
-  // once per turn regardless of internal step count. Use for ballparking
+  // underlying LLM calls. Ingestion aggregates fire once per chunk; per-call
+  // recording (background jobs) fires once per makeModelCall. Chat fires
+  // once per turn regardless of tool-step count. Use for ballparking
   // volume, not billing.
   eventCount   Int @default(0)
 
   workspace   Workspace @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
   workspaceId String
-  user        User      @relation(fields: [userId], references: [id], onDelete: Cascade)
-  userId      String
+  user        User?     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  userId      String?
 
-  @@unique([date, userId, workspaceId, source, model])
+  @@unique([date, userId, workspaceId, source, model, operationKey])
   @@index([workspaceId, date])
   @@index([userId, date])
 }
@@ -1022,6 +1033,10 @@ enum TokenUsageSource {
   memory_ingestion
   conversation
   task_conversation
+  // Non-user-facing LLM work: title generation, session compaction, label
+  // assignment, contact summaries, reranking, etc. Recorded per-call via
+  // makeModelCall/makeStructuredModelCall.
+  background
 }
 
 model UserWorkspace {

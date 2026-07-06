@@ -10,6 +10,10 @@ import {
   ModelRouterEmbeddingModel,
 } from "@mastra/core/llm";
 import { logger } from "~/services/logger.service";
+import {
+  recordTokenUsage,
+  type TokenUsageSource,
+} from "~/services/tokenUsage.server";
 
 import { createOllama } from "ollama-ai-provider-v2";
 import { createAzure } from "@ai-sdk/azure";
@@ -327,6 +331,47 @@ export function createAgent(
 // makeModelCall
 // ---------------------------------------------------------------------------
 
+/**
+ * Map the makeModelCall useCase to a DailyTokenUsage source bucket.
+ * "memory" ingestion has its own bucket; everything else is background
+ * work (title/label gen, session compaction, rerank, etc.). User chat
+ * turns don't go through makeModelCall — they run Mastra Agent directly
+ * from noStreamProcess / mastra-stream and record under conversation /
+ * task_conversation there.
+ */
+function tokenSourceFromUseCase(useCase: UseCase): TokenUsageSource {
+  return useCase === "memory" ? "memory_ingestion" : "background";
+}
+
+/**
+ * Fire-and-forget the daily rollup for a single makeModelCall. Never
+ * throws — usage recording must not break the request path.
+ */
+function recordCallUsage(params: {
+  workspaceId: string | undefined;
+  userId: string | null | undefined;
+  useCase: UseCase;
+  cacheKey: string | undefined;
+  model: string;
+  tokenUsage: TokenUsage | undefined;
+}): void {
+  if (!params.workspaceId || !params.tokenUsage) return;
+  const inTok = params.tokenUsage.promptTokens ?? 0;
+  const outTok = params.tokenUsage.completionTokens ?? 0;
+  if (inTok + outTok === 0) return;
+  // Intentionally not awaited: recording is best-effort and must never
+  // block or fail the caller.
+  void recordTokenUsage({
+    workspaceId: params.workspaceId,
+    userId: params.userId ?? null,
+    source: tokenSourceFromUseCase(params.useCase),
+    inputTokens: inTok,
+    outputTokens: outTok,
+    model: params.model,
+    operationKey: params.cacheKey ?? "",
+  });
+}
+
 export async function makeModelCall(
   stream: boolean,
   messages: ModelMessage[],
@@ -337,6 +382,7 @@ export async function makeModelCall(
   reasoningEffort?: "low" | "medium" | "high",
   workspaceId?: string,
   useCase: UseCase = "chat",
+  userId?: string | null,
 ) {
   const { modelId: model, apiKey, isBYOK, baseUrl } = await resolveModelForWorkspace(workspaceId, useCase, complexity);
   logger.info(`[${useCase}/${complexity}] model: ${model}${isBYOK ? " (BYOK)" : ""}`);
@@ -358,6 +404,7 @@ export async function makeModelCall(
     const usage = await result.usage;
     const tokenUsage = toTokenUsage(usage);
     logTokenUsage(complexity.toUpperCase(), model, tokenUsage);
+    recordCallUsage({ workspaceId, userId, useCase, cacheKey, model, tokenUsage });
     onFinish(text, model, tokenUsage);
     return text;
   }
@@ -368,6 +415,7 @@ export async function makeModelCall(
 
   const tokenUsage = toTokenUsage(result.usage);
   logTokenUsage(complexity.toUpperCase(), model, tokenUsage);
+  recordCallUsage({ workspaceId, userId, useCase, cacheKey, model, tokenUsage });
   onFinish(result.text, model, tokenUsage);
 
   return result.text;
@@ -426,6 +474,7 @@ export async function makeStructuredModelCall<T extends z.ZodType>(
   temperature?: number,
   workspaceId?: string,
   useCase: UseCase = "chat",
+  userId?: string | null,
 ): Promise<{ object: z.infer<T>; usage: TokenUsage | undefined }> {
   const { modelId: model, apiKey, baseUrl } = await resolveModelForWorkspace(workspaceId, useCase, complexity);
   logger.info(`[Structured/${useCase}/${complexity}] model: ${model}`);
@@ -448,6 +497,7 @@ export async function makeStructuredModelCall<T extends z.ZodType>(
     );
     const tokenUsage = toTokenUsage(usage);
     logTokenUsage(`Structured/${complexity.toUpperCase()}`, model, tokenUsage);
+    recordCallUsage({ workspaceId, userId, useCase, cacheKey, model, tokenUsage });
     return { object, usage: tokenUsage };
   }
 
@@ -467,6 +517,7 @@ export async function makeStructuredModelCall<T extends z.ZodType>(
 
     const tokenUsage = toTokenUsage(result.usage);
     logTokenUsage(`Structured/${complexity.toUpperCase()}`, model, tokenUsage);
+    recordCallUsage({ workspaceId, userId, useCase, cacheKey, model, tokenUsage });
     return { object: result.object as z.infer<T>, usage: tokenUsage };
   } catch (error) {
     // Fallback: try to recover JSON from error text
@@ -479,6 +530,7 @@ export async function makeStructuredModelCall<T extends z.ZodType>(
       const usage = extractUsageFromError(error);
       const tokenUsage = toTokenUsage(usage);
       logTokenUsage(`Structured/${complexity.toUpperCase()}`, model, tokenUsage);
+      recordCallUsage({ workspaceId, userId, useCase, cacheKey, model, tokenUsage });
       return { object: validated.data, usage: tokenUsage };
     }
 
