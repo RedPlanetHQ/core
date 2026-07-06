@@ -1002,6 +1002,10 @@ model DailyTokenUsage {
   inputTokens  Int @default(0)
   outputTokens Int @default(0)
   totalTokens  Int @default(0)
+  // Counts recordTokenUsage() invocations that landed in this bucket, not
+  // underlying LLM calls. Ingestion fires once per chunk; conversations fire
+  // once per turn regardless of internal step count. Use for ballparking
+  // volume, not billing.
   eventCount   Int @default(0)
 
   workspace   Workspace @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
