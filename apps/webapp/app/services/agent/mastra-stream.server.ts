@@ -13,6 +13,10 @@ import {
   clearActiveStreamId,
 } from "~/services/conversation.server";
 import { deductCredits } from "~/trigger/utils/utils";
+import {
+  recordTokenUsage,
+  type TokenUsageSource,
+} from "~/services/tokenUsage.server";
 import { logger } from "~/services/logger.service";
 import { convertMastraChunkToAISDKv5 } from "@mastra/core/stream";
 import { getResumableStreamContext } from "~/bullmq/connection";
@@ -47,6 +51,13 @@ export interface SaveConversationResultParams {
   userId: string;
   workspaceId: string;
   isBYOK?: boolean;
+  /** Optional real token usage from the streaming agent result. */
+  inputTokens?: number;
+  outputTokens?: number;
+  /** Bucket the tokens under. Defaults to "conversation". */
+  tokenUsageSource?: TokenUsageSource;
+  /** Model identifier for the rollup. */
+  model?: string;
 }
 
 export async function saveConversationResult({
@@ -58,6 +69,10 @@ export async function saveConversationResult({
   userId,
   workspaceId,
   isBYOK,
+  inputTokens,
+  outputTokens,
+  tokenUsageSource,
+  model,
 }: SaveConversationResultParams): Promise<void> {
   if (parts.length === 0) {
     const fallbackText = parts
@@ -97,6 +112,30 @@ export async function saveConversationResult({
   if (!isBYOK) {
     await deductCredits(workspaceId, userId, "chatMessage", 1);
   }
+
+  // Roll up token usage into the daily bucket. If the caller passed real
+  // usage from agentResult.usage, use it. Otherwise fall back to a rough
+  // char/4 estimate over the assistant text — good enough for the daily
+  // aggregate until every streaming caller plumbs usage through.
+  let inTok = Math.max(0, Math.floor(inputTokens ?? 0));
+  let outTok = Math.max(0, Math.floor(outputTokens ?? 0));
+  if (inTok === 0 && outTok === 0) {
+    const textLen = parts
+      .filter((p: any) => p.type === "text" && typeof p.text === "string")
+      .reduce((n: number, p: any) => n + p.text.length, 0);
+    const userLen = (incomingUserText ?? "").length;
+    inTok = Math.floor(userLen / 4);
+    outTok = Math.floor(textLen / 4);
+  }
+  await recordTokenUsage({
+    workspaceId,
+    userId,
+    source: tokenUsageSource ?? "conversation",
+    inputTokens: inTok,
+    outputTokens: outTok,
+    model,
+  });
+
   await updateConversationStatus(conversationId, "completed");
 }
 

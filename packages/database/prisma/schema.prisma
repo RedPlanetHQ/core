@@ -901,6 +901,7 @@ model User {
   VoiceAspectEmbedding      VoiceAspectEmbedding[]
   VoiceInboxMessage         VoiceInboxMessage[]
   CreditTopup               CreditTopup[]
+  DailyTokenUsage           DailyTokenUsage[]
 }
 
 model VoiceInboxMessage {
@@ -980,6 +981,43 @@ model CreditTopup {
 
   @@index([workspaceId, createdAt])
   @@index([userId, createdAt])
+}
+
+// Per-day rollup of LLM token consumption, broken down by source.
+// One row per (date, userId, workspaceId, source, model). Written via upsert
+// with incrementing counters so concurrent LLM calls collapse into one row.
+model DailyTokenUsage {
+  id        String   @id @default(uuid())
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  // UTC day bucket
+  date   DateTime         @db.Date
+  source TokenUsageSource
+  // Model identifier (e.g. "claude-sonnet-4-6"). Empty string ("") when unknown
+  // or aggregated across models. Non-nullable so the unique constraint dedupes
+  // reliably on Postgres (NULLs are distinct by default).
+  model  String           @default("")
+
+  inputTokens  Int @default(0)
+  outputTokens Int @default(0)
+  totalTokens  Int @default(0)
+  eventCount   Int @default(0)
+
+  workspace   Workspace @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+  workspaceId String
+  user        User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+  userId      String
+
+  @@unique([date, userId, workspaceId, source, model])
+  @@index([workspaceId, date])
+  @@index([userId, date])
+}
+
+enum TokenUsageSource {
+  memory_ingestion
+  conversation
+  task_conversation
 }
 
 model UserWorkspace {
@@ -1103,6 +1141,7 @@ model Workspace {
   voiceInboxMessages      VoiceInboxMessage[]
   Contact                 Contact[]
   CreditTopup             CreditTopup[]
+  DailyTokenUsage         DailyTokenUsage[]
 
   taskRootCounter Int @default(0)
 }
