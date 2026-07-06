@@ -22,6 +22,28 @@ function utcDayBucket(now: Date = new Date()): Date {
 }
 
 /**
+ * Extract input/output tokens from a Mastra agent result.
+ *
+ * Prefers `totalUsage` (sum across all steps of a tool loop) over `usage`
+ * (last step only). For any agent that runs tool calls — which is most of
+ * ours — `usage` alone undercounts the turn by 5-10x.
+ */
+export function pickAgentResultTokens(agentResult: unknown): {
+  inputTokens: number;
+  outputTokens: number;
+} {
+  const r = agentResult as
+    | { totalUsage?: { inputTokens?: number; outputTokens?: number }; usage?: { inputTokens?: number; outputTokens?: number } }
+    | null
+    | undefined;
+  const usage = r?.totalUsage ?? r?.usage;
+  return {
+    inputTokens: Number(usage?.inputTokens ?? 0),
+    outputTokens: Number(usage?.outputTokens ?? 0),
+  };
+}
+
+/**
  * Roll up an LLM call's token usage into the daily bucket for
  * (date, userId, workspaceId, source, model). Concurrent calls collapse
  * into one row via atomic increments.
