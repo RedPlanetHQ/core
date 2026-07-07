@@ -387,6 +387,7 @@ const { loader, action } = createHybridActionApiRoute(
       userId: authentication.userId,
       workspaceId: workspaceId || "",
       isBYOK,
+      model: modelString,
     };
 
     const messageHistoryProcessor: Processor<"message-history"> = {
