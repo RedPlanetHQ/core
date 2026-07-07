@@ -163,6 +163,7 @@ const { loader, action } = createHybridActionApiRoute(
           userId,
           workspaceId,
           isBYOK,
+          model: modelString,
         });
         return messages;
       },
