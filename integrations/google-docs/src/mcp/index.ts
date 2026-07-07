@@ -4,35 +4,16 @@ import { CallToolRequestSchema, ListToolsRequestSchema } from '@modelcontextprot
 import { google, docs_v1 } from 'googleapis';
 import { z } from 'zod';
 import { zodToJsonSchema } from 'zod-to-json-schema';
-import { OAuth2Client, GoogleAuth } from 'google-auth-library';
+import { OAuth2Client } from 'google-auth-library';
 import { generatedTools, handleGeneratedTool } from './generated-tools';
-
-const SERVICE_ACCOUNT_SCOPES = [
-  'https://www.googleapis.com/auth/documents',
-  'https://www.googleapis.com/auth/drive',
-];
-
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-type AuthClient = OAuth2Client | any;
 
 async function loadCredentials(
   client_id: string,
   client_secret: string,
   callback: string,
   config: Record<string, string>
-): Promise<{ authClient: AuthClient; docs: docs_v1.Docs; authMode: 'oauth' | 'service_account' }> {
+): Promise<{ authClient: OAuth2Client; docs: docs_v1.Docs }> {
   try {
-    if (config.service_account_json) {
-      const credentials = JSON.parse(config.service_account_json);
-      const auth = new GoogleAuth({
-        credentials,
-        scopes: SERVICE_ACCOUNT_SCOPES,
-      });
-      const authClient = await auth.getClient();
-      const docs = google.docs({ version: 'v1', auth: authClient as OAuth2Client });
-      return { authClient, docs, authMode: 'service_account' };
-    }
-
     const credentials = {
       refresh_token: config.refresh_token,
       expiry_date:
@@ -49,11 +30,32 @@ async function loadCredentials(
     oauth2Client.setCredentials(credentials);
     oauth2Client.refreshAccessToken();
     const docs = google.docs({ version: 'v1', auth: oauth2Client });
-    return { authClient: oauth2Client, docs, authMode: 'oauth' };
+    return { authClient: oauth2Client, docs };
   } catch (error) {
     console.error('Error loading credentials:', error);
     process.exit(1);
   }
+}
+
+async function getOrCreateFolder(
+  drive: ReturnType<typeof google.drive>,
+  folderName: string
+): Promise<string> {
+  const escapedName = folderName.replace(/'/g, "\\'");
+  const q = `mimeType='application/vnd.google-apps.folder' and name='${escapedName}' and 'root' in parents and trashed=false`;
+  const list = await drive.files.list({ q, fields: 'files(id, name)' });
+  const existing = list.data.files?.[0];
+  if (existing?.id) return existing.id;
+
+  const created = await drive.files.create({
+    requestBody: {
+      name: folderName,
+      mimeType: 'application/vnd.google-apps.folder',
+    },
+    fields: 'id',
+  });
+  if (!created.data.id) throw new Error(`Failed to create folder "${folderName}"`);
+  return created.data.id;
 }
 
 // Accepts a full docs URL or a raw file ID and returns the file ID.
@@ -80,11 +82,17 @@ const ListDocumentsSchema = z.object({});
 
 const CreateDocumentSchema = z.object({
   title: z.string().describe('Title for the new document'),
+  folderName: z
+    .string()
+    .optional()
+    .describe(
+      'Optional folder name at the Drive root. The document will be placed inside this folder; if the folder does not exist it is created automatically.'
+    ),
   makePublic: z
     .boolean()
     .optional()
     .describe(
-      'If true, share the created document publicly (anyone with the link can view). Required for service-account auth so the resulting URL is reachable by end users. Defaults to true when using service-account auth, false otherwise.'
+      'If true, share the created document publicly (anyone with the link can view). Defaults to false.'
     ),
 });
 
@@ -98,11 +106,17 @@ const CloneDocumentSchema = z.object({
     .string()
     .optional()
     .describe('Title for the cloned copy. Defaults to "Copy of <original title>".'),
+  folderName: z
+    .string()
+    .optional()
+    .describe(
+      'Optional folder name at the Drive root. The cloned document is placed inside this folder; if the folder does not exist it is created automatically.'
+    ),
   makePublic: z
     .boolean()
     .optional()
     .describe(
-      'If true, share the cloned document publicly (anyone with the link can view). Defaults to true when using service-account auth, false otherwise.'
+      'If true, share the cloned document publicly (anyone with the link can view). Defaults to false.'
     ),
 });
 
@@ -183,14 +197,14 @@ export async function getTools() {
     {
       name: 'create_document',
       description:
-        'Creates a new Google Doc with a title. Optionally shares it publicly (anyone with the link can view).',
+        'Creates a new Google Doc with a title. Optionally places it inside a named folder at the Drive root (folder auto-created if missing) and shares it publicly (anyone with the link can view).',
       inputSchema: zodToJsonSchema(CreateDocumentSchema),
       annotations: { readOnlyHint: false, destructiveHint: true, idempotentHint: false },
     },
     {
       name: 'clone_document',
       description:
-        'Clones an existing Google Doc into a new document. Accepts either a docs.google.com URL or a raw document ID. The source must be readable by the authenticated account (public link, shared with the account, or owned by it).',
+        'Clones an existing Google Doc into a new document. Accepts either a docs.google.com URL or a raw document ID. Optionally places the copy inside a named folder at the Drive root (folder auto-created if missing). The source must be readable by the authenticated account (public link, shared with the account, or owned by it).',
       inputSchema: zodToJsonSchema(CloneDocumentSchema),
       annotations: { readOnlyHint: false, destructiveHint: true, idempotentHint: false },
     },
@@ -246,7 +260,7 @@ export async function callTool(
   callback: string,
   credentials: Record<string, string>
 ) {
-  const { authClient, docs, authMode } = await loadCredentials(
+  const { authClient, docs } = await loadCredentials(
     client_id,
     client_secret,
     callback,
@@ -291,11 +305,20 @@ export async function callTool(
         });
 
         const documentId = response.data.documentId!;
-        const shouldMakePublic =
-          validatedArgs.makePublic ?? authMode === 'service_account';
+        const drive = google.drive({ version: 'v3', auth: authClient });
 
+        if (validatedArgs.folderName) {
+          const folderId = await getOrCreateFolder(drive, validatedArgs.folderName);
+          await drive.files.update({
+            fileId: documentId,
+            addParents: folderId,
+            removeParents: 'root',
+            fields: 'id, parents',
+          });
+        }
+
+        const shouldMakePublic = validatedArgs.makePublic ?? false;
         if (shouldMakePublic) {
-          const drive = google.drive({ version: 'v3', auth: authClient });
           await shareFilePublicly(drive, documentId);
         }
 
@@ -304,7 +327,7 @@ export async function callTool(
           content: [
             {
               type: 'text',
-              text: `Document created successfully!\nID: ${documentId}\nTitle: ${response.data.title}\nURL: ${url}${shouldMakePublic ? '\nVisibility: public (anyone with the link can view)' : ''}`,
+              text: `Document created successfully!\nID: ${documentId}\nTitle: ${response.data.title}\nURL: ${url}${validatedArgs.folderName ? `\nFolder: ${validatedArgs.folderName}` : ''}${shouldMakePublic ? '\nVisibility: public (anyone with the link can view)' : ''}`,
             },
           ],
         };
@@ -315,15 +338,21 @@ export async function callTool(
         const sourceId = extractDocumentId(validatedArgs.source);
         const drive = google.drive({ version: 'v3', auth: authClient });
 
+        const requestBody: { name?: string; parents?: string[] } = {};
+        if (validatedArgs.title) requestBody.name = validatedArgs.title;
+        if (validatedArgs.folderName) {
+          const folderId = await getOrCreateFolder(drive, validatedArgs.folderName);
+          requestBody.parents = [folderId];
+        }
+
         const copyResponse = await drive.files.copy({
           fileId: sourceId,
-          requestBody: validatedArgs.title ? { name: validatedArgs.title } : {},
+          requestBody,
           fields: 'id, name, webViewLink',
         });
 
         const newId = copyResponse.data.id!;
-        const shouldMakePublic =
-          validatedArgs.makePublic ?? authMode === 'service_account';
+        const shouldMakePublic = validatedArgs.makePublic ?? false;
 
         if (shouldMakePublic) {
           await shareFilePublicly(drive, newId);
@@ -337,7 +366,7 @@ export async function callTool(
           content: [
             {
               type: 'text',
-              text: `Document cloned successfully!\nSource ID: ${sourceId}\nNew ID: ${newId}\nTitle: ${copyResponse.data.name}\nURL: ${url}${shouldMakePublic ? '\nVisibility: public (anyone with the link can view)' : ''}`,
+              text: `Document cloned successfully!\nSource ID: ${sourceId}\nNew ID: ${newId}\nTitle: ${copyResponse.data.name}\nURL: ${url}${validatedArgs.folderName ? `\nFolder: ${validatedArgs.folderName}` : ''}${shouldMakePublic ? '\nVisibility: public (anyone with the link can view)' : ''}`,
             },
           ],
         };

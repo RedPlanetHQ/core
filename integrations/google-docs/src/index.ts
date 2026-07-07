@@ -87,17 +87,6 @@ class GoogleDocCLI extends IntegrationCLI {
             prompt: 'consent',
           },
         },
-        api_key: {
-          fields: [
-            {
-              name: 'service_account_json',
-              label: 'Service Account JSON',
-              placeholder: '{ "type": "service_account", "project_id": "...", ... }',
-              description:
-                'Paste the full JSON key for a Google Cloud service account with Docs + Drive scopes. Documents will be created under the service account and shared publicly (anyone with the link can view). Use this when your OAuth app is not yet verified for the Drive scope.',
-            },
-          ],
-        },
       },
     };
   }
