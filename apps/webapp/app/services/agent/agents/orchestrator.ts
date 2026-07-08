@@ -319,6 +319,26 @@ export async function createOrchestratorAgent(
     )
     .join("\n");
 
+  // Hint appended to "account not found" errors so the LLM can pattern-match
+  // a typo against a known-good ID and retry, instead of giving up.
+  const validAccountIdsHint =
+    connectedIntegrations.length > 0
+      ? `Valid accountIds for this user:\n` +
+        connectedIntegrations
+          .map(
+            (int) =>
+              `- ${int.id} — ${int.integrationDefinition.name} (${int.accountId})`,
+          )
+          .join("\n")
+      : "No connected integrations for this user.";
+
+  const enrichAccountNotFound = (errorMessage: string): string => {
+    if (/not found or not active|Integration account .* not found/i.test(errorMessage)) {
+      return `${errorMessage}\n\n${validAccountIdsHint}\n\nRetry with one of the accountIds above.`;
+    }
+    return errorMessage;
+  };
+
   logger.info(
     `Orchestrator: Loaded ${connectedIntegrations.length} integrations, mode: ${mode}`,
   );
@@ -419,17 +439,21 @@ export async function createOrchestratorAgent(
           typeof result === "object" &&
           "content" in (result as any)
         ) {
+          const isError = (result as any).isError === true;
           const content = (result as any).content;
           if (Array.isArray(content) && content.length > 0 && content[0].text) {
-            return content[0].text;
+            const text = content[0].text as string;
+            return isError ? enrichAccountNotFound(text) : text;
           }
         }
         return JSON.stringify(result, null, 2);
       } catch (error) {
+        const errorMessage =
+          error instanceof Error ? error.message : String(error);
         logger.warn(
-          `Failed to get actions for ${inputData.accountId}: ${error}`,
+          `Failed to get actions for ${inputData.accountId}: ${errorMessage}`,
         );
-        return "[]";
+        return `ERROR: ${enrichAccountNotFound(errorMessage)}`;
       }
     },
   });
@@ -502,7 +526,7 @@ export async function createOrchestratorAgent(
           `Integration action failed: ${inputData.accountId}/${inputData.action}`,
           error,
         );
-        return `ERROR: ${errorMessage}. Check the inputSchema and retry with corrected parameters.`;
+        return `ERROR: ${enrichAccountNotFound(errorMessage)}. Check the inputSchema and retry with corrected parameters.`;
       }
     },
   });
