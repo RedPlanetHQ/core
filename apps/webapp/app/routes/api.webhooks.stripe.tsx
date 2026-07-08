@@ -5,7 +5,7 @@
  * This route processes:
  * - Subscription creation/updates/cancellations
  * - Payment success/failure
- * - Usage metering for overage billing
+ * - One-time credit top-up checkouts
  */
 
 import { type ActionFunctionArgs, json } from "@remix-run/node";
@@ -85,10 +85,6 @@ async function handleSubscriptionCreated(subscription: any) {
         planType,
         status: subscription.status === "active" ? "ACTIVE" : "TRIALING",
         monthlyCredits: planConfig.monthlyCredits,
-        enableUsageBilling: planConfig.enableOverage,
-        usagePricePerCredit: planConfig.enableOverage
-          ? planConfig.overagePrice
-          : null,
         currentPeriodStart: new Date(subscription.current_period_start * 1000),
         currentPeriodEnd: new Date(subscription.current_period_end * 1000),
       },
@@ -121,7 +117,6 @@ async function handleSubscriptionCreated(subscription: any) {
             data: {
               availableCredits: planConfig.monthlyCredits,
               usedCredits: 0,
-              overageCredits: 0,
               lastResetAt: new Date(),
               nextResetAt: new Date(subscription.current_period_end * 1000),
             },
@@ -186,10 +181,6 @@ async function handleSubscriptionUpdated(subscription: any) {
         planType,
         status: subscriptionStatus as any,
         monthlyCredits: planConfig.monthlyCredits,
-        enableUsageBilling: planConfig.enableOverage,
-        usagePricePerCredit: planConfig.enableOverage
-          ? planConfig.overagePrice
-          : null,
         currentPeriodStart: new Date(subscription.current_period_start * 1000),
         currentPeriodEnd: new Date(subscription.current_period_end * 1000),
       },
@@ -223,7 +214,6 @@ async function handleSubscriptionUpdated(subscription: any) {
               data: {
                 availableCredits: planConfig.monthlyCredits,
                 usedCredits: 0,
-                overageCredits: 0,
                 lastResetAt: new Date(),
                 nextResetAt: new Date(subscription.current_period_end * 1000),
               },
@@ -259,12 +249,8 @@ async function handleSubscriptionDeleted(subscription: Stripe.Subscription) {
         planType: "FREE",
         status: "ACTIVE", // FREE plan is now active
         monthlyCredits: freeConfig.monthlyCredits,
-        enableUsageBilling: false,
-        usagePricePerCredit: null,
         stripeSubscriptionId: null,
         stripePriceId: null,
-        overageCreditsUsed: 0,
-        overageAmount: 0,
       },
     });
 
@@ -295,7 +281,6 @@ async function handleSubscriptionDeleted(subscription: Stripe.Subscription) {
             data: {
               availableCredits: freeConfig.monthlyCredits,
               usedCredits: 0,
-              overageCredits: 0,
             },
           });
         }
@@ -333,24 +318,13 @@ async function handleInvoicePaymentSucceeded(invoice: Stripe.Invoice) {
             periodEnd: subscription.currentPeriodEnd,
             monthlyCreditsAllocated: subscription.monthlyCredits,
             creditsUsed: 0, // Will be updated from UserUsage
-            overageCreditsUsed: subscription.overageCreditsUsed,
             subscriptionAmount: (invoice.amount_paid - (tax || 0)) / 100,
-            usageAmount: subscription.overageAmount,
             totalAmount: invoice.amount_paid / 100,
             stripeInvoiceId: invoice.id,
             stripePaymentStatus: invoice.status || "paid",
           },
         });
       }
-
-      // Reset overage tracking after successful payment
-      await prisma.subscription.update({
-        where: { id: subscription.id },
-        data: {
-          overageCreditsUsed: 0,
-          overageAmount: 0,
-        },
-      });
     }
   }
 }
@@ -425,7 +399,7 @@ async function handleCheckoutSessionCompleted(session: Stripe.Checkout.Session) 
     prisma.userUsage.update({
       where: { id: userUsage.id },
       data: {
-        topupCredits: { increment: topup.credits },
+        availableCredits: { increment: topup.credits },
       },
     }),
   ]);

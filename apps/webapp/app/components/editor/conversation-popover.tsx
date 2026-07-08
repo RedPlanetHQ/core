@@ -23,6 +23,7 @@ import {
   hasNeedsApprovalDeep,
   type ConversationToolPart,
 } from "../conversation/conversation-utils";
+import { useOptionalUser } from "~/hooks/useUser";
 
 interface ConversationPart {
   type: string;
@@ -73,6 +74,9 @@ export function ConversationPopover({
   onClose,
 }: ConversationPopoverProps) {
   const open = !!conversationId && !!anchorRect;
+  const currentUser = useOptionalUser();
+  const outOfCredits =
+    !!currentUser && (currentUser.availableCredits ?? 0) < 1;
   const [historyMessages, setHistoryMessages] = useState<UIMessage[]>([]);
   const [historyMeta, setHistoryMeta] = useState<Record<string, string>>({});
   const [loadingHistory, setLoadingHistory] = useState(false);
@@ -329,10 +333,14 @@ export function ConversationPopover({
           {/* Reply input */}
           <div className="border-t p-2">
             <ConversationTextarea
-              placeholder="Reply..."
+              placeholder={
+                outOfCredits
+                  ? "You're out of credits — top up to keep chatting"
+                  : "Reply..."
+              }
               isLoading={sending}
               className="max-h-[200px] min-h-[36px] p-3"
-              disabled={needsApproval}
+              disabled={needsApproval || outOfCredits}
               needsApproval={needsApproval}
               onConversationCreated={(message) => {
                 if (!conversationId) return;

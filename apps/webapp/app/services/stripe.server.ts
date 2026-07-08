@@ -418,35 +418,3 @@ export async function createTopupCheckoutSession({
   return session.url!;
 }
 
-/**
- * Report usage for metered billing (overage)
- * Uses Stripe's new billing meter events API
- */
-export async function reportUsage({
-  workspaceId,
-  overageCredits,
-}: {
-  workspaceId: string;
-  overageCredits: number;
-}): Promise<void> {
-  if (!stripe || !isStripeConfigured()) {
-    throw new Error("Stripe is not configured");
-  }
-
-  const subscription = await prisma.subscription.findUnique({
-    where: { workspaceId },
-  });
-
-  if (!subscription?.stripeCustomerId || !subscription.enableUsageBilling) {
-    return; // No metered billing for this subscription
-  }
-
-  // Report usage using the new billing meter events API
-  await stripe.billing.meterEvents.create({
-    event_name: BILLING_CONFIG.stripe.meterEventName,
-    payload: {
-      value: overageCredits.toString(),
-      stripe_customer_id: subscription.stripeCustomerId,
-    },
-  });
-}

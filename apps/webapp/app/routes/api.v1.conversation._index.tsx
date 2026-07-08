@@ -1,7 +1,10 @@
 import { generateId, stepCountIs } from "ai";
+import { json } from "@remix-run/node";
 import { z } from "zod";
 import { Agent, convertMessages } from "@mastra/core/agent";
 import { createHybridActionApiRoute } from "~/services/routeBuilders/apiBuilder.server";
+import { hasCredits } from "~/trigger/utils/utils";
+import { isWorkspaceBYOK } from "~/services/byok.server";
 import {
   getConversationAndHistory,
   updateConversationStatus,
@@ -175,6 +178,35 @@ const { loader, action } = createHybridActionApiRoute(
       mastraAgentsCount: mastraSizes.agentsCount,
       mastraProcessorsCount: mastraSizes.processorsCount,
     });
+
+    // Pre-flight credit check. Never invoke the model for a workspace that
+    // can't pay for it. BYOK workspaces are always allowed — they cover
+    // their own provider bills. Matches the pattern used in noStreamProcess
+    // and runCASEPipeline.
+    const preflightWorkspaceId = authentication.workspaceId as string;
+    if (preflightWorkspaceId) {
+      const workspaceHasBYOK = await isWorkspaceBYOK(preflightWorkspaceId);
+      if (!workspaceHasBYOK) {
+        const ok = await hasCredits(
+          preflightWorkspaceId,
+          authentication.userId,
+          "chatMessage",
+        );
+        if (!ok) {
+          logger.warn(
+            `[conversation] Insufficient credits for ${authentication.userId}; refusing chat turn`,
+            { conversationId: body.id },
+          );
+          return json(
+            {
+              error: "You're out of credits. Upgrade your plan or add a top-up to keep chatting.",
+              code: "no_credits",
+            },
+            { status: 402 },
+          );
+        }
+      }
+    }
 
     const conversation = await getConversationAndHistory(
       body.id,

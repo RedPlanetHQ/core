@@ -44,6 +44,7 @@ import {
 } from "remix-themes";
 import clsx from "clsx";
 import { getUsageSummary } from "./services/billing.server";
+import { isWorkspaceBYOK } from "./services/byok.server";
 import { Toaster } from "./components/ui/toaster";
 import {
   getPersonaDocumentForUser,
@@ -68,6 +69,7 @@ export const loader = async ({ request }: LoaderFunctionArgs) => {
   let workspaces: Awaited<ReturnType<typeof getUserWorkspaces>> = [];
   let currentWorkspace = null;
   let userPersonaDocumentId = null;
+  let hasBYOK = false;
 
   if (user) {
     workspaceId = await getWorkspaceId(request, user.id, user.workspaceId);
@@ -76,6 +78,7 @@ export const loader = async ({ request }: LoaderFunctionArgs) => {
       : null;
     workspaces = await getUserWorkspaces(user.id);
     userPersonaDocumentId = await getPersonaForUser(workspaceId as string);
+    hasBYOK = workspaceId ? await isWorkspaceBYOK(workspaceId) : false;
 
     currentWorkspace = workspaceId ? await getWorkspaceById(workspaceId) : null;
   }
@@ -85,6 +88,7 @@ export const loader = async ({ request }: LoaderFunctionArgs) => {
       user: user,
       availableCredits: usageSummary?.credits.available ?? 0,
       totalCredits: usageSummary?.credits.monthly ?? 0,
+      hasBYOK,
       workspaces,
       currentWorkspace,
       toastMessage,

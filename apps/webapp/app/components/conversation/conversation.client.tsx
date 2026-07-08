@@ -34,6 +34,7 @@ import {
   SelectValue,
 } from "../ui/select";
 import type { ChatAttachment, LLMModel } from "./conversation-textarea.client";
+import { useOptionalUser } from "~/hooks/useUser";
 
 const ATTACHMENT_ACCEPT =
   "image/*,application/pdf,text/*,application/json,application/xml,.csv,.txt,.md,.json,.xml,.yaml,.yml";
@@ -80,6 +81,10 @@ export const ConversationNew = ({
   name: string;
   accentColor?: string;
 }) => {
+  const currentUser = useOptionalUser();
+  const outOfCredits =
+    !!currentUser && (currentUser.availableCredits ?? 0) < 1;
+
   const [content, setContent] = useState(defaultMessage ?? "");
   const [title, setTitle] = useState(defaultMessage ?? "");
   const [incognito, setIncognito] = useState(false);
@@ -199,7 +204,10 @@ export const ConversationNew = ({
   const editor = useEditor({
     extensions: [
       Placeholder.configure({
-        placeholder: () => "ask corebrain...",
+        placeholder: () =>
+          outOfCredits
+            ? "You're out of credits — top up to keep chatting"
+            : "ask corebrain...",
         includeChildren: true,
       }),
       Document,
@@ -272,7 +280,8 @@ export const ConversationNew = ({
 
   const canSubmit =
     (content.trim().length > 0 || attachments.length > 0) &&
-    uploadingCount === 0;
+    uploadingCount === 0 &&
+    !outOfCredits;
 
   const submitForm = useCallback(
     async (e: React.FormEvent<HTMLFormElement>) => {
