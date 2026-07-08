@@ -830,7 +830,15 @@ describe("processScheduledTask — wake-up branching", () => {
       },
     });
 
-    hasCreditsMock.mockResolvedValueOnce(false);
+    // The pre-flight credit check now lives inside runCASEPipeline (which is
+    // mocked here). Simulate the pipeline's insufficient_credits short-circuit
+    // by returning the same result shape it produces for this scenario.
+    runCASEPipelineMock.mockResolvedValueOnce({
+      success: false,
+      shouldMessage: false,
+      reasoning: "Insufficient credits",
+      error: "insufficient_credits",
+    });
     enqueueScheduledTaskMock.mockClear();
 
     const result = await processScheduledTask({
@@ -840,9 +848,8 @@ describe("processScheduledTask — wake-up branching", () => {
       channel: "email",
     });
 
-    // Pipeline must be skipped — we don't burn an LLM call when we know we
-    // can't pay for it.
-    expect(runCASEPipelineMock).not.toHaveBeenCalled();
+    // Pipeline surfaces the credit shortage as an error; caller must not
+    // treat the occurrence as a success.
     expect(result.success).toBe(false);
     expect(result.error).toBe("insufficient_credits");
 

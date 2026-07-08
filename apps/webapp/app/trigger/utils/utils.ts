@@ -320,12 +320,6 @@ export async function deductCredits(
   // Get the actual credit cost
   const creditCost = amount || BILLING_CONFIG.creditCosts[operation];
 
-  // Spend monthly bucket first, then top-up (persistent, no-expiry) credits.
-  const fromMonthly = Math.min(userUsage.availableCredits, creditCost);
-  const remaining = creditCost - fromMonthly;
-  const fromTopup = Math.min(userUsage.topupCredits, remaining);
-  const shortfall = remaining - fromTopup;
-
   const usageBreakdown = {
     ...(operation === "addEpisode" && {
       episodeCreditsUsed: userUsage.episodeCreditsUsed + creditCost,
@@ -338,52 +332,17 @@ export async function deductCredits(
     }),
   };
 
-  if (shortfall === 0) {
-    await prisma.userUsage.update({
-      where: { id: userUsage.id },
-      data: {
-        availableCredits: userUsage.availableCredits - fromMonthly,
-        topupCredits: userUsage.topupCredits - fromTopup,
-        usedCredits: userUsage.usedCredits + creditCost,
-        ...usageBreakdown,
-      },
-    });
-    return;
-  }
-
-  // Both buckets are drained and we still owe `shortfall` credits.
-  if (subscription.enableUsageBilling) {
-    const cost = shortfall * (subscription.usagePricePerCredit || 0);
-    await prisma.$transaction([
-      prisma.userUsage.update({
-        where: { id: userUsage.id },
-        data: {
-          availableCredits: 0,
-          topupCredits: 0,
-          usedCredits: userUsage.usedCredits + creditCost,
-          overageCredits: userUsage.overageCredits + shortfall,
-          ...usageBreakdown,
-        },
-      }),
-      prisma.subscription.update({
-        where: { id: subscription.id },
-        data: {
-          overageCreditsUsed: subscription.overageCreditsUsed + shortfall,
-          overageAmount: subscription.overageAmount + cost,
-        },
-      }),
-    ]);
-  } else {
-    await prisma.userUsage.update({
-      where: { id: userUsage.id },
-      data: {
-        availableCredits: 0,
-        topupCredits: 0,
-        usedCredits: userUsage.usedCredits + creditCost,
-        ...usageBreakdown,
-      },
-    });
-  }
+  // Single bucket now: spend from availableCredits and clamp at zero.
+  // reserveCredits should have gated shortfalls upstream.
+  const spent = Math.min(userUsage.availableCredits, creditCost);
+  await prisma.userUsage.update({
+    where: { id: userUsage.id },
+    data: {
+      availableCredits: userUsage.availableCredits - spent,
+      usedCredits: userUsage.usedCredits + creditCost,
+      ...usageBreakdown,
+    },
+  });
 }
 
 /**
@@ -422,101 +381,6 @@ export async function hasCredits(
     return false;
   }
 
-  const userUsage = user.UserUsage;
-
-  // Monthly bucket + persistent top-up bucket.
-  if (userUsage.availableCredits + userUsage.topupCredits >= creditCost) {
-    return true;
-  }
-
-  // Free plan with no credits left
-  return false;
+  return user.UserUsage.availableCredits >= creditCost;
 }
 
-/**
- * Reset monthly credits for a workspace
- */
-export async function resetMonthlyCredits(
-  workspaceId: string,
-  userId: string,
-): Promise<void> {
-  const workspace = await prisma.workspace.findUnique({
-    where: { id: workspaceId },
-    include: {
-      Subscription: true,
-    },
-  });
-
-  const user = await prisma.user.findUnique({
-    where: {
-      id: userId,
-    },
-    include: {
-      UserUsage: true,
-    },
-  });
-
-  if (!workspace?.Subscription || !user?.UserUsage) {
-    throw new Error("Workspace, subscription, or user usage not found");
-  }
-
-  const subscription = workspace.Subscription;
-  const userUsage = user.UserUsage;
-  const now = new Date();
-  const nextMonth = new Date(now);
-  nextMonth.setMonth(nextMonth.getMonth() + 1);
-
-  // Get actual subscription amount from Stripe
-  const subscriptionAmount = subscription.stripeSubscriptionId
-    ? await getSubscriptionAmount(subscription.stripeSubscriptionId)
-    : 0;
-
-  const totalAmount = subscriptionAmount / 100 + subscription.overageAmount;
-
-  // Only record a BillingHistory row when there was actual money owed. Free
-  // plans without overage were previously creating $0.00 "pending" rows on
-  // every reset, cluttering the Invoices list.
-  if (totalAmount > 0) {
-    await prisma.billingHistory.create({
-      data: {
-        subscriptionId: subscription.id,
-        periodStart: subscription.currentPeriodStart,
-        periodEnd: subscription.currentPeriodEnd,
-        monthlyCreditsAllocated: subscription.monthlyCredits,
-        creditsUsed: userUsage.usedCredits,
-        overageCreditsUsed: userUsage.overageCredits,
-        subscriptionAmount: subscriptionAmount / 100,
-        usageAmount: subscription.overageAmount,
-        totalAmount,
-      },
-    });
-  }
-
-  // Reset monthly bucket only. topupCredits is intentionally not touched —
-  // top-up credits never expire.
-  await prisma.$transaction([
-    prisma.userUsage.update({
-      where: { id: userUsage.id },
-      data: {
-        availableCredits: subscription.monthlyCredits,
-        usedCredits: 0,
-        overageCredits: 0,
-        lastResetAt: now,
-        nextResetAt: nextMonth,
-        // Reset usage breakdown
-        episodeCreditsUsed: 0,
-        searchCreditsUsed: 0,
-        chatCreditsUsed: 0,
-      },
-    }),
-    prisma.subscription.update({
-      where: { id: subscription.id },
-      data: {
-        currentPeriodStart: now,
-        currentPeriodEnd: nextMonth,
-        overageCreditsUsed: 0,
-        overageAmount: 0,
-      },
-    }),
-  ]);
-}

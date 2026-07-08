@@ -40,91 +40,6 @@ export async function getSubscriptionAmount(stripeSubscriptionId: string): Promi
 }
 
 /**
- * Reset monthly credits for a workspace
- */
-export async function resetMonthlyCredits(
-  workspaceId: string,
-  userId: string,
-): Promise<void> {
-  const workspace = await prisma.workspace.findUnique({
-    where: { id: workspaceId },
-    include: {
-      Subscription: true,
-    },
-  });
-
-  const user = await prisma.user.findUnique({
-    where: {
-      id: userId,
-    },
-    include: {
-      UserUsage: true,
-    },
-  });
-
-  if (!workspace?.Subscription || !user?.UserUsage) {
-    throw new Error("Workspace, subscription, or user usage not found");
-  }
-
-  const subscription = workspace.Subscription;
-  const userUsage = user.UserUsage;
-  const now = new Date();
-  const nextMonth = new Date(now);
-  nextMonth.setMonth(nextMonth.getMonth() + 1);
-
-  // Get actual subscription amount from Stripe
-  const subscriptionAmount = subscription.stripeSubscriptionId
-    ? await getSubscriptionAmount(subscription.stripeSubscriptionId)
-    : 0;
-
-  const totalAmount = subscriptionAmount / 100 + subscription.overageAmount;
-
-  // Only record a BillingHistory row when there was actual money owed.
-  if (totalAmount > 0) {
-    await prisma.billingHistory.create({
-      data: {
-        subscriptionId: subscription.id,
-        periodStart: subscription.currentPeriodStart,
-        periodEnd: subscription.currentPeriodEnd,
-        monthlyCreditsAllocated: subscription.monthlyCredits,
-        creditsUsed: userUsage.usedCredits,
-        overageCreditsUsed: userUsage.overageCredits,
-        subscriptionAmount: subscriptionAmount / 100,
-        usageAmount: subscription.overageAmount,
-        totalAmount,
-      },
-    });
-  }
-
-  // Reset credits
-  await prisma.$transaction([
-    prisma.userUsage.update({
-      where: { id: userUsage.id },
-      data: {
-        availableCredits: subscription.monthlyCredits,
-        usedCredits: 0,
-        overageCredits: 0,
-        lastResetAt: now,
-        nextResetAt: nextMonth,
-        // Reset usage breakdown
-        episodeCreditsUsed: 0,
-        searchCreditsUsed: 0,
-        chatCreditsUsed: 0,
-      },
-    }),
-    prisma.subscription.update({
-      where: { id: subscription.id },
-      data: {
-        currentPeriodStart: now,
-        currentPeriodEnd: nextMonth,
-        overageCreditsUsed: 0,
-        overageAmount: 0,
-      },
-    }),
-  ]);
-}
-
-/**
  * Initialize subscription for a workspace
  */
 export async function initializeSubscription(
@@ -143,10 +58,6 @@ export async function initializeSubscription(
       monthlyCredits: planConfig.monthlyCredits,
       currentPeriodStart: now,
       currentPeriodEnd: nextMonth,
-      enableUsageBilling: planConfig.enableOverage,
-      usagePricePerCredit: planConfig.enableOverage
-        ? planConfig.overagePrice
-        : null,
     },
   });
 }
@@ -199,7 +110,6 @@ export async function ensureBillingInitialized(
           userId: user.id,
           availableCredits: subscription.monthlyCredits,
           usedCredits: 0,
-          overageCredits: 0,
           lastResetAt: new Date(),
           nextResetAt: subscription.currentPeriodEnd,
           episodeCreditsUsed: 0,
@@ -255,9 +165,7 @@ export async function getUsageSummary(workspaceId: string, userId: string) {
       available: userUsage.availableCredits,
       used: userUsage.usedCredits,
       monthly: subscription.monthlyCredits,
-      overage: userUsage.overageCredits,
-      topup: userUsage.topupCredits,
-      total: userUsage.availableCredits + userUsage.topupCredits,
+      total: userUsage.availableCredits,
       percentageUsed: subscription.monthlyCredits
         ? Math.round(
             (userUsage.usedCredits / subscription.monthlyCredits) * 100,
@@ -276,11 +184,6 @@ export async function getUsageSummary(workspaceId: string, userId: string) {
         (subscription.currentPeriodEnd.getTime() - Date.now()) /
           (1000 * 60 * 60 * 24),
       ),
-    },
-    overage: {
-      enabled: subscription.enableUsageBilling,
-      pricePerCredit: subscription.usagePricePerCredit,
-      amount: subscription.overageAmount,
     },
   };
 }
@@ -321,15 +224,7 @@ export async function hasCredits(
     return false;
   }
 
-  const userUsage = user.UserUsage;
-
-  // Monthly bucket + persistent top-up bucket.
-  if (userUsage.availableCredits + userUsage.topupCredits >= creditCost) {
-    return true;
-  }
-
-  // Free plan with no credits left
-  return false;
+  return user.UserUsage.availableCredits >= creditCost;
 }
 
 /**

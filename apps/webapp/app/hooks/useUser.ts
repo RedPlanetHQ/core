@@ -8,6 +8,7 @@ import { type User, type Workspace } from "@prisma/client";
 export interface ExtendedUser extends User {
   availableCredits: number;
   totalCredits: number;
+  hasBYOK: boolean;
   workspaces: Workspace[];
   currentWorkspace: Workspace | null;
   userPersonaDocumentId?: string | null;
@@ -33,6 +34,7 @@ export function useOptionalUser(matches?: UIMatch[]): ExtendedUser | undefined {
         userPersonaDocumentId: routeMatch?.userPersonaDocumentId,
         availableCredits: routeMatch?.availableCredits,
         totalCredits: routeMatch?.totalCredits,
+        hasBYOK: routeMatch?.hasBYOK ?? false,
         workspaces: routeMatch?.workspaces ?? [],
         currentWorkspace: routeMatch?.currentWorkspace ?? null,
       }

@@ -23,7 +23,7 @@ import { prisma } from "~/db.server";
 import { type OrchestratorTools } from "~/services/agent/orchestrator-tools";
 import { getOrCreateAsyncConversation } from "~/services/agent/context/decision-context";
 import { createConversation } from "~/services/conversation.server";
-import { deductCredits } from "~/trigger/utils/utils";
+import { deductCredits, hasCredits } from "~/trigger/utils/utils";
 import { isWorkspaceBYOK } from "~/services/byok.server";
 
 // ============================================================================
@@ -96,6 +96,29 @@ export async function runCASEPipeline(
   // Use unified task fields when available, fall back to reminder fields
   const entityId = taskId ?? reminderId;
   const entityText = taskText ?? reminderText;
+
+  // Pre-flight credit check. BYOK workspaces bypass credits entirely.
+  // Fail fast before creating a conversation or invoking the model — running
+  // the pipeline on an empty balance would just fail deep inside the LLM call.
+  const isBYOK = await isWorkspaceBYOK(userData.workspaceId);
+  if (!isBYOK) {
+    const hasSufficientCredits = await hasCredits(
+      userData.workspaceId,
+      userData.userId,
+      "chatMessage",
+    );
+    if (!hasSufficientCredits) {
+      logger.warn(
+        `[pipeline] Insufficient credits for ${entityId}; skipping pipeline`,
+      );
+      return {
+        success: false,
+        shouldMessage: false,
+        reasoning: "Insufficient credits",
+        error: "insufficient_credits",
+      };
+    }
+  }
 
   try {
     // =========================================================================
@@ -223,8 +246,8 @@ export async function runCASEPipeline(
     }
 
     // Deduct credits (1 for think-only, 2 if butler also ran full execution)
-    // Skip credit deduction if workspace is using their own API key (BYOK)
-    const isBYOK = await isWorkspaceBYOK(userData.workspaceId);
+    // Skip credit deduction if workspace is using their own API key (BYOK).
+    // `isBYOK` was resolved during the pre-flight credit check above.
     if (!isBYOK) {
       try {
         await deductCredits(

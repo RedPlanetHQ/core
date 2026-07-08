@@ -66,11 +66,9 @@ model BillingHistory {
   // Credits tracking
   monthlyCreditsAllocated Int
   creditsUsed             Int
-  overageCreditsUsed      Int
 
   // Charges
   subscriptionAmount Float
-  usageAmount        Float // Overage charges
   totalAmount        Float
 
   // Stripe integration
@@ -827,14 +825,6 @@ model Subscription {
   currentPeriodStart DateTime @default(now())
   currentPeriodEnd   DateTime
 
-  // Usage-based pricing (for PRO plan)
-  enableUsageBilling  Boolean @default(false)
-  usagePricePerCredit Float? // Price per credit after monthly quota
-
-  // Overage tracking
-  overageCreditsUsed Int   @default(0)
-  overageAmount      Float @default(0)
-
   // Relations
   workspace      Workspace        @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
   workspaceId    String           @unique
@@ -933,15 +923,11 @@ model UserUsage {
   updatedAt DateTime  @updatedAt
   deleted   DateTime?
 
-  // Current period tracking
+  // Current credit balance. Top-ups increment this bucket directly; there
+  // is no separate top-up bucket and no monthly reset — credits persist
+  // until spent.
   availableCredits Int @default(0)
   usedCredits      Int @default(0)
-  overageCredits   Int @default(0) // Credits used beyond monthly allocation
-
-  // Persistent, non-expiring credits purchased via top-up.
-  // Consumed only after availableCredits (monthly bucket) is exhausted.
-  // Never reset by the monthly cycle.
-  topupCredits Int @default(0)
 
   // Last reset tracking
   lastResetAt DateTime  @default(now())

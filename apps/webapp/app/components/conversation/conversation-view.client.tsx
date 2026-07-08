@@ -27,6 +27,7 @@ import {
 } from "./permission-mode-selector.client";
 import { cn } from "~/lib/utils";
 import { useStreamingTTS } from "~/hooks/use-streaming-tts";
+import { useOptionalUser } from "~/hooks/useUser";
 
 interface ConversationHistory {
   id: string;
@@ -75,6 +76,15 @@ export function ConversationView({
   onStreamComplete,
   initialVoiceMode = false,
 }: ConversationViewProps) {
+  const currentUser = useOptionalUser();
+  // Strict UI gate: disable the send when the visible balance is empty.
+  // We intentionally don't exempt BYOK here — the sidebar shows "0 credits"
+  // to BYOK workspaces the same way, and letting the button stay enabled
+  // there looks broken. Server-side gates keep the BYOK exemption so
+  // deductions stay correct.
+  const outOfCredits =
+    !!currentUser && (currentUser.availableCredits ?? 0) < 1;
+
   // Local mirror of the loader-provided status — stays fresh across stop/
   // completion events without needing a route revalidation.
   const [conversationStatus, setConversationStatus] = useState(
@@ -474,7 +484,12 @@ export function ConversationView({
                 conversationStatus === "running"
               }
               isStopping={isStopping}
-              disabled={needsApproval}
+              disabled={needsApproval || outOfCredits}
+              placeholder={
+                outOfCredits
+                  ? "You're out of credits — top up to keep chatting"
+                  : undefined
+              }
               onConversationCreated={(message, attachments) => {
                 const hasAttachments = (attachments?.length ?? 0) > 0;
                 if (!message && !hasAttachments) return;

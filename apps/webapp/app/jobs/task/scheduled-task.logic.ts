@@ -31,8 +31,6 @@ import { HttpOrchestratorTools } from "~/services/agent/orchestrator-tools.http"
 import { getPageContentAsHtml } from "~/services/hocuspocus/content.server";
 import { removeTaskItemFromPages } from "~/services/hocuspocus/page-outlinks.server";
 import { enqueueTask } from "~/lib/queue-adapter.server";
-import { hasCredits } from "~/trigger/utils/utils";
-import { isWorkspaceBYOK } from "~/services/byok.server";
 import type { Task } from "@prisma/client";
 
 // ============================================================================
@@ -308,55 +306,38 @@ async function runExecutionPipeline(
   const client = new CoreClient({ baseUrl: env.APP_ORIGIN, token: token! });
   const executorTools = new HttpOrchestratorTools(client);
 
-  // Pre-flight credit check. BYOK workspaces bypass credits entirely.
-  // On insufficient credits, treat the occurrence as failed and let the
-  // failure path reschedule the next run (recurring tasks survive credit
-  // outages; one-time tasks no-op).
+  // runCASEPipeline runs its own pre-flight credit check and short-circuits
+  // with error: "insufficient_credits" for non-BYOK workspaces with empty
+  // balances. Recurring tasks survive credit outages via the failure path
+  // below (next occurrence is rescheduled); one-time tasks no-op.
   let result: CASEPipelineResult;
-  const isBYOK = await isWorkspaceBYOK(workspaceId);
-  const credits = isBYOK
-    ? true
-    : await hasCredits(workspaceId, user?.id as string, "chatMessage");
-
-  if (!credits) {
-    logger.warn(
-      `[scheduled-task] Insufficient credits for ${taskId}, skipping pipeline; will reschedule next occurrence if recurring`,
-    );
+  try {
+    result = await runCASEPipeline({
+      trigger,
+      context,
+      userPersona: userPersona?.content,
+      userData: {
+        userId: user?.id as string,
+        email: user?.email as string,
+        phoneNumber: user?.phoneNumber ?? undefined,
+        workspaceId,
+      },
+      reminderText: taskText,
+      reminderId: task.id,
+      taskId: task.id,
+      taskText,
+      timezone,
+      executorTools,
+      forceNewConversation: true,
+    });
+  } catch (error) {
+    logger.error(`[scheduled-task] Pipeline threw for ${taskId}`, { error });
     result = {
       success: false,
       shouldMessage: false,
-      reasoning: "Insufficient credits",
-      error: "insufficient_credits",
+      reasoning: "Pipeline error",
+      error: error instanceof Error ? error.message : "Unknown error",
     };
-  } else {
-    try {
-      result = await runCASEPipeline({
-        trigger,
-        context,
-        userPersona: userPersona?.content,
-        userData: {
-          userId: user?.id as string,
-          email: user?.email as string,
-          phoneNumber: user?.phoneNumber ?? undefined,
-          workspaceId,
-        },
-        reminderText: taskText,
-        reminderId: task.id,
-        taskId: task.id,
-        taskText,
-        timezone,
-        executorTools,
-        forceNewConversation: true,
-      });
-    } catch (error) {
-      logger.error(`[scheduled-task] Pipeline threw for ${taskId}`, { error });
-      result = {
-        success: false,
-        shouldMessage: false,
-        reasoning: "Pipeline error",
-        error: error instanceof Error ? error.message : "Unknown error",
-      };
-    }
   }
 
   if (result.success && result.conversationId) {

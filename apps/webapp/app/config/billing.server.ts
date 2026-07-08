@@ -15,7 +15,6 @@ export const BILLING_CONFIG = {
     secretKey: process.env.STRIPE_SECRET_KEY,
     publishableKey: process.env.STRIPE_PUBLISHABLE_KEY,
     webhookSecret: process.env.STRIPE_WEBHOOK_SECRET,
-    meterEventName: process.env.STRIPE_METER_EVENT_NAME || "echo_credits_used",
   },
 
   // Plan configurations
@@ -23,7 +22,6 @@ export const BILLING_CONFIG = {
     free: {
       name: "Free",
       monthlyCredits: parseInt(process.env.FREE_PLAN_CREDITS || "200", 10),
-      enableOverage: false,
       features: {
         episodesPerMonth: 200,
         searchesPerMonth: 200,
@@ -33,8 +31,6 @@ export const BILLING_CONFIG = {
     pro: {
       name: "Pro",
       monthlyCredits: parseInt(process.env.PRO_PLAN_CREDITS || "2000", 10),
-      enableOverage: true,
-      overagePrice: parseFloat(process.env.PRO_OVERAGE_PRICE || "0.01"), // $0.01 per credit
       stripePriceId: process.env.PRO_PLAN_STRIPE_PRICE_ID,
       features: {
         episodesPerMonth: 2000,
@@ -46,8 +42,6 @@ export const BILLING_CONFIG = {
     max: {
       name: "Max",
       monthlyCredits: parseInt(process.env.MAX_PLAN_CREDITS || "10000", 10),
-      enableOverage: true,
-      overagePrice: parseFloat(process.env.MAX_OVERAGE_PRICE || "0.008"), // $0.008 per credit (cheaper than pro)
       stripePriceId: process.env.MAX_PLAN_STRIPE_PRICE_ID,
       features: {
         episodesPerMonth: 10000,

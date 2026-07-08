@@ -4,12 +4,8 @@ import { prisma } from "~/db.server";
 import { type CreditOperation } from "~/trigger/utils/utils";
 
 /**
- * Atomically reserve credits for an operation.
- *
- * Spend order:
- *   1. availableCredits (the monthly bucket, resets each cycle)
- *   2. topupCredits (persistent, non-expiring — bought via /settings/billing)
- *
+ * Atomically reserve credits from the user's `availableCredits` balance.
+ * Top-ups increment this same bucket, so there's no second pool to walk.
  * Returns the number of credits reserved, or 0 if insufficient.
  */
 export async function reserveCredits(
@@ -50,48 +46,18 @@ export async function reserveCredits(
   }
 
   const userUsage = userWorkspace.user.UserUsage;
-  const totalAvailable = userUsage.availableCredits + userUsage.topupCredits;
 
-  // Not enough combined balance — behave like the previous overage logic:
-  // reserve whatever is left if overage billing is enabled, otherwise fail.
-  if (totalAvailable < amount) {
-    if (userWorkspace.workspace.Subscription.enableUsageBilling) {
-      const actualDeducted = totalAvailable;
-      if (actualDeducted > 0) {
-        const result = await prisma.userUsage.updateMany({
-          where: {
-            id: userUsage.id,
-            availableCredits: userUsage.availableCredits,
-            topupCredits: userUsage.topupCredits,
-          },
-          data: {
-            availableCredits: 0,
-            topupCredits: 0,
-          },
-        });
-        if (result.count === 0) {
-          // Lost the race — bail; caller will retry.
-          return 0;
-        }
-      }
-      return actualDeducted;
-    }
+  if (userUsage.availableCredits < amount) {
     return 0;
   }
-
-  // Split the reservation: monthly first, then top-up.
-  const fromMonthly = Math.min(userUsage.availableCredits, amount);
-  const fromTopup = amount - fromMonthly;
 
   const result = await prisma.userUsage.updateMany({
     where: {
       id: userUsage.id,
       availableCredits: userUsage.availableCredits,
-      topupCredits: userUsage.topupCredits,
     },
     data: {
-      availableCredits: { decrement: fromMonthly },
-      topupCredits: { decrement: fromTopup },
+      availableCredits: { decrement: amount },
     },
   });
 
@@ -143,12 +109,9 @@ export async function refundCredits(
 }
 
 /**
- * Reconcile reserved credits with actual usage.
- *
- * If actual > reserved: charge the extra, monthly-first then top-up.
- * If actual < reserved: refund the delta into availableCredits (best-effort
- *   accounting — the tiny amount that may leak from the top-up bucket on a
- *   refunded overshoot is acceptable and rare).
+ * Reconcile reserved credits with actual usage against the single
+ * `availableCredits` bucket. Excess reservation is refunded; shortfall
+ * is deducted (clamped, since reserveCredits should have gated it).
  */
 export async function reconcileCredits(
   workspaceId: string,
@@ -192,30 +155,14 @@ export async function reconcileCredits(
   const userUsage = userWorkspace.user.UserUsage;
   const difference = actualAmount - reservedAmount;
 
-  let availableDelta = 0;
-  let topupDelta = 0;
-  if (difference > 0) {
-    const extraFromMonthly = Math.min(userUsage.availableCredits, difference);
-    availableDelta = -extraFromMonthly;
-    topupDelta = -(difference - extraFromMonthly);
-  } else if (difference < 0) {
-    availableDelta = -difference; // refund to monthly bucket
-  }
-
   await prisma.userUsage.update({
     where: { id: userUsage.id },
     data: {
-      ...(availableDelta !== 0 && {
+      ...(difference !== 0 && {
         availableCredits:
-          availableDelta > 0
-            ? { increment: availableDelta }
-            : { decrement: -availableDelta },
-      }),
-      ...(topupDelta !== 0 && {
-        topupCredits:
-          topupDelta > 0
-            ? { increment: topupDelta }
-            : { decrement: -topupDelta },
+          difference > 0
+            ? { decrement: Math.min(userUsage.availableCredits, difference) }
+            : { increment: -difference },
       }),
       usedCredits: { increment: actualAmount },
       ...(operation === "addEpisode" && {

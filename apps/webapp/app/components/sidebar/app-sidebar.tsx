@@ -20,6 +20,7 @@ import {
   ArrowLeft,
   ArrowRight,
 } from "lucide-react";
+import { Card, CardContent } from "../ui/card";
 import { NavMain } from "./nav-main";
 import { useUser } from "~/hooks/useUser";
 import { NavUser } from "./nav-user";
@@ -206,6 +207,13 @@ export function AppSidebar({
         <SidebarFooter className="flex flex-col gap-1 px-2 pb-0">
           <IngestionStatus />
 
+          {user.availableCredits < 1 && (
+            <OutOfCreditsCard
+              agentName={agentName}
+              onUpgrade={() => navigate("/settings/billing")}
+            />
+          )}
+
           <div className="flex justify-end">
             <Button
               variant="ghost"
@@ -222,5 +230,34 @@ export function AppSidebar({
 
       <CommandBar open={commandBar} onOpenChange={setCommandBar} />
     </>
+  );
+}
+
+function OutOfCreditsCard({
+  agentName,
+  onUpgrade,
+}: {
+  agentName: string;
+  onUpgrade: () => void;
+}) {
+  const butler = agentName?.trim() ? agentName : "your butler";
+  return (
+    <Card>
+      <CardContent className="flex flex-col gap-2 p-2">
+        <p className="text-foreground text-xs leading-snug">
+          We&apos;ve run out of credits for the moment, so I can&apos;t take on
+          anything new until we top up. Whenever you&apos;re ready — I&apos;ll
+          be right here.
+        </p>
+        <Button
+          variant="secondary"
+          size="sm"
+          className="h-7 w-full justify-start px-2 text-xs"
+          onClick={onUpgrade}
+        >
+          Upgrade or top up
+        </Button>
+      </CardContent>
+    </Card>
   );
 }

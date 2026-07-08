@@ -20,7 +20,8 @@ import {
   type DecisionContext,
 } from "~/services/agent/types/decision-agent";
 import { type OrchestratorTools } from "~/services/agent/executors/base";
-import { deductCredits } from "~/trigger/utils/utils";
+import { deductCredits, hasCredits } from "~/trigger/utils/utils";
+import { isWorkspaceBYOK } from "~/services/byok.server";
 import {
   pickAgentResultTokens,
   recordTokenUsage,
@@ -80,6 +81,19 @@ export async function noStreamProcess(
   userId: string,
   workspaceId: string,
 ) {
+  // Pre-flight credit check. BYOK workspaces pay their own provider bills so
+  // they always pass; everyone else must have credits before we invoke the
+  // model. Callers catch `Error("no credits")` and surface HTTP 402. Named
+  // separately from the per-model `isBYOK` returned by `resolveModelConfig`
+  // further down — this one is a workspace-wide gate.
+  const workspaceHasBYOK = await isWorkspaceBYOK(workspaceId);
+  if (!workspaceHasBYOK) {
+    const ok = await hasCredits(workspaceId, userId, "chatMessage");
+    if (!ok) {
+      throw new Error("no credits");
+    }
+  }
+
   const conversation = await getConversationAndHistory(body.id, userId);
   const isAssistantApproval = body.needsApproval;
 

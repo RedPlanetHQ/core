@@ -333,17 +333,6 @@ export default function BillingSettings() {
                 <p className="text-muted-foreground text-sm">
                   {usageSummary.credits.percentageUsed}% used this period
                 </p>
-                {usageSummary.credits.topup > 0 && (
-                  <div className="mt-3 flex items-center justify-between border-t pt-3">
-                    <span className="text-muted-foreground flex items-center gap-1.5 text-sm">
-                      <Wallet className="h-3.5 w-3.5" />
-                      Top-up balance
-                    </span>
-                    <span className="text-sm font-semibold">
-                      {usageSummary.credits.topup.toLocaleString()}
-                    </span>
-                  </div>
-                )}
               </Card>
 
               {/* Usage Breakdown */}
@@ -397,35 +386,6 @@ export default function BillingSettings() {
               </Card>
             </div>
 
-            {/* Overage Warning */}
-            {usageSummary.credits.overage > 0 && (
-              <Card className="mt-4 border-orange-500 bg-orange-50 p-4 dark:bg-orange-950">
-                <div className="flex items-start gap-3">
-                  <AlertCircle className="h-5 w-5 text-orange-600 dark:text-orange-400" />
-                  <div>
-                    <h3 className="font-semibold text-orange-900 dark:text-orange-100">
-                      Overage Usage Detected
-                    </h3>
-                    <p className="text-sm text-orange-700 dark:text-orange-300">
-                      You've used {usageSummary.credits.overage} additional
-                      credits beyond your monthly allocation.
-                      {usageSummary.overage.enabled &&
-                        usageSummary.overage.pricePerCredit && (
-                          <>
-                            {" "}
-                            This will cost $
-                            {(
-                              usageSummary.credits.overage *
-                              usageSummary.overage.pricePerCredit
-                            ).toFixed(2)}{" "}
-                            extra this month.
-                          </>
-                        )}
-                    </p>
-                  </div>
-                </div>
-              </Card>
-            )}
           </div>
 
           {/* Plan Section */}
@@ -452,12 +412,6 @@ export default function BillingSettings() {
                   </div>
                   <p className="text-muted-foreground text-sm">
                     {usageSummary.credits.monthly.toLocaleString()} credits/month
-                    {usageSummary.overage.enabled && (
-                      <>
-                        {" "}
-                        · ${usageSummary.overage.pricePerCredit}/credit overage
-                      </>
-                    )}
                   </p>
                 </div>
                 <Button
@@ -677,7 +631,7 @@ export default function BillingSettings() {
                   <span>Credits: 3k/mo</span>
                 </li>
                 <li className="flex items-start gap-2">
-                  <span>No usage based</span>
+                  <span>Top up any time</span>
                 </li>
               </ul>
               <Button
@@ -714,7 +668,7 @@ export default function BillingSettings() {
                   <span>Credits: 15k/mo</span>
                 </li>
                 <li className="flex items-start gap-2">
-                  <span>$0.299 /1K Additional Credits</span>
+                  <span>Top up any time · credits never expire</span>
                 </li>
               </ul>
               <Button
@@ -751,7 +705,7 @@ export default function BillingSettings() {
                   <span>Credits: 100k/mo</span>
                 </li>
                 <li className="flex items-start gap-2">
-                  <span>$0.249 /1K Additional Credits</span>
+                  <span>Top up any time · credits never expire</span>
                 </li>
               </ul>
               <Button

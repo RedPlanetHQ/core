@@ -4,6 +4,9 @@ import { z } from "zod";
 import { createHybridActionApiRoute } from "~/services/routeBuilders/apiBuilder.server";
 import { createConversation } from "~/services/conversation.server";
 import { noStreamProcess } from "~/services/agent/no-stream-process";
+import { hasCredits } from "~/trigger/utils/utils";
+import { isWorkspaceBYOK } from "~/services/byok.server";
+import { logger } from "~/services/logger.service";
 
 const CreateConversationRequestSchema = z.object({
   message: z.string(),
@@ -23,8 +26,39 @@ const { loader, action } = createHybridActionApiRoute(
     corsStrategy: "all",
   },
   async ({ body, authentication }) => {
+    const workspaceId = authentication.workspaceId as string;
+
+    // Pre-flight credit check. BYOK workspaces bypass — they pay their own
+    // provider bills. Otherwise refuse to create a conversation that will
+    // trigger a model call the workspace can't afford. Mirrors the gate in
+    // `noStreamProcess` and `api.v1.conversation._index` so callers get the
+    // same 402 regardless of which entry point they hit.
+    if (workspaceId) {
+      const workspaceHasBYOK = await isWorkspaceBYOK(workspaceId);
+      if (!workspaceHasBYOK) {
+        const ok = await hasCredits(
+          workspaceId,
+          authentication.userId,
+          "chatMessage",
+        );
+        if (!ok) {
+          logger.warn(
+            `[conversation.create] Insufficient credits for ${authentication.userId}; refusing`,
+          );
+          return json(
+            {
+              error:
+                "You're out of credits. Upgrade your plan or add a top-up to keep chatting.",
+              code: "no_credits",
+            },
+            { status: 402 },
+          );
+        }
+      }
+    }
+
     const result = await createConversation(
-      authentication.workspaceId as string,
+      workspaceId,
       authentication.userId,
       {
         message: body.message,
@@ -44,7 +78,7 @@ const { loader, action } = createHybridActionApiRoute(
           scratchpadPageId: body.pageId,
         },
         authentication.userId,
-        authentication.workspaceId as string,
+        workspaceId,
       ).catch((err) => console.error("[daily] Agent processing failed", err));
     }
 
