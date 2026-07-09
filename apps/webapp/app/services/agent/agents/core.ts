@@ -33,6 +33,8 @@ import { getMessageTools } from "../tools/message-tools";
 import { getSessionTools } from "../tools/session-tools";
 import { getSleepTool, getProgressUpdateTool } from "../tools/utils-tools";
 import { getReadFileTool } from "../tools/file-tools";
+import { getMemorySearchTool } from "../tools/memory-tools";
+import { DirectOrchestratorTools } from "../executors";
 import {
   getListAvailableIntegrationsTool,
   getSuggestIntegrationsTool,
@@ -142,6 +144,17 @@ export async function createCoreTools(
   // Load a file at a URL into the model context (images, PDFs, text).
   // Works against external URLs and internal /api/v1/storage attachments.
   tools["read_file"] = getReadFileTool(userId);
+
+  // Their memory — direct recall, no orchestrator hop. Available in every
+  // context (interactive, background, triggers) so the butler consults
+  // memory before composing or delegating. Same executor fallback as the
+  // orchestrators (orchestrator.ts:302).
+  tools["memory_search"] = getMemorySearchTool({
+    userId,
+    workspaceId,
+    source,
+    executor: executorTools ?? new DirectOrchestratorTools(),
+  });
 
   // Integration catalog — global. Agent calls this before
   // suggest_integrations to see which slugs are valid and which are
