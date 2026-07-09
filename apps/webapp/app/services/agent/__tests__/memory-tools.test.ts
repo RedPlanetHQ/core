@@ -102,4 +102,30 @@ describe("createCoreTools memory_search registration", () => {
     });
     expect(tools["memory_search"]).toBeDefined();
   });
+
+  it("threads a provided executor into the registered tool", async () => {
+    const customSearch = vi
+      .fn()
+      .mockResolvedValueOnce("### Episode 1\nfrom custom executor");
+    const customExecutor = {
+      searchMemory: customSearch,
+    } as unknown as OrchestratorTools;
+
+    const tools = await createCoreTools({
+      ...base,
+      executorTools: customExecutor,
+    });
+
+    const result = await (
+      tools["memory_search"] as unknown as ExecutableTool
+    ).execute({ query: "anything" });
+
+    expect(customSearch).toHaveBeenCalledWith(
+      "anything",
+      "user_1",
+      "ws_1",
+      "core",
+    );
+    expect(result).toBe("### Episode 1\nfrom custom executor");
+  });
 });
