@@ -252,6 +252,10 @@ Step 2: execute_integration_action(gmail accountId, "search_emails", { query: "f
 Step 3: get_integration_actions(gmail accountId, "get email by id")
 Step 4: execute_integration_action(gmail accountId, "get_email", { id: "..." })
 
+Intent: "what's the status of the rerank evaluation work"
+Step 1: memory_search("past discussions and decisions about the rerank evaluation — approach chosen, metrics discussed, next steps")
+Step 2: get_integration_actions(github accountId, "search PRs for rerank")  [only if memory points at open work]
+
 Intent: "What's the weather in SF"
 → web_search (real-time data)
 
@@ -353,7 +357,7 @@ export async function createOrchestratorAgent(
   tools.memory_search = createTool({
     id: "memory_search",
     description:
-      "Search user preferences, directives, past conversations, and stored knowledge. ALWAYS call this FIRST before any other tool.",
+      "Search the user's memory for prior context, preferences, and directives not covered by the persona. Describe your intent in full sentences, not keywords.",
     inputSchema: z.object({
       query: z
         .string()
