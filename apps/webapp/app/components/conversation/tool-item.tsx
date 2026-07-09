@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from "react";
+import { memo, useEffect, useMemo, useRef, useState } from "react";
 import { cn } from "~/lib/utils";
 import { type ChatAddToolApproveResponseFunction } from "ai";
 import {
@@ -33,17 +33,7 @@ import type { IconType } from "../icon-utils";
 import { Task } from "../icons/task";
 import { SuggestIntegrationsCards } from "./suggest-integrations-cards";
 
-export const Tool = ({
-  part,
-  addToolApprovalResponse,
-  isDisabled = false,
-  allToolsFlat = [],
-  firstPendingApprovalIdx = -1,
-  isNested = false,
-  integrationAccountMap = {},
-  integrationFrontendMap = {},
-  setToolArgOverride,
-}: {
+interface ToolProps {
   part: ConversationToolPart;
   addToolApprovalResponse: ChatAddToolApproveResponseFunction;
   isDisabled?: boolean;
@@ -56,7 +46,19 @@ export const Tool = ({
     toolCallId: string,
     args: Record<string, unknown>,
   ) => void;
-}) => {
+}
+
+const ToolInner = ({
+  part,
+  addToolApprovalResponse,
+  isDisabled = false,
+  allToolsFlat = [],
+  firstPendingApprovalIdx = -1,
+  isNested = false,
+  integrationAccountMap = {},
+  integrationFrontendMap = {},
+  setToolArgOverride,
+}: ToolProps) => {
   const toolName = part.type.replace("tool-", "");
   const needsApproval = part.state === "approval-requested";
 
@@ -76,12 +78,21 @@ export const Tool = ({
     (part as unknown as { args?: Record<string, unknown> }).args ??
     {};
 
-  // Get all nested parts from output
-  const allNestedParts = getNestedPartsFromOutput(part.output);
+  // Get all nested parts from output. `part.output` identity is stable across
+  // stream ticks that don't change this specific tool, so useMemo keeps the
+  // walk cheap when a sibling tool advances.
+  const allNestedParts = useMemo(
+    () => getNestedPartsFromOutput(part.output),
+    [part.output],
+  );
 
   // Filter to get only tool parts
-  const liveNestedToolParts = allNestedParts.filter(
-    (item): item is ConversationToolPart => item.type.includes("tool-"),
+  const liveNestedToolParts = useMemo(
+    () =>
+      allNestedParts.filter((item): item is ConversationToolPart =>
+        item.type.includes("tool-"),
+      ),
+    [allNestedParts],
   );
 
   // Cache toolCalls seen in nested parts. The resumed stream (after approval)
@@ -93,7 +104,7 @@ export const Tool = ({
     cachedNestedPartsRef.current = liveNestedToolParts;
   }
 
-  const nestedToolParts: ConversationToolPart[] = (() => {
+  const nestedToolParts: ConversationToolPart[] = useMemo(() => {
     if (liveNestedToolParts.length > 0) return liveNestedToolParts;
     const cached = cachedNestedPartsRef.current;
     if (cached.length === 0) return [];
@@ -123,13 +134,15 @@ export const Tool = ({
         output: match.result,
       };
     });
-  })();
+  }, [liveNestedToolParts, part.output]);
 
   const hasNestedTools = nestedToolParts.length > 0;
 
   // Check if any nested tool (at any depth) needs approval (to auto-open)
-  const hasNestedApproval =
-    hasNestedTools && hasNeedsApprovalDeep(nestedToolParts);
+  const hasNestedApproval = useMemo(
+    () => hasNestedTools && hasNeedsApprovalDeep(nestedToolParts),
+    [hasNestedTools, nestedToolParts],
+  );
 
   const [isOpen, setIsOpen] = useState(!needsApproval && hasNestedApproval);
 
@@ -599,8 +612,49 @@ export const Tool = ({
         </Button>
       </CollapsibleTrigger>
       <CollapsibleContent className={cn("w-full", isNested && "pl-3")}>
-        {hasNestedTools ? renderNestedContent() : renderLeafContent()}
+        {/* Only construct the child JSX when actually visible. Otherwise a
+         *  sub-agent with hundreds of nested tools would stringify every
+         *  input/output on every stream tick even though it's hidden. */}
+        {isOpen &&
+          (hasNestedTools ? renderNestedContent() : renderLeafContent())}
       </CollapsibleContent>
     </Collapsible>
   );
 };
+
+/**
+ * Memoize so a stream tick that only advances one tool in a sub-agent's
+ * take_action doesn't re-render every sibling. Once a tool reaches a
+ * terminal state, its data won't change again, so we can safely skip the
+ * re-render even if the parent handed us a fresh part object reference and
+ * a fresh allToolsFlat array — isToolDisabled only returns true for pending
+ * approvals, so terminal tools are unaffected by sibling churn.
+ */
+const arePropsEqual = (prev: ToolProps, next: ToolProps): boolean => {
+  const p = prev.part;
+  const n = next.part;
+  if (p.toolCallId !== n.toolCallId || p.state !== n.state) return false;
+  const terminal =
+    n.state === "output-available" ||
+    n.state === "output-error" ||
+    n.state === "output-denied" ||
+    n.state === "approval-responded";
+  // Terminal fast-path: skip regardless of upstream reference churn — the
+  // observable data on a completed tool is fixed for life. This is what
+  // actually breaks the O(N²) storm when a sub-agent has many tools.
+  if (terminal) return true;
+  // Non-terminal (still streaming): fall back to shallow prop equality.
+  return (
+    p === n &&
+    prev.isDisabled === next.isDisabled &&
+    prev.firstPendingApprovalIdx === next.firstPendingApprovalIdx &&
+    prev.isNested === next.isNested &&
+    prev.addToolApprovalResponse === next.addToolApprovalResponse &&
+    prev.setToolArgOverride === next.setToolArgOverride &&
+    prev.integrationAccountMap === next.integrationAccountMap &&
+    prev.integrationFrontendMap === next.integrationFrontendMap &&
+    prev.allToolsFlat === next.allToolsFlat
+  );
+};
+
+export const Tool = memo(ToolInner, arePropsEqual);
