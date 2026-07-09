@@ -107,6 +107,9 @@ export function ConversationPopover({
   } = useChat({
     id: conversationId ?? "conversation-popover",
     messages: historyMessages,
+    // Throttle stream-driven state updates so a chatty sub-agent can't stall
+    // the popover's main thread — matches ConversationView.
+    experimental_throttle: 100,
     onFinish: () => {
       toolArgOverridesRef.current = {};
     },
@@ -218,13 +221,19 @@ export function ConversationPopover({
     messagesEndRef.current?.scrollIntoView({ behavior: "smooth" });
   }, [visibleMessages]);
 
-  const lastAssistant = [...messages]
-    .reverse()
-    .find((message) => message.role === "assistant");
+  const lastAssistant = useMemo(
+    () =>
+      [...messages].reverse().find((message) => message.role === "assistant"),
+    [messages],
+  );
 
-  const needsApproval = lastAssistant?.parts
-    ? hasNeedsApprovalDeep(lastAssistant.parts as ConversationToolPart[])
-    : false;
+  const needsApproval = useMemo(
+    () =>
+      lastAssistant?.parts
+        ? hasNeedsApprovalDeep(lastAssistant.parts as ConversationToolPart[])
+        : false,
+    [lastAssistant],
+  );
 
   const handleToolApprovalResponse = useCallback(
     (params: { id: string; approved: boolean }) => {

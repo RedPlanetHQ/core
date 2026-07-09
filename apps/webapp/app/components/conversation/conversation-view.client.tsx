@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useFetcher } from "@remix-run/react";
 import { useLocalCommonState } from "~/hooks/use-local-state";
 import { useChat, type UIMessage } from "@ai-sdk/react";
@@ -192,6 +192,11 @@ export function ConversationView({
   } = useChat({
     id: conversationId,
     resume: true,
+    // Sub-agents (e.g. take_action) can emit hundreds of tool-call chunks
+    // per second. Without throttling, each chunk triggers a full re-render
+    // + deep parts-tree walk on the active assistant message and freezes
+    // the main thread. 100ms coalesces updates to ~10fps of streaming.
+    experimental_throttle: 100,
     onFinish: () => {
       toolArgOverridesRef.current = {};
       pendingApprovalRequestsRef.current = [];
@@ -345,16 +350,22 @@ export function ConversationView({
     prevMessageCountRef.current = newCount;
   }, [messages.length]);
 
-  const lastAssistant = [...messages]
-    .reverse()
-    .find((m) => m.role === "assistant") as UIMessage | undefined;
+  const lastAssistant = useMemo(
+    () =>
+      [...messages].reverse().find((m) => m.role === "assistant") as
+        | UIMessage
+        | undefined,
+    [messages],
+  );
 
   // Accumulated plain-text rendering of the latest assistant message
   // — feeds the streaming TTS hook so each completed sentence can be
   // spoken as the model emits it.
-  const lastAssistantText = lastAssistant
-    ? extractAssistantText(lastAssistant.parts as any[])
-    : "";
+  const lastAssistantText = useMemo(
+    () =>
+      lastAssistant ? extractAssistantText(lastAssistant.parts as any[]) : "",
+    [lastAssistant],
+  );
   const isChatStreaming = status === "streaming" || status === "submitted";
   const tts = useStreamingTTS({
     enabled: voiceMode,
@@ -380,16 +391,27 @@ export function ConversationView({
     [tts],
   );
 
-  const needsApproval = lastAssistant?.parts
-    ? hasNeedsApprovalDeep(lastAssistant.parts as ConversationToolPart[])
-    : false;
+  // The two walks below run per render of ConversationView. Memoize on
+  // lastAssistant so unrelated state changes (voiceMode, tts internals,
+  // spacer height) don't re-walk the parts tree.
+  const needsApproval = useMemo(
+    () =>
+      lastAssistant?.parts
+        ? hasNeedsApprovalDeep(lastAssistant.parts as ConversationToolPart[])
+        : false,
+    [lastAssistant],
+  );
 
   // Deep-scan the last assistant message for all suspended tool calls.
   // Keep the ref at the max seen set (stable during approval processing);
   // reset on chat finish (onFinish above).
-  const currentApprovalRequests = lastAssistant
-    ? collectApprovalRequests(mergeAgentParts(lastAssistant.parts))
-    : [];
+  const currentApprovalRequests = useMemo(
+    () =>
+      lastAssistant
+        ? collectApprovalRequests(mergeAgentParts(lastAssistant.parts))
+        : [],
+    [lastAssistant],
+  );
   if (
     currentApprovalRequests.length > pendingApprovalRequestsRef.current.length
   ) {

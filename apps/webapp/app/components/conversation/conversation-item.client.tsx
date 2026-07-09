@@ -1,5 +1,5 @@
 import { EditorContent, useEditor } from "@tiptap/react";
-import { useEffect, memo, useState } from "react";
+import { useEffect, memo, useMemo, useState } from "react";
 import { cn } from "~/lib/utils";
 import { extensionsForConversation } from "./editor-extensions";
 import { type ChatAddToolApproveResponseFunction, type UIMessage } from "ai";
@@ -41,11 +41,17 @@ const ConversationItemComponent = ({
   integrationFrontendMap = {},
   className,
 }: AIConversationItemProps) => {
-  const isUser = message.role === "user" || false;
-  const combinedText = message.parts
-    .filter((part: any) => part.type === "text" && part.text)
-    .map((p: any) => p.text)
-    .join("");
+  const isUser = message?.role === "user" || false;
+  const combinedText = useMemo(
+    () =>
+      message
+        ? message.parts
+            .filter((part: any) => part.type === "text" && part.text)
+            .map((p: any) => p.text)
+            .join("")
+        : "",
+    [message],
+  );
   const [showAllTools, setShowAllTools] = useState(false);
   const formattedTime = createdAt
     ? new Date(createdAt).toLocaleTimeString([], {
@@ -60,27 +66,51 @@ const ConversationItemComponent = ({
     content: combinedText ? combinedText : "",
   });
 
+  // Push new content only when the extracted text actually changes. During a
+  // sub-agent's tool-call storm, `message` identity flips on every stream
+  // chunk while combinedText is unchanged — depending on `message` here would
+  // reflow the editor hundreds of times a second and lock up the main thread.
   useEffect(() => {
     if (combinedText) {
       editor?.commands.setContent(combinedText);
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [message]);
+  }, [combinedText]);
+
+  // Every derived value below walks the (potentially deep) parts tree once.
+  // Memoize on `message` so unrelated state changes (showAllTools toggle,
+  // isChatBusy flip) don't re-run the walks. During streaming the message
+  // reference does churn per tick, but throttling `useChat` upstream keeps
+  // the cost bounded.
+  const mergedParts = useMemo(
+    () => (message ? mergeAgentParts(message.parts) : []),
+    [message],
+  );
+
+  const groupedParts = useMemo(
+    () => groupToolParts(mergedParts),
+    [mergedParts],
+  );
+
+  // Pending approvals from merged parts (so nested tools inside take_action are visible)
+  const pendingApprovals = useMemo(
+    () => (isUser ? [] : findPendingApprovals(mergedParts)),
+    [isUser, mergedParts],
+  );
+
+  // Use mergedParts so data-tool-agent nested tools are included in the flat list
+  const allToolsFlat = useMemo(
+    () => findAllToolsDeep(mergedParts),
+    [mergedParts],
+  );
+  const firstPendingApprovalIdx = useMemo(
+    () => findFirstPendingApprovalIndex(allToolsFlat),
+    [allToolsFlat],
+  );
 
   if (!message) {
     return null;
   }
-
-  const mergedParts = mergeAgentParts(message.parts);
-
-  const groupedParts = groupToolParts(mergedParts);
-
-  // Pending approvals from merged parts (so nested tools inside take_action are visible)
-  const pendingApprovals = isUser ? [] : findPendingApprovals(mergedParts);
-
-  // Use mergedParts so data-tool-agent nested tools are included in the flat list
-  const allToolsFlat = findAllToolsDeep(mergedParts);
-  const firstPendingApprovalIdx = findFirstPendingApprovalIndex(mergedParts);
 
   // Pass approval responses straight through — cascade-reject is handled inside ToolApprovalPanel.
   const handleToolApproval = (params: { id: string; approved: boolean }) => {

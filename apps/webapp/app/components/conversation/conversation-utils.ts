@@ -284,13 +284,13 @@ export const findAllToolsDeep = (
 // ── findFirstPendingApprovalIndex ─────────────────────────────────────────────
 
 /**
- * Finds the index of the first tool with "approval-requested" state in flattened list.
- * Returns -1 if none found.
+ * Finds the index of the first tool with "approval-requested" state in a
+ * flattened tool list. Callers pass a precomputed list (from findAllToolsDeep)
+ * to avoid a second deep walk during streaming.
  */
 export const findFirstPendingApprovalIndex = (
-  parts: ExtendedPart[],
+  allTools: ConversationToolPart[],
 ): number => {
-  const allTools = findAllToolsDeep(parts);
   return allTools.findIndex((part) => part.state === "approval-requested");
 };
 
