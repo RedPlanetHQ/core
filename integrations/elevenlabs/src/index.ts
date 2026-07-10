@@ -32,7 +32,7 @@ class ElevenLabsCLI extends IntegrationCLI {
     super('elevenlabs', '1.0.0');
   }
 
-  protected async handleEvent(eventPayload: IntegrationEventPayload): Promise<unknown> {
+  protected async handleEvent(eventPayload: IntegrationEventPayload): Promise<any> {
     return await run(eventPayload);
   }
 
