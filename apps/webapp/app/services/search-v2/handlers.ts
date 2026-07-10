@@ -1381,8 +1381,11 @@ export async function handleTemporalFacets(
 }
 
 /**
- * Search voice aspects from the Aspects Store when query involves voice aspect types
- * Voice aspects: Directive, Preference, Habit, Belief, Goal
+ * Search voice aspects (Directive, Preference, Habit, Belief, Goal, Task) from
+ * the Aspects Store using the query embedding. Runs on ANY episode-returning
+ * query — voice aspects are complementary to episodes and useful even when the
+ * router didn't tag a voice-aspect type. If the router DID name voice aspects,
+ * filter to those; otherwise return the top matches across all voice aspects.
  */
 async function searchVoiceAspectsForQuery(
   ctx: HandlerContext,
@@ -1390,18 +1393,9 @@ async function searchVoiceAspectsForQuery(
   const query = ctx.options.query;
   if (!query) return [];
 
-  // Check if any requested aspects overlap with voice aspects
-  const voiceAspectSet = new Set(VOICE_ASPECTS as readonly string[]);
-  const requestedVoiceAspects = ctx.routerOutput.aspects.filter((a) =>
-    voiceAspectSet.has(a),
-  );
-
-  if (requestedVoiceAspects.length === 0) return [];
-
   const queryEmbedding = await getEmbedding(query);
   if (!queryEmbedding || queryEmbedding.length === 0) return [];
 
-  // Search for each requested voice aspect type
   const results = await searchVoiceAspects({
     queryVector: queryEmbedding,
     userId: ctx.userId,
@@ -1410,13 +1404,23 @@ async function searchVoiceAspectsForQuery(
     threshold: 0.5,
   });
 
-  // Filter to only requested voice aspects
-  const filtered = results.filter((r) =>
-    requestedVoiceAspects.includes(r.aspect as StatementAspect),
+  // If the router picked voice aspects, honour that filter. Otherwise keep all.
+  const voiceAspectSet = new Set(VOICE_ASPECTS as readonly string[]);
+  const requestedVoiceAspects = ctx.routerOutput.aspects.filter((a) =>
+    voiceAspectSet.has(a),
   );
+  const filtered =
+    requestedVoiceAspects.length > 0
+      ? results.filter((r) =>
+          requestedVoiceAspects.includes(r.aspect as StatementAspect),
+        )
+      : results;
 
   logger.info(
-    `[VoiceAspects] Found ${filtered.length} voice aspects for aspects: [${requestedVoiceAspects.join(", ")}]`,
+    `[VoiceAspects] Found ${filtered.length}/${results.length} voice aspects` +
+      (requestedVoiceAspects.length > 0
+        ? ` (filtered to [${requestedVoiceAspects.join(", ")}])`
+        : ""),
   );
 
   return filtered.map((r) => ({
@@ -1456,16 +1460,16 @@ export async function routeToHandler(
         );
       }
 
-      // Broad mode - return episodes with entity
-      const augmentedEpisodes = await augmentEpisodesWithBroadRecallBackstop(
-        result.episodes,
-        ctx,
-      );
+      // Broad mode - return episodes with entity + voice aspects in parallel
+      const [augmentedEpisodes, voiceAspects] = await Promise.all([
+        augmentEpisodesWithBroadRecallBackstop(result.episodes, ctx),
+        searchVoiceAspectsForQuery(ctx),
+      ]);
       const rerankedEpisodes = await applyEpisodeReranking(
         augmentedEpisodes,
         ctx,
       );
-      return await normalizeToRecallResult(
+      const broadResult = await normalizeToRecallResult(
         {
           episodes: rerankedEpisodes,
           entities: result.entities,
@@ -1473,6 +1477,10 @@ export async function routeToHandler(
         },
         ctx,
       );
+      if (voiceAspects.length > 0) {
+        broadResult.voiceAspects = voiceAspects;
+      }
+      return broadResult;
     }
 
     case "aspect_query": {
@@ -1498,7 +1506,10 @@ export async function routeToHandler(
     }
 
     case "temporal": {
-      const episodes = await handleTemporal(ctx);
+      const [episodes, voiceAspects] = await Promise.all([
+        handleTemporal(ctx),
+        searchVoiceAspectsForQuery(ctx),
+      ]);
       // Only rerank when there's a topic focus — pure date-range queries have no semantic
       // content to score against, so sort by recency instead to avoid filtering valid results
       const hasTopic =
@@ -1517,7 +1528,14 @@ export async function routeToHandler(
                 new Date(a.createdAt).getTime(),
             )
             .slice(0, ctx.options.maxEpisodes || 10);
-      return await normalizeToRecallResult({ episodes: rerankedEpisodes }, ctx);
+      const temporalResult = await normalizeToRecallResult(
+        { episodes: rerankedEpisodes },
+        ctx,
+      );
+      if (voiceAspects.length > 0) {
+        temporalResult.voiceAspects = voiceAspects;
+      }
+      return temporalResult;
     }
 
     case "temporal_facets": {
@@ -1532,9 +1550,14 @@ export async function routeToHandler(
     }
 
     case "exploratory": {
-      const episodes = await handleExploratory(ctx);
-      const augmentedEpisodes =
-        await augmentEpisodesWithBroadRecallBackstop(episodes, ctx);
+      const [episodes, voiceAspects] = await Promise.all([
+        handleExploratory(ctx),
+        searchVoiceAspectsForQuery(ctx),
+      ]);
+      const augmentedEpisodes = await augmentEpisodesWithBroadRecallBackstop(
+        episodes,
+        ctx,
+      );
       const rerankedEpisodes = await applyEpisodeReranking(
         augmentedEpisodes,
         ctx,
@@ -1542,7 +1565,14 @@ export async function routeToHandler(
           threshold: 0.2,
         },
       );
-      return await normalizeToRecallResult({ episodes: rerankedEpisodes }, ctx);
+      const exploratoryResult = await normalizeToRecallResult(
+        { episodes: rerankedEpisodes },
+        ctx,
+      );
+      if (voiceAspects.length > 0) {
+        exploratoryResult.voiceAspects = voiceAspects;
+      }
+      return exploratoryResult;
     }
 
     case "relationship": {
