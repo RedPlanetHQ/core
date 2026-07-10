@@ -58,8 +58,10 @@ const MIN_STATEMENTS_PER_SECTION = 1;
 const MAX_STATEMENTS_PER_CHUNK = 30;
 const MAX_EPISODES_PER_CHUNK = 20;
 
-// Aspects to skip entirely from persona generation
-// Event: Transient calendar/schedule data - agents can query graph directly for specific dates
+// Persona now surfaces IDENTITY only. Everything else (preferences, directives,
+// goals, beliefs, etc.) lives in the graph and is retrievable via memory search
+// at runtime — the persona is intentionally kept small so it stays useful when
+// preloaded on every task.
 const SKIPPED_ASPECTS: StatementAspect[] = [
   "Event",
   "Relationship",
@@ -70,6 +72,8 @@ const SKIPPED_ASPECTS: StatementAspect[] = [
   "Decision",
   "Problem",
   "Task",
+  "Preference",
+  "Directive",
 ];
 
 // ─── Markdown section helpers ───────────────────────────────────────
@@ -1225,11 +1229,7 @@ function combineIntoPersonaDocument(
   sections: PersonaSectionResult[],
   userContext: UserContext,
 ): string {
-  const sectionOrder: StatementAspect[] = [
-    "Identity",
-    "Preference",
-    "Directive",
-  ];
+  const sectionOrder: StatementAspect[] = ["Identity"];
 
   const sectionsByAspect = new Map(sections.map((s) => [s.aspect, s]));
 

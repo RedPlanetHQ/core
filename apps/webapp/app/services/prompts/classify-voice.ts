@@ -73,24 +73,30 @@ Anti-examples (one-time spec edits that sound like Preferences but are Tasks):
 NOT: system architecture, data storage, or caching strategy → Directive. NOT: product positioning or strategic stance → Belief or Directive. NOT: one-time design/copy/spec edits → Task. NOT: standing instructions for work output format → Directive. NOT: value judgments about how the world works → Belief.
 
 **Habit** — What the USER (as a person) actually DOES REPEATEDLY in real life. Recurring personal behaviors, routines, rituals, communication patterns — not engineering methodologies, SDK conventions, or tool workflows.
+
+TEST 1 (RUN THIS FIRST, BEFORE READING KEEP-EXAMPLES): Would this recurring pattern still exist if the user switched jobs tomorrow, stopped using this SDK, or the tool was deleted? If the pattern is scoped to "when using X SDK," "for Y configuration," "when scripting Z tool," or "my methodology for debugging/validating/launching," it is a Preference or Directive — STOP, do not classify as Habit.
+
+TEST 2: Does this describe a recurring rhythm in the user's LIFE (morning routine, weekly ritual, meal habit, exercise pattern, finance behavior, communication cadence with people) — OR a repeated pattern in how the user WORKS with a specific tool, SDK, codebase, or output format? If it's the latter → Preference (personal taste for how output/code should look) or Directive (standing rule for a system/workflow). Only the former is a Habit.
+
 - "Takes fish oil supplements daily at breakfast" → Habit
 - "Reviews PRs every morning before standup" → Habit
 - "I primarily use credit cards for spending, about 80% of transactions" → Habit
 - "Maintains a daily scratchpad for tasks and notes" → Habit
 - "Asks clarifying questions before starting work; challenges proposed approaches" → Habit
 
-TEST: would this recurring pattern exist if the user switched jobs or stopped using a specific SDK/tool? If the pattern is bound to "when using X SDK" or "when configuring Y tool" or "my debugging strategy for Z", it is a Preference or Directive, not a Habit. Habits are about the PERSON; methodologies are about HOW THEY WORK.
+Anti-examples (these SOUND like habits — they use "when," "uses a," "workflow," "maintains," or present-tense verbs — but fail TEST 1 or TEST 2):
+- "When using the @anthropic-ai/sdk TypeScript client, I handle errors via typed exception classes" → Preference (SDK-bound coding convention; dies if the SDK changes)
+- "For Extended Thinking configuration, I use adaptive thinking for Opus 4.7/4.6 and Sonnet 4.6" → Directive (SDK configuration methodology, not a life rhythm)
+- "When using use_figma, I work incrementally in small steps and stop on any error" → Directive (tool-scoped workflow — fails TEST 1)
+- "Uses a four-phase Systematic Debugging methodology: Phase 1 Root Cause, Phase 2 Pattern..." → Directive (engineering methodology the user documented, not a behavior observed in daily life)
+- "Validation workflow: call get_metadata to verify structure, call get_screenshot to verify visual correctness..." → Directive (tool-call procedure, not a personal ritual)
+- "I use bulleted lists in ~33-44% of technical/workflow outputs" → Preference (output-format preference)
+- "I use a minimal Tauri Rust entrypoint: tauri::Builder::default().run(...)" → Preference (code convention)
+- "Before launch, I run a repo health pre-flight checklist: CI green, no stale PRs..." → Directive (SOP for a specific project event)
+- "He already has agent handoffs automated via scripts, but context still leaks" → null (problem report / current-state observation)
+- "I position CORE as a coordination/orchestration layer" → Belief (positioning stance, not repeated behavior)
 
-Anti-examples (these SOUND like habits because they describe a repeated pattern, but are SDK/tool methodologies, conceptual stances, or problem reports):
-- "When using the @anthropic-ai/sdk TypeScript client, I handle errors via typed exception classes" → Preference or Directive (coding methodology, not a personal habit)
-- "For Extended Thinking configuration, I use adaptive thinking for Opus 4.7/4.6" → Directive (SDK configuration pattern)
-- "I verify prompt-cache effectiveness by inspecting Claude API response usage fields" → Directive (how to verify a system behavior)
-- "When using use_figma, I work incrementally in small steps and stop on any error" → Preference or Directive (tool workflow pattern)
-- "He already has agent handoffs automated via scripts, but context still leaks between agents" → null (problem report / system observation, not a habit)
-- "He is thinking in terms of memory primitives and session compaction" → Belief or null (conceptual stance, not a demonstrated recurring behavior)
-- "I position CORE as a coordination/orchestration layer" → Belief (positioning / strategic principle)
-
-NOT: SDK or coding methodologies → Preference/Directive. NOT: tool workflows or configuration patterns → Preference/Directive. NOT: conceptual stances or worldviews → Belief. NOT: problem reports or system observations → null. NOT: something the user WANTS to start but isn't doing yet → Goal.
+NOT: SDK/coding/config methodologies (any "when using X", "for Y configuration") → Preference/Directive. NOT: tool workflows or validation checklists → Directive. NOT: engineering methodologies the user authored (phase diagrams, DOT graphs, red-flag lists) → Directive. NOT: output-format or code-style patterns → Preference. NOT: conceptual stances or worldviews → Belief. NOT: problem reports, current-state observations, or "still has to" complaints → null or Task. NOT: something the user WANTS to start but isn't doing yet → Goal. NOT: a single past action described in past tense → Task.
 
 **Belief** — A lasting CONVICTION or value judgment about how the world works. The user's principles — not a documented fact that anyone reading the same docs would agree with.
 - "Open-source builds more trust than closed products" → Belief
@@ -111,21 +117,31 @@ Anti-examples (these SOUND like principles because they use declarative language
 
 NOT: documented technical facts about external APIs/SDKs/models → null. NOT: procedural workarounds or constraints → null. NOT: standing operating rules ("if intermittent, don't fix") → Directive. NOT: momentary reactions, opinions about a specific draft, or task feedback.
 
-**Goal** — Something the USER personally is working toward over time. A sustained pursuit (days/weeks/months) of an objective the user is driving — not a feature specification for a system.
+**Goal** — Something the USER (a named person, "I", or "he/she") personally is working toward over time. The SUBJECT of the sentence must be a person, not a product/feature/component. A sustained personal pursuit (days/weeks/months) — launch pushes, positioning, community-building, founder objectives, personal growth — not a specification for what a system should do.
 - "I want to run a marathon by December" → Goal
 - "Launch the personal-OS MVP this quarter" → Goal
 - "I want to personally onboard Guillaume" → Goal
 - "Ship the home-screen redesign before Q4" → Goal
 
-TEST: ask "who is pursuing this?" If the subject of the wish is THE SYSTEM/PRODUCT/SKILL ("the app should support X", "the gateway should include Y", "the skill is to do Z"), it is a Directive — a standing instruction for what the system must do — not a Goal. Goal is what the USER is personally pursuing.
+TEST 1 (subject swap): rewrite the sentence starting with "the [feature/page/building/widget/UI/CLI/API/skill/agent] should …". If it still reads naturally, the true subject is the product → Directive. Goal requires a human subject who is personally pursuing something.
 
-Anti-examples (these SOUND like Goals because they use "wants"/"should"/"goal for", but the subject is the system, not the user's personal pursuit):
+TEST 2 (spec swap): would this still be true if we replaced "the app" / "CORE" / "the game" with "this specific feature I'm building right now"? If yes → Directive (it's a feature spec, not a life-scale pursuit).
+
+TEST 3 (word "goal" is not enough): the literal string "goal for X" or "my goal is" does NOT make something a Goal if X is a tool, skill, widget, or deliverable. Ask what the pursuit is over time.
+
+Anti-examples (these SOUND like Goals because they use "wants"/"goal for"/"product goal", but the subject is a system/feature/component):
 - "Wants the app to support OpenAI in addition to Anthropic" → Directive (feature requirement)
-- "OpenCode should have the same functionality as claude-code and codex (full feature parity)" → Directive (system mandate)
+- "OpenCode should have the same functionality as claude-code and codex" → Directive (system mandate)
 - "Wants CORE's open-source deployment to include the gateway component" → Directive (product requirement)
-- "Goal for the claude-code-plugin skill is to ask OpenAI Codex questions about a repository codebase" → Directive (tool behavior spec)
+- "Goal for the claude-code-plugin skill is to ask OpenAI Codex questions about a repository codebase…" → Directive (tool behavior spec)
+- "Wants the game's 'home' interior scene to include … a wall-mounted scratchpad, a computer/terminal …, and a sofa …" → Directive (feature spec)
+- "Wants the Office building to provide a work-focused interface for tasks …" → Directive (surface spec)
+- "Goal: build a Linear integration widget … that shows issues assigned to Harshith in the current cycle" → Directive (widget spec, subject is the widget)
+- "Wants the Home page to present modules … as interactive items that show a different-colored button on hover …" → Directive (UI behavior spec)
+- "Harshith wants a permission-mode feature with two modes ('Default' vs 'Full access') implemented as a separate reusable component …" → Directive (component spec)
+- "Wants CLI features for easy local self-hosting of CORE via Docker: two commands — install-local and config-local …" → Directive (CLI spec)
 
-NOT: feature requirements or product specifications, even if phrased as "I want the app to X" → Directive. NOT: one-time follow-ups or action items → Task. NOT: pending evaluation work ("considering migrating to X") → Task.
+NOT: feature requirements or product specifications, even if phrased as "I want the app to X" or "Goal for X is …" → Directive. NOT: one-time follow-ups, evaluations, or "considering/intends to use X" → Task. NOT: positioning judgments without a pursuit dimension → Belief. Rule of thumb: if the subject of the sentence is a product, feature, page, building, widget, UI element, API, CLI, skill, or workflow, it is NOT a Goal.
 
 **Task** — A specific, FUTURE, uncompleted commitment the user intends to do. A one-time action item with a clear completion state — not a record of work already done, a decision already finalized, or a standing want.
 - "Need to send the proposal to the client by Friday" → Task

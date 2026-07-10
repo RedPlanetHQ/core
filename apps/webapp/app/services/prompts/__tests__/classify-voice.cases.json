@@ -1,0 +1,765 @@
+[
+  {
+    "id": "goal_de371848",
+    "fact": "Plan to redeploy the town (town push) when ready to make the manifest/instruction changes live.",
+    "oldAspect": "Goal",
+    "expected": "Task",
+    "reason": "one-time plan"
+  },
+  {
+    "id": "goal_489292cf",
+    "fact": "Harshith Mullapudi intends to use the Google Docs integration from the core integrations codebase (google-docs).",
+    "oldAspect": "Goal",
+    "expected": "Task",
+    "reason": "'intends to use X' — one-time"
+  },
+  {
+    "id": "goal_faaf9644",
+    "fact": "Harshith Mullapudi intends to use the startup town from the repository path towns/ (specifically towns/ai-startup-town).",
+    "oldAspect": "Goal",
+    "expected": "Task",
+    "reason": "'intends to use X' — one-time"
+  },
+  {
+    "id": "goal_249a312d",
+    "fact": "1. Harshith Mullapudi wants the personalized town project to preserve clear visual differences between towns and buildings across users so designs don't converge over time.",
+    "oldAspect": "Goal",
+    "expected": "Directive",
+    "reason": "system-subject spec"
+  },
+  {
+    "id": "goal_bdc28d09",
+    "fact": "Harshith Mullapudi is considering migrating the project to Next.js because it will be server-backed.",
+    "oldAspect": "Goal",
+    "expected": "Task",
+    "reason": "one-time evaluation"
+  },
+  {
+    "id": "goal_d4cdf07f",
+    "fact": "Harshith Mullapudi wants the game developed iteratively over time while keeping it strictly 2D with a Nintendo Pokémon–like top-down, tile-based RPG aesthetic.",
+    "oldAspect": "Goal",
+    "expected": "Directive",
+    "reason": "system-subject spec"
+  },
+  {
+    "id": "goal_1a86cf1f",
+    "fact": "Harshith Mullapudi wants the gateway-skill installation UX to let the end user “not worry about all this” by selecting a gateway during an Install action (UI asks “which gateway?”) and then installing the skill onto that chosen gateway.",
+    "oldAspect": "Goal",
+    "expected": "Directive",
+    "reason": "system-subject spec"
+  },
+  {
+    "id": "goal_5a01e138",
+    "fact": "Wants the final scorecard UI to be responsive on small screens (wrap/flow instead of being cut off).",
+    "oldAspect": "Goal",
+    "expected": "Directive",
+    "reason": "'wants X to <verb>' — feature spec"
+  },
+  {
+    "id": "goal_15625fe3",
+    "fact": "Wants the Home app redesigned to function as a manifesto of what the product is doing, using the current '/' landing page content as the Home page text.",
+    "oldAspect": "Goal",
+    "expected": "Directive",
+    "reason": "system-subject: 'wants [product-component]'"
+  },
+  {
+    "id": "goal_81b56c22",
+    "fact": "I want to build a community and a public “intelligence layer” product positioned like a butler/Jarvis/chief of staff, with a publicly owned roadmap (community-owned product direction).",
+    "oldAspect": "Goal",
+    "expected": "Goal",
+    "reason": "'I want to X' + personal-pursuit verb"
+  },
+  {
+    "id": "goal_8d0effe3",
+    "fact": "Wants a home/overview widget that shows all currently running coding sessions and to make it available as a default widget users can add.",
+    "oldAspect": "Goal",
+    "expected": "Directive",
+    "reason": "system-subject: 'wants [product-component]'"
+  },
+  {
+    "id": "goal_fe466aec",
+    "fact": "Harshith is considering positioning CORE as an “opinionated framework of working” and is evaluating whether that phrasing appropriately conveys the product’s feel/positioning.",
+    "oldAspect": "Goal",
+    "expected": "Task",
+    "reason": "one-time evaluation"
+  },
+  {
+    "id": "goal_183d6a1e",
+    "fact": "Harshith Mullapudi wants a mobile implementation that avoids a plain WebView embed and instead uses a native-feeling Tentap (Tiptap-in-WebView) editor.",
+    "oldAspect": "Goal",
+    "expected": "Directive",
+    "reason": "system-subject spec"
+  },
+  {
+    "id": "goal_46f652ae",
+    "fact": "Harshith Mullapudi intends an initial app scope of two pages—Scratchpad and Voice—and is evaluating whether a separate Tasks surface is needed.",
+    "oldAspect": "Goal",
+    "expected": "Task",
+    "reason": "one-time evaluation"
+  },
+  {
+    "id": "goal_f34e9597",
+    "fact": "Harshith Mullapudi wants the Corebrain TUI redesigned to align with the Mac app’s tasks UX (a substantial redesign described as “stunning changes”).",
+    "oldAspect": "Goal",
+    "expected": "Directive",
+    "reason": "system-subject spec"
+  },
+  {
+    "id": "goal_6a0aa040",
+    "fact": "Harshith Mullapudi's launch success targets for CORE: reach the Hacker News front page for 4+ hours, achieve 500+ HN points, have all four planned Reddit posts reach “Hot” in their respective subreddits, hit GitHub Trending within 24 hours of launch, reach 3k–5k GitHub stars on day one, and reach 8k–10k GitHub stars by end of week.",
+    "oldAspect": "Goal",
+    "expected": "Goal",
+    "reason": "explicit launch success metrics"
+  },
+  {
+    "id": "goal_63a0ba1a",
+    "fact": "Harshith Mullapudi has an aspirational target of roughly 10k GitHub stars (an increase of ~8.5k stars).",
+    "oldAspect": "Goal",
+    "expected": "Goal",
+    "reason": "'aspirational target' phrasing"
+  },
+  {
+    "id": "goal_2c4c5240",
+    "fact": "Deliverable goal: produce an updated plan (not implementation) that is file+line accurate for three fixes, returning a concise plan that includes touched files, key components, acceptance criteria, and open questions.",
+    "oldAspect": "Goal",
+    "expected": "Directive",
+    "reason": "'Deliverable goal:' phrasing"
+  },
+  {
+    "id": "goal_d6253d45",
+    "fact": "3. April focus is to launch and iterate on positioning until something clearly clicks.",
+    "oldAspect": "Goal",
+    "expected": "Goal",
+    "reason": "time-boxed personal focus"
+  },
+  {
+    "id": "goal_4f8bc995",
+    "fact": "Wants the system to support default Azure model/deployment selection (deriving defaults from the selected model/template when possible) while still allowing end users to override those defaults.",
+    "oldAspect": "Goal",
+    "expected": "Directive",
+    "reason": "system-subject: 'wants [product-component]'"
+  },
+  {
+    "id": "goal_a76bdfb2",
+    "fact": "Harshith Mullapudi wants a Channel CRUD API in the Remix app scoped to the current workspace (session-derived workspaceId) that lists and creates channels, supports PATCH updates for name/config/isDefault/isActive, and treats DELETE as a soft-delete by deactivating a channel rather than hard deletion.",
+    "oldAspect": "Goal",
+    "expected": "Directive",
+    "reason": "system-subject spec"
+  },
+  {
+    "id": "goal_055b93be",
+    "fact": "Harshith Mullapudi wants the final widget build artifact to be a single file named `index.js`, stored/registered in the “integration definition” table and dynamically downloaded/loaded by the UI at runtime.",
+    "oldAspect": "Goal",
+    "expected": "Directive",
+    "reason": "system-subject spec"
+  },
+  {
+    "id": "goal_1d90c8dd",
+    "fact": "Harshith Mullapudi wants the widget render API/context to receive: (1) `placement` (the surface/where it is rendered), (2) `accounts` representing all connected integration accounts but containing only each account's `id`, and (3) a PAT (personal access token) for tool/API access.",
+    "oldAspect": "Goal",
+    "expected": "Directive",
+    "reason": "system-subject spec"
+  },
+  {
+    "id": "goal_e8912408",
+    "fact": "Harshith Mullapudi wants the system to support creating two orders simultaneously (e.g., one on Amazon and one on Swiggy) rather than being limited to only one session/task running at a time.",
+    "oldAspect": "Goal",
+    "expected": "Directive",
+    "reason": "system-subject spec"
+  },
+  {
+    "id": "goal_fe88215f",
+    "fact": "Wants system prompts reviewed to ensure they are high-quality and that users can clearly perceive differences between personalities during interaction.",
+    "oldAspect": "Goal",
+    "expected": "Directive",
+    "reason": "system-subject: 'wants [product-component]'"
+  },
+  {
+    "id": "habit_d1803420",
+    "fact": "Harshith Mullapudi uses YNAB (You Need A Budget).",
+    "oldAspect": "Habit",
+    "expected": "Habit",
+    "reason": "personal-finance recurring behavior"
+  },
+  {
+    "id": "habit_b104115f",
+    "fact": "Harshith Mullapudi records product/SDK guidance about Claude model capabilities and migration considerations (task budgets, vision resolution and token/cost implications, prompting and memory behavior, and interim-update behavior) for later reference.",
+    "oldAspect": "Habit",
+    "expected": "Directive",
+    "reason": "SDK-scoped methodology"
+  },
+  {
+    "id": "habit_e27d6382",
+    "fact": "Harshith Mullapudi journals about meals and restaurant experiences.",
+    "oldAspect": "Habit",
+    "expected": "Habit",
+    "reason": "personal journaling ritual"
+  },
+  {
+    "id": "habit_ee56f345",
+    "fact": "Harshith Mullapudi maintains a daily “today’s scratchpad” with sections like “Brief,” “Carried over,” “Suggested today,” and “Heads up,” and uses it to track and surface tasks and notices.",
+    "oldAspect": "Habit",
+    "expected": "Habit",
+    "reason": "life-cadence keyword"
+  },
+  {
+    "id": "habit_7284fb3b",
+    "fact": "Uses a “Subagent-Driven Development” workflow defined as a DOT/Graphviz process that starts by reading an implementation plan, extracting all tasks with full text, noting relevant context, and creating a TodoWrite task list.",
+    "oldAspect": "Habit",
+    "expected": "Directive",
+    "reason": "DOT/Graphviz workflow doc"
+  },
+  {
+    "id": "habit_80a343a2",
+    "fact": "Harshith Mullapudi asks clarifying questions and challenges whether proposed approaches are the best way to solve problems.",
+    "oldAspect": "Habit",
+    "expected": "Habit",
+    "reason": "recurring communication behavior"
+  },
+  {
+    "id": "habit_9ed42e75",
+    "fact": "Treats 3+ failed fixes as a potential “wrong architecture” situation rather than merely a failed hypothesis, and responds by stopping to question fundamentals and discussing with a human partner before attempting more fixes.",
+    "oldAspect": "Habit",
+    "expected": "Directive",
+    "reason": "meta-methodology rule"
+  },
+  {
+    "id": "habit_268f3989",
+    "fact": "Harshith Mullapudi has an automated WhatsApp “daily morning sync for harshith” reminder workflow with specific filtering rules and deliverables.",
+    "oldAspect": "Habit",
+    "expected": "Habit",
+    "reason": "life-cadence keyword"
+  },
+  {
+    "id": "habit_46762845",
+    "fact": "I rely on tauri-apps/tauri-action to handle macOS notarization automatically when the required environment variables are set.",
+    "oldAspect": "Habit",
+    "expected": "Preference",
+    "reason": "SDK/tool-choice preference"
+  },
+  {
+    "id": "habit_fa234471",
+    "fact": "I handle personal finance and security triage by quickly verifying alerts and locking down issues.",
+    "oldAspect": "Habit",
+    "expected": "Directive",
+    "reason": "triage workflow methodology"
+  },
+  {
+    "id": "ctrl_dir_b0ec71e5",
+    "fact": "Anything that looks wrong should always be flagged in one sentence describing what was noticed and its impact.",
+    "oldAspect": "Directive",
+    "expected": "Directive",
+    "reason": "control: standing rule should stay Directive"
+  },
+  {
+    "id": "ctrl_dir_f105e40c",
+    "fact": "Do not repeatedly point to documentation (e.g., avoid “Refs:” links); reference docs only when the conversation explicitly goes into documentation or technical/setup details.",
+    "oldAspect": "Directive",
+    "expected": "Directive",
+    "reason": "control: standing rule should stay Directive"
+  },
+  {
+    "id": "ctrl_dir_d5e33700",
+    "fact": "Questions must not be persisted into the task description; derive/bubble them up from the chat thread instead.",
+    "oldAspect": "Directive",
+    "expected": "Directive",
+    "reason": "control: standing rule should stay Directive"
+  },
+  {
+    "id": "ctrl_dir_87353b74",
+    "fact": "Use `figma.createAutoLayout()` for containers with structurally related children rather than relying on absolute `x/y` positioning (\"Rule 12a\").",
+    "oldAspect": "Directive",
+    "expected": "Directive",
+    "reason": "control: standing rule should stay Directive"
+  },
+  {
+    "id": "ctrl_dir_2447b951",
+    "fact": "Harshith Mullapudi requires that gateway-dependent commands must not operate when no native native gateway is installed/present.",
+    "oldAspect": "Directive",
+    "expected": "Directive",
+    "reason": "control: standing rule should stay Directive"
+  },
+  {
+    "id": "ctrl_dir_108d0528",
+    "fact": "Store credentials securely using the existing credential storage patterns (IntegrationAccount credentials/config).",
+    "oldAspect": "Directive",
+    "expected": "Directive",
+    "reason": "control: standing rule should stay Directive"
+  },
+  {
+    "id": "ctrl_dir_279b1658",
+    "fact": "Do not use placeholders or ambiguous task surfacing.",
+    "oldAspect": "Directive",
+    "expected": "Directive",
+    "reason": "control: standing rule should stay Directive"
+  },
+  {
+    "id": "ctrl_dir_de6f8899",
+    "fact": "When working on integrations, missing permissions must be stated and the system must not advance by assumption.",
+    "oldAspect": "Directive",
+    "expected": "Directive",
+    "reason": "control: standing rule should stay Directive"
+  },
+  {
+    "id": "ctrl_dir_8788ff47",
+    "fact": "Only actionable, non-noise emails should be surfaced and must include source/context.",
+    "oldAspect": "Directive",
+    "expected": "Directive",
+    "reason": "control: standing rule should stay Directive"
+  },
+  {
+    "id": "ctrl_dir_43285c14",
+    "fact": "Any project/iteration filtering requires explicit field/value confirmation and must not proceed if ambiguous.",
+    "oldAspect": "Directive",
+    "expected": "Directive",
+    "reason": "control: standing rule should stay Directive"
+  },
+  {
+    "id": "ctrl_dir_3ac92ae0",
+    "fact": "Actions/status changes/IDs must always be explicit in messaging.",
+    "oldAspect": "Directive",
+    "expected": "Directive",
+    "reason": "control: standing rule should stay Directive"
+  },
+  {
+    "id": "ctrl_dir_7bcd2900",
+    "fact": "Onboarding outputs must always show connection status, progress, and a preference/memory graph, and must allow Harshith Mullapudi to provide correction/feedback.",
+    "oldAspect": "Directive",
+    "expected": "Directive",
+    "reason": "control: standing rule should stay Directive"
+  },
+  {
+    "id": "ctrl_dir_dfadc4d4",
+    "fact": "Users must not be able to access /home until onboardingComplete === true.",
+    "oldAspect": "Directive",
+    "expected": "Directive",
+    "reason": "control: standing rule should stay Directive"
+  },
+  {
+    "id": "ctrl_dir_893b4a28",
+    "fact": "Do not bundle Playwright Chromium into the CoreBrain gateway binary; ensure Chromium is installed during post-install/setup.",
+    "oldAspect": "Directive",
+    "expected": "Directive",
+    "reason": "control: standing rule should stay Directive"
+  },
+  {
+    "id": "ctrl_dir_81a69ea4",
+    "fact": "Do not introduce a separate “tasks” system or separate task storage for CORE’s coding orchestration, because task orchestration is already handled by CORE’s existing coding-session machinery.",
+    "oldAspect": "Directive",
+    "expected": "Directive",
+    "reason": "control: standing rule should stay Directive"
+  },
+  {
+    "id": "ctrl_dir_ecdc21d5",
+    "fact": "Do not use queue workers (BullMQ/Trigger.dev or similar); focus on an HTTP-only chat streaming path for this implementation.",
+    "oldAspect": "Directive",
+    "expected": "Directive",
+    "reason": "control: standing rule should stay Directive"
+  },
+  {
+    "id": "ctrl_dir_9b361ee2",
+    "fact": "Use quick, read-only inspection scripts to discover file structure (e.g., listing pages/top-level nodes, components, and variable collections) before making changes.",
+    "oldAspect": "Directive",
+    "expected": "Directive",
+    "reason": "control: standing rule should stay Directive"
+  },
+  {
+    "id": "ctrl_dir_e3f8189f",
+    "fact": "Use a one-time-per-project routing-rules injection flow; skip the routing-rules step entirely if HAS_ROUTING is yes or ROUTING_DECLINED is true.",
+    "oldAspect": "Directive",
+    "expected": "Directive",
+    "reason": "control: standing rule should stay Directive"
+  },
+  {
+    "id": "ctrl_dir_eee87d04",
+    "fact": "Never process, notify, or store Harshith Mullapudi’s data without per-case opt-in.",
+    "oldAspect": "Directive",
+    "expected": "Directive",
+    "reason": "control: standing rule should stay Directive"
+  },
+  {
+    "id": "ctrl_dir_26acfea0",
+    "fact": "Harshith Mullapudi requires an explicit system-prompt guardrail: the system must always ask Harshith for explicit approval before calling any generate function because generation consumes aura.",
+    "oldAspect": "Directive",
+    "expected": "Directive",
+    "reason": "control: standing rule should stay Directive"
+  },
+  {
+    "id": "ctrl_dir_f44c384a",
+    "fact": "Use output_config: {format: {...}} instead of the deprecated output_format parameter on messages.create().",
+    "oldAspect": "Directive",
+    "expected": "Directive",
+    "reason": "control: standing rule should stay Directive"
+  },
+  {
+    "id": "ctrl_dir_b5b7a434",
+    "fact": "Only one item/channel may be marked as the single default at a time — not everything should be default.",
+    "oldAspect": "Directive",
+    "expected": "Directive",
+    "reason": "control: standing rule should stay Directive"
+  },
+  {
+    "id": "ctrl_dir_b049f211",
+    "fact": "Treat “plan my day” as a task only (a pure task), not a reusable skill/policy.",
+    "oldAspect": "Directive",
+    "expected": "Directive",
+    "reason": "control: standing rule should stay Directive"
+  },
+  {
+    "id": "ctrl_dir_23aab1a0",
+    "fact": "Do not push changes, open a pull request, or merge unless explicitly asked.",
+    "oldAspect": "Directive",
+    "expected": "Directive",
+    "reason": "control: standing rule should stay Directive"
+  },
+  {
+    "id": "ctrl_dir_d14a1d10",
+    "fact": "Treat a task as “recurring” only if it has a schedule defined and taskOccurrences > 1; show “runs” in the UI only in that case.",
+    "oldAspect": "Directive",
+    "expected": "Directive",
+    "reason": "control: standing rule should stay Directive"
+  },
+  {
+    "id": "ctrl_pref_310ed43c",
+    "fact": "Prefers using WhatsApp for quick back-and-forth/ambient checks and approvals as a communication channel.",
+    "oldAspect": "Preference",
+    "expected": "Preference",
+    "reason": "control: taste preference should stay Preference"
+  },
+  {
+    "id": "ctrl_pref_a5dc567d",
+    "fact": "Harshith Mullapudi prefers a larger HOME interior with more items (the current interior felt too small).",
+    "oldAspect": "Preference",
+    "expected": "Preference",
+    "reason": "control: taste preference should stay Preference"
+  },
+  {
+    "id": "ctrl_pref_eb9dd72e",
+    "fact": "Harshith Mullapudi prefers using a fixed structure (e.g., for NPC prompt templates).",
+    "oldAspect": "Preference",
+    "expected": "Preference",
+    "reason": "control: taste preference should stay Preference"
+  },
+  {
+    "id": "ctrl_pref_b53584fe",
+    "fact": "I prefer the Home app’s default window size to be larger.",
+    "oldAspect": "Preference",
+    "expected": "Preference",
+    "reason": "control: taste preference should stay Preference"
+  },
+  {
+    "id": "ctrl_pref_9bff5082",
+    "fact": "For GitHub scanning, prefer repo-wide scans over filtered issue searches.",
+    "oldAspect": "Preference",
+    "expected": "Preference",
+    "reason": "control: taste preference should stay Preference"
+  },
+  {
+    "id": "ctrl_pref_4bf0a3eb",
+    "fact": "Harshith Mullapudi prefers a design shaped like a central rectangle with two circular side elements (pods/earpieces).",
+    "oldAspect": "Preference",
+    "expected": "Preference",
+    "reason": "control: taste preference should stay Preference"
+  },
+  {
+    "id": "ctrl_pref_8b8a59b9",
+    "fact": "Prefer reusing existing OAuth and integration account routes rather than introducing new routes; an onboarding property-picker UI is an optional future enhancement.",
+    "oldAspect": "Preference",
+    "expected": "Preference",
+    "reason": "control: taste preference should stay Preference"
+  },
+  {
+    "id": "ctrl_pref_032e836e",
+    "fact": "For the analyst persona, I prefer a “CIA analyst” style name.",
+    "oldAspect": "Preference",
+    "expected": "Preference",
+    "reason": "control: taste preference should stay Preference"
+  },
+  {
+    "id": "ctrl_pref_23651d4a",
+    "fact": "Prefer renaming UI buttons to town-related, theme-consistent names.",
+    "oldAspect": "Preference",
+    "expected": "Preference",
+    "reason": "control: taste preference should stay Preference"
+  },
+  {
+    "id": "ctrl_pref_f8af6c9d",
+    "fact": "When reviewing visual output, I prefer using reference screenshots and having the assistant look at them to compare results.",
+    "oldAspect": "Preference",
+    "expected": "Preference",
+    "reason": "control: taste preference should stay Preference"
+  },
+  {
+    "id": "ctrl_pref_ec96b31c",
+    "fact": "Prefer high-level diagrams and architecture evaluations when requested.",
+    "oldAspect": "Preference",
+    "expected": "Preference",
+    "reason": "control: taste preference should stay Preference"
+  },
+  {
+    "id": "ctrl_pref_1df35204",
+    "fact": "Prefers using the Geist font, specifically setting Geist Variable as the default site-wide font.",
+    "oldAspect": "Preference",
+    "expected": "Preference",
+    "reason": "control: taste preference should stay Preference"
+  },
+  {
+    "id": "ctrl_pref_f3751f08",
+    "fact": "Prefer making only the exact requested string replacements and do not change other related mentions (e.g., Slack headers/section titles) unless explicitly instructed.",
+    "oldAspect": "Preference",
+    "expected": "Preference",
+    "reason": "control: taste preference should stay Preference"
+  },
+  {
+    "id": "ctrl_pref_c0794e90",
+    "fact": "For the butler persona, I prefer using “Alfred” for recognizability and clarity.",
+    "oldAspect": "Preference",
+    "expected": "Preference",
+    "reason": "control: taste preference should stay Preference"
+  },
+  {
+    "id": "ctrl_pref_d5ec579c",
+    "fact": "Prefers using a Tab+Tab gesture when the input is empty (for entering new-task mode).",
+    "oldAspect": "Preference",
+    "expected": "Preference",
+    "reason": "control: taste preference should stay Preference"
+  },
+  {
+    "id": "ctrl_pref_bd74e96b",
+    "fact": "Harshith Mullapudi prefers using Option 1 if possible, but finds a WebView approach acceptable if required.",
+    "oldAspect": "Preference",
+    "expected": "Preference",
+    "reason": "control: taste preference should stay Preference"
+  },
+  {
+    "id": "ctrl_pref_b0f85a06",
+    "fact": "Finds the TARS persona to be the only one working well/preferred among the available personas.",
+    "oldAspect": "Preference",
+    "expected": "Preference",
+    "reason": "control: taste preference should stay Preference"
+  },
+  {
+    "id": "ctrl_pref_1b8288f4",
+    "fact": "Prefer detecting and operating on structured TipTap/ProseMirror node types (e.g., plan, output, workingContext via node.type.name) instead of parsing HTML and string-matching <h2> headings.",
+    "oldAspect": "Preference",
+    "expected": "Preference",
+    "reason": "control: taste preference should stay Preference"
+  },
+  {
+    "id": "ctrl_pref_896a0a8d",
+    "fact": "Prefer relationship retrieval to use vector search instead of brittle string CONTAINS matching.",
+    "oldAspect": "Preference",
+    "expected": "Preference",
+    "reason": "control: taste preference should stay Preference"
+  },
+  {
+    "id": "ctrl_pref_25543a00",
+    "fact": "For the handleExploratory implementation, Harshith Mullapudi prefers using documents (querying PostgreSQL Document records via prisma.document) rather than fetching and grouping raw Neo4j episodes.",
+    "oldAspect": "Preference",
+    "expected": "Preference",
+    "reason": "control: taste preference should stay Preference"
+  },
+  {
+    "id": "ctrl_bel_68f70df5",
+    "fact": "Harshith Mullapudi believes expanding comments and keeping conversations “still doable with butler” is feasible.",
+    "oldAspect": "Belief",
+    "expected": "Belief",
+    "reason": "control: conviction should stay Belief"
+  },
+  {
+    "id": "ctrl_bel_fbe0b2e3",
+    "fact": "Harshith believes an LLM can notice cross-profile patterns across thousands of founders that humans cannot hold in working memory.",
+    "oldAspect": "Belief",
+    "expected": "Belief",
+    "reason": "control: conviction should stay Belief"
+  },
+  {
+    "id": "ctrl_bel_81b8086e",
+    "fact": "I believe every AI-using knowledge worker will eventually have a personal operating system (an operating layer, not a chat app) that knows them, watches their work, learns from every conversation, and acts across every tool they use.",
+    "oldAspect": "Belief",
+    "expected": "Belief",
+    "reason": "control: conviction should stay Belief"
+  },
+  {
+    "id": "ctrl_bel_74f95c36",
+    "fact": "I believe building is not the performance of building, and I reject tech-for-tech’s-sake; work becomes real when it ships and solves a real problem for a real person.",
+    "oldAspect": "Belief",
+    "expected": "Belief",
+    "reason": "control: conviction should stay Belief"
+  },
+  {
+    "id": "ctrl_bel_6a268716",
+    "fact": "Harshith Mullapudi believes that building the same packages is bad.",
+    "oldAspect": "Belief",
+    "expected": "Belief",
+    "reason": "control: conviction should stay Belief"
+  },
+  {
+    "id": "ctrl_bel_6618b11a",
+    "fact": "Harshith Mullapudi thinks the current STORE interior “ticket” concept is bad because it reads like “store outside” (the signage/feel suggests an exterior or non-store context rather than an interior store experience).",
+    "oldAspect": "Belief",
+    "expected": "Belief",
+    "reason": "control: conviction should stay Belief"
+  },
+  {
+    "id": "ctrl_bel_319a9557",
+    "fact": "Harshith believes storing a node 'position' may be unnecessary for updates if a TipTap JSON document contains a page identifier and a task item identifier, since the system can search the JSON and update the matching node by ID.",
+    "oldAspect": "Belief",
+    "expected": "Belief",
+    "reason": "control: conviction should stay Belief"
+  },
+  {
+    "id": "ctrl_bel_ac40a6a2",
+    "fact": "Harshith Mullapudi believes stripping with regex is incorrect.",
+    "oldAspect": "Belief",
+    "expected": "Belief",
+    "reason": "control: conviction should stay Belief"
+  },
+  {
+    "id": "ctrl_task_f7bf879e",
+    "fact": "Add a Help icon that opens a Help view containing two tabs: Privacy and Terms.",
+    "oldAspect": "Task",
+    "expected": "Task",
+    "reason": "control: one-time action should stay Task"
+  },
+  {
+    "id": "ctrl_task_e0c12327",
+    "fact": "Ship a CLI gateway plus login commands.",
+    "oldAspect": "Task",
+    "expected": "Task",
+    "reason": "control: one-time action should stay Task"
+  },
+  {
+    "id": "ctrl_task_8099f5dd",
+    "fact": "Remove labels because they are no longer needed.",
+    "oldAspect": "Task",
+    "expected": "Task",
+    "reason": "control: one-time action should stay Task"
+  },
+  {
+    "id": "ctrl_task_2e02b25c",
+    "fact": "Add a streaming tool-part UI and validate it via a calendar query.",
+    "oldAspect": "Task",
+    "expected": "Task",
+    "reason": "control: one-time action should stay Task"
+  },
+  {
+    "id": "ctrl_task_b236e6f2",
+    "fact": "Replace the separate “Concepts” tab with a “Concepts” section on the Welcome page.",
+    "oldAspect": "Task",
+    "expected": "Task",
+    "reason": "control: one-time action should stay Task"
+  },
+  {
+    "id": "ctrl_dir2_c94819",
+    "fact": "PLAN MODE EXCEPTION — ALWAYS RUN: telemetry must always be run because it writes locally to `~/.gstack/analytics/` (a user config directory, not project files), and skipping it loses session duration and outcome data.",
+    "oldAspect": "Directive",
+    "expected": "Directive",
+    "reason": "control: rule-shaped fact should stay Directive"
+  },
+  {
+    "id": "ctrl_dir2_db9543",
+    "fact": "When an agent session gets stuck mid-task, CORE should read the error and session state, consult memory and the task description, try to apply a fix and resume, or otherwise ping the team on Slack with a tightly scoped unblock question.",
+    "oldAspect": "Directive",
+    "expected": "Directive",
+    "reason": "control: rule-shaped fact should stay Directive"
+  },
+  {
+    "id": "ctrl_dir2_246d10",
+    "fact": "If issues are found during the plan self-check, fix them inline without re-review.",
+    "oldAspect": "Directive",
+    "expected": "Directive",
+    "reason": "control: rule-shaped fact should stay Directive"
+  },
+  {
+    "id": "ctrl_dir2_eda2be",
+    "fact": "When evaluating founders’ startup claims, every answer must take a clear position and explicitly state what evidence would change that position (rigor without hedging or fake certainty).",
+    "oldAspect": "Directive",
+    "expected": "Directive",
+    "reason": "control: rule-shaped fact should stay Directive"
+  },
+  {
+    "id": "ctrl_dir2_137833",
+    "fact": "When making edits, keep existing items/content unchanged but remove emojis from any changes (preserve content while stripping emoji).",
+    "oldAspect": "Directive",
+    "expected": "Directive",
+    "reason": "control: rule-shaped fact should stay Directive"
+  },
+  {
+    "id": "ctrl_dir2_c2ae6c",
+    "fact": "When assigning memory labels, avoid instructions that bias toward only broad labels; assign labels across all relevant dimensions (project, domain, feature, activity) to improve retrieval usefulness.",
+    "oldAspect": "Directive",
+    "expected": "Directive",
+    "reason": "control: rule-shaped fact should stay Directive"
+  },
+  {
+    "id": "ctrl_dir2_643ce2",
+    "fact": "The assistant must not offer the Visual Companion upfront; offer it just-in-time only when a question genuinely needs visual clarification.",
+    "oldAspect": "Directive",
+    "expected": "Directive",
+    "reason": "control: rule-shaped fact should stay Directive"
+  },
+  {
+    "id": "ctrl_dir2_a1d62c",
+    "fact": "If an agent does not exist yet, creating the agent is step zero for every example.",
+    "oldAspect": "Directive",
+    "expected": "Directive",
+    "reason": "control: rule-shaped fact should stay Directive"
+  },
+  {
+    "id": "ctrl_dir2_96cf76",
+    "fact": "If RECENT_PATTERN shows a repeating skill sequence (e.g., review→ship→review), suggest the likely next skill as “Based on your recent pattern, you probably want /[next skill].”",
+    "oldAspect": "Directive",
+    "expected": "Directive",
+    "reason": "control: rule-shaped fact should stay Directive"
+  },
+  {
+    "id": "ctrl_dir2_2cb3f6",
+    "fact": "When implementing a new integration, model it after an existing integration in the codebase (inspect authentication, account connection flow, and request client, and mirror those patterns).",
+    "oldAspect": "Directive",
+    "expected": "Directive",
+    "reason": "control: rule-shaped fact should stay Directive"
+  },
+  {
+    "id": "ctrl_pref2_7a7b96",
+    "fact": "Harshith Mullapudi prefers the terminal background color to match the design token/class `bg-background-2` across both dark and light themes.",
+    "oldAspect": "Preference",
+    "expected": "Preference",
+    "reason": "control: taste preference should stay Preference"
+  },
+  {
+    "id": "ctrl_pref2_83c3cf",
+    "fact": "Harshith prefers a closing call-to-action that explicitly solicits critical feedback (ask readers what hard things CORE will fail at) to surface blind spots and improve the product.",
+    "oldAspect": "Preference",
+    "expected": "Preference",
+    "reason": "control: taste preference should stay Preference"
+  },
+  {
+    "id": "ctrl_pref2_e7258f",
+    "fact": "Harshith Mullapudi prefers implementing gateway availability detection via a polling-based health check mechanism.",
+    "oldAspect": "Preference",
+    "expected": "Preference",
+    "reason": "control: taste preference should stay Preference"
+  },
+  {
+    "id": "ctrl_pref2_2a8fe4",
+    "fact": "Harshith Mullapudi prefers TipTap task/checklist items to display checkbox, task text, task ID, and status control inline (in that sequence) and for the bullet/dot to be removed.",
+    "oldAspect": "Preference",
+    "expected": "Preference",
+    "reason": "control: taste preference should stay Preference"
+  },
+  {
+    "id": "ctrl_pref2_ebddeb",
+    "fact": "Harshith Mullapudi prefers to stop repeated pings/notifications.",
+    "oldAspect": "Preference",
+    "expected": "Preference",
+    "reason": "control: taste preference should stay Preference"
+  },
+  {
+    "id": "ctrl_pref2_6ee737",
+    "fact": "Prefers writing in a personal founder voice rather than a purely corporate brand voice.",
+    "oldAspect": "Preference",
+    "expected": "Preference",
+    "reason": "control: taste preference should stay Preference"
+  }
+]
