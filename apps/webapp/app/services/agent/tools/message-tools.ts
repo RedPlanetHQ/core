@@ -161,30 +161,66 @@ export function getMessageTools(
             preview: message.slice(0, 100),
           });
 
-          await handler.sendReply(replyTo, message, metadata);
+          const sendResult = await handler.sendReply(replyTo, message, metadata);
+
+          const slackTs =
+            channelType === "slack" &&
+            sendResult &&
+            typeof sendResult === "object"
+              ? (sendResult as { ts?: string }).ts
+              : undefined;
 
           // ---------------------------------------------------------------
-          // Mirror to channel conversation for reply context
+          // Mirror to conversation for reply context.
+          // If this send belongs to a task, mirror into the TASK's
+          // conversation (asyncJobId=taskId) and stamp slackTs so a Slack
+          // thread-reply routes back here. Otherwise, daily-bucket mirror.
           // ---------------------------------------------------------------
           try {
-            const channelConversationId =
-              await getOrCreateChannelConversation(
-                userId,
-                workspaceId,
-                message,
-                channelType,
-                undefined,
+            let taskConversationId: string | undefined;
+            if (currentTaskId) {
+              const taskConv = await prisma.conversation.findFirst({
+                where: {
+                  asyncJobId: currentTaskId,
+                  userId,
+                  deleted: null,
+                },
+                orderBy: { createdAt: "desc" },
+                select: { id: true },
+              });
+              taskConversationId = taskConv?.id;
+            }
+
+            if (taskConversationId) {
+              await prisma.conversationHistory.create({
+                data: {
+                  conversationId: taskConversationId,
+                  parts: [{ text: message, type: "text" }],
+                  message: "",
+                  userType: UserTypeEnum.Agent,
+                  ...(slackTs ? { context: { slackTs } } : {}),
+                },
+              });
+            } else {
+              const channelConversationId =
+                await getOrCreateChannelConversation(
+                  userId,
+                  workspaceId,
+                  message,
+                  channelType,
+                  undefined,
+                  UserTypeEnum.Agent,
+                );
+              await upsertConversationHistory(
+                crypto.randomUUID(),
+                [{ text: message, type: "text" }],
+                channelConversationId,
                 UserTypeEnum.Agent,
+                false,
               );
-            await upsertConversationHistory(
-              crypto.randomUUID(),
-              [{ text: message, type: "text" }],
-              channelConversationId,
-              UserTypeEnum.Agent,
-              false,
-            );
+            }
           } catch (mirrorError) {
-            logger.warn("[send_message] Failed to mirror to channel conversation", {
+            logger.warn("[send_message] Failed to mirror to conversation", {
               error: mirrorError,
             });
           }
