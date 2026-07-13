@@ -67,6 +67,21 @@ export async function getOrCreateChannelConversation(
   channelMetadata?: Record<string, string>,
   userType?: UserTypeEnum,
 ): Promise<string> {
+  // Slack thread-reply → route back to the task conversation that posted
+  // the message (matched by the stored slackTs on its ConversationHistory row).
+  const threadTs = channelMetadata?.threadTs;
+  if (threadTs) {
+    const match = await prisma.conversationHistory.findFirst({
+      where: {
+        context: { path: ["slackTs"], equals: threadTs },
+        conversation: { userId, deleted: null },
+      },
+      orderBy: { createdAt: "desc" },
+      select: { conversationId: true },
+    });
+    if (match) return match.conversationId;
+  }
+
   const sessionId = channelMetadata?.sessionId;
 
   if (sessionId) {
