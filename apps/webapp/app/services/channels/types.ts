@@ -26,7 +26,11 @@ export interface ChannelHandler {
   slug: string;
   capabilities: ChannelCapabilities;
   parseInbound(request: Request): Promise<InboundParseResult>;
-  sendReply(to: string, text: string, metadata?: ReplyMetadata): Promise<void>;
+  sendReply(
+    to: string,
+    text: string,
+    metadata?: ReplyMetadata,
+  ): Promise<{ ts?: string } | void>;
   getFormat(): string;
   emptyResponse(): Response;
   /** Send a typing/processing indicator. Only called if capabilities.sendTypingIndicator is true. */

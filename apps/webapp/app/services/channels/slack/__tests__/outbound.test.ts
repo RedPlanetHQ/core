@@ -1,0 +1,42 @@
+import { beforeEach, describe, expect, it, vi } from "vitest";
+
+vi.mock("~/services/logger.service", () => ({
+  logger: { info: vi.fn(), warn: vi.fn(), debug: vi.fn(), error: vi.fn() },
+}));
+vi.mock("~/db.server", () => ({
+  prisma: {
+    channel: { findFirst: vi.fn() },
+  },
+}));
+
+import { prisma } from "~/db.server";
+import { sendReply } from "../outbound";
+
+describe("slack outbound sendReply", () => {
+  beforeEach(() => {
+    vi.restoreAllMocks();
+    vi.clearAllMocks();
+  });
+
+  it("returns the posted message ts for a DM", async () => {
+    (prisma.channel.findFirst as any).mockResolvedValue({
+      id: "ch1",
+      config: { bot_token: "xoxb-test" },
+    });
+
+    // conversations.open then chat.postMessage
+    const fetchMock = vi
+      .fn()
+      .mockResolvedValueOnce({
+        json: async () => ({ ok: true, channel: { id: "D123" } }),
+      })
+      .mockResolvedValueOnce({
+        json: async () => ({ ok: true, ts: "1700000000.000100" }),
+      });
+    vi.stubGlobal("fetch", fetchMock);
+
+    const result = await sendReply("U123", "hello", { workspaceId: "ws1" });
+
+    expect(result).toEqual({ ts: "1700000000.000100" });
+  });
+});
