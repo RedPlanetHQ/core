@@ -168,7 +168,7 @@ export async function sendReply(
   to: string,
   text: string,
   metadata?: ReplyMetadata,
-): Promise<void> {
+): Promise<{ ts?: string } | void> {
   const workspaceId = metadata?.workspaceId as string | undefined;
   const channelId = metadata?.channelId as string | undefined;
 
@@ -188,10 +188,9 @@ export async function sendReply(
   const slackChannel = metadata?.slackChannel as string | undefined;
   if (slackChannel) {
     const threadTs = metadata?.threadTs as string | undefined;
-    await sendSlackMessage(botToken, slackChannel, plainText, threadTs, blocks);
-    return;
+    return await sendSlackMessage(botToken, slackChannel, plainText, threadTs, blocks);
   }
 
   // DM — `to` is the Slack user ID (set from inbound replyTo)
-  await sendSlackDM(botToken, to, plainText, blocks);
+  return await sendSlackDM(botToken, to, plainText, blocks);
 }

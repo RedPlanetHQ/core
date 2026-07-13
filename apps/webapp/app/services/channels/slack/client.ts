@@ -39,7 +39,7 @@ export async function sendSlackMessage(
   text: string,
   threadTs?: string,
   blocks?: unknown[],
-): Promise<void> {
+): Promise<{ ts?: string }> {
   const payload: Record<string, unknown> = { channel, text };
   if (threadTs) {
     payload.thread_ts = threadTs;
@@ -65,6 +65,8 @@ export async function sendSlackMessage(
     });
     throw new Error(`Slack chat.postMessage failed: ${msgData.error}`);
   }
+
+  return { ts: msgData.ts as string | undefined };
 }
 
 /**
@@ -132,7 +134,7 @@ export async function sendSlackDM(
   slackUserId: string,
   text: string,
   blocks?: unknown[],
-): Promise<void> {
+): Promise<{ ts?: string }> {
   const openRes = await fetch("https://slack.com/api/conversations.open", {
     method: "POST",
     headers: {
@@ -151,7 +153,7 @@ export async function sendSlackDM(
     throw new Error(`Slack conversations.open failed: ${openData.error}`);
   }
 
-  await sendSlackMessage(
+  return await sendSlackMessage(
     accessToken,
     openData.channel.id,
     text,
