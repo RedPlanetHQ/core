@@ -23,7 +23,7 @@ import { prisma } from "~/db.server";
 import { type OrchestratorTools } from "~/services/agent/orchestrator-tools";
 import { getOrCreateAsyncConversation } from "~/services/agent/context/decision-context";
 import { createConversation } from "~/services/conversation.server";
-import { deductCredits, hasCredits } from "~/trigger/utils/utils";
+import { hasCredits } from "~/trigger/utils/utils";
 import { isWorkspaceBYOK } from "~/services/byok.server";
 
 // ============================================================================
@@ -245,23 +245,10 @@ export async function runCASEPipeline(
       }
     }
 
-    // Deduct credits (1 for think-only, 2 if butler also ran full execution)
-    // Skip credit deduction if workspace is using their own API key (BYOK).
-    // `isBYOK` was resolved during the pre-flight credit check above.
-    if (!isBYOK) {
-      try {
-        await deductCredits(
-          userData.workspaceId,
-          userData.userId,
-          "chatMessage",
-          1, // noStreamProcess already deducts 1, so just 1 more for the pipeline
-        );
-      } catch (error) {
-        logger.warn(`[pipeline] Failed to deduct credits for ${entityId}`, {
-          error,
-        });
-      }
-    }
+    // No extra credit charge here — the underlying `noStreamProcess` call
+    // already deducted token-based credits for the butler+think turn. The
+    // previous flat +1 double-charged every trigger run relative to a
+    // regular chat turn.
 
     logger.info(`[pipeline] Successfully processed ${entityId}`);
 

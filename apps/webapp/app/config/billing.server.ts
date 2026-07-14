@@ -54,11 +54,30 @@ export const BILLING_CONFIG = {
     },
   },
 
-  // Credit costs per operation
+  // Credit costs per operation. `chatMessage` is the pre-flight minimum
+  // (used by `hasCredits` to refuse turns for empty wallets); the real
+  // charge for a chat turn is computed from actual input/output tokens via
+  // `creditsForTokens` in ~/jobs/credit_utils.
   creditCosts: {
     addEpisode: parseInt(process.env.CREDIT_COST_EPISODE || "1", 10),
     search: parseInt(process.env.CREDIT_COST_SEARCH || "1", 10),
     chatMessage: parseInt(process.env.CREDIT_COST_CHAT || "1", 10),
+  },
+
+  // Token → credit conversion for chat/agent turns.
+  // Defaults price 1 credit per 1K input tokens and 5 credits per 1K
+  // output tokens, matching the typical 5× premium providers charge for
+  // completion vs. prompt tokens.
+  tokenCosts: {
+    inputTokensPerCredit: parseInt(
+      process.env.CREDIT_INPUT_TOKENS_PER_CREDIT || "1000",
+      10,
+    ),
+    outputTokensPerCredit: parseInt(
+      process.env.CREDIT_OUTPUT_TOKENS_PER_CREDIT || "200",
+      10,
+    ),
+    minChatCredits: parseInt(process.env.CREDIT_MIN_CHAT || "1", 10),
   },
 
   // Billing cycle settings

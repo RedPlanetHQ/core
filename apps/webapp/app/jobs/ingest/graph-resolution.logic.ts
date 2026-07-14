@@ -39,7 +39,6 @@ import {
 import { makeModelCall } from "~/lib/model.server";
 import { prisma } from "~/db.server";
 import { IngestionStatus } from "@core/database";
-import { deductCredits } from "~/trigger/utils/utils";
 import { isWorkspaceBYOK } from "~/services/byok.server";
 
 import {
@@ -478,38 +477,33 @@ export async function processGraphResolution(
         // Don't throw - the graph resolution work is still valid
       }
 
-      // Credit reconciliation: only reconcile when all chunks are done
-      // Skip for BYOK workspaces (no credits were reserved or need deducting)
+      // Commit the upfront reservation as the final ingest bill on the
+      // last chunk. Ingest is billed purely on the input-token estimate
+      // from `addToQueue` — no reconciliation against statement count.
+      // reconcileCredits with actual === reserved skips the availableCredits
+      // update (already decremented at reserve time) and just rolls the
+      // amount into usedCredits + episodeCreditsUsed for analytics.
+      // Skip for BYOK workspaces (no credits were reserved).
       const byok = await isWorkspaceBYOK(payload.workspaceId);
-
       if (!byok) {
-        const reservedCredits = finalOutput?.reservedCredits || currentOutput?.reservedCredits || 0;
+        const reservedCredits =
+          finalOutput?.reservedCredits || currentOutput?.reservedCredits || 0;
         const totalChunks = payload.episodeDetails?.totalChunks || 1;
         const completedChunks = finalOutput?.episodes?.length || 1;
         const allChunksDone = completedChunks >= totalChunks;
 
-        if (reservedCredits > 0) {
-          if (allChunksDone) {
-            // All chunks done: reconcile reserved vs total statements across all chunks
-            const totalStatementsUsed = finalOutput?.statementsCreated || statementsCount;
-            await reconcileCredits(
-              payload.workspaceId,
-              payload.userId,
-              "addEpisode",
-              reservedCredits,
-              totalStatementsUsed,
-            );
-          }
-          // Non-last chunks: credits already reserved, no action needed
-        } else {
-          // Fallback: no reservation found (legacy path), deduct full amount
-          await deductCredits(
+        if (reservedCredits > 0 && allChunksDone) {
+          await reconcileCredits(
             payload.workspaceId,
             payload.userId,
             "addEpisode",
-            statementsCount,
+            reservedCredits,
+            reservedCredits,
           );
         }
+        // Non-last chunks: leave the reservation in place; the final chunk
+        // will commit for the whole session. No reservation at all means
+        // upstream skipped reserveCredits — nothing to commit.
       }
       // Token rollup happens per-call inside makeModelCall now; no aggregated
       // recording here (would double-count with the per-call writes).
