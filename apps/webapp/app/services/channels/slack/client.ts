@@ -134,6 +134,7 @@ export async function sendSlackDM(
   slackUserId: string,
   text: string,
   blocks?: unknown[],
+  threadTs?: string,
 ): Promise<{ ts?: string }> {
   const openRes = await fetch("https://slack.com/api/conversations.open", {
     method: "POST",
@@ -157,7 +158,7 @@ export async function sendSlackDM(
     accessToken,
     openData.channel.id,
     text,
-    undefined,
+    threadTs,
     blocks,
   );
 }

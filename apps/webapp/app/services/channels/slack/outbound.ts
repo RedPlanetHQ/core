@@ -191,6 +191,9 @@ export async function sendReply(
     return await sendSlackMessage(botToken, slackChannel, plainText, threadTs, blocks);
   }
 
-  // DM — `to` is the Slack user ID (set from inbound replyTo)
-  return await sendSlackDM(botToken, to, plainText, blocks);
+  // DM — `to` is the Slack user ID (set from inbound replyTo).
+  // Thread the reply under the original message when the inbound came in as a
+  // thread reply (threadTs present), so the exchange stays in one Slack thread.
+  const threadTs = metadata?.threadTs as string | undefined;
+  return await sendSlackDM(botToken, to, plainText, blocks, threadTs);
 }
