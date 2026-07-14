@@ -21,6 +21,7 @@ const SearchParamsSchema = z.object({
 const ActionBodySchema = z.object({
   action: z.string().min(1, "Action name is required"),
   parameters: z.record(z.string(), z.any()).optional().default({}),
+  source: z.string().max(128).optional(),
 });
 
 /**
@@ -70,12 +71,19 @@ const { action } = createHybridActionApiRoute(
   async ({ params, body, authentication }) => {
     const { integrationAccountId } = params;
     const { action: actionName, parameters } = body;
+    
+    const source =
+      body.source ??
+      (authentication.type === "OAUTH2" && authentication.oauth2
+        ? `oauth:${authentication.oauth2.clientId}`
+        : undefined);
 
     const result = await executeIntegrationAction(
       integrationAccountId,
       actionName,
       parameters,
       authentication.userId,
+      source,
     );
 
     return json({ result });
