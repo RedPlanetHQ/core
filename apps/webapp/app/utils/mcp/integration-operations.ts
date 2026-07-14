@@ -324,8 +324,32 @@ export async function executeIntegrationAction(
         } finally {
           await client.close();
         }
+        await prisma.integrationCallLog
+          .create({
+            data: {
+              integrationAccountId: accountId,
+              toolName: action,
+              source: source || null,
+              error: null,
+            },
+          })
+          .catch((logError: any) => {
+            logger.error(`Failed to log custom MCP call: ${logError}`);
+          });
       } catch (error) {
         logger.error(`Custom MCP call error for ${account.id}: ${error}`);
+        await prisma.integrationCallLog
+          .create({
+            data: {
+              integrationAccountId: accountId,
+              toolName: action,
+              source: source || null,
+              error: error instanceof Error ? error.message : String(error),
+            },
+          })
+          .catch((logError: any) => {
+            logger.error(`Failed to log custom MCP call error: ${logError}`);
+          });
         throw error;
       }
     } else {
