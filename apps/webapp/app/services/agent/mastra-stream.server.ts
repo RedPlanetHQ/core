@@ -13,6 +13,7 @@ import {
   clearActiveStreamId,
 } from "~/services/conversation.server";
 import { deductCredits } from "~/trigger/utils/utils";
+import { creditsForTokens } from "~/jobs/credit_utils";
 import {
   recordTokenUsage,
   type TokenUsageSource,
@@ -109,10 +110,6 @@ export async function saveConversationResult({
     }
   }
 
-  if (!isBYOK) {
-    await deductCredits(workspaceId, userId, "chatMessage", 1);
-  }
-
   // Roll up token usage into the daily bucket. If the caller passed real
   // usage from agentResult.usage, use it. Otherwise fall back to a rough
   // char/4 estimate over the assistant text — good enough for the daily
@@ -127,6 +124,16 @@ export async function saveConversationResult({
     inTok = Math.floor(userLen / 4);
     outTok = Math.floor(textLen / 4);
   }
+
+  // Charge from real token usage — the flat per-turn cost was replaced so a
+  // turn that spends 20K tokens on tool loops isn't priced the same as a
+  // one-sentence reply. Falls back to the char/4 estimate above when the
+  // agent didn't report `totalUsage` (self-hosted / older providers).
+  if (!isBYOK) {
+    const chatCredits = creditsForTokens(inTok, outTok);
+    await deductCredits(workspaceId, userId, "chatMessage", chatCredits);
+  }
+
   await recordTokenUsage({
     workspaceId,
     userId,

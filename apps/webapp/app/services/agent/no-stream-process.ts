@@ -21,6 +21,7 @@ import {
 } from "~/services/agent/types/decision-agent";
 import { type OrchestratorTools } from "~/services/agent/executors/base";
 import { deductCredits, hasCredits } from "~/trigger/utils/utils";
+import { creditsForTokens } from "~/jobs/credit_utils";
 import { isWorkspaceBYOK } from "~/services/byok.server";
 import {
   pickAgentResultTokens,
@@ -393,14 +394,20 @@ export async function noStreamProcess(
       );
     }
 
-    if (!isBYOK) {
-      await deductCredits(workspaceId, userId, "chatMessage", 1);
-    }
-
     // Roll up real LLM token usage. Trigger flows (reminders, task triggers)
     // set body.triggerContext — track those separately from user chat so the
     // daily rollup breaks out task_conversation vs conversation.
     const { inputTokens, outputTokens } = pickAgentResultTokens(agentResult);
+
+    // Charge from real token usage. Prior code deducted a flat 1 credit per
+    // turn regardless of how many tokens the agent burned across tool loops;
+    // now a heavy multi-step turn costs proportionally more. BYOK workspaces
+    // still bypass — they pay their own provider bills.
+    if (!isBYOK) {
+      const chatCredits = creditsForTokens(inputTokens, outputTokens);
+      await deductCredits(workspaceId, userId, "chatMessage", chatCredits);
+    }
+
     await recordTokenUsage({
       workspaceId,
       userId,

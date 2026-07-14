@@ -28,6 +28,7 @@ import {
   createResumableUIResponse,
   drainAgentResult,
 } from "~/services/agent/mastra-stream.server";
+import { pickAgentResultTokens } from "~/services/tokenUsage.server";
 import { processFileAttachments } from "~/services/agent/file-resolver.server";
 import {
   registerStream,
@@ -422,6 +423,13 @@ const { loader, action } = createHybridActionApiRoute(
       model: modelString,
     };
 
+    // Mutable handle to the current Mastra run — set right after each
+    // `agent.stream` / `approveToolCall` / `declineToolCall` below. The
+    // output processor closes over this so it can pull real token totals
+    // off the stream instead of falling back to the char/4 estimate. Both
+    // credit deduction AND DailyTokenUsage rollup depend on these numbers.
+    const currentRun: { result: any } = { result: null };
+
     const messageHistoryProcessor: Processor<"message-history"> = {
       id: "message-history",
       async processInput({ messages }) {
@@ -430,10 +438,31 @@ const { loader, action } = createHybridActionApiRoute(
       async processOutputResult({ messages }) {
         const convertedMessages = convertMessages(messages).to("AIV6.UI");
 
+        // Pull real input/output tokens off the current stream/resume result.
+        // `totalUsage` sums across every step of a tool loop; `usage` is only
+        // the last step. Prefer totalUsage — for tool-heavy turns `usage`
+        // undercounts by 5–10×. Both fields are promises on Mastra streams,
+        // so await them defensively.
+        let realInputTokens: number | undefined;
+        let realOutputTokens: number | undefined;
+        try {
+          const src = currentRun.result;
+          const usage = src ? await (src.totalUsage ?? src.usage) : undefined;
+          if (usage) {
+            const picked = pickAgentResultTokens({ totalUsage: usage });
+            realInputTokens = picked.inputTokens;
+            realOutputTokens = picked.outputTokens;
+          }
+        } catch {
+          // Fall through — saveConversationResult has a char/4 fallback.
+        }
+
         await saveConversationResult({
           parts: convertedMessages[convertedMessages.length - 1]
             ? convertedMessages[convertedMessages.length - 1].parts
             : [],
+          inputTokens: realInputTokens,
+          outputTokens: realOutputTokens,
           ...saveParams,
         });
 
@@ -563,6 +592,10 @@ const { loader, action } = createHybridActionApiRoute(
             });
           }
 
+          // Point the closed-over ref at the run whose outputProcessor is
+          // about to fire, so token totals land on this iteration's save.
+          currentRun.result = resumeResult;
+
           // Drain intermediate streams so each Mastra run finishes (and its
           // outputProcessors fire) before the next tool decision is processed.
           if (!isLast) {
@@ -621,6 +654,8 @@ const { loader, action } = createHybridActionApiRoute(
         modelSettings: { temperature: 0.5 },
         abortSignal: abortController.signal,
       });
+      // Same ref the outputProcessor reads for real token usage.
+      currentRun.result = stream;
     } catch (error) {
       // Stream failed to start (e.g., context-length overflow, provider
       // error). Nothing has been sent to the client yet, so we can mark the

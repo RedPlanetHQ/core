@@ -1,4 +1,4 @@
-import { isBillingEnabled } from "~/config/billing.server";
+import { BILLING_CONFIG, isBillingEnabled } from "~/config/billing.server";
 import { prisma } from "~/db.server";
 
 import { type CreditOperation } from "~/trigger/utils/utils";
@@ -184,4 +184,30 @@ export async function reconcileCredits(
  */
 export function estimateCreditsFromTokens(tokenCount: number): number {
   return Math.max(1, Math.ceil(tokenCount / 10));
+}
+
+/**
+ * Convert real LLM token usage into credits for a chat/agent turn.
+ *
+ * Uses `BILLING_CONFIG.tokenCosts` divisors: 1 credit per N input tokens
+ * plus 1 credit per M output tokens (defaults 1000 and 200 respectively,
+ * i.e. output is billed 5× input). Floors at `minChatCredits` so trivial
+ * turns still show as at least one credit — this matches the prior flat
+ * per-turn behavior and avoids "free" replies when a model returns an
+ * empty message.
+ */
+export function creditsForTokens(
+  inputTokens: number,
+  outputTokens: number,
+  opts?: { min?: number },
+): number {
+  const { inputTokensPerCredit, outputTokensPerCredit, minChatCredits } =
+    BILLING_CONFIG.tokenCosts;
+  const inTok = Math.max(0, Math.floor(inputTokens || 0));
+  const outTok = Math.max(0, Math.floor(outputTokens || 0));
+  const raw =
+    Math.ceil(inTok / Math.max(1, inputTokensPerCredit)) +
+    Math.ceil(outTok / Math.max(1, outputTokensPerCredit));
+  const floor = opts?.min ?? minChatCredits;
+  return Math.max(floor, raw);
 }
