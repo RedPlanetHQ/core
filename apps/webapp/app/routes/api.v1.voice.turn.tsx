@@ -37,6 +37,7 @@ import {
   saveConversationResult,
   createResumableUIResponse,
 } from "~/services/agent/mastra-stream.server";
+import { pickAgentResultTokens } from "~/services/tokenUsage.server";
 import {
   registerStream,
   unregisterStream,
@@ -147,6 +148,14 @@ const { loader, action } = createHybridActionApiRoute(
       (gw as any).__registerMastra(mastra);
     }
 
+    // Mutable handle to the current Mastra run — set right after
+    // `agent.stream` below. The output processor closes over this so it can
+    // pull real token totals off the stream instead of falling back to a
+    // char/4 estimate. Both credit deduction AND DailyTokenUsage rollup
+    // depend on these numbers. No approval loop on the voice path, so this
+    // is only assigned once.
+    const currentRun: { result: any } = { result: null };
+
     const messageHistoryProcessor: Processor<"message-history"> = {
       id: "message-history",
       async processInput({ messages }) {
@@ -155,6 +164,24 @@ const { loader, action } = createHybridActionApiRoute(
       async processOutputResult({ messages }) {
         const convertedMessages = convertMessages(messages).to("AIV6.UI");
         const last = convertedMessages[convertedMessages.length - 1];
+
+        // Prefer totalUsage (sums every step of a tool loop) over usage
+        // (last step only). Await defensively — Mastra exposes these as
+        // promises on streams.
+        let realInputTokens: number | undefined;
+        let realOutputTokens: number | undefined;
+        try {
+          const src = currentRun.result;
+          const usage = src ? await (src.totalUsage ?? src.usage) : undefined;
+          if (usage) {
+            const picked = pickAgentResultTokens({ totalUsage: usage });
+            realInputTokens = picked.inputTokens;
+            realOutputTokens = picked.outputTokens;
+          }
+        } catch {
+          // Fall through — saveConversationResult has a char/4 fallback.
+        }
+
         await saveConversationResult({
           parts: last ? last.parts : [],
           conversationId,
@@ -164,6 +191,8 @@ const { loader, action } = createHybridActionApiRoute(
           workspaceId,
           isBYOK,
           model: modelString,
+          inputTokens: realInputTokens,
+          outputTokens: realOutputTokens,
         });
         return messages;
       },
@@ -187,6 +216,8 @@ const { loader, action } = createHybridActionApiRoute(
         modelSettings: { temperature: 0.5 },
         abortSignal: abortController.signal,
       });
+      // Same ref the outputProcessor reads for real token usage.
+      currentRun.result = stream;
     } catch (error) {
       logger.error("[voice-turn] agent.stream failed to start", {
         conversationId,

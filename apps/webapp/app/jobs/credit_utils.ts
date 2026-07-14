@@ -189,12 +189,14 @@ export function estimateCreditsFromTokens(tokenCount: number): number {
 /**
  * Convert real LLM token usage into credits for a chat/agent turn.
  *
- * Uses `BILLING_CONFIG.tokenCosts` divisors: 1 credit per N input tokens
- * plus 1 credit per M output tokens (defaults 1000 and 200 respectively,
- * i.e. output is billed 5× input). Floors at `minChatCredits` so trivial
- * turns still show as at least one credit — this matches the prior flat
- * per-turn behavior and avoids "free" replies when a model returns an
- * empty message.
+ * Uses `BILLING_CONFIG.tokenCosts` divisors: 1 credit per
+ * `inputTokensPerCredit` input tokens + 1 credit per `outputTokensPerCredit`
+ * output tokens. Defaults price 1 credit / 1K input tokens and 5 credits /
+ * 1K output tokens (i.e. `outputTokensPerCredit` = 200 → smaller divisor →
+ * more credits per token → output billed 5× input, matching typical
+ * provider pricing). Floors at `minChatCredits` so trivial turns still
+ * show as at least one credit, matching the prior flat per-turn behavior
+ * and avoiding "free" replies when a model returns an empty message.
  */
 export function creditsForTokens(
   inputTokens: number,
