@@ -163,6 +163,7 @@ export function createConversation(
 		let lastAgentItem: ToolCallItem | null = savedAgentItem; // restored from prior stream (like cachedNestedPartsRef)
 		let lastAgentCallId: string | null = null; // tracks lastAgentItem's toolCallId for parent linkage
 		let hadApprovalRequest = false;
+		let onFinishFired = false;
 		const approvedContainerIds = new Set<string>(); // prevent duplicate approval expansion
 
 			try {
@@ -438,20 +439,17 @@ export function createConversation(
 
 					case 'finish-message':
 					case 'finish': {
-						// Mastra emits `finish` / `finish-message` when a turn is
-						// wrapping up. Some server variants keep the SSE connection
-						// alive past this point (for potential resume), so the
-						// natural for-await exit below never fires and the CLI's
-						// "Thinking…" loader spins forever. Fire onFinish here and
-						// bail — the generator can keep draining silently, we're
-						// done reacting to it.
-						if (!hadApprovalRequest) {
+						// Fire onFinish immediately so the CLI loader clears the
+						// moment the turn wraps up — but keep draining the SSE
+						// stream so the server can finish its persistence step
+						// (outputProcessors → saveConversationResult). Aborting
+						// or returning here would close the socket early and
+						// the assistant reply would never hit the DB.
+						if (!hadApprovalRequest && !onFinishFired) {
+							onFinishFired = true;
 							callbacks.onFinish?.();
 						}
-						if (activeAbortController === controller) {
-							activeAbortController = null;
-						}
-						return;
+						break;
 					}
 
 					case 'error': {
@@ -465,8 +463,10 @@ export function createConversation(
 				}
 			}
 
-			// Only fire finish if this wasn't an approval pause
-			if (!hadApprovalRequest) {
+			// Only fire finish if this wasn't an approval pause AND we
+			// haven't already fired it from a `finish` event above.
+			if (!hadApprovalRequest && !onFinishFired) {
+				onFinishFired = true;
 				callbacks.onFinish?.();
 			}
 		} catch (err) {
@@ -477,7 +477,10 @@ export function createConversation(
 
 			const msg = err instanceof Error ? err.message : String(err);
 			if (msg === 'terminated') {
-				if (!hadApprovalRequest) callbacks.onFinish?.();
+				if (!hadApprovalRequest && !onFinishFired) {
+					onFinishFired = true;
+					callbacks.onFinish?.();
+				}
 				return;
 			}
 
