@@ -1,5 +1,5 @@
-import {truncateToWidth} from '@mariozechner/pi-tui';
-import type {Component} from '@mariozechner/pi-tui';
+import {truncateToWidth} from '@earendil-works/pi-tui';
+import type {Component} from '@earendil-works/pi-tui';
 import chalk from 'chalk';
 import {getToolDisplayName} from '../utils/tool-names.js';
 import {loadIntegrationBundle} from '../utils/integration-loader.js';

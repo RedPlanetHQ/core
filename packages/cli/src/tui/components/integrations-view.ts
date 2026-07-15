@@ -1,5 +1,5 @@
-import {SelectList, Text, Spacer, Container, Loader, matchesKey, Key} from '@mariozechner/pi-tui';
-import type {Component, TUI} from '@mariozechner/pi-tui';
+import {SelectList, Text, Spacer, Container, Loader, matchesKey, Key} from '@earendil-works/pi-tui';
+import type {Component, TUI} from '@earendil-works/pi-tui';
 import chalk from 'chalk';
 import {
 	fetchIntegrationDefinitions,

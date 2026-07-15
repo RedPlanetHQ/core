@@ -33,27 +33,41 @@ const { loader, action } = createHybridActionApiRoute(
     // trigger a model call the workspace can't afford. Mirrors the gate in
     // `noStreamProcess` and `api.v1.conversation._index` so callers get the
     // same 402 regardless of which entry point they hit.
-    if (workspaceId) {
-      const workspaceHasBYOK = await isWorkspaceBYOK(workspaceId);
-      if (!workspaceHasBYOK) {
-        const ok = await hasCredits(
-          workspaceId,
-          authentication.userId,
-          "chatMessage",
+    //
+    // Fail closed on missing workspace: an authenticated token without a
+    // workspace context can't be verified for credits, so we refuse rather
+    // than silently skipping the gate.
+    if (!workspaceId) {
+      logger.warn(
+        `[conversation.create] Missing workspaceId on auth for ${authentication.userId}; refusing`,
+      );
+      return json(
+        {
+          error: "Workspace context missing — please re-authenticate.",
+          code: "no_workspace",
+        },
+        { status: 401 },
+      );
+    }
+    const workspaceHasBYOK = await isWorkspaceBYOK(workspaceId);
+    if (!workspaceHasBYOK) {
+      const ok = await hasCredits(
+        workspaceId,
+        authentication.userId,
+        "chatMessage",
+      );
+      if (!ok) {
+        logger.warn(
+          `[conversation.create] Insufficient credits for ${authentication.userId}; refusing`,
         );
-        if (!ok) {
-          logger.warn(
-            `[conversation.create] Insufficient credits for ${authentication.userId}; refusing`,
-          );
-          return json(
-            {
-              error:
-                "You're out of credits. Upgrade your plan or add a top-up to keep chatting.",
-              code: "no_credits",
-            },
-            { status: 402 },
-          );
-        }
+        return json(
+          {
+            error:
+              "You're out of credits. Upgrade your plan or add a top-up to keep chatting.",
+            code: "no_credits",
+          },
+          { status: 402 },
+        );
       }
     }
 

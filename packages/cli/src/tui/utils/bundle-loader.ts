@@ -22,10 +22,18 @@ function tryResolve(name: string): string | null {
 const STUB_URL = `data:text/javascript,export%20default%20{}`;
 
 // Known deps — resolved to absolute file:// URLs if available, stub otherwise.
+// `@mariozechner/pi-tui` is the deprecated name for `@earendil-works/pi-tui`.
+// Widget bundles built against either import specifier resolve to the same
+// installed package so old bundles keep working post-migration.
+const piTuiUrl =
+	tryResolve('@earendil-works/pi-tui') ??
+	tryResolve('@mariozechner/pi-tui') ??
+	STUB_URL;
 const KNOWN_DEPS: Array<[string, string]> = [
 	['react', tryResolve('react') ?? STUB_URL],
 	['react/jsx-runtime', tryResolve('react/jsx-runtime') ?? STUB_URL],
-	['@mariozechner/pi-tui', tryResolve('@mariozechner/pi-tui') ?? STUB_URL],
+	['@earendil-works/pi-tui', piTuiUrl],
+	['@mariozechner/pi-tui', piTuiUrl],
 	['@redplanethq/ui/tui', tryResolve('@redplanethq/ui/tui') ?? STUB_URL],
 	['@redplanethq/ui/web', tryResolve('@redplanethq/ui/web') ?? STUB_URL],
 ];

@@ -6,8 +6,8 @@ import {
 	Loader,
 	matchesKey,
 	Key,
-} from '@mariozechner/pi-tui';
-import type {Component, TUI} from '@mariozechner/pi-tui';
+} from '@earendil-works/pi-tui';
+import type {Component, TUI} from '@earendil-works/pi-tui';
 import chalk from 'chalk';
 import {
 	fetchTasks,
@@ -35,13 +35,12 @@ type Tab = {
 };
 
 const TABS: Tab[] = [
-	{key: 'All', status: null},
-	{key: 'Todo', status: 'Todo'},
 	{key: 'Waiting', status: 'Waiting'},
-	{key: 'Ready', status: 'Ready'},
-	{key: 'Working', status: 'Working'},
 	{key: 'Review', status: 'Review'},
-	{key: 'Done', status: 'Done'},
+	{key: 'Working', status: 'Working'},
+	{key: 'Ready', status: 'Ready'},
+	{key: 'Todo', status: 'Todo'},
+	{key: 'Completed', status: 'Done'},
 	{key: 'Recurring', status: null, recurring: true},
 ];
 

@@ -1,5 +1,5 @@
-import {Text, Spacer, Container, Loader, matchesKey, Key} from '@mariozechner/pi-tui';
-import type {Component, TUI} from '@mariozechner/pi-tui';
+import {Text, Spacer, Container, Loader, matchesKey, Key} from '@earendil-works/pi-tui';
+import type {Component, TUI} from '@earendil-works/pi-tui';
 import chalk from 'chalk';
 import {fetchIntegrationAccounts} from '../utils/stream.js';
 import type {IntegrationAccount} from '../utils/stream.js';
