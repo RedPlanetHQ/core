@@ -90,23 +90,42 @@ export async function completeTopup(
       ? session.payment_intent
       : session.payment_intent?.id;
 
-  await prisma.$transaction([
-    prisma.creditTopup.update({
-      where: { id: topup.id },
+  // Race guard: two concurrent handlers (e.g. `completed` + `async_payment_
+  // succeeded` arriving close together, or Stripe re-delivery after a
+  // timeout) can both read status="pending" above. The `updateMany` with a
+  // status guard is atomic — only the winner sees `count === 1` and
+  // increments availableCredits. The loser sees count===0 and no-ops. The
+  // earlier `topup.status === "completed"` check is the fast path for
+  // already-settled rows; this is the correctness guarantee.
+  const claimed = await prisma.$transaction(async (tx) => {
+    const claim = await tx.creditTopup.updateMany({
+      where: { id: topup.id, status: "pending" },
       data: {
         status: "completed",
         completedAt: new Date(),
         stripePaymentIntentId: paymentIntentId,
         stripeCheckoutSessionId: session.id,
       },
-    }),
-    prisma.userUsage.update({
-      where: { id: userUsage.id },
+    });
+    if (claim.count === 0) {
+      return false;
+    }
+    await tx.userUsage.update({
+      where: { id: userUsage!.id },
       data: {
         availableCredits: { increment: topup.credits },
       },
-    }),
-  ]);
+    });
+    return true;
+  });
+
+  if (!claimed) {
+    logger.info(
+      "[topup] concurrent handler already completed — no credits granted this time",
+      { topupId: topup.id, sessionId: session.id },
+    );
+    return { status: "already_completed" };
+  }
 
   logger.info("[topup] completed and credits granted", {
     topupId: topup.id,
