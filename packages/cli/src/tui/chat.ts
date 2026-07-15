@@ -1042,6 +1042,40 @@ export function startTuiApp(
 		let markdownInserted = false;
 		let hadOutput = false;
 		let hadErrorMessage = false;
+		let finishFired = false;
+		// Safety net: if the server never sends `finish` and stops emitting
+		// events for this many ms after any output, treat the turn as done.
+		// Otherwise the editor stays disabled forever and the user is stuck.
+		const IDLE_TIMEOUT_MS = 5_000;
+		let idleTimer: ReturnType<typeof setTimeout> | null = null;
+
+		function clearIdleTimer(): void {
+			if (idleTimer) {
+				clearTimeout(idleTimer);
+				idleTimer = null;
+			}
+		}
+
+		function fireFinish(): void {
+			if (finishFired || requestId !== myRequestId) return;
+			finishFired = true;
+			clearIdleTimer();
+			removeLoader();
+			if (!hadOutput && !hadErrorMessage) {
+				addToMessages(new Text(chalk.gray('(no response)'), 1, 0));
+				addToMessages(new Spacer(1));
+			}
+			isProcessing = false;
+			editor.disableSubmit = false;
+			scratchpadPanel?.refresh().catch(() => {});
+			tui.requestRender();
+		}
+
+		function armIdleTimer(): void {
+			clearIdleTimer();
+			if (!hadOutput) return; // wait until at least one event before arming
+			idleTimer = setTimeout(fireFinish, IDLE_TIMEOUT_MS);
+		}
 
 		const callbacks = {
 			onTextDelta(delta: string) {
@@ -1058,6 +1092,7 @@ export function startTuiApp(
 				showLoader();
 				responseMd.setText(accumulated);
 				tui.requestRender();
+				armIdleTimer();
 			},
 
 			onToolStart(_id: string, _name: string, item: ToolCallItem) {
@@ -1067,11 +1102,13 @@ export function startTuiApp(
 				insertBeforeLoader(item);
 				showLoader();
 				tui.requestRender();
+				armIdleTimer();
 			},
 
 			onRerender() {
 				if (requestId !== myRequestId) return;
 				tui.requestRender();
+				armIdleTimer();
 			},
 
 			onStepFinish() {
@@ -1083,27 +1120,17 @@ export function startTuiApp(
 				// if another step runs.
 				removeLoader();
 				tui.requestRender();
+				armIdleTimer();
 			},
 
 			onFinish() {
-				if (requestId !== myRequestId) return;
-				removeLoader();
-
-				if (!hadOutput && !hadErrorMessage) {
-					addToMessages(new Text(chalk.gray('(no response)'), 1, 0));
-					addToMessages(new Spacer(1));
-				}
-
-				isProcessing = false;
-				editor.disableSubmit = false;
-				// If the scratchpad panel is open the agent may have called
-				// `update_scratchpad` — refresh so the panel reflects new content.
-				scratchpadPanel?.refresh().catch(() => {});
-				tui.requestRender();
+				fireFinish();
 			},
 
 			onAbort() {
 				if (requestId !== myRequestId) return;
+				finishFired = true;
+				clearIdleTimer();
 				removeLoader();
 				// Remove pending approval panel if present
 				if (pendingApprovalPanel) {
@@ -1129,6 +1156,8 @@ export function startTuiApp(
 
 			onError(err: Error) {
 				if (requestId !== myRequestId) return;
+				finishFired = true;
+				clearIdleTimer();
 				removeLoader();
 				hadErrorMessage = true;
 				const code = (err as {code?: string}).code;
