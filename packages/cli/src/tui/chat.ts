@@ -970,7 +970,10 @@ export function startTuiApp(
 		tui.requestRender();
 	}
 
+	let loaderVisible = false;
+
 	function removeLoader(): void {
+		if (!loaderVisible) return;
 		const idx = conversationComponents.lastIndexOf(loader);
 		if (idx !== -1) conversationComponents.splice(idx, 1);
 		try {
@@ -979,13 +982,22 @@ export function startTuiApp(
 			// ignore
 		}
 		loader.stop();
+		loaderVisible = false;
 	}
 
 	function showLoader(): void {
+		if (loaderVisible) {
+			// Already in the tree — just restart the animation in case a
+			// previous stop() cleared the interval.
+			loader.stop();
+			loader.start();
+			return;
+		}
 		conversationComponents.push(loader);
 		messagesContainer.addChild(loader);
-		loader.stop();   // clear any existing interval before restarting
+		loader.stop();
 		loader.start();
+		loaderVisible = true;
 	}
 
 	function showOutOfCreditsToast(): void {
@@ -1042,6 +1054,8 @@ export function startTuiApp(
 					markdownInserted = true;
 				}
 
+				// Re-show the loader if it was hidden after a previous step.
+				showLoader();
 				responseMd.setText(accumulated);
 				tui.requestRender();
 			},
@@ -1051,6 +1065,7 @@ export function startTuiApp(
 				hadOutput = true;
 				allToolItems.push(item);
 				insertBeforeLoader(item);
+				showLoader();
 				tui.requestRender();
 			},
 
@@ -1061,6 +1076,12 @@ export function startTuiApp(
 
 			onStepFinish() {
 				if (requestId !== myRequestId) return;
+				// The visible turn is done — server-side bookkeeping
+				// (persistence, token accounting) can still delay `finish`
+				// by seconds. Drop the spinner so the UI reads as "reply
+				// delivered". It'll be re-shown by the next text/tool event
+				// if another step runs.
+				removeLoader();
 				tui.requestRender();
 			},
 
