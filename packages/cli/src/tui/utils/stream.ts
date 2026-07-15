@@ -236,6 +236,31 @@ export async function fetchWorkspaceAvatar(
 
 // ── Stream conversation ───────────────────────────────────────────────────────
 
+/**
+ * Custom error thrown when the webapp refuses a chat turn because the
+ * workspace is out of credits. `code === 'no_credits'` matches the JSON
+ * body the webapp returns from both `/api/v1/conversation/create` and
+ * `/api/v1/conversation`. Callers can distinguish it from generic HTTP
+ * failures to render a friendly "top up" hint instead of a generic error.
+ */
+export class NoCreditsError extends Error {
+	code = 'no_credits';
+	constructor(message: string) {
+		super(message);
+		this.name = 'NoCreditsError';
+	}
+}
+
+async function readErrorPayload(
+	response: Response,
+): Promise<{code?: string; error?: string}> {
+	try {
+		return (await response.json()) as {code?: string; error?: string};
+	} catch {
+		return {};
+	}
+}
+
 export async function* streamConversation(
 	baseUrl: string,
 	apiKey: string,
@@ -260,6 +285,13 @@ export async function* streamConversation(
 		}),
 		signal,
 	});
+
+	if (response.status === 402) {
+		const body = await readErrorPayload(response);
+		if (body.code === 'no_credits') {
+			throw new NoCreditsError(body.error ?? 'Out of credits.');
+		}
+	}
 
 	if (!response.ok || !response.body) {
 		throw new Error(`HTTP ${response.status}: ${response.statusText}`);
@@ -348,6 +380,205 @@ export async function fetchConversations(
 		conversations: data.conversations ?? [],
 		hasNext: data.pagination?.hasNext ?? false,
 	};
+}
+
+// ── Pages (scratchpad) ────────────────────────────────────────────────────────
+
+export interface PageRef {
+	id: string;
+	date: string;
+}
+
+/** GET /api/v1/page?date=YYYY-MM-DD — creates the page on-demand if missing. */
+export async function fetchPageByDate(
+	baseUrl: string,
+	apiKey: string,
+	dateISO: string,
+): Promise<PageRef> {
+	const response = await fetch(
+		`${baseUrl}/api/v1/page?date=${encodeURIComponent(dateISO)}`,
+		{headers: {Authorization: `Bearer ${apiKey}`}},
+	);
+	if (!response.ok) {
+		throw new Error(`Failed to load scratchpad: ${response.statusText}`);
+	}
+	return (await response.json()) as PageRef;
+}
+
+/**
+ * GET /api/v1/page/:pageId/content — HTML from last-persisted TipTap doc.
+ *
+ * Throws with a status-aware message when the endpoint is missing (older
+ * webapp deployment) so the caller can distinguish "actually empty" from
+ * "endpoint not available".
+ */
+export async function fetchPageContent(
+	baseUrl: string,
+	apiKey: string,
+	pageId: string,
+): Promise<string | null> {
+	const response = await fetch(`${baseUrl}/api/v1/page/${pageId}/content`, {
+		headers: {Authorization: `Bearer ${apiKey}`},
+	});
+	if (response.status === 404) {
+		throw new Error(
+			'Page-content endpoint missing (needs `/api/v1/page/:pageId/content` — restart webapp).',
+		);
+	}
+	if (!response.ok) {
+		throw new Error(`Failed to load page content: ${response.status} ${response.statusText}`);
+	}
+	const data = (await response.json()) as {html?: string | null};
+	return data.html ?? null;
+}
+
+// ── Credits ───────────────────────────────────────────────────────────────────
+
+export interface CreditsInfo {
+	available: number;
+	monthly: number;
+	billingEnabled: boolean;
+	byok: boolean;
+}
+
+/**
+ * GET /api/v1/credits — workspace credit balance + billing flags.
+ *
+ * When `billingEnabled` is false OR `byok` is true, callers should treat the
+ * workspace as always having credits. Otherwise `available` gates chat
+ * requests just like the webapp's `hasCredits` server check.
+ */
+export async function fetchCredits(
+	baseUrl: string,
+	apiKey: string,
+): Promise<CreditsInfo | null> {
+	try {
+		const response = await fetch(`${baseUrl}/api/v1/credits`, {
+			headers: {Authorization: `Bearer ${apiKey}`},
+		});
+		if (!response.ok) return null;
+		return (await response.json()) as CreditsInfo;
+	} catch {
+		return null;
+	}
+}
+
+// ── Task runs (recurring task history) ───────────────────────────────────────
+
+export interface TaskRunSummary {
+	id: string;
+	title: string | null;
+	status: string | null;
+	createdAt: string;
+	updatedAt: string;
+}
+
+/**
+ * Fetch all conversation "runs" for a task. Reuses the existing conversations
+ * list endpoint with the `asyncJobId` filter — every run of a recurring
+ * scheduled task creates a conversation whose `asyncJobId` matches the task
+ * id (see `apps/webapp/app/services/conversation.server.ts:444-446`), so no
+ * new endpoint is needed on the webapp side.
+ */
+export async function fetchTaskRuns(
+	baseUrl: string,
+	apiKey: string,
+	taskId: string,
+	limit = 50,
+): Promise<TaskRunSummary[]> {
+	const params = new URLSearchParams({
+		asyncJobId: taskId,
+		limit: String(limit),
+	});
+	const response = await fetch(
+		`${baseUrl}/api/v1/conversations?${params.toString()}`,
+		{headers: {Authorization: `Bearer ${apiKey}`}},
+	);
+	if (!response.ok) {
+		throw new Error(`Failed to load task runs: ${response.statusText}`);
+	}
+	const data = (await response.json()) as {
+		conversations?: Array<{
+			id: string;
+			title: string | null;
+			status: string | null;
+			createdAt: string;
+			updatedAt: string;
+		}>;
+	};
+	return (data.conversations ?? []).map(c => ({
+		id: c.id,
+		title: c.title,
+		status: c.status,
+		createdAt: c.createdAt,
+		updatedAt: c.updatedAt,
+	}));
+}
+
+// ── Voice inbox (catchup) ─────────────────────────────────────────────────────
+
+/**
+ * GET /api/v1/inbox?limit=1 → { count }
+ *
+ * Returns the number of unchecked `voiceInboxMessage` rows for the current
+ * user. This is the same source the webapp's ButlerStatusPill and Mac inbox
+ * pill both count — a distinct table from `conversations`, populated by
+ * agent `send_message` outputs and cleared when the user runs `/catchup`
+ * (`POST /api/v1/inbox/summarise` stamps `checked`).
+ */
+export async function fetchInboxCount(
+	baseUrl: string,
+	apiKey: string,
+): Promise<number> {
+	const response = await fetch(`${baseUrl}/api/v1/inbox?limit=1`, {
+		headers: {Authorization: `Bearer ${apiKey}`},
+	});
+	if (!response.ok) return 0;
+	const data = (await response.json()) as {count?: number};
+	return data.count ?? 0;
+}
+
+/**
+ * POST /api/v1/inbox/summarise — runs the LLM catchup summariser over the
+ * user's unchecked inbox and marks the rows as caught up. Returns the summary
+ * text (may be empty when there was nothing to catch up on).
+ */
+export async function summariseCatchup(
+	baseUrl: string,
+	apiKey: string,
+): Promise<{summary: string; count: number}> {
+	const response = await fetch(`${baseUrl}/api/v1/inbox/summarise`, {
+		method: 'POST',
+		headers: {
+			'Content-Type': 'application/json',
+			Authorization: `Bearer ${apiKey}`,
+		},
+	});
+	if (!response.ok) {
+		throw new Error(`Failed to summarise catchup: ${response.statusText}`);
+	}
+	const data = (await response.json()) as {summary?: string; count?: number};
+	return {summary: data.summary ?? '', count: data.count ?? 0};
+}
+
+// ── Gateways ──────────────────────────────────────────────────────────────────
+
+export interface GatewaySummary {
+	id: string;
+	name: string;
+	status: 'CONNECTED' | 'DISCONNECTED';
+}
+
+export async function fetchGateways(
+	baseUrl: string,
+	apiKey: string,
+): Promise<GatewaySummary[]> {
+	const response = await fetch(`${baseUrl}/api/v1/gateways`, {
+		headers: {Authorization: `Bearer ${apiKey}`},
+	});
+	if (!response.ok) return [];
+	const data = (await response.json()) as {gateways?: GatewaySummary[]};
+	return data.gateways ?? [];
 }
 
 // ── Tasks ─────────────────────────────────────────────────────────────────────
@@ -562,6 +793,13 @@ export async function createConversationApi(
 		},
 		body: JSON.stringify({message, source: 'cli', incognito}),
 	});
+
+	if (response.status === 402) {
+		const body = await readErrorPayload(response);
+		if (body.code === 'no_credits') {
+			throw new NoCreditsError(body.error ?? 'Out of credits.');
+		}
+	}
 
 	if (!response.ok) {
 		throw new Error(`Failed to create conversation: ${response.statusText}`);

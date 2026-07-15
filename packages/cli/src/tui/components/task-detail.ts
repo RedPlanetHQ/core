@@ -6,8 +6,8 @@ import {
 	Loader,
 	matchesKey,
 	Key,
-} from '@mariozechner/pi-tui';
-import type {Component, TUI} from '@mariozechner/pi-tui';
+} from '@earendil-works/pi-tui';
+import type {Component, TUI} from '@earendil-works/pi-tui';
 import chalk from 'chalk';
 import {
 	fetchTaskDetail,

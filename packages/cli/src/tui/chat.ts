@@ -10,11 +10,11 @@ import {
 	CombinedAutocompleteProvider,
 	matchesKey,
 	Key,
-} from '@mariozechner/pi-tui';
-import type {Component} from '@mariozechner/pi-tui';
+} from '@earendil-works/pi-tui';
+import type {Component} from '@earendil-works/pi-tui';
 import {buildAvatar} from './utils/avatar.js';
 import chalk from 'chalk';
-import {StatusLine} from './components/status-line.js';
+import {StatusLine, type StatusZone} from './components/status-line.js';
 import {editorTheme, markdownTheme} from './themes.js';
 import {createConversation} from './hooks/use-conversation.js';
 import {ToolCallItem} from './components/tool-call-item.js';
@@ -24,13 +24,16 @@ import {TaskDetail} from './components/task-detail.js';
 import type {TaskSummary} from './utils/stream.js';
 import {IntegrationsView} from './components/integrations-view.js';
 import {WidgetsView} from './components/widgets-view.js';
-import {DashboardView} from './components/dashboard-view.js';
 import {loadWidgetBundle} from './utils/widget-loader.js';
 import {getPreferences} from '../config/preferences.js';
-import {fetchConversationHistory, fetchWorkspace, fetchIntegrationAccounts, openBrowser, createTaskApi} from './utils/stream.js';
+import {fetchConversationHistory, fetchWorkspace, fetchIntegrationAccounts, openBrowser, createTaskApi, isRecurringTask, summariseCatchup, fetchCredits, NoCreditsError, type CreditsInfo} from './utils/stream.js';
 import type {HistoryMessage} from './utils/stream.js';
 import {getToolDisplayName} from './utils/tool-names.js';
 import {ApprovalPanel} from './components/approval-panel.js';
+import {ContextBar, type ContextInfo} from './components/context-bar.js';
+import {SplitPane} from './components/split-pane.js';
+import {ScratchpadPanel} from './components/scratchpad-panel.js';
+import {TaskRuns} from './components/task-runs.js';
 
 export function startTuiApp(
 	baseUrl: string,
@@ -55,23 +58,29 @@ export function startTuiApp(
 
 	// ── Messages area ─────────────────────────────────────────────────────────
 	const messagesContainer = new Container();
-	tui.addChild(messagesContainer);
+	// SplitPane wraps messages so we can slot a scratchpad panel on the left
+	// half when `/today` is active. Without a left child it renders the right
+	// child at full width, i.e. behaves exactly like the plain container.
+	const messagesSplit = new SplitPane(messagesContainer);
+	tui.addChild(messagesSplit);
 
-	// ── Task title bar (shown above editor when in a task conversation) ─────
-	const taskTitleContainer = new Container();
-	tui.addChild(taskTitleContainer);
+	// ── Context bar (shown above editor when a task/scratchpad is active) ────
+	const contextBar = new ContextBar();
+	tui.addChild(contextBar);
 
 	// ── Editor ────────────────────────────────────────────────────────────────
 	const editor = new Editor(tui, editorTheme);
 	editor.setAutocompleteProvider(
 		new CombinedAutocompleteProvider(
 			[
+				{name: 'new-task', description: 'Create a new task from the next message'},
+				{name: 'today', description: 'Open today’s scratchpad'},
+				{name: 'catchup', description: 'Summarise unread inbox items'},
 				{name: 'clear', description: 'Clear conversation and start fresh'},
 				{name: 'resume', description: 'Resume a previous conversation'},
 				{name: 'tasks', description: 'View and manage your tasks'},
 				{name: 'integrations', description: 'View and connect integrations'},
 				{name: 'widgets', description: 'Configure widgets (below-input & overview)'},
-				{name: 'dashboard', description: 'Show overview widgets in TUI'},
 				{
 					name: 'incognito',
 					description: 'Toggle incognito mode (new conversations only)',
@@ -83,8 +92,32 @@ export function startTuiApp(
 	);
 	tui.addChild(editor);
 
-	// ── Status line (incognito + below-input widget on one row) ──────────────
-	const statusLine = new StatusLine();
+	// ── Status line — badges + tasks + widget + G + C (focusable, 2 rows)
+	const statusLine = new StatusLine(baseUrl, apiKey, () => tui.requestRender());
+	statusLine.onBlur = () => {
+		tui.setFocus(editor);
+		tui.requestRender();
+	};
+	statusLine.onActivate = (zone: StatusZone) => {
+		tui.setFocus(editor);
+		if (zone === 'tasks') {
+			showTaskList();
+		} else if (zone === 'catchup') {
+			runCatchup();
+		} else if (zone === 'gateways') {
+			addToMessages(
+				new Text(
+					chalk.dim('Manage gateways: run ') +
+						chalk.white('corebrain gateway list') +
+						chalk.dim(' outside the chat.'),
+					1,
+					0,
+				),
+			);
+			addToMessages(new Spacer(1));
+			tui.requestRender();
+		}
+	};
 	tui.addChild(statusLine);
 
 	async function loadBelowInputWidget(): Promise<void> {
@@ -151,6 +184,41 @@ export function startTuiApp(
 	let autoApproveAll = false;
 	let currentTask: TaskSummary | null = null;
 	let taskInfoOverlay: TaskDetail | null = null;
+	// Pending catchup summary that will seed a new chat when the user presses `c`.
+	let pendingCatchupSummary: string | null = null;
+	// Container holding the catchup summary + hints while catchup view is active.
+	let catchupViewContainer: Container | null = null;
+	// Active scratchpad side-panel (set while `/today` is in effect).
+	let scratchpadPanel: ScratchpadPanel | null = null;
+	// Cached credit balance for the workspace. `null` = not fetched yet.
+	// The webapp's `/api/v1/conversation` and `/api/v1/conversation/create`
+	// endpoints both server-gate the same check; we mirror it client-side so
+	// the input border can turn red immediately instead of waiting for the
+	// user to type + submit and see a 402.
+	let creditsInfo: CreditsInfo | null = null;
+	// Which context is driving the "normal" border colour right now. Kept
+	// separate from `contextBar.getContext()` because scratchpad mode hides
+	// the bar visually but still wants a yellow border.
+	let activeBorderKind: 'task' | 'scratchpad' | null = null;
+	function outOfCredits(): boolean {
+		if (!creditsInfo) return false;
+		if (!creditsInfo.billingEnabled) return false;
+		if (creditsInfo.byok) return false;
+		return creditsInfo.available <= 0;
+	}
+	function refreshBorder(): void {
+		editor.borderColor = outOfCredits()
+			? chalk.red
+			: ContextBar.borderColor(activeBorderKind);
+		tui.requestRender();
+	}
+	async function refreshCredits(): Promise<void> {
+		const info = await fetchCredits(baseUrl, apiKey);
+		if (info) {
+			creditsInfo = info;
+			refreshBorder();
+		}
+	}
 
 	const conversation = createConversation(baseUrl, apiKey);
 
@@ -180,6 +248,13 @@ export function startTuiApp(
 			}
 		})
 		.catch(() => {});
+
+	// Initial credit probe + 60s poll so a top-up done in the webapp reflects
+	// back in the CLI within a minute (mirrors the webapp's polling cadence).
+	refreshCredits().catch(() => {});
+	setInterval(() => {
+		refreshCredits().catch(() => {});
+	}, 60_000);
 
 	const loader = new Loader(
 		tui,
@@ -228,19 +303,28 @@ export function startTuiApp(
 		tui.requestRender();
 	}
 
+	function applyContext(info: ContextInfo | null): void {
+		contextBar.setContext(info);
+		activeBorderKind = info?.kind ?? null;
+		refreshBorder();
+	}
+
 	function setTaskContext(task: TaskSummary | null): void {
 		currentTask = task;
-		taskTitleContainer.clear();
-		if (task) {
-			const id = task.displayId ? chalk.dim(`[${task.displayId}] `) : '';
-			const title = chalk.bold.white(task.title || 'Untitled');
-			const status = chalk.cyan(`(${task.status})`);
-			const hint = chalk.dim('   ctrl+o info');
-			taskTitleContainer.addChild(
-				new Text(`${id}${title} ${status}${hint}`, 1, 0),
-			);
+		if (!task) {
+			applyContext(null);
+			return;
 		}
-		tui.requestRender();
+		const pill = task.displayId ?? 'TASK';
+		const hint = isRecurringTask(task)
+			? 'ctrl+o info · ctrl+r runs'
+			: 'ctrl+o info';
+		applyContext({
+			kind: 'task',
+			pill,
+			subtitle: `${task.title || 'Untitled'}  (${task.status})`,
+			hint,
+		});
 	}
 
 	function clearConversation(): void {
@@ -339,8 +423,18 @@ export function startTuiApp(
 			return;
 		}
 
-		if (trimmed === '/dashboard') {
-			showDashboardView();
+		if (trimmed === '/new-task') {
+			setNewTaskMode(true);
+			return;
+		}
+
+		if (trimmed === '/catchup') {
+			runCatchup();
+			return;
+		}
+
+		if (trimmed === '/today') {
+			openScratchpad();
 			return;
 		}
 
@@ -350,6 +444,7 @@ export function startTuiApp(
 		}
 
 		if (trimmed === '/exit') {
+			statusLine.dispose();
 			tui.stop();
 			process.stdout.write('\n');
 			process.exit(0);
@@ -360,17 +455,18 @@ export function startTuiApp(
 	};
 
 	function hideMainUI(): void {
+		if (statusLine.focused) tui.setFocus(editor);
 		try { tui.removeChild(statusLine); } catch { /* ignore */ }
-		tui.removeChild(messagesContainer);
-		try { tui.removeChild(taskTitleContainer); } catch { /* ignore */ }
+		tui.removeChild(messagesSplit);
+		try { tui.removeChild(contextBar); } catch { /* ignore */ }
 		tui.removeChild(editor);
 		overlayActive = true;
 	}
 
 	function restoreMainUI(): void {
 		overlayActive = false;
-		tui.addChild(messagesContainer);
-		tui.addChild(taskTitleContainer);
+		tui.addChild(messagesSplit);
+		tui.addChild(contextBar);
 		tui.addChild(editor);
 		tui.addChild(statusLine);
 		tui.setFocus(editor);
@@ -442,17 +538,30 @@ export function startTuiApp(
 				const header = `${dot} ${chalk.bold(displayName)}${argSummary ? chalk.dim(' (' + argSummary + ')') : ''}`;
 				addToMessages(new Text(header, 1, 0));
 
-				// Result preview (first 3 non-empty lines)
+				// Result preview — up to 2 non-empty lines, HTML stripped, prefixed
+				// with `│` / `└─` to match the streaming ToolCallItem style.
 				const resultStr = stringifyToolOutput(part.output);
 				if (resultStr) {
-					const previewLines = resultStr
+					const allLines = resultStr
 						.split('\n')
-						.filter(l => l.trim().length > 0)
-						.slice(0, 3);
-					for (const line of previewLines) {
-						addToMessages(new Text(chalk.dim('  ' + line), 1, 0));
+						.map(cleanPreviewLine)
+						.filter(l => l.length > 0);
+					const previewLines = allLines.slice(0, 2);
+					const extra = allLines.length - previewLines.length;
+					previewLines.forEach((line, idx) => {
+						const isLast = idx === previewLines.length - 1 && extra === 0;
+						const prefix = isLast ? '  └ ' : '  │ ';
+						addToMessages(new Text(chalk.dim(prefix + line), 1, 0));
+					});
+					if (extra > 0) {
+						addToMessages(
+							new Text(chalk.dim(`  └ +${extra} more lines`), 1, 0),
+						);
 					}
 				}
+
+				// Breathing room so consecutive tool calls don't run together.
+				addToMessages(new Spacer(1));
 
 				any = true;
 				continue;
@@ -463,6 +572,26 @@ export function startTuiApp(
 		}
 
 		return any;
+	}
+
+	/**
+	 * Turn one line of a tool's raw output into something that scans in the
+	 * preview strip: HTML tags stripped, whitespace collapsed, capped to a
+	 * readable width. Preserves tag *content* so `<p>hello</p>` becomes `hello`
+	 * (not empty), which is important for HTML-heavy tools like get_scratchpad.
+	 */
+	function cleanPreviewLine(raw: string): string {
+		const stripped = raw
+			.replace(/<[^>]+>/g, ' ')
+			.replace(/&nbsp;/gi, ' ')
+			.replace(/&amp;/gi, '&')
+			.replace(/&lt;/gi, '<')
+			.replace(/&gt;/gi, '>')
+			.replace(/&quot;/gi, '"')
+			.replace(/&#39;/gi, "'");
+		const collapsed = stripped.replace(/\s+/g, ' ').trim();
+		if (collapsed.length <= 120) return collapsed;
+		return collapsed.slice(0, 120) + '…';
 	}
 
 	function summarizeArgs(input: unknown): string {
@@ -639,6 +768,34 @@ export function startTuiApp(
 		};
 	}
 
+	function showTaskRunsOverlay(task: TaskSummary): void {
+		hideMainUI();
+
+		const runsView = new TaskRuns(
+			baseUrl,
+			apiKey,
+			task,
+			tui,
+			() => tui.requestRender(),
+		);
+		tui.addChild(runsView);
+		tui.setFocus(runsView);
+
+		runsView.onCancel = () => {
+			try { tui.removeChild(runsView); } catch { /* ignore */ }
+			restoreMainUI();
+		};
+
+		runsView.onOpenRun = run => {
+			try { tui.removeChild(runsView); } catch { /* ignore */ }
+			// Swap the active conversation to the picked run. `openTaskConversation`
+			// already handles clearing state, setting the task context, and
+			// loading history — reuse it so the flow matches picking a run from
+			// `/tasks`.
+			openTaskConversation(task, run.id);
+		};
+	}
+
 	function showIntegrationsView(): void {
 		hideMainUI();
 
@@ -670,19 +827,147 @@ export function startTuiApp(
 		};
 	}
 
-	function showDashboardView(): void {
+	// ── Scratchpad (/today) ───────────────────────────────────────────────────
+
+	function updateScratchpadContextBar(): void {
+		if (!scratchpadPanel) {
+			// If a task was active, keep its context; otherwise clear.
+			if (currentTask) setTaskContext(currentTask);
+			else applyContext(null);
+			return;
+		}
+		// The ScratchpadPanel already shows the date + nav hints, so an extra
+		// context-bar row is just repetition. Keep the visual bar empty but
+		// drive the border colour off `activeBorderKind = 'scratchpad'`.
+		contextBar.setContext(null);
+		activeBorderKind = 'scratchpad';
+		refreshBorder();
+	}
+
+	function openScratchpad(): void {
+		if (scratchpadPanel) {
+			const currentDate = scratchpadPanel.getDate();
+			const today = new Date();
+			const onToday =
+				currentDate.getUTCFullYear() === today.getUTCFullYear() &&
+				currentDate.getUTCMonth() === today.getUTCMonth() &&
+				currentDate.getUTCDate() === today.getUTCDate();
+			if (onToday) {
+				// Toggle off — /today acts as a "close scratchpad" too.
+				closeScratchpad();
+				return;
+			}
+			scratchpadPanel.setDate(today);
+			updateScratchpadContextBar();
+			tui.requestRender();
+			return;
+		}
+		scratchpadPanel = new ScratchpadPanel(baseUrl, apiKey, () => tui.requestRender());
+		scratchpadPanel.onDateChange = () => updateScratchpadContextBar();
+		messagesSplit.setLeft(scratchpadPanel);
+		updateScratchpadContextBar();
+		tui.requestRender();
+	}
+
+	function closeScratchpad(): void {
+		if (!scratchpadPanel) return;
+		scratchpadPanel = null;
+		messagesSplit.setLeft(null);
+		updateScratchpadContextBar();
+		tui.requestRender();
+	}
+
+	// ── Catchup ───────────────────────────────────────────────────────────────
+
+	function showCatchupView(summary: string, count: number): void {
 		hideMainUI();
+		pendingCatchupSummary = summary;
 
-		const view = new DashboardView(baseUrl, apiKey, tui, () =>
-			tui.requestRender(),
+		const container = new Container();
+		catchupViewContainer = container;
+		container.addChild(new Spacer(1));
+		container.addChild(
+			new Text(
+				chalk.bold.cyan('Catchup') +
+					chalk.dim(` · ${count} item${count === 1 ? '' : 's'}`),
+				1,
+				0,
+			),
 		);
-		tui.addChild(view);
-		tui.setFocus(view);
+		container.addChild(new Spacer(1));
+		container.addChild(new Markdown(summary, 1, 0, markdownTheme));
+		container.addChild(new Spacer(2));
+		container.addChild(
+			new Text(
+				chalk.bold.white('  c') +
+					chalk.dim('  continue in a new chat') +
+					chalk.dim('     ') +
+					chalk.bold.white('esc') +
+					chalk.dim('  close'),
+				1,
+				0,
+			),
+		);
+		container.addChild(new Spacer(1));
+		tui.addChild(container);
+		tui.setFocus(container);
+		tui.requestRender();
+	}
 
-		view.onCancel = () => {
-			tui.removeChild(view);
+	function closeCatchupView(): void {
+		if (!catchupViewContainer) return;
+		try { tui.removeChild(catchupViewContainer); } catch { /* ignore */ }
+		catchupViewContainer = null;
+		pendingCatchupSummary = null;
+		restoreMainUI();
+	}
+
+	function showCatchupEmptyToast(): void {
+		addToMessages(new Text(chalk.dim('Nothing to catch up on.'), 1, 0));
+		addToMessages(new Spacer(1));
+		tui.requestRender();
+	}
+
+	function runCatchup(): void {
+		if (isProcessing || catchupViewContainer) return;
+		pendingCatchupSummary = null;
+		showLoader();
+		summariseCatchup(baseUrl, apiKey)
+			.then(({summary, count}) => {
+				removeLoader();
+				if (count === 0 || !summary) {
+					showCatchupEmptyToast();
+					return;
+				}
+				showCatchupView(summary, count);
+			})
+			.catch((err: Error) => {
+				removeLoader();
+				addToMessages(
+					new Text(
+						chalk.red('Catchup failed: ') + chalk.dim(err.message),
+						1,
+						0,
+					),
+				);
+				addToMessages(new Spacer(1));
+				tui.requestRender();
+			});
+	}
+
+	function continueCatchupInNewChat(): void {
+		if (!pendingCatchupSummary) return;
+		const seed = pendingCatchupSummary;
+		if (catchupViewContainer) {
+			try { tui.removeChild(catchupViewContainer); } catch { /* ignore */ }
+			catchupViewContainer = null;
 			restoreMainUI();
-		};
+		}
+		pendingCatchupSummary = null;
+		clearConversation();
+		editor.setText(seed + '\n\n');
+		tui.setFocus(editor);
+		tui.requestRender();
 	}
 
 	function removeLoader(): void {
@@ -703,12 +988,32 @@ export function startTuiApp(
 		loader.start();
 	}
 
+	function showOutOfCreditsToast(): void {
+		addToMessages(
+			new Text(
+				chalk.red('You’re out of credits. ') +
+					chalk.dim('Top up at ') +
+					chalk.white(baseUrl + '/settings/billing'),
+				1,
+				0,
+			),
+		);
+		addToMessages(new Spacer(1));
+	}
+
 	function runMessage(message: string): void {
+		if (outOfCredits()) {
+			showOutOfCreditsToast();
+			tui.requestRender();
+			return;
+		}
 		isProcessing = true;
 		editor.disableSubmit = true;
 		const myRequestId = ++requestId;
 
-		// User bubble
+		// User bubble — leading blank line so consecutive turns don't run
+		// into the previous assistant reply.
+		addToMessages(new Spacer(1));
 		addToMessages(
 			new Text(
 				chalk.bgHex('#3a3a3a').white(' \u276f ' + message + ' '),
@@ -724,6 +1029,7 @@ export function startTuiApp(
 		let accumulated = '';
 		let markdownInserted = false;
 		let hadOutput = false;
+		let hadErrorMessage = false;
 
 		const callbacks = {
 			onTextDelta(delta: string) {
@@ -762,13 +1068,16 @@ export function startTuiApp(
 				if (requestId !== myRequestId) return;
 				removeLoader();
 
-				if (!hadOutput) {
+				if (!hadOutput && !hadErrorMessage) {
 					addToMessages(new Text(chalk.gray('(no response)'), 1, 0));
+					addToMessages(new Spacer(1));
 				}
 
-				addToMessages(new Spacer(1));
 				isProcessing = false;
 				editor.disableSubmit = false;
+				// If the scratchpad panel is open the agent may have called
+				// `update_scratchpad` — refresh so the panel reflects new content.
+				scratchpadPanel?.refresh().catch(() => {});
 				tui.requestRender();
 			},
 
@@ -800,9 +1109,35 @@ export function startTuiApp(
 			onError(err: Error) {
 				if (requestId !== myRequestId) return;
 				removeLoader();
-				addToMessages(
-					new Text(chalk.red('Error: ') + chalk.gray(err.message), 1, 0),
-				);
+				hadErrorMessage = true;
+				const code = (err as {code?: string}).code;
+				const isNoCredits = err instanceof NoCreditsError || code === 'no_credits';
+				if (isNoCredits) {
+					// Server told us we're out — flip local state so the border
+					// turns red immediately and future submits short-circuit.
+					if (creditsInfo) creditsInfo.available = 0;
+					refreshBorder();
+					addToMessages(
+						new Text(
+							chalk.red('You’re out of credits. ') +
+								chalk.dim('Top up at ') +
+								chalk.white(baseUrl + '/settings/billing'),
+							1,
+							0,
+						),
+					);
+				} else {
+					// Empty message often means the server emitted a bare SSE
+					// `error` event with no payload — surface something
+					// actionable instead of a lone "Error:" line.
+					const message = err.message?.trim() || 'Stream ended unexpectedly (no error message from server).';
+					addToMessages(
+						new Text(chalk.red('Error: ') + chalk.gray(message), 1, 0),
+					);
+					// Any stream failure could be a credit gate that raced past
+					// our poll — refresh so the border reflects reality.
+					refreshCredits().catch(() => {});
+				}
 				addToMessages(new Spacer(1));
 				isProcessing = false;
 				editor.disableSubmit = false;
@@ -872,6 +1207,7 @@ export function startTuiApp(
 
 	tui.addInputListener(data => {
 		if (data === '\x03') {
+			statusLine.dispose();
 			tui.stop();
 			process.stdout.write('\n');
 			process.exit(0);
@@ -943,6 +1279,48 @@ export function startTuiApp(
 			return {consume: true};
 		}
 
+		// ── Down arrow on empty editor → focus status line zone selector ───
+		if (
+			!overlayActive &&
+			!isProcessing &&
+			!newTaskMode &&
+			!statusLine.focused &&
+			matchesKey(data, Key.down) &&
+			editor.getText().length === 0
+		) {
+			statusLine.setSelectedZone('tasks');
+			tui.setFocus(statusLine);
+			tui.requestRender();
+			return {consume: true};
+		}
+
+		// ── Catchup view input (only when the modal view is up) ────────────
+		if (catchupViewContainer) {
+			if (data === 'c' || data === 'C') {
+				continueCatchupInNewChat();
+				return {consume: true};
+			}
+			if (matchesKey(data, Key.escape)) {
+				closeCatchupView();
+				return {consume: true};
+			}
+			// Block other keys while the catchup modal is up — no editor,
+			// no accidental slash-commands.
+			return {consume: true};
+		}
+
+		// ── Scratchpad day nav (Ctrl+P prev · Ctrl+N next) ─────────────────
+		if (scratchpadPanel && !overlayActive && !isProcessing && !statusLine.focused) {
+			if (matchesKey(data, Key.ctrl('p'))) {
+				scratchpadPanel.shiftDays(-1);
+				return {consume: true};
+			}
+			if (matchesKey(data, Key.ctrl('n'))) {
+				scratchpadPanel.shiftDays(1);
+				return {consume: true};
+			}
+		}
+
 		if (matchesKey(data, Key.ctrl('o'))) {
 			if (taskInfoOverlay) {
 				taskInfoOverlay.onCancel?.();
@@ -961,6 +1339,18 @@ export function startTuiApp(
 			}
 
 			return;
+		}
+
+		// ── Ctrl+R → show runs of the current recurring task ──────────────
+		if (
+			!overlayActive &&
+			!isProcessing &&
+			currentTask &&
+			isRecurringTask(currentTask) &&
+			matchesKey(data, Key.ctrl('r'))
+		) {
+			showTaskRunsOverlay(currentTask);
+			return {consume: true};
 		}
 
 		if (!overlayActive && matchesKey(data, Key.ctrl('i'))) {

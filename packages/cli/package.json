@@ -22,7 +22,7 @@
 	"dependencies": {
 		"@clack/prompts": "^1.0.1",
 		"@fastify/websocket": "^11.0.1",
-		"@mariozechner/pi-tui": "^0.57.1",
+		"@earendil-works/pi-tui": "^0.80.7",
 		"@mishieck/ink-titled-box": "^0.4.2",
 		"@redplanethq/gateway-protocol": "workspace:*",
 		"@redplanethq/sdk": "workspace:*",

@@ -1,10 +1,11 @@
-import {truncateToWidth} from '@mariozechner/pi-tui';
-import type {Component} from '@mariozechner/pi-tui';
+import {truncateToWidth} from '@earendil-works/pi-tui';
+import type {Component} from '@earendil-works/pi-tui';
 import chalk from 'chalk';
 import {getToolDisplayName} from '../utils/tool-names.js';
 import type {OutputPart} from '../utils/stream.js';
 
-const PREVIEW_LINES = 3;
+const PREVIEW_LINES = 2;
+const PREVIEW_LINE_MAX_CHARS = 120;
 
 function toResultString(value: unknown): string {
 	if (value === undefined || value === null) return '';
@@ -14,6 +15,26 @@ function toResultString(value: unknown): string {
 	} catch {
 		return String(value);
 	}
+}
+
+/**
+ * Trim a single preview line for the collapsed tool-result strip: strip HTML
+ * tags (their content is kept), decode a couple of common entities, collapse
+ * whitespace, cap to {@link PREVIEW_LINE_MAX_CHARS}. Keeps tool outputs that
+ * happen to be raw HTML (e.g. `get_scratchpad`) legible in the preview.
+ */
+function cleanPreviewLine(raw: string): string {
+	const stripped = raw
+		.replace(/<[^>]+>/g, ' ')
+		.replace(/&nbsp;/gi, ' ')
+		.replace(/&amp;/gi, '&')
+		.replace(/&lt;/gi, '<')
+		.replace(/&gt;/gi, '>')
+		.replace(/&quot;/gi, '"')
+		.replace(/&#39;/gi, "'");
+	const collapsed = stripped.replace(/\s+/g, ' ').trim();
+	if (collapsed.length <= PREVIEW_LINE_MAX_CHARS) return collapsed;
+	return collapsed.slice(0, PREVIEW_LINE_MAX_CHARS) + '…';
 }
 
 function toSingleLine(str: string): string {
@@ -30,7 +51,7 @@ function argSummaryFromInput(
 			const str = toSingleLine(
 				typeof firstVal === 'string' ? firstVal : JSON.stringify(firstVal ?? ''),
 			);
-			return str.length > 60 ? str.slice(0, 60) + '\u2026' : str;
+			return str.length > 60 ? str.slice(0, 60) + '…' : str;
 		} catch {}
 	}
 
@@ -40,7 +61,7 @@ function argSummaryFromInput(
 		const str = toSingleLine(
 			typeof firstVal === 'string' ? firstVal : JSON.stringify(firstVal ?? ''),
 		);
-		return str.length > 60 ? str.slice(0, 60) + '\u2026' : str;
+		return str.length > 60 ? str.slice(0, 60) + '…' : str;
 	} catch {
 		return toSingleLine(raw).slice(0, 60);
 	}
@@ -346,10 +367,11 @@ export class ToolCallItem implements Component {
 			if (isRoot) {
 				lines.push(
 					truncateToWidth(
-						chalk.dim(indent + '  \u2514\u2500 ctrl+o to collapse'),
+						chalk.dim(indent + '  └─ ctrl+o to collapse'),
 						width,
 					),
 				);
+				lines.push('');
 			}
 			return lines;
 		}
@@ -358,21 +380,25 @@ export class ToolCallItem implements Component {
 		if (this.result) {
 			const resultLines = this.result
 				.split('\n')
-				.filter((l) => l.trim().length > 0);
-			for (const line of resultLines.slice(0, PREVIEW_LINES)) {
+				.map(cleanPreviewLine)
+				.filter((l) => l.length > 0);
+			const shown = resultLines.slice(0, PREVIEW_LINES);
+			const extra = resultLines.length - shown.length;
+			shown.forEach((line, idx) => {
+				const isTail = idx === shown.length - 1 && extra === 0 && !isRoot;
+				const prefix = isTail ? '└ ' : '│ ';
 				lines.push(
-					truncateToWidth(indent + '  \u2502 ' + chalk.dim(line), width),
+					truncateToWidth(indent + '  ' + prefix + chalk.dim(line), width),
 				);
-			}
+			});
 
 			if (isRoot) {
-				const extra = resultLines.length - PREVIEW_LINES;
 				lines.push(
 					truncateToWidth(
 						chalk.dim(
 							extra > 0
-								? `${indent}  \u2514\u2500 +${extra} lines (ctrl+o to expand)`
-								: `${indent}  \u2514\u2500 ctrl+o to expand`,
+								? `${indent}  └─ +${extra} lines (ctrl+o to expand)`
+								: `${indent}  └─ ctrl+o to expand`,
 						),
 						width,
 					),
@@ -381,10 +407,16 @@ export class ToolCallItem implements Component {
 		} else if (isRoot) {
 			lines.push(
 				truncateToWidth(
-					chalk.dim(indent + '  \u2514\u2500 ctrl+o to expand'),
+					chalk.dim(indent + '  └─ ctrl+o to expand'),
 					width,
 				),
 			);
+		}
+
+		// Breathing room under root-level tool calls so consecutive calls read
+		// as distinct blocks (matches the history renderer).
+		if (isRoot) {
+			lines.push('');
 		}
 
 		return lines;

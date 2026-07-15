@@ -184,28 +184,46 @@ const { loader, action } = createHybridActionApiRoute(
     // can't pay for it. BYOK workspaces are always allowed — they cover
     // their own provider bills. Matches the pattern used in noStreamProcess
     // and runCASEPipeline.
-    const preflightWorkspaceId = authentication.workspaceId as string;
-    if (preflightWorkspaceId) {
-      const workspaceHasBYOK = await isWorkspaceBYOK(preflightWorkspaceId);
-      if (!workspaceHasBYOK) {
-        const ok = await hasCredits(
-          preflightWorkspaceId,
-          authentication.userId,
-          "chatMessage",
+    //
+    // Fail closed: if `workspaceId` is somehow missing (auth misconfig),
+    // refuse the turn instead of silently letting it through. Previously
+    // this branch was `if (workspaceId) { check }`, which meant a token
+    // without workspace context could chat for free.
+    const preflightWorkspaceId = authentication.workspaceId as
+      | string
+      | undefined;
+    if (!preflightWorkspaceId) {
+      logger.warn(
+        `[conversation] Missing workspaceId on auth for ${authentication.userId}; refusing chat turn`,
+        { conversationId: body.id },
+      );
+      return json(
+        {
+          error: "Workspace context missing — please re-authenticate.",
+          code: "no_workspace",
+        },
+        { status: 401 },
+      );
+    }
+    const workspaceHasBYOK = await isWorkspaceBYOK(preflightWorkspaceId);
+    if (!workspaceHasBYOK) {
+      const ok = await hasCredits(
+        preflightWorkspaceId,
+        authentication.userId,
+        "chatMessage",
+      );
+      if (!ok) {
+        logger.warn(
+          `[conversation] Insufficient credits for ${authentication.userId}; refusing chat turn`,
+          { conversationId: body.id },
         );
-        if (!ok) {
-          logger.warn(
-            `[conversation] Insufficient credits for ${authentication.userId}; refusing chat turn`,
-            { conversationId: body.id },
-          );
-          return json(
-            {
-              error: "You're out of credits. Upgrade your plan or add a top-up to keep chatting.",
-              code: "no_credits",
-            },
-            { status: 402 },
-          );
-        }
+        return json(
+          {
+            error: "You're out of credits. Upgrade your plan or add a top-up to keep chatting.",
+            code: "no_credits",
+          },
+          { status: 402 },
+        );
       }
     }
 

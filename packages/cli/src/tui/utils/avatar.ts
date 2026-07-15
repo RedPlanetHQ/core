@@ -1,6 +1,6 @@
 import chalk from 'chalk';
-import {Text} from '@mariozechner/pi-tui';
-import type {Component} from '@mariozechner/pi-tui';
+import {Text} from '@earendil-works/pi-tui';
+import type {Component} from '@earendil-works/pi-tui';
 
 // 3×5 bitmap font for digits and uppercase letters.
 // Each glyph is 5 rows of 3 columns; '1' = pixel on, '0' = off.
