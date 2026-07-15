@@ -16,6 +16,7 @@ import { logger } from "~/services/logger.service";
 import type { PlanType } from "@prisma/client";
 import { unscheduleAllForWorkspace } from "~/services/oauth/scheduler";
 import { sendPaymentFailedEmail } from "~/services/email.server";
+import { completeTopup, findTopupForSession } from "~/services/topup.server";
 
 // Initialize Stripe
 const stripe = BILLING_CONFIG.stripe.secretKey
@@ -330,9 +331,13 @@ async function handleInvoicePaymentSucceeded(invoice: Stripe.Invoice) {
 }
 
 /**
- * Handle checkout.session.completed — currently only used for one-time
- * credit top-ups. Subscription checkouts are handled by
- * customer.subscription.created.
+ * Handle checkout.session.completed and checkout.session.async_payment_succeeded.
+ *
+ * Sync card payments fire `completed` with `payment_status: "paid"` — we
+ * grant credits immediately. Async methods (ACH, some wallets) fire
+ * `completed` with `payment_status: "unpaid"` first; `completeTopup` no-ops
+ * on that and we credit later when `async_payment_succeeded` fires.
+ * Subscription checkouts are handled by `customer.subscription.created`.
  */
 async function handleCheckoutSessionCompleted(session: Stripe.Checkout.Session) {
   if (session.mode !== "payment") {
@@ -341,74 +346,17 @@ async function handleCheckoutSessionCompleted(session: Stripe.Checkout.Session) 
   if (session.metadata?.type !== "topup") {
     return;
   }
-  if (session.payment_status !== "paid") {
-    logger.info("Skipping unpaid topup checkout session", {
-      sessionId: session.id,
-      payment_status: session.payment_status,
-    });
-    return;
-  }
 
-  const topupId = session.metadata.topupId as string | undefined;
-  const paymentIntentId =
-    typeof session.payment_intent === "string"
-      ? session.payment_intent
-      : session.payment_intent?.id;
-
-  const topup = topupId
-    ? await prisma.creditTopup.findUnique({ where: { id: topupId } })
-    : await prisma.creditTopup.findUnique({
-        where: { stripeCheckoutSessionId: session.id },
-      });
-
+  const topup = await findTopupForSession(session);
   if (!topup) {
     logger.error("Topup row not found for checkout session", {
       sessionId: session.id,
-      topupId,
+      topupId: session.metadata?.topupId,
     });
     return;
   }
 
-  // Idempotency: if already completed, skip. Webhooks retry on failure.
-  if (topup.status === "completed") {
-    logger.info("Topup already completed, skipping", { topupId: topup.id });
-    return;
-  }
-
-  const userUsage = await prisma.userUsage.findUnique({
-    where: { userId: topup.userId },
-  });
-  if (!userUsage) {
-    logger.error("UserUsage missing for topup", {
-      topupId: topup.id,
-      userId: topup.userId,
-    });
-    return;
-  }
-
-  await prisma.$transaction([
-    prisma.creditTopup.update({
-      where: { id: topup.id },
-      data: {
-        status: "completed",
-        completedAt: new Date(),
-        stripePaymentIntentId: paymentIntentId,
-        stripeCheckoutSessionId: session.id,
-      },
-    }),
-    prisma.userUsage.update({
-      where: { id: userUsage.id },
-      data: {
-        availableCredits: { increment: topup.credits },
-      },
-    }),
-  ]);
-
-  logger.info("Topup completed and credits granted", {
-    topupId: topup.id,
-    userId: topup.userId,
-    credits: topup.credits,
-  });
+  await completeTopup(topup.id, session);
 }
 
 /**
@@ -533,6 +481,7 @@ export async function action({ request }: ActionFunctionArgs) {
         break;
 
       case "checkout.session.completed":
+      case "checkout.session.async_payment_succeeded":
         await handleCheckoutSessionCompleted(
           event.data.object as Stripe.Checkout.Session,
         );
