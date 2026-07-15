@@ -436,6 +436,24 @@ export function createConversation(
 						break;
 					}
 
+					case 'finish-message':
+					case 'finish': {
+						// Mastra emits `finish` / `finish-message` when a turn is
+						// wrapping up. Some server variants keep the SSE connection
+						// alive past this point (for potential resume), so the
+						// natural for-await exit below never fires and the CLI's
+						// "Thinking…" loader spins forever. Fire onFinish here and
+						// bail — the generator can keep draining silently, we're
+						// done reacting to it.
+						if (!hadApprovalRequest) {
+							callbacks.onFinish?.();
+						}
+						if (activeAbortController === controller) {
+							activeAbortController = null;
+						}
+						return;
+					}
+
 					case 'error': {
 						if (event.error === 'terminated') break;
 						callbacks.onError?.(new Error(event.error));
