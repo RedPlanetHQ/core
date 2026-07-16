@@ -20,16 +20,14 @@ interface ToolResponseEnvelope {
  *   coding_*   → /api/coding
  *   browser_*  → /api/browser
  *   exec_*     → /api/exec
- *   skill_*    → /api/skills
  *   (others)   → /api/utils
  */
 function toolGroup(
   toolName: string,
-): "coding" | "browser" | "exec" | "skills" | "utils" {
+): "coding" | "browser" | "exec" | "utils" {
   if (toolName.startsWith("coding_")) return "coding";
   if (toolName.startsWith("browser_")) return "browser";
   if (toolName.startsWith("exec_")) return "exec";
-  if (toolName.startsWith("skill_")) return "skills";
   return "utils";
 }
 
