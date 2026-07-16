@@ -453,26 +453,29 @@ const { loader, action } = createHybridActionApiRoute(
       async processInput({ messages }) {
         return messages;
       },
-      async processOutputResult({ messages }) {
+      async processOutputResult({ messages, result }) {
         const convertedMessages = convertMessages(messages).to("AIV6.UI");
 
-        // Pull real input/output tokens off the current stream/resume result.
-        // `totalUsage` sums across every step of a tool loop; `usage` is only
-        // the last step. Prefer totalUsage — for tool-heavy turns `usage`
-        // undercounts by 5–10×. Both fields are promises on Mastra streams,
-        // so await them defensively.
+        // Pull real input/output tokens from the `result` arg Mastra hands
+        // us. It's the totalized usage snapshot as of the terminal `finish`
+        // chunk (see @mastra/core chunk-7YYAFR2H.js — the workflow-level
+        // finish chunk populates `usageCount` and is the source of this
+        // value).
+        //
+        // Do NOT reach for `currentRun.result.totalUsage` here: that's a
+        // DelayedPromise resolved inside the transform's `flush()`, which
+        // can only fire AFTER this processor returns. Awaiting it inside
+        // the processor deadlocks the whole run — the transform is blocked
+        // on `runOutputProcessors`, and the flush that would resolve the
+        // promise can't run until the transform returns. Symptom: text
+        // streamed fine, but the SSE stream never closed, so useChat's
+        // consumeStream hung and `onFinish` never fired.
         let realInputTokens: number | undefined;
         let realOutputTokens: number | undefined;
-        try {
-          const src = currentRun.result;
-          const usage = src ? await (src.totalUsage ?? src.usage) : undefined;
-          if (usage) {
-            const picked = pickAgentResultTokens({ totalUsage: usage });
-            realInputTokens = picked.inputTokens;
-            realOutputTokens = picked.outputTokens;
-          }
-        } catch {
-          // Fall through — saveConversationResult has a char/4 fallback.
+        if (result?.usage) {
+          const picked = pickAgentResultTokens({ totalUsage: result.usage });
+          realInputTokens = picked.inputTokens;
+          realOutputTokens = picked.outputTokens;
         }
 
         await saveConversationResult({

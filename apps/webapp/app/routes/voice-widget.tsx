@@ -110,6 +110,15 @@ export default function VoiceWidget() {
   /** ElevenLabs audio queue — sentences play sequentially via <audio>. */
   const elQueueRef = useRef<HTMLAudioElement[]>([]);
   const elActiveRef = useRef<HTMLAudioElement | null>(null);
+  /**
+   * Outstanding Swift utterances the frontend has queued via `voice_speak`
+   * but hasn't seen a matching `voice:tts-ended` for. AVSpeechSynthesizer
+   * emits `tts-ended` per utterance, so it goes to zero briefly between
+   * sentences even though more are queued in Swift. Without this counter,
+   * `finishAssistantTurn` would reopen the mic in that gap and the
+   * recognizer would pick up the assistant's next sentence.
+   */
+  const pendingSwiftTtsRef = useRef<number>(0);
   /** toolCallIds of progress_update events already spoken — dedupe across retries. */
   const spokenProgressRef = useRef<Set<string>>(new Set());
   /** True while butler is in an active continuous-conversation session. */
@@ -253,6 +262,21 @@ export default function VoiceWidget() {
 
     unsubs.push(
       tauriListen("voice:tts-ended", () => {
+        // Swift emits tts-ended per AVSpeechUtterance. Between utterances
+        // the counter drops to zero briefly even though we've queued more
+        // — only treat "TTS totally done" when the counter for utterances
+        // WE dispatched hits zero. Otherwise the reopen-mic path below
+        // would fire in that gap and the recognizer would pick up the
+        // next sentence.
+        if (pendingSwiftTtsRef.current > 0) {
+          pendingSwiftTtsRef.current -= 1;
+        }
+        if (pendingSwiftTtsRef.current > 0) {
+          console.log(
+            `[voice-widget] tts-ended (${pendingSwiftTtsRef.current} utterance(s) still queued) → keep mic closed`,
+          );
+          return;
+        }
         ttsActiveRef.current = false;
         // Stream still flowing (subagent mid-work between progress
         // beats, or main reply not yet complete). Stay in "thinking"
@@ -681,6 +705,11 @@ export default function VoiceWidget() {
         // and in the gap the recognizer would happily transcribe the
         // assistant's own voice through the mic). The `voice:tts-ended`
         // handler is what reopens the floor once playback finishes.
+        //
+        // Track outstanding utterances so tts-ended between sentences
+        // doesn't prematurely reopen the mic — Swift emits one per
+        // utterance, and we need the WHOLE queue drained.
+        pendingSwiftTtsRef.current += 1;
         ttsActiveRef.current = true;
         clearHideTimer();
         setStatus("speaking");
@@ -740,6 +769,7 @@ export default function VoiceWidget() {
       });
       // Same synchronous flip as the 204 branch — keep the mic shut
       // until Swift's tts-ended event arrives.
+      pendingSwiftTtsRef.current += 1;
       ttsActiveRef.current = true;
       clearHideTimer();
       setStatus("speaking");
@@ -766,6 +796,13 @@ export default function VoiceWidget() {
       }
       elActiveRef.current = null;
     }
+    // Zero the Swift utterance counter: `voice_cancel_speech` in the
+    // Swift helper calls `stopSpeaking(at: .immediate)`, which fires
+    // `didCancel` (→ `tts-ended`) for the CURRENTLY-playing utterance
+    // only. Any queued but unstarted utterances are silently discarded
+    // with no tts-ended, so a residual positive count here would leave
+    // the mic pinned closed forever on the next turn.
+    pendingSwiftTtsRef.current = 0;
     ttsActiveRef.current = false;
   }
 

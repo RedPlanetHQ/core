@@ -182,6 +182,11 @@ export function startTuiApp(
 	let workspaceAccent = '#c15e50';
 	let pendingApprovalPanel: ApprovalPanel | null = null;
 	let autoApproveAll = false;
+	// Tracks whether the "Thinking…" loader is currently mounted under
+	// `messagesContainer`. Hoisted here (before insertBeforeLoader) so the
+	// helper can read it — `let` bindings aren't hoisted, unlike function
+	// decls, so a lower declaration would trip TDZ at runtime.
+	let loaderVisible = false;
 	let currentTask: TaskSummary | null = null;
 	let taskInfoOverlay: TaskDetail | null = null;
 	// Pending catchup summary that will seed a new chat when the user presses `c`.
@@ -978,6 +983,7 @@ export function startTuiApp(
 	}
 
 	function removeLoader(): void {
+		if (!loaderVisible) return;
 		const idx = conversationComponents.lastIndexOf(loader);
 		if (idx !== -1) conversationComponents.splice(idx, 1);
 		try {
@@ -986,13 +992,20 @@ export function startTuiApp(
 			// ignore
 		}
 		loader.stop();
+		loaderVisible = false;
 	}
 
 	function showLoader(): void {
+		if (loaderVisible) {
+			loader.stop();
+			loader.start();
+			return;
+		}
 		conversationComponents.push(loader);
 		messagesContainer.addChild(loader);
 		loader.stop();   // clear any existing interval before restarting
 		loader.start();
+		loaderVisible = true;
 	}
 
 	function showOutOfCreditsToast(): void {
@@ -1037,42 +1050,6 @@ export function startTuiApp(
 		let markdownInserted = false;
 		let hadOutput = false;
 		let hadErrorMessage = false;
-		let finishFired = false;
-		// Safety net: if the server never sends `finish` and stops emitting
-		// events for this many ms after any output, treat the turn as done.
-		// Otherwise the editor stays disabled forever and the user is stuck.
-		const IDLE_TIMEOUT_MS = 5_000;
-		let idleTimer: ReturnType<typeof setTimeout> | null = null;
-
-		function clearIdleTimer(): void {
-			if (idleTimer) {
-				clearTimeout(idleTimer);
-				idleTimer = null;
-			}
-		}
-
-		function fireFinish(): void {
-			if (requestId !== myRequestId) return;
-			clearIdleTimer();
-			removeLoader();
-			if (!finishFired) {
-				finishFired = true;
-				if (!hadOutput && !hadErrorMessage) {
-					addToMessages(new Text(chalk.gray('(no response)'), 1, 0));
-					addToMessages(new Spacer(1));
-				}
-				scratchpadPanel?.refresh().catch(() => {});
-			}
-			isProcessing = false;
-			editor.disableSubmit = false;
-			tui.requestRender();
-		}
-
-		function armIdleTimer(): void {
-			clearIdleTimer();
-			if (!hadOutput) return; // wait until at least one event before arming
-			idleTimer = setTimeout(fireFinish, IDLE_TIMEOUT_MS);
-		}
 
 		const callbacks = {
 			onTextDelta(delta: string) {
@@ -1126,7 +1103,6 @@ export function startTuiApp(
 
 			onAbort() {
 				if (requestId !== myRequestId) return;
-				clearIdleTimer();
 				removeLoader();
 				// Remove pending approval panel if present
 				if (pendingApprovalPanel) {
@@ -1152,7 +1128,6 @@ export function startTuiApp(
 
 			onError(err: Error) {
 				if (requestId !== myRequestId) return;
-				clearIdleTimer();
 				removeLoader();
 				hadErrorMessage = true;
 				const code = (err as {code?: string}).code;
