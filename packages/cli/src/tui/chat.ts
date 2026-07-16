@@ -272,15 +272,22 @@ export function startTuiApp(
 
 	function insertBeforeLoader(component: Component): void {
 		conversationComponents.push(component);
-		// Remove loader, add component, re-add loader
-		try {
-			messagesContainer.removeChild(loader);
-		} catch {
-			// loader not in tree yet
+		// Insert new content ABOVE the loader when it's visible, otherwise
+		// just append. Do NOT re-add the loader here — that used to bypass
+		// the loaderVisible flag and stranded the loader in the tree after
+		// removeLoader() had already run, which the caller couldn't clear.
+		const loaderInTree = loaderVisible;
+		if (loaderInTree) {
+			try {
+				messagesContainer.removeChild(loader);
+			} catch {
+				// ignore
+			}
 		}
-
 		messagesContainer.addChild(component);
-		messagesContainer.addChild(loader);
+		if (loaderInTree) {
+			messagesContainer.addChild(loader);
+		}
 	}
 
 	function toggleIncognito(): void {
@@ -1030,6 +1037,42 @@ export function startTuiApp(
 		let markdownInserted = false;
 		let hadOutput = false;
 		let hadErrorMessage = false;
+		let finishFired = false;
+		// Safety net: if the server never sends `finish` and stops emitting
+		// events for this many ms after any output, treat the turn as done.
+		// Otherwise the editor stays disabled forever and the user is stuck.
+		const IDLE_TIMEOUT_MS = 5_000;
+		let idleTimer: ReturnType<typeof setTimeout> | null = null;
+
+		function clearIdleTimer(): void {
+			if (idleTimer) {
+				clearTimeout(idleTimer);
+				idleTimer = null;
+			}
+		}
+
+		function fireFinish(): void {
+			if (requestId !== myRequestId) return;
+			clearIdleTimer();
+			removeLoader();
+			if (!finishFired) {
+				finishFired = true;
+				if (!hadOutput && !hadErrorMessage) {
+					addToMessages(new Text(chalk.gray('(no response)'), 1, 0));
+					addToMessages(new Spacer(1));
+				}
+				scratchpadPanel?.refresh().catch(() => {});
+			}
+			isProcessing = false;
+			editor.disableSubmit = false;
+			tui.requestRender();
+		}
+
+		function armIdleTimer(): void {
+			clearIdleTimer();
+			if (!hadOutput) return; // wait until at least one event before arming
+			idleTimer = setTimeout(fireFinish, IDLE_TIMEOUT_MS);
+		}
 
 		const callbacks = {
 			onTextDelta(delta: string) {
@@ -1083,6 +1126,7 @@ export function startTuiApp(
 
 			onAbort() {
 				if (requestId !== myRequestId) return;
+				clearIdleTimer();
 				removeLoader();
 				// Remove pending approval panel if present
 				if (pendingApprovalPanel) {
@@ -1108,6 +1152,7 @@ export function startTuiApp(
 
 			onError(err: Error) {
 				if (requestId !== myRequestId) return;
+				clearIdleTimer();
 				removeLoader();
 				hadErrorMessage = true;
 				const code = (err as {code?: string}).code;

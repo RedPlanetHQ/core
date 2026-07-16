@@ -244,6 +244,7 @@ export function createConversation(
 					case 'tool-output-available': {
 						rememberPart(event.toolCallId, {state: 'output-available'});
 						const parentItem = activeTools.get(event.toolCallId);
+						let extractedResult: unknown;
 						if (parentItem && event.output) {
 							let parts: OutputPart[] | null = null;
 							if (Array.isArray(event.output.parts)) {
@@ -270,13 +271,27 @@ export function createConversation(
 										state: isTerminal ? 'output-available' : (part.state ?? 'in-progress'),
 									});
 								}
+							} else {
+								// Plain leaf-tool output — no nested parts to mirror,
+								// just remember the value so we can hand it to setDone
+								// below.
+								extractedResult = event.output;
 							}
 						}
 
-						if (!event.preliminary && activeParent?.id === event.toolCallId) {
-							parentItem?.setDone();
-							activeParent = null;
-							if (lastAgentItem === parentItem) lastAgentItem = null;
+						if (!event.preliminary) {
+							if (activeParent?.id === event.toolCallId) {
+								parentItem?.setDone();
+								activeParent = null;
+								if (lastAgentItem === parentItem) lastAgentItem = null;
+							} else if (parentItem && !parentItem.isDone) {
+								// Non-container leaf tool: server sends the terminal
+								// state as `tool-output-available` (no `tool-result`
+								// follows), so we have to flip .isDone here or the
+								// row keeps rendering as "running…" and the caller's
+								// loader stays visible forever.
+								parentItem.setDone(extractedResult);
+							}
 						}
 
 						callbacks.onRerender?.();
