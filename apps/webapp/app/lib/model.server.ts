@@ -297,20 +297,17 @@ export function createAgent(
 
   // BYOK OpenAI-compatible proxy: workspace stored { apiKey, baseUrl }, pointing
   // at CLIProxyAPI / Vercel AI Gateway / any OpenAI-compatible endpoint. Mastra's
-  // router can't handle custom base URLs, so use the direct SDK. apiMode falls
-  // back to chat_completions since most third-party proxies don't implement
-  // the OpenAI Responses API.
+  // router can't handle custom base URLs, so use the direct SDK. Third-party
+  // proxies almost never implement the OpenAI Responses API, so pin to
+  // chat_completions regardless of env.OPENAI_API_MODE (which targets the
+  // server-level OpenAI provider, not per-workspace proxies).
   if (provider === "openai" && options?.apiKey && options?.baseUrl) {
     const modelId = getModelId(modelString);
     const openaiClient = createOpenAI({
       baseURL: options.baseUrl,
       apiKey: options.apiKey,
     });
-    const apiMode = openaiConfig.apiMode ?? "chat_completions";
-    const model =
-      apiMode === "responses"
-        ? openaiClient.responses(modelId)
-        : openaiClient.chat(modelId);
+    const model = openaiClient.chat(modelId);
     return new Agent({
       id: `model-call-${modelString}`,
       name: `Model Call (${modelString})`,
@@ -482,14 +479,17 @@ function tryParseJsonFromText(raw: string): unknown | undefined {
  * tool-calling/JSON-schema support, so the app can't assume any given
  * OpenRouter model honors strict structured output the way OpenAI does.
  */
-function needsTolerantParsing(model: string): boolean {
+function needsTolerantParsing(model: string, workspaceBaseUrl?: string): boolean {
   const provider = getProvider(model);
   const openaiConfig = getProviderConfig("openai");
   const apiMode = openaiConfig.apiMode ?? "responses";
-  const isProxyChatMode = apiMode === "chat_completions" && !!openaiConfig.baseUrl;
+  const isServerProxyChatMode = apiMode === "chat_completions" && !!openaiConfig.baseUrl;
+  // Per-workspace openai BYOK with a baseUrl is by definition a third-party
+  // proxy (CLIProxyAPI, Vercel AI Gateway, etc.) — always tolerant.
+  const isWorkspaceProxy = provider === "openai" && !!workspaceBaseUrl;
   const isOllama = provider === "ollama" || getDefaultChatProviderType() === "ollama";
   const isOpenRouter = provider === "openrouter";
-  return isProxyChatMode || isOllama || isOpenRouter;
+  return isServerProxyChatMode || isWorkspaceProxy || isOllama || isOpenRouter;
 }
 
 export async function makeStructuredModelCall<T extends z.ZodType>(
@@ -513,13 +513,14 @@ export async function makeStructuredModelCall<T extends z.ZodType>(
   const agentApiOptions = apiKey ? { apiKey, ...(baseUrl && { baseUrl }) } : undefined;
 
   // Proxy/Ollama/OpenRouter: manual JSON extraction (no guaranteed structured output support)
-  if (needsTolerantParsing(model)) {
+  if (needsTolerantParsing(model, baseUrl)) {
     const { object, usage } = await structuredCallWithTolerantParsing(
       schema,
       messages,
       model,
       temperature,
       apiKey,
+      baseUrl,
     );
     const tokenUsage = toTokenUsage(usage);
     logTokenUsage(`Structured/${complexity.toUpperCase()}`, model, tokenUsage);
@@ -590,6 +591,7 @@ async function structuredCallWithTolerantParsing<T extends z.ZodType>(
   modelString: string,
   temperature?: number,
   apiKey?: string,
+  baseUrl?: string,
 ): Promise<{ object: z.infer<T>; usage: any }> {
   const schemaHint = schemaInstruction(schema);
   const jsonPreamble =
@@ -598,7 +600,7 @@ async function structuredCallWithTolerantParsing<T extends z.ZodType>(
     "Include every required key; use null for nullable fields; use [] for empty arrays." +
     schemaHint;
 
-  const agentOpts = apiKey ? { apiKey } : undefined;
+  const agentOpts = apiKey ? { apiKey, ...(baseUrl && { baseUrl }) } : undefined;
   const agent = createAgent(modelString, jsonPreamble, undefined, agentOpts);
 
   const textResult = await agent.generate(messages as any, {
@@ -611,7 +613,7 @@ async function structuredCallWithTolerantParsing<T extends z.ZodType>(
     return { object: validated.data, usage: textResult.usage };
   }
 
-  // Repair attempt
+  // Repair attempt (reuse the same agentOpts so proxy baseUrl + key stay applied)
   const repairAgent = createAgent(
     modelString,
     "You are a JSON repair assistant. Convert the user's content into a single valid JSON object. " +
