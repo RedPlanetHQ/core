@@ -233,6 +233,7 @@
             "pages": [
               "self-hosting/environment-variables",
               "self-hosting/model-providers",
+              "self-hosting/subscription-proxy",
               "self-hosting/embeddings",
               "self-hosting/ai-providers"
             ]
