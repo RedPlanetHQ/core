@@ -8,7 +8,7 @@ CORE uses embedding models to convert text into vector representations for seman
 ## Configuration
 
 ```env
-EMBEDDINGS_PROVIDER=openai          # openai | google | ollama
+EMBEDDINGS_PROVIDER=openai          # openai | google | ollama | azure | local
 EMBEDDING_MODEL=text-embedding-3-small
 EMBEDDING_MODEL_SIZE=1536           # must match pgvector column dimension
 ```
@@ -50,6 +50,43 @@ EMBEDDING_MODEL=gemini-embedding-2-preview
 EMBEDDING_MODEL_SIZE=1024
 GOOGLE_GENERATIVE_AI_API_KEY=AIza...
 ```
+
+### Local (in-process, no server)
+
+CORE ships with an in-process embedding backend powered by [`@huggingface/transformers`](https://huggingface.co/docs/transformers.js) v4 + ONNX Runtime. No separate service, no API key, no network — model weights are downloaded once on first boot and cached to disk. Ideal for fully local self-hosts that don't want to run Ollama.
+
+| Model | Dimensions | Notes |
+|-------|-----------|-------|
+| `onnx-community/nomic-embed-text-v1.5` | 768 | Recommended. Comparable to `text-embedding-3-small` |
+| Any other feature-extraction model published as ONNX on Hugging Face | varies | Set `EMBEDDING_MODEL` to the repo id |
+
+```env
+EMBEDDINGS_PROVIDER=local
+EMBEDDING_MODEL=onnx-community/nomic-embed-text-v1.5
+EMBEDDING_MODEL_SIZE=768
+
+# Optional. Defaults to q8 — the sweet spot for CPU inference.
+LOCAL_EMBEDDING_DTYPE=q8              # fp32 | fp16 | q8 | q4
+
+# Optional. Where ONNX weights are cached. Defaults to ./data/models.
+LOCAL_EMBEDDING_CACHE_DIR=/app/data/models
+```
+
+The pipeline is warmed at server startup so the first request doesn't pay the load cost. First-run download progress streams into the server logs (throttled to ~10% per file):
+
+```
+[embed:local] initializing pipeline (model=onnx-community/nomic-embed-text-v1.5, dtype=q8, cache=/app/data/models)
+[embed:local] fetching model_quantized.onnx (onnx-community/nomic-embed-text-v1.5)
+[embed:local] downloading model_quantized.onnx: 30% (52.1/172.8 MB)
+[embed:local] downloading model_quantized.onnx: 40% (69.5/172.8 MB)
+…
+[embed:local] pipeline ready (onnx-community/nomic-embed-text-v1.5)
+Local embeddings warmed
+```
+
+**Docker persistence** — the hosted `docker-compose.yaml` mounts a named volume `local_models:/app/data/models` so weights survive rebuilds. Without it, every container recreate re-downloads ~150–200 MB.
+
+**Trigger.dev caveat** — memory-ingestion jobs run inside Trigger.dev workers when `QUEUE_PROVIDER=trigger`, not the webapp process. Local embeddings only work end-to-end with `QUEUE_PROVIDER=bullmq`.
 
 ### Ollama (Self-Hosted)
 

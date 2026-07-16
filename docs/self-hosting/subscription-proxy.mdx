@@ -1,0 +1,168 @@
+---
+title: "Use Your Claude / Codex Subscription"
+description: "Run CORE against your Claude Max or ChatGPT Codex subscription via a local OpenAI-compatible proxy — no API keys required."
+---
+
+If you already pay for Claude Max (Anthropic) or a ChatGPT plan that includes Codex, you can point CORE at your subscription instead of buying separate API credits. CORE never touches the subscription's OAuth tokens directly — a small proxy service (running on your own machine) sits between them and translates OpenAI-compatible requests into whatever the subscription CLI expects.
+
+<Warning>
+Subscription plans are licensed for **interactive** use. Providers can rate-limit or revoke OAuth tokens they detect being used as a headless backend for a hosted service. Fine for personal self-host on your own laptop or VPS; risky if you're serving other users or a public product. If in doubt, use real API keys.
+</Warning>
+
+## How it works
+
+```
+CORE  ──▶  CLIProxyAPI (localhost)  ──▶  Claude Code / Codex CLI OAuth  ──▶  your subscription
+```
+
+CORE talks to CLIProxyAPI as if it were an OpenAI-compatible API. CLIProxyAPI holds your subscription OAuth tokens and translates each request into the native protocol (Anthropic messages, ChatGPT Codex, Gemini, etc.). Multiple subscriptions can be logged into the same proxy.
+
+## 1. Boot the proxy
+
+CORE ships a compose recipe at `hosting/cliproxy/`:
+
+```bash
+cd hosting/cliproxy
+docker compose up -d
+```
+
+The compose file exposes:
+- Main API on `${CLIPROXY_PORT:-8317}` — this is what CORE calls
+- OAuth callback ports (`1455` Codex, `54545` Claude, `8085` Gemini, `51121` Qwen, `11451` iFlow) bound to `127.0.0.1` so they aren't network-exposed
+
+A persistent named volume `cli_proxy_auth:/root/.cli-proxy-api` stores OAuth tokens across container rebuilds.
+
+## 2. Set your proxy API key
+
+Edit `hosting/cliproxy/config.yaml`:
+
+```yaml
+host: 0.0.0.0
+port: 8317
+auth-dir: /root/.cli-proxy-api
+
+api-keys:
+  - <generate-a-long-random-string>   # ← this authenticates CORE → proxy
+```
+
+Generate one with `openssl rand -hex 32`. This is **your proxy's key** — completely unrelated to any subscription. You'll paste this same string into CORE later.
+
+Restart the container after editing:
+
+```bash
+docker compose restart cli-proxy-api
+```
+
+## 3. Log in to your subscription
+
+Run the proxy's login command for each subscription you want to use. The `-no-browser` flag prints a URL — paste it into your laptop browser, sign in, and approve.
+
+**Claude Max / Claude Pro**
+```bash
+docker compose exec cli-proxy-api \
+  /CLIProxyAPI/CLIProxyAPI -no-browser --claude-login
+```
+
+**ChatGPT Plus / Pro / Business (Codex)**
+```bash
+docker compose exec cli-proxy-api \
+  /CLIProxyAPI/CLIProxyAPI -no-browser --codex-login
+```
+
+Others: `--gemini-login`, `--qwen-login`, `--iflow-login`.
+
+<Note>
+If the exact binary path fails, run `docker compose exec cli-proxy-api ls -la /CLIProxyAPI` to find the actual binary, or use `docker compose run --rm cli-proxy-api --claude-login` to invoke via the image entrypoint.
+</Note>
+
+**Verify** the login worked by listing available models:
+
+```bash
+curl -s http://localhost:8317/v1/models \
+  -H "Authorization: Bearer <your-proxy-key>" | jq
+```
+
+You should see the model IDs your subscription can serve — e.g. `claude-sonnet-4-6`, `claude-haiku-4-5-20251001`, `gpt-5.5`, etc. Note the exact IDs: some (like `claude-sonnet-4-6`) work in short form, others (like `claude-haiku-4-5-20251001`) require the date-stamped version.
+
+## 4. Wire the proxy into CORE
+
+You can do this per workspace via BYOK (recommended, no restart) or globally via env.
+
+### Per workspace (BYOK)
+
+In the CORE webapp, open **Workspace Settings → Models → API Keys**, click **+ Add API key**, choose **OpenAI**, and fill in:
+
+- **Base URL**: `http://localhost:8317/v1` (or `http://cli-proxy-api:8317/v1` if CORE runs on the same docker network; `http://host.docker.internal:8317/v1` for a Mac Docker CORE reaching a laptop-side proxy)
+- **API key**: the same random string you put in `config.yaml`
+
+Save. Then in the **Models** section pick a tier (Default / Low / High), choose **Enter model ID…**, and type a router string prefixed with `openai/` — e.g. `openai/claude-sonnet-4-6`. The `openai/` prefix forces CORE to route through the openai provider path (which now honors the workspace's proxy URL); the model id after the slash is what gets sent to CLIProxyAPI.
+
+### Globally (env)
+
+```env
+CHAT_PROVIDER=openai
+OPENAI_API_KEY=<your-proxy-key>
+OPENAI_BASE_URL=http://localhost:8317/v1
+OPENAI_API_MODE=chat_completions
+MODEL=claude-sonnet-4-6
+```
+
+Third-party proxies generally don't implement the OpenAI Responses API — `OPENAI_API_MODE=chat_completions` is required.
+
+## 5. Pick your model IDs
+
+Grab exact IDs from `GET /v1/models` (step 3). Suggested defaults:
+
+| Tier | Recommended (Claude Max) | Recommended (ChatGPT) |
+|---|---|---|
+| Default | `openai/claude-sonnet-4-6` | `openai/gpt-5.5` |
+| Low complexity | `openai/claude-haiku-4-5-20251001` | `openai/gpt-5-mini` |
+| High complexity | `openai/claude-opus-4-7` | `openai/gpt-5.6` |
+
+Low and High fall back to Default when empty — you only need to fill them in if you want a different model at those tiers (cheap for background work, expensive for reasoning-heavy paths).
+
+## Structured outputs & tool calling
+
+Under the hood, CORE routes structured-extraction calls (memory ingestion, label classification, etc.) via OpenAI-compatible **tool calling** when a workspace proxy is configured. Claude's structured outputs enforce grammar-constrained sampling on tool args, so the model physically can't respond with prose refusals like "there's nothing to extract" — it will call the tool with empty arrays. This is why the proxy path is reliable even for empty or trivial content.
+
+If tool calling fails for any reason (proxy translation bug, network hiccup), CORE falls back to prompt-based JSON extraction with a tolerant parser, and finally to an empty-schema coercion — chain of three so ingestion never blocks on a proxy quirk.
+
+## Combined with local embeddings
+
+Pair this with the [local embeddings backend](/self-hosting/embeddings#local-in-process-no-server) for a fully key-free self-host:
+
+```env
+# Chat via your Claude subscription (workspace BYOK does the routing)
+CHAT_PROVIDER=openai
+OPENAI_BASE_URL=http://localhost:8317/v1
+OPENAI_API_KEY=<proxy-key>
+OPENAI_API_MODE=chat_completions
+MODEL=claude-sonnet-4-6
+
+# Embeddings in-process, no external service
+EMBEDDINGS_PROVIDER=local
+EMBEDDING_MODEL=onnx-community/nomic-embed-text-v1.5
+EMBEDDING_MODEL_SIZE=768
+```
+
+No Anthropic API key, no OpenAI API key, no separate embedding server. Just your subscription.
+
+## Troubleshooting
+
+**`unknown provider for model X`** from the proxy — you haven't authenticated the subscription that serves that model. Run the matching `--*-login` command.
+
+**`Incorrect API key provided`** from `platform.openai.com` — CORE isn't sending through the proxy. Check that your Workspace Settings → OpenAI row has both a Base URL and an API key saved, and that your model id starts with `openai/`.
+
+**502 from the proxy with a model id that's not in the served list** — some model IDs need the date-stamped form (e.g. `claude-haiku-4-5-20251001` not `claude-haiku-4-5`). Re-check the exact IDs from `GET /v1/models`.
+
+**Callback port already in use during login** — the proxy publishes callback ports on `127.0.0.1` only. If another local process is using `54545` / `1455`, stop it first (or edit the compose file to remap).
+
+## Alternatives
+
+The `hosting/cliproxy/` compose targets [CLIProxyAPI](https://github.com/router-for-me/CLIProxyAPI). Other options that expose the same OpenAI-compatible surface:
+
+- **[Vercel AI Gateway](https://vercel.com/docs/ai-gateway/coding-agents/claude-code)** — first-party pass-through for Claude Max via `ANTHROPIC_BASE_URL`. Requires a Vercel account, but zero self-hosting.
+- **[ai-cli-proxy-api](https://github.com/ben-vargas/ai-cli-proxy-api)** — variant that supports Factory and Amp CLIs alongside ChatGPT Plus/Pro and Claude Pro/Max.
+- **[ai-sdk-provider-claude-code](https://github.com/ben-vargas/ai-sdk-provider-claude-code)** — direct Vercel AI SDK provider (not proxy) — would require adding a new provider block in CORE's model resolver rather than the drop-in URL swap this doc describes.
+
+Anything that exposes an OpenAI-compatible `/v1/chat/completions` endpoint works with CORE via the same **Base URL + API key** wire-up.
