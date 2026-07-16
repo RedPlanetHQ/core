@@ -138,6 +138,17 @@ const EnvironmentSchema = z
     CHAT_PROVIDER: z.enum(CHAT_PROVIDERS).default("openai"),
     EMBEDDINGS_PROVIDER: z.enum(EMBEDDING_PROVIDERS).optional(),
 
+    // Local (transformers.js) embedding backend.
+    // Active when EMBEDDINGS_PROVIDER=local. Model is taken from EMBEDDING_MODEL
+    // (recommend: onnx-community/nomic-embed-text-v1.5, 768 dims — set
+    // EMBEDDING_MODEL_SIZE=768 or leave the seeded model dim to take over).
+    // dtype: fp32 | fp16 | q8 | q4 — q8 is the sweet spot for CPU.
+    LOCAL_EMBEDDING_DTYPE: z
+      .enum(["fp32", "fp16", "q8", "q4"])
+      .default("q8"),
+    // Where ONNX weights are cached on disk. Defaults to ./data/models.
+    LOCAL_EMBEDDING_CACHE_DIR: z.string().optional(),
+
     // Inline batch fallback (when Batch API is unavailable)
     INLINE_BATCH_TTL_MS: z.coerce.number().int().positive().default(3600000),
     MAX_INLINE_BATCHES: z.coerce.number().int().positive().default(500),

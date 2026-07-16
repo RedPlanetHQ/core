@@ -1,0 +1,17 @@
+# CLIProxyAPI config — see https://help.router-for.me/configuration/basic
+#
+# The `api-keys` list below is what CLIProxyAPI accepts on the /v1 endpoint.
+# Rotate the placeholder before exposing this service anywhere non-local, and
+# paste the same value into CORE's BYOK settings when you wire the proxy in.
+
+host: 0.0.0.0
+port: 8317
+auth-dir: /root/.cli-proxy-api
+
+api-keys:
+  - change-me-to-a-long-random-string
+
+# Optional: turn on the remote management API to add/remove OAuth logins
+# from another machine. Leave disabled unless you know you need it.
+# remote-management:
+#   enabled: false

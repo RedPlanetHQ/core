@@ -38,6 +38,7 @@
     "@hocuspocus/provider": "^3.4.4",
     "@hocuspocus/server": "^3.4.4",
     "@hocuspocus/transformer": "^3.4.4",
+     "@huggingface/transformers": "4.2.0",
     "@mastra/ai-sdk": "^1.6.2",
     "@mastra/core": "1.51.0",
     "@mastra/memory": "1.23.0",

@@ -10,6 +10,7 @@ import {
   ModelRouterEmbeddingModel,
 } from "@mastra/core/llm";
 import { logger } from "~/services/logger.service";
+import { embedLocal } from "~/services/localEmbeddings.server";
 import {
   recordTokenUsage,
   type TokenUsageSource,
@@ -289,6 +290,31 @@ export function createAgent(
       id: `model-call-${modelString}`,
       name: `Model Call (${modelString})`,
       model: ollama(modelId) as any,
+      instructions: instructions || "",
+      ...(tools && { tools }),
+    });
+  }
+
+  // BYOK OpenAI-compatible proxy: workspace stored { apiKey, baseUrl }, pointing
+  // at CLIProxyAPI / Vercel AI Gateway / any OpenAI-compatible endpoint. Mastra's
+  // router can't handle custom base URLs, so use the direct SDK. apiMode falls
+  // back to chat_completions since most third-party proxies don't implement
+  // the OpenAI Responses API.
+  if (provider === "openai" && options?.apiKey && options?.baseUrl) {
+    const modelId = getModelId(modelString);
+    const openaiClient = createOpenAI({
+      baseURL: options.baseUrl,
+      apiKey: options.apiKey,
+    });
+    const apiMode = openaiConfig.apiMode ?? "chat_completions";
+    const model =
+      apiMode === "responses"
+        ? openaiClient.responses(modelId)
+        : openaiClient.chat(modelId);
+    return new Agent({
+      id: `model-call-${modelString}`,
+      name: `Model Call (${modelString})`,
+      model: model as any,
       instructions: instructions || "",
       ...(tools && { tools }),
     });
@@ -710,6 +736,18 @@ export async function getEmbedding(text: string) {
   const embeddingInfo = await getDefaultEmbeddingInfo();
   const embeddingProviderType = embeddingInfo?.providerType ?? "openai";
   const embeddingModelId = embeddingInfo?.modelId ?? "text-embedding-3-small";
+
+  // Local (transformers.js) short-circuits the AI SDK: no HTTP, no retries
+  // needed since the model is in-process. Dimension checks still apply below.
+  if (embeddingProviderType === "local") {
+    let lastEmbedding = await embedLocal((text ?? "").toString());
+    if (targetDim && targetDim > 0 && lastEmbedding.length !== targetDim) {
+      throw new Error(
+        `Embedding dimension mismatch: local model ${embeddingModelId} produced ${lastEmbedding.length}, expected ${targetDim}. Set EMBEDDING_MODEL_SIZE or update the seeded model dimensions.`,
+      );
+    }
+    return lastEmbedding;
+  }
 
   const maxRetries = 3;
   let lastEmbedding: number[] = [];

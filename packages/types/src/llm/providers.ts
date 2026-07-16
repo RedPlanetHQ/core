@@ -83,7 +83,7 @@ export const PROVIDER_SPECS: Record<string, ProviderSpec> = {
   },
   ollama: {
     id: "ollama",
-    label: "Ollama (local)",
+    label: "Ollama",
     serverDefault: true,
     byokSupported: true,
     apiKeyVar: null,
@@ -92,7 +92,7 @@ export const PROVIDER_SPECS: Record<string, ProviderSpec> = {
       var: "OLLAMA_URL",
       required: true,
       placeholder: "http://localhost:11434",
-      hint: "URL of your local Ollama server",
+      hint: "URL of your Ollama server — local (http://localhost:11434) or Ollama Cloud (https://ollama.com)",
     },
     defaultChatModel: "llama3.2",
     modelHint: "Use model IDs like ollama/llama3.2",
@@ -187,7 +187,13 @@ export const BYOK_PROVIDERS = ALL_PROVIDERS.filter(
 ) as readonly string[] as readonly [string, ...string[]];
 
 /** Providers that can also be used as embeddings backends. */
-export const EMBEDDING_PROVIDERS = ["openai", "google", "ollama", "azure"] as const;
+export const EMBEDDING_PROVIDERS = [
+  "openai",
+  "google",
+  "ollama",
+  "azure",
+  "local",
+] as const;
 
 export type ChatProvider = (typeof CHAT_PROVIDERS)[number];
 export type BYOKProvider = (typeof BYOK_PROVIDERS)[number];

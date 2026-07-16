@@ -7,6 +7,7 @@ import { trackConfig } from "~/services/telemetry.server";
 import { prisma } from "~/db.server";
 import { migration } from "~/migration";
 import { ensureDefaultProviders } from "~/services/llm-provider.server";
+import { initLocalEmbeddings } from "~/services/localEmbeddings.server";
 
 // Global flag to ensure startup only runs once per server process
 let startupInitialized = false;
@@ -134,6 +135,22 @@ export async function initializeStartupServices() {
     // Seed LLM providers/models and populate in-memory cache
     await ensureDefaultProviders();
     logger.info("LLM providers and models seeded");
+
+    // Warm the local embedding pipeline before we accept traffic. First run
+    // downloads ONNX weights (~150–200MB for nomic q8) — the loader streams
+    // download progress into these logs so the boot is observable. A failure
+    // here is loud but non-fatal: the app comes up, and the first embed call
+    // will surface the same error.
+    if (env.EMBEDDINGS_PROVIDER === "local") {
+      try {
+        await initLocalEmbeddings();
+        logger.info("Local embeddings warmed");
+      } catch (error) {
+        logger.error("Local embeddings warmup failed (server will still start)", {
+          error,
+        });
+      }
+    }
 
     startupInitialized = true;
     logger.info("Application initialization completed successfully");
