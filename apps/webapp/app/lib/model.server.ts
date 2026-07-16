@@ -1,4 +1,4 @@
-import { embed, type ModelMessage } from "ai";
+import { embed, generateText, tool, type ModelMessage } from "ai";
 import { z } from "zod";
 import {
   createOpenAI,
@@ -512,6 +512,36 @@ export async function makeStructuredModelCall<T extends z.ZodType>(
 
   const agentApiOptions = apiKey ? { apiKey, ...(baseUrl && { baseUrl }) } : undefined;
 
+  // Workspace-proxy openai (CLIProxyAPI, Vercel AI Gateway) → try tool-calling
+  // first. When the proxy is backed by Claude, CLIProxyAPI translates OpenAI
+  // `tools` + `tool_choice` into Anthropic's native `tool_use`, and Claude
+  // physically cannot deviate from the tool's JSON schema (grammar-constrained
+  // sampling). This eliminates the prose-refusal failure mode we get from
+  // response_format-style structured output on proxies.
+  const isWorkspaceProxy = getProvider(model) === "openai" && !!baseUrl && !!apiKey;
+  if (isWorkspaceProxy) {
+    try {
+      const { object, usage } = await structuredCallViaTools(
+        schema,
+        messages,
+        model,
+        apiKey!,
+        baseUrl!,
+        temperature,
+      );
+      const tokenUsage = toTokenUsage(usage);
+      logTokenUsage(`Structured/${complexity.toUpperCase()}`, model, tokenUsage);
+      recordCallUsage({ workspaceId, userId, useCase, cacheKey, model, tokenUsage });
+      return { object, usage: tokenUsage };
+    } catch (error) {
+      logger.warn(
+        "[Structured] Tool-based extraction failed, falling back to tolerant text parsing",
+        { error: (error as Error).message, model },
+      );
+      // fall through to tolerant path
+    }
+  }
+
   // Proxy/Ollama/OpenRouter: manual JSON extraction (no guaranteed structured output support)
   if (needsTolerantParsing(model, baseUrl)) {
     const { object, usage } = await structuredCallWithTolerantParsing(
@@ -585,6 +615,54 @@ function schemaInstruction(schema: z.ZodType): string {
   }
 }
 
+/**
+ * Force schema-conformant output via tool-calling for the workspace-proxy path.
+ * A single `return_result` tool is defined with the target zod schema as its
+ * input; toolChoice pins the model to that tool, so Claude via CLIProxyAPI
+ * cannot respond with prose — its tool arguments MUST match the schema.
+ */
+async function structuredCallViaTools<T extends z.ZodType>(
+  schema: T,
+  messages: ModelMessage[],
+  modelString: string,
+  apiKey: string,
+  baseUrl: string,
+  temperature?: number,
+): Promise<{ object: z.infer<T>; usage: any }> {
+  const modelId = getModelId(modelString);
+  const openaiClient = createOpenAI({ baseURL: baseUrl, apiKey });
+
+  const returnResultTool = tool({
+    description:
+      "Return the extracted structured data. You MUST call this tool with the extracted data — do not respond with prose. If nothing is present to extract, still call the tool with empty arrays / nulls / empty strings per the schema.",
+    inputSchema: schema,
+  });
+
+  const result = await generateText({
+    model: openaiClient.chat(modelId),
+    messages,
+    tools: { return_result: returnResultTool },
+    toolChoice: { type: "tool", toolName: "return_result" },
+    ...(temperature !== undefined && { temperature }),
+  });
+
+  const toolCall = result.toolCalls?.[0];
+  if (!toolCall) {
+    throw new Error(
+      "Model returned no tool call despite toolChoice=required. Response: " +
+        (result.text ?? "").slice(0, 200),
+    );
+  }
+  const args = (toolCall as any).input ?? (toolCall as any).args;
+  const validated = schema.safeParse(args);
+  if (!validated.success) {
+    throw new Error(
+      `Tool arguments failed schema validation: ${validated.error.message}`,
+    );
+  }
+  return { object: validated.data, usage: result.usage };
+}
+
 async function structuredCallWithTolerantParsing<T extends z.ZodType>(
   schema: T,
   messages: ModelMessage[],
@@ -648,12 +726,97 @@ async function structuredCallWithTolerantParsing<T extends z.ZodType>(
     return { object: repairedValidated.data, usage: repairResult.usage ?? textResult.usage };
   }
 
+  // Prose-refusal fallback. Claude (via subscription proxies) sometimes
+  // refuses to emit JSON on trivial inputs — e.g. asked to "extract facts
+  // from an empty greeting", it responds in prose: "The episode contains
+  // no facts to extract." Neither the primary nor the repair attempt got
+  // parseable JSON out of it. Build an empty-shaped object from the schema
+  // (arrays → [], nullables → null, primitives → "") and try to validate.
+  // If the schema accepts it, treat that as "model successfully extracted
+  // nothing" — preserves ingestion continuity for trivial episodes.
+  const bothProse = !parsed && !repairedParsed;
+  logger.warn("[Structured] Tolerant parse failed", {
+    model: modelString,
+    bothProse,
+    textPreview: (textResult.text ?? "").slice(0, 300),
+    repairPreview: (repairResult.text ?? "").slice(0, 300),
+  });
+  if (bothProse) {
+    const empty = buildEmptyForSchema(schema);
+    logger.warn("[Structured] Empty-schema fallback build", {
+      built: empty !== undefined,
+      empty,
+    });
+    if (empty !== undefined) {
+      const emptyValidated = schema.safeParse(empty);
+      logger.warn("[Structured] Empty-schema fallback validate", {
+        success: emptyValidated.success,
+        issues: emptyValidated.success
+          ? undefined
+          : emptyValidated.error?.issues,
+      });
+      if (emptyValidated.success) {
+        logger.warn(
+          "[Structured] Model returned prose (likely a refusal on trivial input); coerced to empty schema shape.",
+          { model: modelString },
+        );
+        return {
+          object: emptyValidated.data,
+          usage: repairResult.usage ?? textResult.usage,
+        };
+      }
+    }
+  }
+
   const err = new Error(
     "No object generated: could not parse/validate JSON from proxy/self-hosted model output.",
   ) as Error & { text?: string; repairText?: string };
   err.text = textResult.text;
   err.repairText = repairResult.text;
   throw err;
+}
+
+/**
+ * Recursively construct an empty-shaped instance for a zod schema. Returns
+ * undefined when the schema contains types we can't safely default (unions,
+ * discriminated unions, tuples, records with required keys, etc.) — the
+ * caller then falls back to raising the original error rather than fabricating
+ * potentially-wrong data. Written against zod v4's `.def.type` shape.
+ */
+function buildEmptyForSchema(schema: unknown): unknown {
+  const def: any = (schema as any)?.def ?? (schema as any)?._def;
+  const kind: string | undefined = def?.type ?? def?.typeName;
+  if (!kind) return undefined;
+
+  // Optional / nullable / default: return their "empty" as the outer type
+  if (kind === "optional" || kind === "ZodOptional") return undefined;
+  if (kind === "nullable" || kind === "ZodNullable") return null;
+  if (kind === "default" || kind === "ZodDefault") {
+    const dv = def.defaultValue;
+    return typeof dv === "function" ? dv() : dv;
+  }
+
+  if (kind === "array" || kind === "ZodArray") return [];
+  if (kind === "string" || kind === "ZodString") return "";
+  if (kind === "number" || kind === "ZodNumber") return 0;
+  if (kind === "boolean" || kind === "ZodBoolean") return false;
+
+  if (kind === "object" || kind === "ZodObject") {
+    const shape =
+      (schema as any).shape ??
+      (typeof def?.shape === "function" ? def.shape() : def?.shape);
+    if (!shape || typeof shape !== "object") return undefined;
+    const out: Record<string, unknown> = {};
+    for (const key of Object.keys(shape)) {
+      const val = buildEmptyForSchema(shape[key]);
+      // Undefined is legal for optional fields; include the key so
+      // shape-strict schemas don't miss it.
+      out[key] = val;
+    }
+    return out;
+  }
+
+  return undefined;
 }
 
 function extractTextFromError(error: unknown): string {
