@@ -4,7 +4,7 @@ import {
   type ActionFunctionArgs,
 } from "@remix-run/node";
 import { useLoaderData, useFetcher } from "@remix-run/react";
-import { useEffect, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { Prisma } from "@prisma/client";
 import { requireUser } from "~/services/session.server";
 import { prisma } from "~/db.server";
@@ -19,7 +19,7 @@ import {
 import { Input } from "~/components/ui/input";
 import { Button } from "~/components/ui/button";
 import { Badge } from "~/components/ui/badge";
-import { Trash2 } from "lucide-react";
+import { Plus, Trash2 } from "lucide-react";
 import {
   getChatModels,
   persistCustomWorkspaceModel,
@@ -32,37 +32,73 @@ import {
   isSupportedProvider,
   type SupportedProvider,
 } from "~/services/byok.server";
-import { PROVIDER_SPECS } from "@core/types";
+import {
+  PROVIDER_SPECS,
+  BYOK_PROVIDERS as ALL_BYOK_PROVIDERS,
+} from "@core/types";
 
-const USE_CASES = [
-  {
-    key: "chat",
-    label: "Chat",
-    description: "Default model used for conversations with the agent",
-  },
-  {
-    key: "memory",
-    label: "Memory Ingestion",
-    description:
-      "Model used for extracting and structuring knowledge from episodes",
-  },
-  {
-    key: "search",
-    label: "Search Router",
-    description: "Model used for query generation and search result ranking",
-  },
-] as const;
-
-type UseCase = (typeof USE_CASES)[number]["key"];
-
-// Derived from the canonical catalog in @core/types/llm/providers.
-// Adding a provider there propagates here automatically.
+// ---------------------------------------------------------------------------
+// Model tiers — replaces the old per-use-case config.
+// ---------------------------------------------------------------------------
 //
-// formKind decides which row component to render:
-//   "key-only"  — only an API key input (anthropic, google, openrouter, …)
-//   "url-only"  — only a URL input; provider needs no key (ollama)
-//   "dual"      — URL + key inputs (openai proxy, azure). URL is optional
-//                 when baseUrl.required is false (openai direct still works).
+// Three complexity slots at the workspace level:
+//   medium (Default), low, high
+//
+// - Every internal call already declares its `complexity` — the resolver in
+//   llm-provider.server.ts::getModelForUseCase picks the matching slot,
+//   falling back to `medium` when empty, then to server default.
+// - Legacy storage shape (`{ chat: { modelId | medium }, memory: ..., search: ... }`)
+//   is migrated on read here; on next write the whole modelConfig collapses to
+//   the flat shape.
+
+type ComplexityTier = "low" | "medium" | "high";
+
+const TIERS: { key: ComplexityTier; label: string; hint: string }[] = [
+  {
+    key: "medium",
+    label: "Default",
+    hint: "used for chat turns, memory ingestion, and most background work",
+  },
+  {
+    key: "low",
+    label: "Low complexity",
+    hint: "cheap / fast — titles, query rewriting, reranking. Empty = uses Default.",
+  },
+  {
+    key: "high",
+    label: "High complexity",
+    hint: "best-quality — reasoning-heavy paths. Empty = uses Default.",
+  },
+];
+
+// Legacy shape support: read either the new flat shape or the old per-use-case one.
+function readTierSlot(
+  modelConfig: Record<string, any> | undefined,
+  complexity: ComplexityTier,
+): string {
+  if (!modelConfig) return "";
+  // New flat shape
+  const flat = modelConfig[complexity];
+  if (typeof flat === "string" && flat.length > 0) return flat;
+  // Legacy per-use-case shape — prefer `chat` as the canonical carrier
+  const legacy = modelConfig.chat;
+  if (legacy && typeof legacy === "object") {
+    const chosen: unknown =
+      (legacy as Record<string, unknown>)[complexity] ??
+      (complexity === "medium"
+        ? (legacy as Record<string, unknown>).medium ??
+          (legacy as Record<string, unknown>).modelId
+        : undefined);
+    if (typeof chosen === "string" && chosen.length > 0) return chosen;
+  }
+  return "";
+}
+
+// ---------------------------------------------------------------------------
+// Provider forms — used by the API keys section. Derived from the canonical
+// catalog so adding a provider in @core/types propagates here.
+// ---------------------------------------------------------------------------
+
 type FormKind = "key-only" | "url-only" | "dual";
 
 type ProviderForm = {
@@ -75,83 +111,122 @@ type ProviderForm = {
   baseUrlRequired: boolean;
 };
 
-const BYOK_PROVIDERS: ProviderForm[] = Object.values(PROVIDER_SPECS)
-  .filter((s) => s.byokSupported)
-  .map((s) => {
-    const hasKey = s.apiKeyVar !== null;
-    const hasUrl = !!s.baseUrl;
-    const formKind: FormKind =
-      hasKey && hasUrl ? "dual" : hasUrl ? "url-only" : "key-only";
-    return {
-      type: s.id as SupportedProvider,
-      label: s.label,
-      hint: s.modelHint ?? s.baseUrl?.hint,
-      formKind,
-      apiKeyPlaceholder: s.apiKeyPlaceholder,
-      baseUrlPlaceholder: s.baseUrl?.placeholder ?? "",
-      baseUrlRequired: s.baseUrl?.required ?? false,
-    };
-  });
+const PROVIDER_FORMS: Record<string, ProviderForm> = Object.fromEntries(
+  Object.values(PROVIDER_SPECS)
+    .filter((s) => s.byokSupported)
+    .map((s): [string, ProviderForm] => {
+      const hasKey = s.apiKeyVar !== null;
+      const hasUrl = !!s.baseUrl;
+      const formKind: FormKind =
+        hasKey && hasUrl ? "dual" : hasUrl ? "url-only" : "key-only";
+      return [
+        s.id,
+        {
+          type: s.id as SupportedProvider,
+          label: s.label,
+          hint: s.modelHint ?? s.baseUrl?.hint,
+          formKind,
+          apiKeyPlaceholder: s.apiKeyPlaceholder,
+          baseUrlPlaceholder: s.baseUrl?.placeholder ?? "",
+          baseUrlRequired: s.baseUrl?.required ?? false,
+        },
+      ];
+    }),
+);
+
+const ALL_PROVIDER_TYPES = ALL_BYOK_PROVIDERS as unknown as SupportedProvider[];
+
+// ---------------------------------------------------------------------------
+// Loader
+// ---------------------------------------------------------------------------
 
 export const loader = async ({ request }: LoaderFunctionArgs) => {
   const user = await requireUser(request);
-
-  if (!user.workspaceId) {
-    throw new Error("Workspace not found");
-  }
+  if (!user.workspaceId) throw new Error("Workspace not found");
 
   const workspace = await prisma.workspace.findUnique({
     where: { id: user.workspaceId },
     select: { metadata: true },
   });
 
-  const modelConfig = ((workspace?.metadata as any)?.modelConfig ??
-    {}) as Record<UseCase, { modelId: string } | undefined>;
+  const modelConfig = ((workspace?.metadata as any)?.modelConfig ?? {}) as
+    | Record<string, any>
+    | undefined;
 
   const [models, keyStatus] = await Promise.all([
     getChatModels(user.workspaceId),
     getWorkspaceKeyStatus(user.workspaceId),
   ]);
 
-  return json({ modelConfig, models, keyStatus });
+  // Also fetch stored baseUrls for providers that carry one, so the UI can
+  // render "https://…/v1" alongside the "Key set" badge without a second RTT.
+  const providerBaseUrls = await prisma.lLMProvider.findMany({
+    where: { workspaceId: user.workspaceId, isActive: true },
+    select: { type: true, config: true },
+  });
+  const baseUrlByProvider: Record<string, string | null> = {};
+  for (const p of providerBaseUrls) {
+    const cfg = p.config as Record<string, unknown> | null;
+    baseUrlByProvider[p.type] =
+      cfg && typeof cfg.baseUrl === "string" ? cfg.baseUrl : null;
+  }
+
+  return json({ modelConfig, models, keyStatus, baseUrlByProvider });
 };
+
+// ---------------------------------------------------------------------------
+// Action
+// ---------------------------------------------------------------------------
 
 export const action = async ({ request }: ActionFunctionArgs) => {
   const user = await requireUser(request);
   const formData = await request.formData();
   const intent = formData.get("intent") as string;
-
   if (!user.workspaceId) {
     return json({ error: "Workspace not found" }, { status: 404 });
   }
 
   if (intent === "updateModel") {
-    const useCase = formData.get("useCase") as UseCase;
+    const complexity = (formData.get("complexity") as string) || "medium";
     const modelId = formData.get("modelId") as string;
-
-    const validUseCases: UseCase[] = ["chat", "memory", "search"];
-    if (!validUseCases.includes(useCase)) {
-      return json({ error: "Invalid use case" }, { status: 400 });
+    if (!["low", "medium", "high"].includes(complexity)) {
+      return json({ error: "Invalid complexity" }, { status: 400 });
     }
-    if (!modelId) {
-      return json({ error: "Missing modelId" }, { status: 400 });
-    }
+    if (!modelId) return json({ error: "Missing modelId" }, { status: 400 });
 
     const workspace = await prisma.workspace.findUnique({
       where: { id: user.workspaceId },
       select: { metadata: true },
     });
-
     const metadata = (workspace?.metadata as Record<string, unknown>) ?? {};
-    const currentConfig =
-      (metadata.modelConfig as Record<string, unknown>) ?? {};
+    const currentConfig = (metadata.modelConfig ?? {}) as Record<string, unknown>;
+
+    // Migration: strip legacy per-use-case entries the next time we write.
+    // Anything not in the flat tier set gets dropped.
+    const flatOnly: Record<string, unknown> = {};
+    for (const k of ["low", "medium", "high"]) {
+      if (typeof currentConfig[k] === "string") flatOnly[k] = currentConfig[k];
+    }
+    // Carry legacy chat.modelId / chat.medium into the medium slot if the
+    // flat shape doesn't have one yet — one-shot migration on first save.
+    if (!flatOnly.medium) {
+      const legacyChat = currentConfig.chat as
+        | Record<string, unknown>
+        | undefined;
+      if (legacyChat && typeof legacyChat === "object") {
+        const legacyMedium =
+          (legacyChat as any).medium ?? (legacyChat as any).modelId;
+        if (typeof legacyMedium === "string") flatOnly.medium = legacyMedium;
+      }
+    }
+    flatOnly[complexity] = modelId;
 
     await prisma.workspace.update({
       where: { id: user.workspaceId },
       data: {
         metadata: {
           ...metadata,
-          modelConfig: { ...currentConfig, [useCase]: { modelId } },
+          modelConfig: flatOnly,
         } as Prisma.InputJsonValue,
       },
     });
@@ -163,21 +238,37 @@ export const action = async ({ request }: ActionFunctionArgs) => {
   }
 
   if (intent === "resetModel") {
-    const useCase = formData.get("useCase") as UseCase;
-    const validUseCases: UseCase[] = ["chat", "memory", "search"];
-    if (!validUseCases.includes(useCase)) {
-      return json({ error: "Invalid use case" }, { status: 400 });
-    }
-
+    const complexity = formData.get("complexity") as string | null;
     const workspace = await prisma.workspace.findUnique({
       where: { id: user.workspaceId },
       select: { metadata: true },
     });
-
     const metadata = (workspace?.metadata as Record<string, unknown>) ?? {};
-    const currentConfig =
-      (metadata.modelConfig as Record<string, unknown>) ?? {};
-    const { [useCase]: _removed, ...nextConfig } = currentConfig;
+    const currentConfig = (metadata.modelConfig ?? {}) as Record<string, unknown>;
+
+    // Normalize to flat shape first (drop legacy per-use-case entries too).
+    const flatOnly: Record<string, unknown> = {};
+    for (const k of ["low", "medium", "high"]) {
+      if (typeof currentConfig[k] === "string") flatOnly[k] = currentConfig[k];
+    }
+    if (!flatOnly.medium) {
+      const legacyChat = currentConfig.chat as
+        | Record<string, unknown>
+        | undefined;
+      const legacyMedium =
+        legacyChat &&
+        typeof legacyChat === "object" &&
+        ((legacyChat as any).medium ?? (legacyChat as any).modelId);
+      if (typeof legacyMedium === "string") flatOnly.medium = legacyMedium;
+    }
+
+    let nextConfig: Record<string, unknown> = flatOnly;
+    if (complexity && ["low", "medium", "high"].includes(complexity)) {
+      delete nextConfig[complexity];
+    } else {
+      // Reset everything.
+      nextConfig = {};
+    }
 
     await prisma.workspace.update({
       where: { id: user.workspaceId },
@@ -190,7 +281,6 @@ export const action = async ({ request }: ActionFunctionArgs) => {
     });
 
     await pruneOrphanWorkspaceModels(user.workspaceId);
-
     return json({ success: true });
   }
 
@@ -198,13 +288,9 @@ export const action = async ({ request }: ActionFunctionArgs) => {
     const providerType = formData.get("providerType") as string;
     const apiKey = (formData.get("apiKey") as string)?.trim();
     const baseUrl = (formData.get("baseUrl") as string)?.trim() || undefined;
-
-    if (!isSupportedProvider(providerType)) {
+    if (!isSupportedProvider(providerType))
       return json({ error: "Unsupported provider" }, { status: 400 });
-    }
-    if (!apiKey) {
-      return json({ error: "API key is required" }, { status: 400 });
-    }
+    if (!apiKey) return json({ error: "API key is required" }, { status: 400 });
 
     await setWorkspaceApiKey(user.workspaceId, providerType, apiKey, baseUrl);
     return json({ success: true });
@@ -212,11 +298,8 @@ export const action = async ({ request }: ActionFunctionArgs) => {
 
   if (intent === "deleteKey") {
     const providerType = formData.get("providerType") as string;
-
-    if (!isSupportedProvider(providerType)) {
+    if (!isSupportedProvider(providerType))
       return json({ error: "Unsupported provider" }, { status: 400 });
-    }
-
     await deleteWorkspaceApiKey(user.workspaceId, providerType);
     return json({ success: true });
   }
@@ -224,296 +307,30 @@ export const action = async ({ request }: ActionFunctionArgs) => {
   return json({ error: "Invalid intent" }, { status: 400 });
 };
 
-/**
- * Two-input BYOK row for providers that carry both a URL and an API key.
- * Used by Azure (URL required) and OpenAI (URL optional — leaving it blank
- * keeps calls pointed at api.openai.com; filling it in aims the workspace
- * at any OpenAI-compatible proxy such as CLIProxyAPI or Vercel AI Gateway).
- */
-function DualFieldBYOKRow({
-  provider,
-  hasKey,
-}: {
-  provider: ProviderForm;
-  hasKey: boolean;
-}) {
-  const fetcher = useFetcher();
-  const [apiKey, setApiKey] = useState("");
-  const [baseUrl, setBaseUrl] = useState("");
-  const [editing, setEditing] = useState(false);
-
-  const isSubmitting = fetcher.state !== "idle";
-
-  const canSave =
-    apiKey.trim().length > 0 &&
-    (!provider.baseUrlRequired || baseUrl.trim().length > 0);
-
-  const handleSave = () => {
-    if (!canSave) return;
-    fetcher.submit(
-      {
-        intent: "setKey",
-        providerType: provider.type,
-        apiKey,
-        // Only send baseUrl when the user actually typed one — an empty string
-        // would otherwise overwrite a previously stored URL for openai.
-        ...(baseUrl.trim() && { baseUrl: baseUrl.trim() }),
-      },
-      { method: "POST" },
-    );
-    setApiKey("");
-    setBaseUrl("");
-    setEditing(false);
-  };
-
-  const handleDelete = () => {
-    fetcher.submit(
-      { intent: "deleteKey", providerType: provider.type },
-      { method: "POST" },
-    );
-  };
-
-  const activeHasKey =
-    fetcher.formData?.get("intent") === "deleteKey"
-      ? false
-      : fetcher.formData?.get("intent") === "setKey"
-        ? true
-        : hasKey;
-
-  return (
-    <div className="bg-background-3 flex flex-col gap-2 rounded-lg p-3 px-4">
-      <div className="flex items-center justify-between">
-        <div className="flex flex-col gap-1">
-          <div className="flex items-center gap-2">
-            <span className="text-sm font-medium">{provider.label}</span>
-            {activeHasKey && (
-              <Badge variant="secondary" className="text-xs">
-                Key set
-              </Badge>
-            )}
-          </div>
-          {provider.hint && (
-            <p className="text-muted-foreground text-xs">{provider.hint}</p>
-          )}
-        </div>
-
-        <div className="flex items-center gap-2">
-          {activeHasKey && !editing ? (
-            <>
-              <Button
-                variant="secondary"
-                size="sm"
-                className="h-7 text-xs"
-                onClick={() => setEditing(true)}
-              >
-                Replace
-              </Button>
-              <Button
-                variant="secondary"
-                size="sm"
-                className="text-destructive h-7"
-                onClick={handleDelete}
-                disabled={isSubmitting}
-              >
-                <Trash2 className="h-3.5 w-3.5" />
-              </Button>
-            </>
-          ) : (
-            <div className="flex flex-col items-end gap-1.5">
-              <Input
-                className="h-7 w-72 font-mono text-xs"
-                placeholder={
-                  provider.baseUrlRequired
-                    ? provider.baseUrlPlaceholder
-                    : `${provider.baseUrlPlaceholder} (optional)`
-                }
-                value={baseUrl}
-                onChange={(e) => setBaseUrl(e.target.value)}
-                type="text"
-              />
-              <Input
-                className="h-7 w-72 font-mono text-xs"
-                placeholder={provider.apiKeyPlaceholder || "API key"}
-                value={apiKey}
-                onChange={(e) => setApiKey(e.target.value)}
-                onKeyDown={(e) => e.key === "Enter" && handleSave()}
-                type="password"
-              />
-              <div className="flex gap-2">
-                <Button
-                  variant="secondary"
-                  size="sm"
-                  className="h-7 text-xs"
-                  onClick={handleSave}
-                  disabled={!canSave || isSubmitting}
-                >
-                  Save
-                </Button>
-                {editing && (
-                  <Button
-                    variant="ghost"
-                    size="sm"
-                    className="h-7 text-xs"
-                    onClick={() => {
-                      setEditing(false);
-                      setApiKey("");
-                      setBaseUrl("");
-                    }}
-                  >
-                    Cancel
-                  </Button>
-                )}
-              </div>
-            </div>
-          )}
-        </div>
-      </div>
-    </div>
-  );
-}
-
-function BYOKRow({
-  provider,
-  hasKey,
-}: {
-  provider: ProviderForm;
-  hasKey: boolean;
-}) {
-  const fetcher = useFetcher();
-  const [inputValue, setInputValue] = useState("");
-  const [editing, setEditing] = useState(false);
-
-  const isSubmitting = fetcher.state !== "idle";
-  const isUrl = provider.formKind === "url-only";
-  const placeholder = isUrl
-    ? provider.baseUrlPlaceholder
-    : provider.apiKeyPlaceholder;
-
-  const handleSave = () => {
-    if (!inputValue.trim()) return;
-    fetcher.submit(
-      { intent: "setKey", providerType: provider.type, apiKey: inputValue },
-      { method: "POST" },
-    );
-    setInputValue("");
-    setEditing(false);
-  };
-
-  const handleDelete = () => {
-    fetcher.submit(
-      { intent: "deleteKey", providerType: provider.type },
-      { method: "POST" },
-    );
-  };
-
-  const activeHasKey =
-    fetcher.formData?.get("intent") === "deleteKey"
-      ? false
-      : fetcher.formData?.get("intent") === "setKey"
-        ? true
-        : hasKey;
-
-  return (
-    <div className="bg-background-3 flex flex-col gap-2 rounded-lg p-3 px-4">
-      <div className="flex items-center justify-between">
-        <div className="flex flex-col gap-1">
-          <div className="flex items-center gap-2">
-            <span className="text-sm font-medium">{provider.label}</span>
-            {activeHasKey && (
-              <Badge variant="secondary" className="text-xs">
-                {isUrl ? "URL set" : "Key set"}
-              </Badge>
-            )}
-          </div>
-
-          {provider.hint && (
-            <p className="text-muted-foreground text-xs">{provider.hint}</p>
-          )}
-        </div>
-
-        <div className="flex items-center gap-2">
-          {activeHasKey && !editing ? (
-            <>
-              <Button
-                variant="secondary"
-                size="sm"
-                className="h-7 text-xs"
-                onClick={() => setEditing(true)}
-              >
-                Replace
-              </Button>
-              <Button
-                variant="secondary"
-                size="sm"
-                className="text-destructive h-7"
-                onClick={handleDelete}
-                disabled={isSubmitting}
-              >
-                <Trash2 className="h-3.5 w-3.5" />
-              </Button>
-            </>
-          ) : (
-            <>
-              <Input
-                className="h-7 w-56 font-mono text-xs"
-                placeholder={placeholder}
-                value={inputValue}
-                onChange={(e) => setInputValue(e.target.value)}
-                onKeyDown={(e) => e.key === "Enter" && handleSave()}
-                type={isUrl ? "text" : "password"}
-              />
-              <Button
-                variant="secondary"
-                size="sm"
-                className="h-7 text-xs"
-                onClick={handleSave}
-                disabled={!inputValue.trim() || isSubmitting}
-              >
-                Save
-              </Button>
-              {editing && (
-                <Button
-                  variant="ghost"
-                  size="sm"
-                  className="h-7 text-xs"
-                  onClick={() => {
-                    setEditing(false);
-                    setInputValue("");
-                  }}
-                >
-                  Cancel
-                </Button>
-              )}
-            </>
-          )}
-        </div>
-      </div>
-    </div>
-  );
-}
+// ---------------------------------------------------------------------------
+// Model tier picker (used 3× — Default / Low / High)
+// ---------------------------------------------------------------------------
 
 const CUSTOM_VALUE = "__custom__";
 const DEFAULT_VALUE = "__default__";
 
-function ModelSelector({
-  useCase,
-  label,
-  description,
+function TierPicker({
+  complexity,
+  slotLabel,
+  slotHint,
   currentModelId,
   modelsByProvider,
-  hasBYOK,
   onSelect,
 }: {
-  useCase: UseCase;
-  label: string;
-  description: string;
+  complexity: ComplexityTier;
+  slotLabel: string;
+  slotHint?: string;
   currentModelId: string;
   modelsByProvider: Record<
     string,
     { id: string; modelId: string; label: string | null }[]
   >;
-  hasBYOK: boolean;
-  onSelect: (useCase: UseCase, modelId: string) => void;
+  onSelect: (complexity: ComplexityTier, modelId: string) => void;
 }) {
   const isCustom =
     currentModelId !== "" &&
@@ -525,19 +342,13 @@ function ModelSelector({
   );
   const [showCustom, setShowCustom] = useState(isCustom);
 
-  // Re-sync when the parent's currentModelId changes (e.g. after save →
-  // loader refetch). Without this the custom input keeps showing the
-  // previously-typed value even after a successful update, which looks
-  // like the change didn't take. Only overwrite the input when the new
-  // value is a different custom id — don't clobber in-flight typing.
+  // Sync local state when the parent-provided value changes (e.g. after save →
+  // loader refetch). Without this the custom input stays showing the previous
+  // value even after a successful update.
   useEffect(() => {
     setShowCustom(isCustom);
-    if (isCustom && currentModelId !== customValue) {
-      setCustomValue(currentModelId);
-    }
-    if (!isCustom) {
-      setCustomValue("");
-    }
+    if (isCustom && currentModelId !== customValue) setCustomValue(currentModelId);
+    if (!isCustom) setCustomValue("");
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [currentModelId, isCustom]);
 
@@ -547,25 +358,32 @@ function ModelSelector({
       return;
     }
     setShowCustom(false);
-    // Empty string signals "clear override" — parent routes this to the
-    // resetModel intent so the workspace falls back to the server default.
-    onSelect(useCase, value === DEFAULT_VALUE ? "" : value);
+    onSelect(complexity, value === DEFAULT_VALUE ? "" : value);
   };
 
+  const placeholderText =
+    complexity === "medium" ? "Use server default" : "Use Default";
+
   return (
-    <div>
-      <h3 className="text-sm font-medium">{label}</h3>
-      <p className="text-muted-foreground mb-2 text-xs">{description}</p>
+    <div className="flex flex-col gap-1">
+      <div className="text-sm font-medium">
+        {slotLabel}
+        {slotHint && (
+          <span className="text-muted-foreground ml-2 text-xs font-normal">
+            {slotHint}
+          </span>
+        )}
+      </div>
       <div className="flex items-center gap-2">
         <Select
           value={showCustom ? CUSTOM_VALUE : currentModelId}
           onValueChange={handleSelect}
         >
-          <SelectTrigger className="w-72">
-            <SelectValue placeholder="Use server default" />
+          <SelectTrigger className="w-80">
+            <SelectValue placeholder={placeholderText} />
           </SelectTrigger>
           <SelectContent className="shadow-lg">
-            <SelectItem value={DEFAULT_VALUE}>Use server default</SelectItem>
+            <SelectItem value={DEFAULT_VALUE}>{placeholderText}</SelectItem>
             {Object.entries(modelsByProvider).map(
               ([provider, providerModels]) => (
                 <div key={provider}>
@@ -580,14 +398,10 @@ function ModelSelector({
                 </div>
               ),
             )}
-            {hasBYOK && (
-              <>
-                <div className="text-muted-foreground px-2 py-1.5 text-xs font-semibold uppercase">
-                  Custom
-                </div>
-                <SelectItem value={CUSTOM_VALUE}>Enter model ID...</SelectItem>
-              </>
-            )}
+            <div className="text-muted-foreground px-2 py-1.5 text-xs font-semibold uppercase">
+              Custom
+            </div>
+            <SelectItem value={CUSTOM_VALUE}>Enter model ID…</SelectItem>
           </SelectContent>
         </Select>
 
@@ -595,12 +409,12 @@ function ModelSelector({
           <>
             <Input
               className="h-9 w-64 font-mono text-sm"
-              placeholder="openrouter/anthropic/claude-3.5-haiku"
+              placeholder="openai/claude-sonnet-4-6"
               value={customValue}
               onChange={(e) => setCustomValue(e.target.value)}
               onKeyDown={(e) => {
                 if (e.key === "Enter" && customValue.trim()) {
-                  onSelect(useCase, customValue.trim());
+                  onSelect(complexity, customValue.trim());
                 }
               }}
             />
@@ -608,7 +422,7 @@ function ModelSelector({
               variant="secondary"
               size="sm"
               onClick={() => {
-                if (customValue.trim()) onSelect(useCase, customValue.trim());
+                if (customValue.trim()) onSelect(complexity, customValue.trim());
               }}
               disabled={!customValue.trim()}
             >
@@ -619,24 +433,308 @@ function ModelSelector({
       </div>
       {showCustom && (
         <p className="text-muted-foreground mt-1 text-xs">
-          Use <code>openrouter/provider/model</code> for OpenRouter, <code>azure/&lt;deployment-name&gt;</code> for Azure
+          e.g. <code>openai/claude-sonnet-4-6</code> to route via a workspace
+          OpenAI-compat proxy · <code>openrouter/provider/model</code> for
+          OpenRouter · <code>azure/&lt;deployment&gt;</code> for Azure
         </p>
       )}
     </div>
   );
 }
 
-export default function ModelsSettings() {
-  const { modelConfig, models, keyStatus } = useLoaderData<typeof loader>();
+// ---------------------------------------------------------------------------
+// API key rows
+// ---------------------------------------------------------------------------
+
+function ConfiguredKeyRow({
+  provider,
+  baseUrl,
+}: {
+  provider: ProviderForm;
+  baseUrl: string | null;
+}) {
   const fetcher = useFetcher();
+  const [editing, setEditing] = useState(false);
+  const [apiKey, setApiKey] = useState("");
+  const [urlInput, setUrlInput] = useState(baseUrl ?? "");
+  const isSubmitting = fetcher.state !== "idle";
+
+  const showUrl = provider.formKind !== "key-only";
+  const canSave =
+    apiKey.trim().length > 0 &&
+    (!provider.baseUrlRequired || urlInput.trim().length > 0);
+
+  const handleSave = () => {
+    if (!canSave) return;
+    fetcher.submit(
+      {
+        intent: "setKey",
+        providerType: provider.type,
+        apiKey,
+        ...(showUrl && urlInput.trim() && { baseUrl: urlInput.trim() }),
+      },
+      { method: "POST" },
+    );
+    setApiKey("");
+    setEditing(false);
+  };
+
+  const handleDelete = () => {
+    fetcher.submit(
+      { intent: "deleteKey", providerType: provider.type },
+      { method: "POST" },
+    );
+  };
+
+  return (
+    <div className="bg-background-3 flex flex-col gap-2 rounded-lg p-3 px-4">
+      <div className="flex items-start justify-between gap-3">
+        <div className="min-w-0 flex-1 flex-col gap-1">
+          <div className="flex items-center gap-2">
+            <span className="text-sm font-medium">{provider.label}</span>
+            <Badge variant="secondary" className="text-xs">
+              Key set
+            </Badge>
+          </div>
+          {showUrl && baseUrl && !editing && (
+            <p className="text-muted-foreground truncate font-mono text-xs">
+              {baseUrl}
+            </p>
+          )}
+          {provider.hint && !editing && (
+            <p className="text-muted-foreground text-xs">{provider.hint}</p>
+          )}
+        </div>
+
+        {!editing ? (
+          <div className="flex items-center gap-2">
+            <Button
+              variant="secondary"
+              size="sm"
+              className="h-7 text-xs"
+              onClick={() => setEditing(true)}
+            >
+              Replace
+            </Button>
+            <Button
+              variant="secondary"
+              size="sm"
+              className="text-destructive h-7"
+              onClick={handleDelete}
+              disabled={isSubmitting}
+            >
+              <Trash2 className="h-3.5 w-3.5" />
+            </Button>
+          </div>
+        ) : (
+          <div className="flex flex-col items-end gap-1.5">
+            {showUrl && (
+              <Input
+                className="h-7 w-72 font-mono text-xs"
+                placeholder={
+                  provider.baseUrlRequired
+                    ? provider.baseUrlPlaceholder
+                    : `${provider.baseUrlPlaceholder} (optional)`
+                }
+                value={urlInput}
+                onChange={(e) => setUrlInput(e.target.value)}
+              />
+            )}
+            {provider.formKind !== "url-only" && (
+              <Input
+                className="h-7 w-72 font-mono text-xs"
+                placeholder={provider.apiKeyPlaceholder || "API key"}
+                type="password"
+                value={apiKey}
+                onChange={(e) => setApiKey(e.target.value)}
+                onKeyDown={(e) => e.key === "Enter" && handleSave()}
+              />
+            )}
+            {provider.formKind === "url-only" && (
+              <Input
+                className="h-7 w-72 font-mono text-xs"
+                placeholder={provider.baseUrlPlaceholder}
+                value={apiKey}
+                onChange={(e) => setApiKey(e.target.value)}
+                onKeyDown={(e) => e.key === "Enter" && handleSave()}
+              />
+            )}
+            <div className="flex gap-2">
+              <Button
+                variant="secondary"
+                size="sm"
+                className="h-7 text-xs"
+                onClick={handleSave}
+                disabled={!canSave || isSubmitting}
+              >
+                Save
+              </Button>
+              <Button
+                variant="ghost"
+                size="sm"
+                className="h-7 text-xs"
+                onClick={() => {
+                  setEditing(false);
+                  setApiKey("");
+                  setUrlInput(baseUrl ?? "");
+                }}
+              >
+                Cancel
+              </Button>
+            </div>
+          </div>
+        )}
+      </div>
+    </div>
+  );
+}
+
+function AddKeyRow({
+  availableProviders,
+  onDone,
+}: {
+  availableProviders: ProviderForm[];
+  onDone: () => void;
+}) {
+  const fetcher = useFetcher();
+  const [selectedType, setSelectedType] = useState<string>("");
+  const [apiKey, setApiKey] = useState("");
+  const [urlInput, setUrlInput] = useState("");
+  const isSubmitting = fetcher.state !== "idle";
+
+  const provider = selectedType ? PROVIDER_FORMS[selectedType] : null;
+  const showUrl = provider?.formKind !== "key-only";
+  const canSave = provider
+    ? provider.formKind === "url-only"
+      ? apiKey.trim().length > 0 // for ollama the URL field is captured in apiKey
+      : apiKey.trim().length > 0 &&
+        (!provider.baseUrlRequired || urlInput.trim().length > 0)
+    : false;
+
+  // Reset when fetcher completes.
+  useEffect(() => {
+    if (fetcher.state === "idle" && fetcher.data && (fetcher.data as any).success) {
+      setSelectedType("");
+      setApiKey("");
+      setUrlInput("");
+      onDone();
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [fetcher.state, fetcher.data]);
+
+  const handleSave = () => {
+    if (!provider || !canSave) return;
+    if (provider.formKind === "url-only") {
+      // For ollama the "apiKey" field is actually the base URL (matches the
+      // existing byok.server.ts convention for URL-only providers).
+      fetcher.submit(
+        {
+          intent: "setKey",
+          providerType: provider.type,
+          apiKey: apiKey.trim(),
+        },
+        { method: "POST" },
+      );
+    } else {
+      fetcher.submit(
+        {
+          intent: "setKey",
+          providerType: provider.type,
+          apiKey: apiKey.trim(),
+          ...(urlInput.trim() && { baseUrl: urlInput.trim() }),
+        },
+        { method: "POST" },
+      );
+    }
+  };
+
+  return (
+    <div className="bg-background-3 flex flex-col gap-3 rounded-lg p-3 px-4">
+      <div className="flex items-center gap-2">
+        <Select value={selectedType} onValueChange={setSelectedType}>
+          <SelectTrigger className="w-64">
+            <SelectValue placeholder="Choose a provider…" />
+          </SelectTrigger>
+          <SelectContent className="shadow-lg">
+            {availableProviders.map((p) => (
+              <SelectItem key={p.type} value={p.type}>
+                {p.label}
+              </SelectItem>
+            ))}
+          </SelectContent>
+        </Select>
+        <Button
+          variant="ghost"
+          size="sm"
+          className="text-muted-foreground h-8 text-xs"
+          onClick={onDone}
+        >
+          Cancel
+        </Button>
+      </div>
+
+      {provider && (
+        <div className="flex flex-col gap-1.5">
+          {provider.hint && (
+            <p className="text-muted-foreground text-xs">{provider.hint}</p>
+          )}
+          {showUrl && (
+            <Input
+              className="h-8 w-full max-w-md font-mono text-xs"
+              placeholder={
+                provider.baseUrlRequired
+                  ? provider.baseUrlPlaceholder
+                  : `${provider.baseUrlPlaceholder} (optional)`
+              }
+              value={urlInput}
+              onChange={(e) => setUrlInput(e.target.value)}
+            />
+          )}
+          <Input
+            className="h-8 w-full max-w-md font-mono text-xs"
+            placeholder={
+              provider.formKind === "url-only"
+                ? provider.baseUrlPlaceholder
+                : provider.apiKeyPlaceholder || "API key"
+            }
+            type={provider.formKind === "url-only" ? "text" : "password"}
+            value={apiKey}
+            onChange={(e) => setApiKey(e.target.value)}
+            onKeyDown={(e) => e.key === "Enter" && handleSave()}
+          />
+          <div>
+            <Button
+              variant="secondary"
+              size="sm"
+              className="h-8 text-xs"
+              onClick={handleSave}
+              disabled={!canSave || isSubmitting}
+            >
+              Save
+            </Button>
+          </div>
+        </div>
+      )}
+    </div>
+  );
+}
+
+// ---------------------------------------------------------------------------
+// Main
+// ---------------------------------------------------------------------------
+
+export default function ModelsSettings() {
+  const { modelConfig, models, keyStatus, baseUrlByProvider } =
+    useLoaderData<typeof loader>();
+  const fetcher = useFetcher();
+  const [addingKey, setAddingKey] = useState(false);
 
   const pendingIntent = fetcher.formData?.get("intent");
-  const pendingConfig =
+  const pendingUpdate =
     pendingIntent === "updateModel" || pendingIntent === "resetModel"
       ? {
-          useCase: fetcher.formData!.get("useCase") as UseCase,
-          // resetModel has no modelId — fall back to "" so the trigger shows
-          // the "Use server default" placeholder optimistically.
+          complexity:
+            (fetcher.formData!.get("complexity") as ComplexityTier) ?? "medium",
           modelId:
             pendingIntent === "updateModel"
               ? (fetcher.formData!.get("modelId") as string)
@@ -644,62 +742,80 @@ export default function ModelsSettings() {
         }
       : null;
 
-  const getCurrentModelId = (useCase: UseCase) => {
-    if (pendingConfig?.useCase === useCase) return pendingConfig.modelId;
-    return modelConfig[useCase]?.modelId ?? "";
+  const getCurrentModelId = (complexity: ComplexityTier) => {
+    if (pendingUpdate?.complexity === complexity) return pendingUpdate.modelId;
+    return readTierSlot(modelConfig, complexity);
   };
 
-  const handleModelChange = (useCase: UseCase, modelId: string) => {
+  const handleModelChange = (complexity: ComplexityTier, modelId: string) => {
     if (modelId === "") {
-      // ModelSelector emits "" when the user picks "Use server default" —
-      // clear the workspace override rather than trying to save an empty id.
-      fetcher.submit({ intent: "resetModel", useCase }, { method: "POST" });
+      fetcher.submit(
+        { intent: "resetModel", complexity },
+        { method: "POST" },
+      );
       return;
     }
     fetcher.submit(
-      { intent: "updateModel", useCase, modelId },
+      { intent: "updateModel", complexity, modelId },
       { method: "POST" },
     );
   };
 
-  const modelsByProvider = models.reduce(
-    (acc, model) => {
-      const providerLabel = model.provider.name ?? model.provider.type;
-      if (!acc[providerLabel]) acc[providerLabel] = [];
-      acc[providerLabel].push({
-        id: model.id,
-        modelId: model.modelId,
-        label: model.label,
-      });
-      return acc;
-    },
-    {} as Record<
-      string,
-      { id: string; modelId: string; label: string | null }[]
-    >,
+  const modelsByProvider = useMemo(() => {
+    return models.reduce(
+      (acc, model) => {
+        const providerLabel = model.provider.name ?? model.provider.type;
+        if (!acc[providerLabel]) acc[providerLabel] = [];
+        acc[providerLabel].push({
+          id: model.id,
+          modelId: model.modelId,
+          label: model.label,
+        });
+        return acc;
+      },
+      {} as Record<
+        string,
+        { id: string; modelId: string; label: string | null }[]
+      >,
+    );
+  }, [models]);
+
+  const configuredProviderTypes = useMemo(
+    () => new Set(keyStatus.map((k) => k.providerType)),
+    [keyStatus],
   );
 
-  const keyStatusMap = Object.fromEntries(
-    keyStatus.map((k) => [k.providerType, true]),
+  const configuredProviders = useMemo(
+    () =>
+      keyStatus
+        .map((k) => PROVIDER_FORMS[k.providerType])
+        .filter((p): p is ProviderForm => !!p),
+    [keyStatus],
   );
-  const hasBYOK = keyStatus.length > 0;
+
+  const availableToAdd = useMemo(
+    () =>
+      ALL_PROVIDER_TYPES.map((t) => PROVIDER_FORMS[t]).filter(
+        (p): p is ProviderForm => !!p && !configuredProviderTypes.has(p.type),
+      ),
+    [configuredProviderTypes],
+  );
 
   return (
     <div className="md:w-3xl mx-auto flex w-auto flex-col gap-4 px-4 py-6">
       <SettingSection
         title="Models"
-        description="Choose which model to use for each task. Falls back to the server default when not set."
+        description="Pick a model per complexity tier. Every internal call chooses the tier it needs — Low and High fall back to Default when empty; Default falls back to the server default."
       >
         <div className="flex flex-col gap-6">
-          {USE_CASES.map(({ key, label, description }) => (
-            <ModelSelector
+          {TIERS.map(({ key, label, hint }) => (
+            <TierPicker
               key={key}
-              useCase={key}
-              label={label}
-              description={description}
+              complexity={key}
+              slotLabel={label}
+              slotHint={hint}
               currentModelId={getCurrentModelId(key)}
               modelsByProvider={modelsByProvider}
-              hasBYOK={hasBYOK}
               onSelect={handleModelChange}
             />
           ))}
@@ -708,23 +824,35 @@ export default function ModelsSettings() {
 
       <SettingSection
         title="API Keys"
-        description="Add your own provider API keys. These override server-level keys for your workspace."
+        description="Add provider API keys for your workspace. These override server-level keys."
       >
         <div className="flex flex-col gap-2">
-          {BYOK_PROVIDERS.map((provider) =>
-            provider.formKind === "dual" ? (
-              <DualFieldBYOKRow
-                key={provider.type}
-                provider={provider}
-                hasKey={!!keyStatusMap[provider.type]}
-              />
-            ) : (
-              <BYOKRow
-                key={provider.type}
-                provider={provider}
-                hasKey={!!keyStatusMap[provider.type]}
-              />
-            ),
+          {configuredProviders.map((p) => (
+            <ConfiguredKeyRow
+              key={p.type}
+              provider={p}
+              baseUrl={baseUrlByProvider[p.type] ?? null}
+            />
+          ))}
+
+          {addingKey ? (
+            <AddKeyRow
+              availableProviders={availableToAdd}
+              onDone={() => setAddingKey(false)}
+            />
+          ) : (
+            <Button
+              variant="secondary"
+              size="sm"
+              className="mt-1 h-8 w-fit gap-1.5 text-xs"
+              onClick={() => setAddingKey(true)}
+              disabled={availableToAdd.length === 0}
+            >
+              <Plus className="h-3.5 w-3.5" />
+              {availableToAdd.length === 0
+                ? "All providers configured"
+                : "Add API key"}
+            </Button>
           )}
         </div>
       </SettingSection>

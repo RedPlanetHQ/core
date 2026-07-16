@@ -280,8 +280,14 @@ export async function getModelForUseCase(
 ): Promise<string> {
   let effectiveComplexity = complexity;
 
-  // 1. Workspace override — always check when workspace has explicit model config.
-  // This ensures BYOK workspaces use their chosen model at every complexity tier.
+  // 1. Workspace override. Two shapes are accepted:
+  //    Legacy:   modelConfig[useCase] = { modelId }
+  //              → same model at every complexity tier
+  //    Tiered:   modelConfig[useCase] = { medium, low?, high? }
+  //              → medium is the "default", low/high are optional overrides.
+  //              A missing complexity slot falls back to medium. If medium is
+  //              also missing, we fall through to DB complexity routing.
+  //    BYOK-only in the UI, but read-side supports it for anyone.
   if (workspaceId) {
     const workspace = await prisma.workspace.findUnique({
       where: { id: workspaceId },
@@ -292,10 +298,14 @@ export async function getModelForUseCase(
     });
     const meta = (workspace?.metadata ?? {}) as Record<string, any>;
     const modelConfig = meta.modelConfig as
-      | Record<string, { modelId: string }>
+      | Record<string, Record<string, string | undefined>>
       | undefined;
-    const modelId = modelConfig?.[useCase]?.modelId;
-    if (modelId) return modelId;
+    const useCaseCfg = modelConfig?.[useCase];
+    if (useCaseCfg && typeof useCaseCfg === "object") {
+      const chosen =
+        useCaseCfg[complexity] ?? useCaseCfg.medium ?? useCaseCfg.modelId;
+      if (typeof chosen === "string" && chosen.length > 0) return chosen;
+    }
 
     // Free plans are capped to the low tier. Explicit overrides above win;
     // paid plans and self-hosted (billing disabled) keep the requested tier.
@@ -443,10 +453,22 @@ export async function getChatComposerModels(
       select: { metadata: true },
     });
     const meta = (workspace?.metadata ?? {}) as Record<string, any>;
-    defaultChatModelId = meta.modelConfig?.chat?.modelId as string | undefined;
+    const cfg = (meta.modelConfig ?? {}) as Record<string, unknown>;
+    // Prefer the new flat shape (medium acts as the "default" slot). Fall
+    // back to the legacy per-use-case shape so pre-migration workspaces still
+    // get their default model marked in the composer.
+    if (typeof cfg.medium === "string") {
+      defaultChatModelId = cfg.medium;
+    } else if (cfg.chat && typeof cfg.chat === "object") {
+      const legacyChat = cfg.chat as Record<string, unknown>;
+      const legacyMedium =
+        (legacyChat.medium as string | undefined) ??
+        (legacyChat.modelId as string | undefined);
+      if (typeof legacyMedium === "string") defaultChatModelId = legacyMedium;
+    }
   }
 
-  return allModels
+  const composerModels = allModels
     .filter(
       (m) => m.capabilities.length === 0 || m.capabilities.includes("chat"),
     )
@@ -468,6 +490,15 @@ export async function getChatComposerModels(
         isDefault: defaultChatModelId === m.modelId,
       };
     });
+
+  logger.info("[getChatComposerModels] returning to frontend", {
+    workspaceId,
+    defaultChatModelId,
+    count: composerModels.length,
+    models: composerModels,
+  });
+
+  return composerModels;
 }
 
 /**
@@ -480,6 +511,8 @@ export async function persistCustomWorkspaceModel(
   workspaceId: string,
   modelId: string,
 ): Promise<void> {
+  logger.info("[persistCustomWorkspaceModel] called", { workspaceId, modelId });
+
   const existing = await prisma.lLMModel.findFirst({
     where: {
       modelId,
@@ -488,25 +521,62 @@ export async function persistCustomWorkspaceModel(
         { provider: { workspaceId: null } },
       ],
     },
+    include: { provider: true },
   });
-  if (existing) return;
+  if (existing) {
+    logger.info("[persistCustomWorkspaceModel] existing row — skipping", {
+      modelId,
+      existingProviderType: existing.provider.type,
+      existingProviderScope: existing.provider.workspaceId
+        ? "workspace"
+        : "global",
+    });
+    return;
+  }
 
   const providerType = inferProviderFromModelId(modelId);
+  logger.info("[persistCustomWorkspaceModel] inferred provider", {
+    modelId,
+    providerType,
+    envChatProvider: env.CHAT_PROVIDER,
+  });
+
   const workspaceProvider = await prisma.lLMProvider.findFirst({
     where: { workspaceId, type: providerType, isActive: true },
   });
-  if (!workspaceProvider) return;
+  if (!workspaceProvider) {
+    logger.warn(
+      "[persistCustomWorkspaceModel] no active workspace-scoped provider for inferred type — skipping",
+      { workspaceId, providerType, modelId },
+    );
+    return;
+  }
 
-  await prisma.lLMModel.create({
-    data: {
-      providerId: workspaceProvider.id,
+  try {
+    const created = await prisma.lLMModel.create({
+      data: {
+        providerId: workspaceProvider.id,
+        modelId,
+        label: modelId,
+        complexity: "medium",
+        supportsBatch: false,
+        capabilities: ["chat"],
+      },
+    });
+    logger.info("[persistCustomWorkspaceModel] created", {
+      id: created.id,
+      modelId: created.modelId,
+      providerId: created.providerId,
+    });
+  } catch (error) {
+    logger.error("[persistCustomWorkspaceModel] create failed", {
+      workspaceId,
       modelId,
-      label: modelId,
-      complexity: "medium",
-      supportsBatch: false,
-      capabilities: ["chat"],
-    },
-  });
+      providerId: workspaceProvider.id,
+      error: (error as Error).message,
+    });
+    throw error;
+  }
 }
 
 /**
@@ -523,14 +593,25 @@ export async function pruneOrphanWorkspaceModels(
     select: { metadata: true },
   });
   const meta = (workspace?.metadata ?? {}) as Record<string, any>;
-  const modelConfig = (meta.modelConfig ?? {}) as Record<
-    string,
-    { modelId?: string } | undefined
-  >;
+  const modelConfig = (meta.modelConfig ?? {}) as Record<string, unknown>;
 
+  // Collect every modelId currently referenced from modelConfig. Supports both
+  // shapes concurrently since read-side migration is passive:
+  //   New flat: { medium?, low?, high? }              (values are strings)
+  //   Legacy:   { chat: { modelId | medium | low | high }, memory: ..., search: ... }
   const referenced = new Set<string>();
-  for (const cfg of Object.values(modelConfig)) {
-    if (cfg?.modelId) referenced.add(cfg.modelId);
+  for (const [key, val] of Object.entries(modelConfig)) {
+    if (["low", "medium", "high"].includes(key) && typeof val === "string") {
+      referenced.add(val);
+      continue;
+    }
+    if (val && typeof val === "object") {
+      const cfg = val as Record<string, unknown>;
+      for (const k of ["modelId", "low", "medium", "high"]) {
+        const v = cfg[k];
+        if (typeof v === "string") referenced.add(v);
+      }
+    }
   }
 
   const workspaceModels = await prisma.lLMModel.findMany({
@@ -541,6 +622,16 @@ export async function pruneOrphanWorkspaceModels(
   const orphanIds = workspaceModels
     .filter((m) => !referenced.has(m.modelId))
     .map((m) => m.id);
+
+  logger.info("[pruneOrphanWorkspaceModels]", {
+    workspaceId,
+    referenced: Array.from(referenced),
+    workspaceModelIds: workspaceModels.map((m) => m.modelId),
+    orphanIds,
+    aboutToDelete: workspaceModels
+      .filter((m) => orphanIds.includes(m.id))
+      .map((m) => m.modelId),
+  });
 
   if (orphanIds.length === 0) return;
 
@@ -577,6 +668,18 @@ export async function getAvailableModels(workspaceId?: string) {
         isDeprecated: false,
       },
       include: { provider: true },
+    });
+
+    logger.info("[getAvailableModels]", {
+      workspaceId,
+      workspaceProviderTypes: workspaceProviders.map((p) => ({
+        type: p.type,
+        modelCount: p.models.length,
+      })),
+      typesWithCustomModels: Array.from(typesWithCustomModels),
+      customModelIds: customModels.map((m) => m.modelId),
+      globalModelIds: globalModels.map((m) => m.modelId),
+      returnedCount: globalModels.length + customModels.length,
     });
 
     return [...globalModels, ...customModels];
