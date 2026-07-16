@@ -9,7 +9,6 @@ import {filesRoutes} from './files';
 import {utilsRoutes} from './utils';
 import {folderRoutes} from './folders';
 import {shellRoutes} from './shell';
-import {skillsRoutes} from './skills';
 import {isSlotEnabled} from './manifest-builder';
 import {getPreferences} from '@/config/preferences';
 
@@ -52,11 +51,6 @@ export async function buildServer(opts: ApiServerOptions): Promise<FastifyInstan
 	}
 	// utils has no slot — it's always enabled (e.g. `sleep`).
 	await app.register(utilsRoutes, {prefix: '/api/utils'});
-
-	// Skills management is always on — it only mutates `~/.corebrain/skills/`,
-	// which is implicitly within scope, and doesn't run user code beyond
-	// `git clone` of the URL the caller specifies.
-	await app.register(skillsRoutes, {prefix: '/api/skills'});
 
 	// Folder management — used by the webapp's per-gateway settings page to
 	// add/remove local paths or clone GitHub URLs into the workspace.

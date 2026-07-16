@@ -31,21 +31,6 @@ export type AvailableAgent = z.infer<typeof AvailableAgent>;
 export const DeployMode = z.enum(["native", "docker", "railway"]);
 export type DeployMode = z.infer<typeof DeployMode>;
 
-/**
- * A skill the gateway has on disk under `~/.corebrain/skills/<name>/`. The
- * record is built by `listSkills` from each skill's `SKILL.md` frontmatter.
- * Currently informational — the gateway doesn't auto-load these; tools that
- * want to use them call `skill_install` / `skill_remove` to manage the
- * directory.
- */
-export const GatewaySkill = z.object({
-  name: z.string(),
-  description: z.string(),
-  allowedTools: z.array(z.string()).optional(),
-  path: z.string(),
-});
-export type GatewaySkill = z.infer<typeof GatewaySkill>;
-
 export const Manifest = z.object({
   protocolVersion: z.literal(PROTOCOL_VERSION),
   gateway: z.object({
