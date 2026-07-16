@@ -112,7 +112,7 @@ export function getProvider(modelString: string): string {
 /**
  * Extract bare model ID from a router string.
  */
-function getModelId(modelString: string): string {
+export function getModelId(modelString: string): string {
   if (modelString.includes("/")) return modelString.split("/").slice(1).join("/");
   return modelString;
 }

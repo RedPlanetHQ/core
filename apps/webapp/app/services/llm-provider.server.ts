@@ -1,3 +1,4 @@
+import { createOpenAI } from "@ai-sdk/openai";
 import { prisma } from "~/db.server";
 import { env } from "~/env.server";
 import { logger } from "~/services/logger.service";
@@ -714,7 +715,9 @@ export async function resolveModelConfig(
   modelString: string,
   workspaceId: string | null | undefined,
 ): Promise<ResolvedModelConfig> {
-  const { toRouterString, getProvider, getModel } = await import("~/lib/model.server");
+  const { toRouterString, getProvider, getModel, getModelId } = await import(
+    "~/lib/model.server"
+  );
 
   const providerType = getProvider(modelString);
   const { apiKey, isBYOK } = await resolveApiKeyForWorkspace(
@@ -730,6 +733,25 @@ export async function resolveModelConfig(
       modelConfig: getModel(modelString) as unknown as ModelConfig,
       isBYOK,
     };
+  }
+
+  // Workspace-scoped openai BYOK with a baseUrl: user pointed openai at a
+  // subscription proxy (CLIProxyAPI / Vercel AI Gateway). Same reason as the
+  // Ollama branch — Mastra's router doesn't accept custom baseURLs, so build
+  // a concrete chat_completions model instance ourselves. Third-party
+  // proxies almost never implement the Responses API, so we pin to chat.
+  if (providerType === "openai" && isBYOK && apiKey) {
+    const byokBaseUrl = workspaceId
+      ? await resolveWorkspaceProviderBaseUrl(workspaceId, "openai")
+      : null;
+    const baseUrl = byokBaseUrl ?? env.OPENAI_BASE_URL;
+    if (baseUrl) {
+      const openaiClient = createOpenAI({ baseURL: baseUrl, apiKey });
+      return {
+        modelConfig: openaiClient.chat(getModelId(modelString)) as unknown as ModelConfig,
+        isBYOK: true,
+      };
+    }
   }
 
   const routerString = toRouterString(modelString) as `${string}/${string}`;
