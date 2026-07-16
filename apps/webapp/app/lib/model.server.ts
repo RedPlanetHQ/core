@@ -594,10 +594,20 @@ async function structuredCallWithTolerantParsing<T extends z.ZodType>(
   baseUrl?: string,
 ): Promise<{ object: z.infer<T>; usage: any }> {
   const schemaHint = schemaInstruction(schema);
+  // Claude (via subscription proxies) is more likely than GPT to respond with
+  // a prose explanation or refusal when the input looks nonsensical for the
+  // task (e.g. "extract facts from an empty greeting"). Explicitly cover the
+  // no-content case and the no-refusals rule.
   const jsonPreamble =
-    "Return ONLY a single valid JSON object that matches the requested schema. " +
-    "Do not wrap it in Markdown fences. Do not include extra text. " +
-    "Include every required key; use null for nullable fields; use [] for empty arrays." +
+    "You are a strict JSON generator. Return ONLY a single valid JSON object " +
+    "that matches the requested schema — no prose, no explanations, no refusals, " +
+    "no Markdown fences, no code blocks, no leading or trailing text. " +
+    "Include every required key; use null for nullable fields, [] for empty " +
+    "arrays, \"\" for empty strings. " +
+    "If the input contains nothing relevant to extract, still return the exact " +
+    "JSON structure with empty arrays / nulls / empty strings — NEVER respond " +
+    "with a sentence saying there is nothing to extract. Your entire output " +
+    "must be parseable by JSON.parse()." +
     schemaHint;
 
   const agentOpts = apiKey ? { apiKey, ...(baseUrl && { baseUrl }) } : undefined;
@@ -616,8 +626,12 @@ async function structuredCallWithTolerantParsing<T extends z.ZodType>(
   // Repair attempt (reuse the same agentOpts so proxy baseUrl + key stay applied)
   const repairAgent = createAgent(
     modelString,
-    "You are a JSON repair assistant. Convert the user's content into a single valid JSON object. " +
-      "Return ONLY the JSON object, with no Markdown fences and no extra text." +
+    "You are a strict JSON repair assistant. The user will paste text that was " +
+      "supposed to be JSON matching a schema, but isn't. Convert it into a single " +
+      "valid JSON object matching the schema. If the text is prose saying there " +
+      "is nothing to extract, return the schema with empty arrays, nulls, or " +
+      "empty strings — do not echo the prose. Return ONLY the JSON object, no " +
+      "Markdown fences, no explanation." +
       schemaHint,
     undefined,
     agentOpts,

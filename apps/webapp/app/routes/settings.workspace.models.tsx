@@ -4,7 +4,7 @@ import {
   type ActionFunctionArgs,
 } from "@remix-run/node";
 import { useLoaderData, useFetcher } from "@remix-run/react";
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { Prisma } from "@prisma/client";
 import { requireUser } from "~/services/session.server";
 import { prisma } from "~/db.server";
@@ -524,6 +524,22 @@ function ModelSelector({
     isCustom ? currentModelId : "",
   );
   const [showCustom, setShowCustom] = useState(isCustom);
+
+  // Re-sync when the parent's currentModelId changes (e.g. after save →
+  // loader refetch). Without this the custom input keeps showing the
+  // previously-typed value even after a successful update, which looks
+  // like the change didn't take. Only overwrite the input when the new
+  // value is a different custom id — don't clobber in-flight typing.
+  useEffect(() => {
+    setShowCustom(isCustom);
+    if (isCustom && currentModelId !== customValue) {
+      setCustomValue(currentModelId);
+    }
+    if (!isCustom) {
+      setCustomValue("");
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [currentModelId, isCustom]);
 
   const handleSelect = (value: string) => {
     if (value === CUSTOM_VALUE) {
