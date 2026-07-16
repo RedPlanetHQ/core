@@ -90,6 +90,20 @@
     "envKey": "OLLAMA_URL",
     "models": []
   },
+  "local": {
+    "name": "Local (transformers.js)",
+    "envKey": "EMBEDDINGS_PROVIDER",
+    "models": [
+      {
+        "modelId": "onnx-community/nomic-embed-text-v1.5",
+        "label": "Nomic Embed Text v1.5 (local ONNX)",
+        "complexity": "low",
+        "supportsBatch": false,
+        "capabilities": ["embedding"],
+        "dimensions": 768
+      }
+    ]
+  },
   "azure": {
     "name": "Azure OpenAI",
     "envKey": "AZURE_API_KEY",

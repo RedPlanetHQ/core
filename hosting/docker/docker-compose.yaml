@@ -43,6 +43,11 @@ services:
       - OLLAMA_URL=${OLLAMA_URL}
       - EMBEDDING_MODEL=${EMBEDDING_MODEL}
       - EMBEDDING_MODEL_SIZE=${EMBEDDING_MODEL_SIZE}
+      # Local (transformers.js) embeddings. Cache dir is mounted as a named
+      # volume so ONNX weights (~150–200MB for nomic q8) survive container
+      # restarts — otherwise every boot re-downloads the model.
+      - LOCAL_EMBEDDING_DTYPE=${LOCAL_EMBEDDING_DTYPE:-q8}
+      - LOCAL_EMBEDDING_CACHE_DIR=/app/data/models
       - MODEL=${MODEL}
       - TRIGGER_PROJECT_ID=${TRIGGER_PROJECT_ID}
       - TRIGGER_SECRET_KEY=${TRIGGER_SECRET_KEY}
@@ -68,6 +73,8 @@ services:
         condition: service_healthy
       redis:
         condition: service_started
+    volumes:
+      - local_models:/app/data/models
     networks:
       - core
 
@@ -164,3 +171,4 @@ volumes:
   neo4j_data:
   shared:
   ollama_data:
+  local_models:

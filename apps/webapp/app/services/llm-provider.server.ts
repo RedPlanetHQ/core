@@ -682,6 +682,17 @@ export async function resolveModelForWorkspace(
     return { modelId, apiKey, isBYOK, baseUrl };
   }
 
+  // OpenAI: an optional per-workspace baseUrl lets a workspace point at any
+  // OpenAI-compatible proxy (self-hosted CLIProxyAPI, Vercel AI Gateway, etc.)
+  // Env OPENAI_BASE_URL remains the server-wide default.
+  if (providerType === "openai") {
+    const byokBaseUrl = workspaceId
+      ? await resolveWorkspaceProviderBaseUrl(workspaceId, "openai")
+      : null;
+    const baseUrl = byokBaseUrl ?? env.OPENAI_BASE_URL;
+    if (baseUrl) return { modelId, apiKey, isBYOK, baseUrl };
+  }
+
   return { modelId, apiKey, isBYOK };
 }
 

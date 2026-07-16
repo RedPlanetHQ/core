@@ -57,27 +57,41 @@ type UseCase = (typeof USE_CASES)[number]["key"];
 
 // Derived from the canonical catalog in @core/types/llm/providers.
 // Adding a provider there propagates here automatically.
-const BYOK_PROVIDERS: {
+//
+// formKind decides which row component to render:
+//   "key-only"  — only an API key input (anthropic, google, openrouter, …)
+//   "url-only"  — only a URL input; provider needs no key (ollama)
+//   "dual"      — URL + key inputs (openai proxy, azure). URL is optional
+//                 when baseUrl.required is false (openai direct still works).
+type FormKind = "key-only" | "url-only" | "dual";
+
+type ProviderForm = {
   type: SupportedProvider;
   label: string;
-  placeholder: string;
   hint?: string;
-  isUrl?: boolean;
-  isAzure?: boolean;
-}[] = Object.values(PROVIDER_SPECS)
+  formKind: FormKind;
+  apiKeyPlaceholder: string;
+  baseUrlPlaceholder: string;
+  baseUrlRequired: boolean;
+};
+
+const BYOK_PROVIDERS: ProviderForm[] = Object.values(PROVIDER_SPECS)
   .filter((s) => s.byokSupported)
-  .map((s) => ({
-    type: s.id as SupportedProvider,
-    label: s.label,
-    // For ollama (no api key, has required URL), the form input is a URL.
-    placeholder:
-      s.apiKeyVar === null && s.baseUrl
-        ? s.baseUrl.placeholder
-        : s.apiKeyPlaceholder,
-    hint: s.modelHint ?? s.baseUrl?.hint,
-    isUrl: s.apiKeyVar === null,
-    isAzure: s.isAzure,
-  }));
+  .map((s) => {
+    const hasKey = s.apiKeyVar !== null;
+    const hasUrl = !!s.baseUrl;
+    const formKind: FormKind =
+      hasKey && hasUrl ? "dual" : hasUrl ? "url-only" : "key-only";
+    return {
+      type: s.id as SupportedProvider,
+      label: s.label,
+      hint: s.modelHint ?? s.baseUrl?.hint,
+      formKind,
+      apiKeyPlaceholder: s.apiKeyPlaceholder,
+      baseUrlPlaceholder: s.baseUrl?.placeholder ?? "",
+      baseUrlRequired: s.baseUrl?.required ?? false,
+    };
+  });
 
 export const loader = async ({ request }: LoaderFunctionArgs) => {
   const user = await requireUser(request);
@@ -148,6 +162,38 @@ export const action = async ({ request }: ActionFunctionArgs) => {
     return json({ success: true });
   }
 
+  if (intent === "resetModel") {
+    const useCase = formData.get("useCase") as UseCase;
+    const validUseCases: UseCase[] = ["chat", "memory", "search"];
+    if (!validUseCases.includes(useCase)) {
+      return json({ error: "Invalid use case" }, { status: 400 });
+    }
+
+    const workspace = await prisma.workspace.findUnique({
+      where: { id: user.workspaceId },
+      select: { metadata: true },
+    });
+
+    const metadata = (workspace?.metadata as Record<string, unknown>) ?? {};
+    const currentConfig =
+      (metadata.modelConfig as Record<string, unknown>) ?? {};
+    const { [useCase]: _removed, ...nextConfig } = currentConfig;
+
+    await prisma.workspace.update({
+      where: { id: user.workspaceId },
+      data: {
+        metadata: {
+          ...metadata,
+          modelConfig: nextConfig,
+        } as Prisma.InputJsonValue,
+      },
+    });
+
+    await pruneOrphanWorkspaceModels(user.workspaceId);
+
+    return json({ success: true });
+  }
+
   if (intent === "setKey") {
     const providerType = formData.get("providerType") as string;
     const apiKey = (formData.get("apiKey") as string)?.trim();
@@ -178,11 +224,17 @@ export const action = async ({ request }: ActionFunctionArgs) => {
   return json({ error: "Invalid intent" }, { status: 400 });
 };
 
-function AzureBYOKRow({
+/**
+ * Two-input BYOK row for providers that carry both a URL and an API key.
+ * Used by Azure (URL required) and OpenAI (URL optional — leaving it blank
+ * keeps calls pointed at api.openai.com; filling it in aims the workspace
+ * at any OpenAI-compatible proxy such as CLIProxyAPI or Vercel AI Gateway).
+ */
+function DualFieldBYOKRow({
   provider,
   hasKey,
 }: {
-  provider: (typeof BYOK_PROVIDERS)[number];
+  provider: ProviderForm;
   hasKey: boolean;
 }) {
   const fetcher = useFetcher();
@@ -192,10 +244,21 @@ function AzureBYOKRow({
 
   const isSubmitting = fetcher.state !== "idle";
 
+  const canSave =
+    apiKey.trim().length > 0 &&
+    (!provider.baseUrlRequired || baseUrl.trim().length > 0);
+
   const handleSave = () => {
-    if (!apiKey.trim() || !baseUrl.trim()) return;
+    if (!canSave) return;
     fetcher.submit(
-      { intent: "setKey", providerType: provider.type, apiKey, baseUrl },
+      {
+        intent: "setKey",
+        providerType: provider.type,
+        apiKey,
+        // Only send baseUrl when the user actually typed one — an empty string
+        // would otherwise overwrite a previously stored URL for openai.
+        ...(baseUrl.trim() && { baseUrl: baseUrl.trim() }),
+      },
       { method: "POST" },
     );
     setApiKey("");
@@ -259,14 +322,18 @@ function AzureBYOKRow({
             <div className="flex flex-col items-end gap-1.5">
               <Input
                 className="h-7 w-72 font-mono text-xs"
-                placeholder="https://<resource>.openai.azure.com/openai/v1"
+                placeholder={
+                  provider.baseUrlRequired
+                    ? provider.baseUrlPlaceholder
+                    : `${provider.baseUrlPlaceholder} (optional)`
+                }
                 value={baseUrl}
                 onChange={(e) => setBaseUrl(e.target.value)}
                 type="text"
               />
               <Input
                 className="h-7 w-72 font-mono text-xs"
-                placeholder="API key"
+                placeholder={provider.apiKeyPlaceholder || "API key"}
                 value={apiKey}
                 onChange={(e) => setApiKey(e.target.value)}
                 onKeyDown={(e) => e.key === "Enter" && handleSave()}
@@ -278,7 +345,7 @@ function AzureBYOKRow({
                   size="sm"
                   className="h-7 text-xs"
                   onClick={handleSave}
-                  disabled={!apiKey.trim() || !baseUrl.trim() || isSubmitting}
+                  disabled={!canSave || isSubmitting}
                 >
                   Save
                 </Button>
@@ -309,7 +376,7 @@ function BYOKRow({
   provider,
   hasKey,
 }: {
-  provider: (typeof BYOK_PROVIDERS)[number];
+  provider: ProviderForm;
   hasKey: boolean;
 }) {
   const fetcher = useFetcher();
@@ -317,6 +384,10 @@ function BYOKRow({
   const [editing, setEditing] = useState(false);
 
   const isSubmitting = fetcher.state !== "idle";
+  const isUrl = provider.formKind === "url-only";
+  const placeholder = isUrl
+    ? provider.baseUrlPlaceholder
+    : provider.apiKeyPlaceholder;
 
   const handleSave = () => {
     if (!inputValue.trim()) return;
@@ -350,7 +421,7 @@ function BYOKRow({
             <span className="text-sm font-medium">{provider.label}</span>
             {activeHasKey && (
               <Badge variant="secondary" className="text-xs">
-                {provider.isUrl ? "URL set" : "Key set"}
+                {isUrl ? "URL set" : "Key set"}
               </Badge>
             )}
           </div>
@@ -385,11 +456,11 @@ function BYOKRow({
             <>
               <Input
                 className="h-7 w-56 font-mono text-xs"
-                placeholder={provider.placeholder}
+                placeholder={placeholder}
                 value={inputValue}
                 onChange={(e) => setInputValue(e.target.value)}
                 onKeyDown={(e) => e.key === "Enter" && handleSave()}
-                type={provider.isUrl ? "text" : "password"}
+                type={isUrl ? "text" : "password"}
               />
               <Button
                 variant="secondary"
@@ -422,6 +493,7 @@ function BYOKRow({
 }
 
 const CUSTOM_VALUE = "__custom__";
+const DEFAULT_VALUE = "__default__";
 
 function ModelSelector({
   useCase,
@@ -456,10 +528,12 @@ function ModelSelector({
   const handleSelect = (value: string) => {
     if (value === CUSTOM_VALUE) {
       setShowCustom(true);
-    } else {
-      setShowCustom(false);
-      onSelect(useCase, value);
+      return;
     }
+    setShowCustom(false);
+    // Empty string signals "clear override" — parent routes this to the
+    // resetModel intent so the workspace falls back to the server default.
+    onSelect(useCase, value === DEFAULT_VALUE ? "" : value);
   };
 
   return (
@@ -474,7 +548,8 @@ function ModelSelector({
           <SelectTrigger className="w-72">
             <SelectValue placeholder="Use server default" />
           </SelectTrigger>
-          <SelectContent>
+          <SelectContent className="shadow-lg">
+            <SelectItem value={DEFAULT_VALUE}>Use server default</SelectItem>
             {Object.entries(modelsByProvider).map(
               ([provider, providerModels]) => (
                 <div key={provider}>
@@ -539,11 +614,17 @@ export default function ModelsSettings() {
   const { modelConfig, models, keyStatus } = useLoaderData<typeof loader>();
   const fetcher = useFetcher();
 
+  const pendingIntent = fetcher.formData?.get("intent");
   const pendingConfig =
-    fetcher.formData?.get("intent") === "updateModel"
+    pendingIntent === "updateModel" || pendingIntent === "resetModel"
       ? {
-          useCase: fetcher.formData.get("useCase") as UseCase,
-          modelId: fetcher.formData.get("modelId") as string,
+          useCase: fetcher.formData!.get("useCase") as UseCase,
+          // resetModel has no modelId — fall back to "" so the trigger shows
+          // the "Use server default" placeholder optimistically.
+          modelId:
+            pendingIntent === "updateModel"
+              ? (fetcher.formData!.get("modelId") as string)
+              : "",
         }
       : null;
 
@@ -553,6 +634,12 @@ export default function ModelsSettings() {
   };
 
   const handleModelChange = (useCase: UseCase, modelId: string) => {
+    if (modelId === "") {
+      // ModelSelector emits "" when the user picks "Use server default" —
+      // clear the workspace override rather than trying to save an empty id.
+      fetcher.submit({ intent: "resetModel", useCase }, { method: "POST" });
+      return;
+    }
     fetcher.submit(
       { intent: "updateModel", useCase, modelId },
       { method: "POST" },
@@ -609,8 +696,8 @@ export default function ModelsSettings() {
       >
         <div className="flex flex-col gap-2">
           {BYOK_PROVIDERS.map((provider) =>
-            provider.isAzure ? (
-              <AzureBYOKRow
+            provider.formKind === "dual" ? (
+              <DualFieldBYOKRow
                 key={provider.type}
                 provider={provider}
                 hasKey={!!keyStatusMap[provider.type]}
