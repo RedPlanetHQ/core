@@ -311,6 +311,7 @@ export async function applyMultiFactorReranking(
   episodes: EpisodeWithProvenance[],
   limit: number,
   options?: SearchOptions,
+  workspaceId?: string,
 ): Promise<(EpisodeWithProvenance & { rerankScore: number })[]> {
   // Stage 1: Optional LLM validation for borderline confidence
   let finalEpisodes = episodes;
@@ -320,6 +321,7 @@ export async function applyMultiFactorReranking(
     query,
     episodes,
     maxEpisodesForLLM,
+    workspaceId,
   );
 
   if (finalEpisodes.length === 0) {
@@ -378,6 +380,7 @@ export async function applyEpisodeReranking(
   episodes: EpisodeWithProvenance[],
   config: RerankConfig,
   options?: SearchOptions,
+  workspaceId?: string,
 ): Promise<(EpisodeWithProvenance & { rerankScore: number })[]> {
   const limit = config.limit || 20;
 
@@ -405,7 +408,7 @@ export async function applyEpisodeReranking(
         { error },
       );
       // Fallback to original multi-stage algorithm
-      return applyMultiFactorReranking(query, episodes, limit, options);
+      return applyMultiFactorReranking(query, episodes, limit, options, workspaceId);
     }
   }
 
@@ -423,7 +426,7 @@ export async function applyEpisodeReranking(
         { error },
       );
       // Fallback to original multi-stage algorithm
-      return applyMultiFactorReranking(query, episodes, limit, options);
+      return applyMultiFactorReranking(query, episodes, limit, options, workspaceId);
     }
   }
 
@@ -431,7 +434,7 @@ export async function applyEpisodeReranking(
   logger.info(
     "RERANK_PROVIDER=none, using original multi-stage ranking algorithm",
   );
-  return applyMultiFactorReranking(query, episodes, limit, options);
+  return applyMultiFactorReranking(query, episodes, limit, options, workspaceId);
 }
 
 /**
@@ -442,6 +445,7 @@ async function validateEpisodesWithLLM(
   query: string,
   episodes: EpisodeWithProvenance[],
   maxEpisodes: number = 20,
+  workspaceId?: string,
 ): Promise<EpisodeWithProvenance[]> {
   const prompt = `Given user query, validate which episodes are truly relevant.
 
@@ -504,7 +508,7 @@ If NO episodes are relevant to the query, return:
       "low",
       "search-rerank",
       undefined,
-      undefined,
+      workspaceId,
       "search",
     );
 
@@ -544,6 +548,7 @@ async function validateEpisodesWithLLMInBatches(
   query: string,
   episodes: EpisodeWithProvenance[],
   maxEpisodes: number = 20,
+  workspaceId?: string,
 ): Promise<EpisodeWithProvenance[]> {
   const BATCH_SIZE = 10;
 
@@ -569,7 +574,7 @@ async function validateEpisodesWithLLMInBatches(
   // Process all batches in parallel
   const batchResults = await Promise.all(
     batches.map((batch, batchIndex) =>
-      validateEpisodesWithLLM(query, batch, batch.length).then((result) => {
+      validateEpisodesWithLLM(query, batch, batch.length, workspaceId).then((result) => {
         logger.info(
           `Batch ${batchIndex + 1}/${batches.length} completed: ${result.length}/${batch.length} episodes validated`,
         );
