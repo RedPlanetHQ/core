@@ -21,7 +21,7 @@ const exec = promisify(execCb);
 
 async function commandExists(cmd: string): Promise<boolean> {
 	try {
-		await exec(`command -v ${cmd}`);
+		await exec(`${process.platform === 'win32' ? 'where' : 'command -v'} ${cmd}`);
 		return true;
 	} catch {
 		return false;
