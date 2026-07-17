@@ -30,6 +30,10 @@
               "concepts/scratchpad",
               "concepts/widgets"
             ]
+          },
+          {
+            "group": "Bring Your Own Models",
+            "pages": ["guides/subscription-proxy"]
           }
         ]
       },
@@ -233,7 +237,7 @@
             "pages": [
               "self-hosting/environment-variables",
               "self-hosting/model-providers",
-              "self-hosting/subscription-proxy",
+              "guides/subscription-proxy",
               "self-hosting/embeddings",
               "self-hosting/ai-providers"
             ]
