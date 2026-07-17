@@ -1,9 +1,13 @@
 ---
 title: "Use Your Claude / Codex Subscription"
-description: "Run CORE against your Claude Max or ChatGPT Codex subscription via a local OpenAI-compatible proxy — no API keys required."
+description: "Point CORE at your Claude Max or ChatGPT Codex subscription via an OpenAI-compatible proxy — works on CORE Cloud (BYOK) and self-hosted deployments."
 ---
 
-If you already pay for Claude Max (Anthropic) or a ChatGPT plan that includes Codex, you can point CORE at your subscription instead of buying separate API credits. CORE never touches the subscription's OAuth tokens directly — a small proxy service (running on your own machine) sits between them and translates OpenAI-compatible requests into whatever the subscription CLI expects.
+Works on **CORE Cloud** (via workspace BYOK) and on **self-hosted** deployments (via env or BYOK). If you already pay for Claude Max (Anthropic) or a ChatGPT plan that includes Codex, you can point CORE at your subscription instead of buying separate API credits. CORE never touches the subscription's OAuth tokens directly — a small proxy service (running on infrastructure you control) sits between them and translates OpenAI-compatible requests into whatever the subscription CLI expects.
+
+<Note>
+The proxy runs on infrastructure **you** control (laptop, tailnet host, small VPS, Vercel AI Gateway). CORE — cloud or self-hosted — just makes OpenAI-compatible API calls to whatever URL you give it. OAuth tokens for your subscription stay on your side.
+</Note>
 
 <Warning>
 Subscription plans are licensed for **interactive** use. Providers can rate-limit or revoke OAuth tokens they detect being used as a headless backend for a hosted service. Fine for personal self-host on your own laptop or VPS; risky if you're serving other users or a public product. If in doubt, use real API keys.
@@ -12,19 +16,30 @@ Subscription plans are licensed for **interactive** use. Providers can rate-limi
 ## How it works
 
 ```
-CORE  ──▶  CLIProxyAPI (localhost)  ──▶  Claude Code / Codex CLI OAuth  ──▶  your subscription
+CORE (cloud or self-hosted)  ──▶  CLIProxyAPI (your infra)  ──▶  Claude / Codex CLI OAuth  ──▶  your subscription
 ```
 
 CORE talks to CLIProxyAPI as if it were an OpenAI-compatible API. CLIProxyAPI holds your subscription OAuth tokens and translates each request into the native protocol (Anthropic messages, ChatGPT Codex, Gemini, etc.). Multiple subscriptions can be logged into the same proxy.
 
+## Where to run the proxy
+
+The proxy needs to be reachable from the machine running CORE. Pick whichever matches your setup:
+
+- **Self-hosted CORE on your laptop / server** → run the proxy on the same host (or same docker network). Local `http://localhost:8317` works.
+- **CORE Cloud, personal use** → run the proxy on your laptop + expose it via a [Cloudflare Tunnel](https://developers.cloudflare.com/cloudflare-one/connections/connect-networks/), tailnet, ngrok, or a $5 VPS. CORE Cloud can't reach `localhost` on your machine directly.
+- **CORE Cloud, no self-hosting** → [Vercel AI Gateway](https://vercel.com/docs/ai-gateway/coding-agents/claude-code) is a first-party proxy for Claude Max that requires no self-hosting at all; skip to [Alternatives](#alternatives) for the URL.
+
 ## 1. Boot the proxy
 
-CORE ships a compose recipe at `hosting/cliproxy/`:
+CORE ships a compose recipe at `hosting/cliproxy/` in the repo. If you're on CORE Cloud, clone just to get the compose file:
 
 ```bash
-cd hosting/cliproxy
+git clone https://github.com/RedPlanetHQ/core.git
+cd core/hosting/cliproxy
 docker compose up -d
 ```
+
+Self-hosted users already have the repo checked out — `cd hosting/cliproxy && docker compose up -d`.
 
 The compose file exposes:
 - Main API on `${CLIPROXY_PORT:-8317}` — this is what CORE calls
@@ -86,18 +101,21 @@ You should see the model IDs your subscription can serve — e.g. `claude-sonnet
 
 ## 4. Wire the proxy into CORE
 
-You can do this per workspace via BYOK (recommended, no restart) or globally via env.
+Recommended: **workspace BYOK** (works on both cloud and self-hosted, no restart, scoped to one workspace). Self-hosted deployments can also set it globally via env.
 
-### Per workspace (BYOK)
+### Workspace BYOK (cloud + self-hosted)
 
 In the CORE webapp, open **Workspace Settings → Models → API Keys**, click **+ Add API key**, choose **OpenAI**, and fill in:
 
-- **Base URL**: `http://localhost:8317/v1` (or `http://cli-proxy-api:8317/v1` if CORE runs on the same docker network; `http://host.docker.internal:8317/v1` for a Mac Docker CORE reaching a laptop-side proxy)
+- **Base URL** — where CORE reaches the proxy:
+  - **CORE Cloud** → your public/tunnel URL, e.g. `https://cliproxy.mytunnel.trycloudflare.com/v1`
+  - **Self-hosted, both on your laptop** → `http://localhost:8317/v1`
+  - **Self-hosted CORE in Docker + proxy on the same host** → `http://host.docker.internal:8317/v1` (Mac) or `http://cli-proxy-api:8317/v1` if they share a docker network
 - **API key**: the same random string you put in `config.yaml`
 
 Save. Then in the **Models** section pick a tier (Default / Low / High), choose **Enter model ID…**, and type a router string prefixed with `openai/` — e.g. `openai/claude-sonnet-4-6`. The `openai/` prefix forces CORE to route through the openai provider path (which now honors the workspace's proxy URL); the model id after the slash is what gets sent to CLIProxyAPI.
 
-### Globally (env)
+### Self-hosted, globally via env
 
 ```env
 CHAT_PROVIDER=openai
