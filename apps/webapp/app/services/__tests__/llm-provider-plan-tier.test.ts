@@ -55,7 +55,7 @@ function wireProviderWithTieredModels() {
 
 function mockWorkspace(opts: {
   planType?: string | null;
-  modelConfig?: Record<string, { modelId: string }>;
+  modelConfig?: Record<string, unknown>;
 }) {
   prismaMocks.workspace.findUnique.mockResolvedValue({
     metadata: opts.modelConfig ? { modelConfig: opts.modelConfig } : {},
@@ -74,16 +74,6 @@ describe("getModelForUseCase — free-plan cap", () => {
     mockWorkspace({ planType: "FREE" });
     const model = await getModelForUseCase("chat", "ws-1", "high");
     expect(model).toBe("low-model");
-  });
-
-  it("honors an explicit per-use-case override for a FREE workspace (no cap)", async () => {
-    mockWorkspace({
-      planType: "FREE",
-      modelConfig: { chat: { modelId: "override-model" } },
-    });
-    const model = await getModelForUseCase("chat", "ws-1", "high");
-    expect(model).toBe("override-model");
-    expect(prismaMocks.lLMModel.findFirst).not.toHaveBeenCalled();
   });
 
   it("treats a workspace with no subscription as FREE", async () => {
@@ -118,6 +108,61 @@ describe("getModelForUseCase — free-plan cap", () => {
   });
 });
 
+// Workspace override lives at modelConfig.{low,medium,high} — a flat tier
+// map, independent of useCase. Every internal call (chat, memory, search, …)
+// resolves through the same three slots.
+describe("getModelForUseCase — workspace tier override", () => {
+  it("honors modelConfig.medium for a chat call", async () => {
+    mockWorkspace({
+      planType: "PRO",
+      modelConfig: { medium: "openai/claude-sonnet-4-6" },
+    });
+    const model = await getModelForUseCase("chat", "ws-1", "medium");
+    expect(model).toBe("openai/claude-sonnet-4-6");
+    expect(prismaMocks.lLMModel.findFirst).not.toHaveBeenCalled();
+  });
+
+  it("honors modelConfig.medium for a memory call", async () => {
+    mockWorkspace({
+      planType: "PRO",
+      modelConfig: { medium: "openai/claude-sonnet-4-6" },
+    });
+    const model = await getModelForUseCase("memory", "ws-1", "medium");
+    expect(model).toBe("openai/claude-sonnet-4-6");
+  });
+
+  it("picks the requested complexity slot when set", async () => {
+    mockWorkspace({
+      planType: "PRO",
+      modelConfig: {
+        medium: "openai/claude-sonnet-4-6",
+        high: "openai/claude-opus-4-7",
+      },
+    });
+    const model = await getModelForUseCase("chat", "ws-1", "high");
+    expect(model).toBe("openai/claude-opus-4-7");
+  });
+
+  it("falls back to medium when the requested complexity is empty", async () => {
+    mockWorkspace({
+      planType: "PRO",
+      modelConfig: { medium: "openai/claude-sonnet-4-6" },
+    });
+    const model = await getModelForUseCase("chat", "ws-1", "high");
+    expect(model).toBe("openai/claude-sonnet-4-6");
+  });
+
+  it("bypasses the FREE-plan cap for a FREE workspace", async () => {
+    mockWorkspace({
+      planType: "FREE",
+      modelConfig: { medium: "openai/claude-sonnet-4-6" },
+    });
+    const model = await getModelForUseCase("chat", "ws-1", "high");
+    expect(model).toBe("openai/claude-sonnet-4-6");
+    expect(prismaMocks.lLMModel.findFirst).not.toHaveBeenCalled();
+  });
+});
+
 describe("resolveDefaultChatModelId", () => {
   it("returns a low-tier model for a FREE workspace", async () => {
     mockWorkspace({ planType: "FREE" });
@@ -125,10 +170,10 @@ describe("resolveDefaultChatModelId", () => {
     expect(model).toBe("low-model");
   });
 
-  it("returns the FREE workspace's explicit chat override when set", async () => {
+  it("returns the FREE workspace's explicit low override when set", async () => {
     mockWorkspace({
       planType: "FREE",
-      modelConfig: { chat: { modelId: "override-model" } },
+      modelConfig: { low: "override-model" },
     });
     const model = await resolveDefaultChatModelId("ws-1");
     expect(model).toBe("override-model");

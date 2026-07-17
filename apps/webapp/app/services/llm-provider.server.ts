@@ -264,9 +264,9 @@ export async function getEmbeddingDimensions(): Promise<number> {
  * Resolve the model ID for a given use case + complexity.
  *
  * Resolution order:
- *   1. workspace.metadata.modelConfig[useCase].modelId  (explicit workspace override)
- *   2. LLMModel with env.CHAT_PROVIDER + complexity     (DB complexity routing)
- *   3. env.MODEL                                        (final fallback)
+ *   1. workspace.metadata.modelConfig[complexity]   (explicit workspace override, flat tier map)
+ *   2. LLMModel with env.CHAT_PROVIDER + complexity (DB complexity routing)
+ *   3. env.MODEL                                    (final fallback)
  *
  * Plan tiering: when billing is enabled, a workspace on a free plan is forced
  * to the "low" complexity tier (step 2) regardless of the requested complexity.
@@ -280,14 +280,10 @@ export async function getModelForUseCase(
 ): Promise<string> {
   let effectiveComplexity = complexity;
 
-  // 1. Workspace override. Two shapes are accepted:
-  //    Legacy:   modelConfig[useCase] = { modelId }
-  //              → same model at every complexity tier
-  //    Tiered:   modelConfig[useCase] = { medium, low?, high? }
-  //              → medium is the "default", low/high are optional overrides.
-  //              A missing complexity slot falls back to medium. If medium is
-  //              also missing, we fall through to DB complexity routing.
-  //    BYOK-only in the UI, but read-side supports it for anyone.
+  // 1. Workspace override — flat tier map: modelConfig = { medium, low?, high? }
+  //    Same tiered pick regardless of useCase; medium is the "Default" slot,
+  //    and a missing complexity slot falls back to medium. BYOK-only in the
+  //    UI, but read-side supports it for anyone.
   if (workspaceId) {
     const workspace = await prisma.workspace.findUnique({
       where: { id: workspaceId },
@@ -297,15 +293,10 @@ export async function getModelForUseCase(
       },
     });
     const meta = (workspace?.metadata ?? {}) as Record<string, any>;
-    const modelConfig = meta.modelConfig as
-      | Record<string, Record<string, string | undefined>>
-      | undefined;
-    const useCaseCfg = modelConfig?.[useCase];
-    if (useCaseCfg && typeof useCaseCfg === "object") {
-      const chosen =
-        useCaseCfg[complexity] ?? useCaseCfg.medium ?? useCaseCfg.modelId;
-      if (typeof chosen === "string" && chosen.length > 0) return chosen;
-    }
+    const modelConfig = meta.modelConfig as Record<string, unknown> | undefined;
+
+    const tierPick = modelConfig?.[complexity] ?? modelConfig?.medium;
+    if (typeof tierPick === "string" && tierPick.length > 0) return tierPick;
 
     // Free plans are capped to the low tier. Explicit overrides above win;
     // paid plans and self-hosted (billing disabled) keep the requested tier.
@@ -347,7 +338,8 @@ export async function getModelForUseCase(
  * The main conversational agent historically used env.MODEL for every plan.
  * Paid plans, self-hosted (billing disabled), and call sites without a
  * workspace keep that behavior. Free workspaces drop to a low-tier chat model,
- * honoring an explicit modelConfig.chat override first (via getModelForUseCase).
+ * honoring an explicit modelConfig.low / modelConfig.medium override first
+ * (via getModelForUseCase).
  */
 export async function resolveDefaultChatModelId(
   workspaceId: string | null | undefined,
@@ -437,9 +429,10 @@ export interface ComposerModel {
 
 /**
  * Models ready to render in the chat composer dropdown for a workspace.
- * Marks the workspace's configured chat model (workspace.metadata.modelConfig.chat)
- * as isDefault, and avoids double-prefixing ids when the modelId already starts
- * with its provider type (e.g. "openrouter/xiaomi/mimo-v2.5-pro").
+ * Marks the workspace's configured default chat model (medium slot of
+ * workspace.metadata.modelConfig) as isDefault, and avoids double-prefixing
+ * ids when the modelId already starts with its provider type
+ * (e.g. "openrouter/xiaomi/mimo-v2.5-pro").
  */
 export async function getChatComposerModels(
   workspaceId?: string,
@@ -454,17 +447,8 @@ export async function getChatComposerModels(
     });
     const meta = (workspace?.metadata ?? {}) as Record<string, any>;
     const cfg = (meta.modelConfig ?? {}) as Record<string, unknown>;
-    // Prefer the new flat shape (medium acts as the "default" slot). Fall
-    // back to the legacy per-use-case shape so pre-migration workspaces still
-    // get their default model marked in the composer.
     if (typeof cfg.medium === "string") {
       defaultChatModelId = cfg.medium;
-    } else if (cfg.chat && typeof cfg.chat === "object") {
-      const legacyChat = cfg.chat as Record<string, unknown>;
-      const legacyMedium =
-        (legacyChat.medium as string | undefined) ??
-        (legacyChat.modelId as string | undefined);
-      if (typeof legacyMedium === "string") defaultChatModelId = legacyMedium;
     }
   }
 
@@ -595,23 +579,12 @@ export async function pruneOrphanWorkspaceModels(
   const meta = (workspace?.metadata ?? {}) as Record<string, any>;
   const modelConfig = (meta.modelConfig ?? {}) as Record<string, unknown>;
 
-  // Collect every modelId currently referenced from modelConfig. Supports both
-  // shapes concurrently since read-side migration is passive:
-  //   New flat: { medium?, low?, high? }              (values are strings)
-  //   Legacy:   { chat: { modelId | medium | low | high }, memory: ..., search: ... }
+  // Collect every modelId currently referenced from modelConfig. The shape is
+  // { medium?, low?, high? }, with string values.
   const referenced = new Set<string>();
-  for (const [key, val] of Object.entries(modelConfig)) {
-    if (["low", "medium", "high"].includes(key) && typeof val === "string") {
-      referenced.add(val);
-      continue;
-    }
-    if (val && typeof val === "object") {
-      const cfg = val as Record<string, unknown>;
-      for (const k of ["modelId", "low", "medium", "high"]) {
-        const v = cfg[k];
-        if (typeof v === "string") referenced.add(v);
-      }
-    }
+  for (const k of ["low", "medium", "high"] as const) {
+    const val = modelConfig[k];
+    if (typeof val === "string") referenced.add(val);
   }
 
   const workspaceModels = await prisma.lLMModel.findMany({
@@ -757,7 +730,7 @@ function inferProviderFromModelId(modelId: string): string {
 
 /**
  * Resolve model + API key for a workspace, use case and complexity.
- * Model: workspace.metadata.modelConfig[useCase] → DB complexity → env.MODEL
+ * Model: workspace.metadata.modelConfig[complexity] → DB complexity → env.MODEL
  * Key:   workspace BYOK → env key
  */
 export async function resolveModelForWorkspace(
