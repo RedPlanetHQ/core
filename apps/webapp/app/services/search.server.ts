@@ -279,6 +279,7 @@ export class SearchService {
         episodesWithProvenance,
         rerankConfig,
         opts,
+        workspaceId,
       );
 
       // Filter by threshold if using a reranking model
