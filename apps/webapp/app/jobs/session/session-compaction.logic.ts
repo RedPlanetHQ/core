@@ -231,7 +231,7 @@ async function getTitleForCompactedSession(
       const titleResult = await processTitleGeneration({
         queueId: ingestionRecords[0].id,
         userId: episodes[0]?.userId || "",
-        workspaceId: "", // Not critical for title generation
+        workspaceId,
       });
 
       if (titleResult.success && titleResult.title) {
