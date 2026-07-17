@@ -38,20 +38,18 @@ import {
 } from "@core/types";
 
 // ---------------------------------------------------------------------------
-// Model tiers — replaces the old per-use-case config.
+// Model tiers
 // ---------------------------------------------------------------------------
 //
 // Three complexity slots at the workspace level:
 //   medium (Default), low, high
 //
-// - Every internal call already declares its `complexity` — the resolver in
-//   llm-provider.server.ts::getModelForUseCase picks the matching slot,
-//   falling back to `medium` when empty, then to server default.
-// - Legacy storage shape (`{ chat: { modelId | medium }, memory: ..., search: ... }`)
-//   is migrated on read here; on next write the whole modelConfig collapses to
-//   the flat shape.
+// Every internal call already declares its `complexity` — the resolver in
+// llm-provider.server.ts::getModelForUseCase picks the matching slot,
+// falling back to `medium` when empty, then to the server default.
 
 type ComplexityTier = "low" | "medium" | "high";
+const TIER_KEYS: ComplexityTier[] = ["low", "medium", "high"];
 
 const TIERS: { key: ComplexityTier; label: string; hint: string }[] = [
   {
@@ -71,27 +69,12 @@ const TIERS: { key: ComplexityTier; label: string; hint: string }[] = [
   },
 ];
 
-// Legacy shape support: read either the new flat shape or the old per-use-case one.
 function readTierSlot(
-  modelConfig: Record<string, any> | undefined,
+  modelConfig: Record<string, unknown> | undefined,
   complexity: ComplexityTier,
 ): string {
-  if (!modelConfig) return "";
-  // New flat shape
-  const flat = modelConfig[complexity];
-  if (typeof flat === "string" && flat.length > 0) return flat;
-  // Legacy per-use-case shape — prefer `chat` as the canonical carrier
-  const legacy = modelConfig.chat;
-  if (legacy && typeof legacy === "object") {
-    const chosen: unknown =
-      (legacy as Record<string, unknown>)[complexity] ??
-      (complexity === "medium"
-        ? (legacy as Record<string, unknown>).medium ??
-          (legacy as Record<string, unknown>).modelId
-        : undefined);
-    if (typeof chosen === "string" && chosen.length > 0) return chosen;
-  }
-  return "";
+  const value = modelConfig?.[complexity];
+  return typeof value === "string" ? value : "";
 }
 
 // ---------------------------------------------------------------------------
@@ -150,7 +133,7 @@ export const loader = async ({ request }: LoaderFunctionArgs) => {
   });
 
   const modelConfig = ((workspace?.metadata as any)?.modelConfig ?? {}) as
-    | Record<string, any>
+    | Record<string, unknown>
     | undefined;
 
   const [models, keyStatus] = await Promise.all([
@@ -189,7 +172,7 @@ export const action = async ({ request }: ActionFunctionArgs) => {
   if (intent === "updateModel") {
     const complexity = (formData.get("complexity") as string) || "medium";
     const modelId = formData.get("modelId") as string;
-    if (!["low", "medium", "high"].includes(complexity)) {
+    if (!TIER_KEYS.includes(complexity as ComplexityTier)) {
       return json({ error: "Invalid complexity" }, { status: 400 });
     }
     if (!modelId) return json({ error: "Missing modelId" }, { status: 400 });
@@ -201,32 +184,18 @@ export const action = async ({ request }: ActionFunctionArgs) => {
     const metadata = (workspace?.metadata as Record<string, unknown>) ?? {};
     const currentConfig = (metadata.modelConfig ?? {}) as Record<string, unknown>;
 
-    // Migration: strip legacy per-use-case entries the next time we write.
-    // Anything not in the flat tier set gets dropped.
-    const flatOnly: Record<string, unknown> = {};
-    for (const k of ["low", "medium", "high"]) {
-      if (typeof currentConfig[k] === "string") flatOnly[k] = currentConfig[k];
+    const nextConfig: Record<string, string> = {};
+    for (const k of TIER_KEYS) {
+      if (typeof currentConfig[k] === "string") nextConfig[k] = currentConfig[k] as string;
     }
-    // Carry legacy chat.modelId / chat.medium into the medium slot if the
-    // flat shape doesn't have one yet — one-shot migration on first save.
-    if (!flatOnly.medium) {
-      const legacyChat = currentConfig.chat as
-        | Record<string, unknown>
-        | undefined;
-      if (legacyChat && typeof legacyChat === "object") {
-        const legacyMedium =
-          (legacyChat as any).medium ?? (legacyChat as any).modelId;
-        if (typeof legacyMedium === "string") flatOnly.medium = legacyMedium;
-      }
-    }
-    flatOnly[complexity] = modelId;
+    nextConfig[complexity] = modelId;
 
     await prisma.workspace.update({
       where: { id: user.workspaceId },
       data: {
         metadata: {
           ...metadata,
-          modelConfig: flatOnly,
+          modelConfig: nextConfig,
         } as Prisma.InputJsonValue,
       },
     });
@@ -246,28 +215,13 @@ export const action = async ({ request }: ActionFunctionArgs) => {
     const metadata = (workspace?.metadata as Record<string, unknown>) ?? {};
     const currentConfig = (metadata.modelConfig ?? {}) as Record<string, unknown>;
 
-    // Normalize to flat shape first (drop legacy per-use-case entries too).
-    const flatOnly: Record<string, unknown> = {};
-    for (const k of ["low", "medium", "high"]) {
-      if (typeof currentConfig[k] === "string") flatOnly[k] = currentConfig[k];
-    }
-    if (!flatOnly.medium) {
-      const legacyChat = currentConfig.chat as
-        | Record<string, unknown>
-        | undefined;
-      const legacyMedium =
-        legacyChat &&
-        typeof legacyChat === "object" &&
-        ((legacyChat as any).medium ?? (legacyChat as any).modelId);
-      if (typeof legacyMedium === "string") flatOnly.medium = legacyMedium;
-    }
-
-    let nextConfig: Record<string, unknown> = flatOnly;
-    if (complexity && ["low", "medium", "high"].includes(complexity)) {
-      delete nextConfig[complexity];
-    } else {
-      // Reset everything.
-      nextConfig = {};
+    let nextConfig: Record<string, string> = {};
+    if (complexity && TIER_KEYS.includes(complexity as ComplexityTier)) {
+      for (const k of TIER_KEYS) {
+        if (k !== complexity && typeof currentConfig[k] === "string") {
+          nextConfig[k] = currentConfig[k] as string;
+        }
+      }
     }
 
     await prisma.workspace.update({
