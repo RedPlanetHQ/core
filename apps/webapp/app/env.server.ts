@@ -140,7 +140,7 @@ const EnvironmentSchema = z
 
     // Local (transformers.js) embedding backend.
     // Active when EMBEDDINGS_PROVIDER=local. Model is taken from EMBEDDING_MODEL
-    // (recommend: onnx-community/nomic-embed-text-v1.5, 768 dims — set
+    // (recommend: nomic-ai/nomic-embed-text-v1.5, 768 dims — set
     // EMBEDDING_MODEL_SIZE=768 or leave the seeded model dim to take over).
     // dtype: fp32 | fp16 | q8 | q4 — q8 is the sweet spot for CPU.
     LOCAL_EMBEDDING_DTYPE: z

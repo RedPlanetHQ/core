@@ -57,12 +57,12 @@ CORE ships with an in-process embedding backend powered by [`@huggingface/transf
 
 | Model | Dimensions | Notes |
 |-------|-----------|-------|
-| `onnx-community/nomic-embed-text-v1.5` | 768 | Recommended. Comparable to `text-embedding-3-small` |
+| `nomic-ai/nomic-embed-text-v1.5` | 768 | Recommended. Comparable to `text-embedding-3-small` |
 | Any other feature-extraction model published as ONNX on Hugging Face | varies | Set `EMBEDDING_MODEL` to the repo id |
 
 ```env
 EMBEDDINGS_PROVIDER=local
-EMBEDDING_MODEL=onnx-community/nomic-embed-text-v1.5
+EMBEDDING_MODEL=nomic-ai/nomic-embed-text-v1.5
 EMBEDDING_MODEL_SIZE=768
 
 # Optional. Defaults to q8 — the sweet spot for CPU inference.
@@ -75,12 +75,12 @@ LOCAL_EMBEDDING_CACHE_DIR=/app/data/models
 The pipeline is warmed at server startup so the first request doesn't pay the load cost. First-run download progress streams into the server logs (throttled to ~10% per file):
 
 ```
-[embed:local] initializing pipeline (model=onnx-community/nomic-embed-text-v1.5, dtype=q8, cache=/app/data/models)
-[embed:local] fetching model_quantized.onnx (onnx-community/nomic-embed-text-v1.5)
+[embed:local] initializing pipeline (model=nomic-ai/nomic-embed-text-v1.5, dtype=q8, cache=/app/data/models)
+[embed:local] fetching model_quantized.onnx (nomic-ai/nomic-embed-text-v1.5)
 [embed:local] downloading model_quantized.onnx: 30% (52.1/172.8 MB)
 [embed:local] downloading model_quantized.onnx: 40% (69.5/172.8 MB)
 …
-[embed:local] pipeline ready (onnx-community/nomic-embed-text-v1.5)
+[embed:local] pipeline ready (nomic-ai/nomic-embed-text-v1.5)
 Local embeddings warmed
 ```
 

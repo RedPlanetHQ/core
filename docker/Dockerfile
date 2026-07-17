@@ -69,5 +69,11 @@ COPY --from=builder --chown=node:node /core/scripts ./scripts
 
 EXPOSE 3000
 
+# Local-embeddings cache dir. Created here (owned by node) so the named
+# volume mounted at /app/data/models in docker-compose inherits node
+# ownership on first mount — otherwise the volume comes up root:root and
+# the runtime process (USER node) can't write ONNX weights into it.
+RUN mkdir -p /app/data/models && chown -R node:node /app
+
 USER node
 CMD ["./scripts/entrypoint.sh"]

@@ -95,7 +95,7 @@
     "envKey": "EMBEDDINGS_PROVIDER",
     "models": [
       {
-        "modelId": "onnx-community/nomic-embed-text-v1.5",
+        "modelId": "nomic-ai/nomic-embed-text-v1.5",
         "label": "Nomic Embed Text v1.5 (local ONNX)",
         "complexity": "low",
         "supportsBatch": false,
