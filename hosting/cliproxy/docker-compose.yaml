@@ -2,6 +2,13 @@
 # Grok subscription behind a single OpenAI-compatible endpoint, then plug it
 # into CORE as a workspace BYOK provider.
 #
+# This compose file is for LOCAL use — running the proxy on your laptop and
+# doing the OAuth login flow interactively. For hosted deployments (Railway,
+# Fly, VPS) where you want to seed OAuth tokens via env vars instead of
+# logging in inside the container, see ./DEPLOY.md — that path uses the
+# redplanethq/cliproxy wrapper image (built by
+# .github/workflows/build-cliproxy-image.yml).
+#
 # ⚠  Terms of Service — subscription plans (Pro / Max / Plus / Codex) are
 #    licensed for interactive use. Using them as a headless backend for a
 #    hosted service is a gray area; providers can rate-limit or revoke
