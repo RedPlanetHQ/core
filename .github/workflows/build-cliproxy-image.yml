@@ -1,0 +1,61 @@
+name: Build CLIProxy Image
+
+# Publishes redplanethq/cliproxy — a thin wrapper around eceasy/cli-proxy-api
+# that seeds OAuth JSONs from CLIPROXY_AUTH_<name>_B64 env vars, so you can
+# deploy to Railway/Fly/etc. without running the interactive --*-login flow
+# inside the container.
+#
+# Triggers:
+#   - Tag `cliproxy-<version>` (e.g. cliproxy-0.1.0) → :<version>
+#   - Push to main touching hosting/cliproxy/**       → :latest
+#   - Manual workflow_dispatch                        → :latest
+
+on:
+  push:
+    tags:
+      - "cliproxy-*"
+    branches:
+      - main
+    paths:
+      - "hosting/cliproxy/**"
+      - ".github/workflows/build-cliproxy-image.yml"
+  workflow_dispatch:
+
+jobs:
+  build-cliproxy:
+    runs-on: [self-hosted, linux, x64, aws, spot]
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up QEMU
+        uses: docker/setup-qemu-action@v3
+
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v3
+
+      - name: Login to Docker Registry
+        run: echo "${{ secrets.DOCKER_PASSWORD }}" | docker login -u "${{ secrets.DOCKER_USERNAME }}" --password-stdin
+
+      # Strip the `cliproxy-` prefix (cliproxy-0.1.0 → 0.1.0). For non-tag
+      # events (main push / workflow_dispatch) we publish `latest` only.
+      - name: Compute image tags
+        id: meta
+        run: |
+          if [[ "${GITHUB_REF_TYPE}" == "tag" ]]; then
+            version="${GITHUB_REF_NAME#cliproxy-}"
+            echo "tags=redplanethq/cliproxy:${version},redplanethq/cliproxy:latest" >> "$GITHUB_OUTPUT"
+          else
+            echo "tags=redplanethq/cliproxy:latest" >> "$GITHUB_OUTPUT"
+          fi
+
+      - name: Build and Push CLIProxy Docker Image
+        uses: docker/build-push-action@v5
+        with:
+          context: ./hosting/cliproxy
+          file: ./hosting/cliproxy/Dockerfile
+          platforms: linux/amd64,linux/arm64
+          push: true
+          tags: ${{ steps.meta.outputs.tags }}
+          cache-from: type=registry,ref=redplanethq/cliproxy:buildcache
+          cache-to: type=registry,ref=redplanethq/cliproxy:buildcache,mode=max
