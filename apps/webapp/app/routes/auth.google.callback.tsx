@@ -15,23 +15,42 @@ export let loader: LoaderFunction = async ({ request }) => {
     redirectTo,
   });
 
-  const authuser = await authenticator.authenticate("google", request);
-  const headers = await saveSession(request, authuser);
+  try {
+    const authuser = await authenticator.authenticate("google", request);
+    const headers = await saveSession(request, authuser);
 
-  logger.debug("auth.google.callback authuser", {
-    authuser,
-  });
+    logger.debug("auth.google.callback authuser", {
+      authuser,
+    });
 
-  const user = await getUserById(authuser.userId);
-  if (user && !user.onboardingComplete && !redirectTo.startsWith("/onboarding")) {
-    const onboardingUrl =
-      redirectTo && redirectTo !== "/"
-        ? `/onboarding?redirectTo=${encodeURIComponent(redirectTo)}`
-        : "/onboarding";
-    return redirect(onboardingUrl, { headers });
+    const user = await getUserById(authuser.userId);
+    if (
+      user &&
+      !user.onboardingComplete &&
+      !redirectTo.startsWith("/onboarding")
+    ) {
+      const onboardingUrl =
+        redirectTo && redirectTo !== "/"
+          ? `/onboarding?redirectTo=${encodeURIComponent(redirectTo)}`
+          : "/onboarding";
+      return redirect(onboardingUrl, { headers });
+    }
+
+    return redirect(redirectTo, {
+      headers,
+    });
+  } catch (error) {
+    const url = new URL(request.url);
+    logger.error("auth.google.callback failed", {
+      redirectTo,
+      hasCode: url.searchParams.has("code"),
+      hasState: url.searchParams.has("state"),
+      scope: url.searchParams.get("scope"),
+      error:
+        error instanceof Error
+          ? { name: error.name, message: error.message, stack: error.stack }
+          : String(error),
+    });
+    throw error;
   }
-
-  return redirect(redirectTo, {
-    headers,
-  });
 };
