@@ -58,6 +58,57 @@ if [ "$(id -u)" = "0" ]; then
     chown -R corebrain:corebrain /app /home/corebrain 2>/dev/null || true
   fi
 
+  # ── cliproxy setup ──────────────────────────────────────────────────────
+  # CLIProxyAPI runs as root (its auth-dir is /root/.cli-proxy-api by default;
+  # we redirect it to the corebrain-home volume so tokens survive restarts).
+  CLIPROXY_AUTH_DIR="/home/corebrain/.cli-proxy-api"
+  mkdir -p "$CLIPROXY_AUTH_DIR"
+  chmod 700 "$CLIPROXY_AUTH_DIR"
+
+  # Config: full override takes priority; otherwise generate from env vars.
+  if [ -n "${CLIPROXY_OVERRIDE_CONFIG_B64:-}" ]; then
+    printf '%s' "$CLIPROXY_OVERRIDE_CONFIG_B64" | base64 -d > /CLIProxyAPI/config.yaml
+    echo "[cliproxy] using config from CLIPROXY_OVERRIDE_CONFIG_B64"
+  else
+    # Resolve (or auto-generate) the API key.
+    _cliproxy_key="${CLIPROXY_API_KEY:-}"
+    if [ -z "$_cliproxy_key" ]; then
+      _cliproxy_key=$(head -c 32 /dev/urandom | base64 | tr -dc 'a-zA-Z0-9' | head -c 32 || true)
+      echo "[cliproxy] generated API key: $_cliproxy_key"
+      echo "[cliproxy] set CLIPROXY_API_KEY=$_cliproxy_key to pin it across restarts"
+    fi
+    printf 'host: 0.0.0.0\nport: 8317\nauth-dir: %s\napi-keys:\n  - %s\n' \
+      "$CLIPROXY_AUTH_DIR" "$_cliproxy_key" > /CLIProxyAPI/config.yaml
+    unset _cliproxy_key
+  fi
+
+  # Seed per-provider auth JSONs from CLIPROXY_AUTH_<name>_B64 env vars.
+  # Seed-only: if the file already exists (volume has a refreshed token), skip.
+  for _var in $(env | awk -F= '/^CLIPROXY_AUTH_.*_B64=/{print $1}'); do
+    _name=$(printf '%s' "$_var" | sed -e 's/^CLIPROXY_AUTH_//' -e 's/_B64$//')
+    _target="$CLIPROXY_AUTH_DIR/$_name.json"
+    if [ -s "$_target" ]; then
+      echo "[cliproxy] $_target already present, skipping seed from \$$_var"
+      continue
+    fi
+    _val=$(eval "printf '%s' \"\$$_var\"")
+    if [ -z "$_val" ]; then continue; fi
+    if ! printf '%s' "$_val" | base64 -d > "$_target" 2>/dev/null; then
+      echo "[cliproxy] ERROR: \$$_var is not valid base64" >&2
+      rm -f "$_target"; continue
+    fi
+    chmod 600 "$_target"
+    echo "[cliproxy] seeded $_target from \$$_var"
+  done
+  unset _var _name _target _val
+
+  # Start cliproxy in the background. Logs flow to container stdout/stderr.
+  /CLIProxyAPI/CLIProxyAPI --config /CLIProxyAPI/config.yaml &
+
+  # Start nginx in the background. It proxies :7787 → gateway (:7788) or
+  # cliproxy (:8317) based on the /llmproxy prefix.
+  nginx -g 'daemon off;' &
+
   # Re-exec this script as corebrain. `runuser` (util-linux) is in the base
   # node:22-slim image and doesn't require PAM, unlike `su`.
   exec runuser -u corebrain -- "$0" "$@"

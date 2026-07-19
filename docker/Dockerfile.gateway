@@ -7,8 +7,14 @@
 # any Docker host. For laptop installs use `npm install -g @redplanethq/corebrain`
 # instead — this image exists to make the hosted-gateway deploy one command.
 #
+# Also bundles CLIProxyAPI (cliproxy) behind the same port — accessible at
+# /llmproxy/v1 — so you can use a single Railway service for both the gateway
+# and an OpenAI-compatible proxy for Claude Max / ChatGPT / Codex / Gemini
+# subscriptions. Configure CORE's BYOK base URL as:
+#   https://<gateway-host>/llmproxy/v1
+#
 # Build:
-#   docker build -f packages/cli/docker/Dockerfile -t corebrain-gateway .
+#   docker build -f docker/Dockerfile.gateway -t corebrain-gateway .
 # Run:
 #   docker run --rm -it \
 #     -p 7787:7787 \
@@ -20,13 +26,19 @@
 #     -e GITHUB_TOKEN=...                         # optional; for `git clone` of private repos \
 #     -e ANTHROPIC_API_KEY=...                    # optional; lets claude skip OAuth login \
 #     -e OPENAI_API_KEY=...                       # optional; lets codex skip OAuth login \
-#     -v corebrain-home:/home/corebrain                 # persist gateway id, agent login + session state, chromium cache \
+#     -e CLIPROXY_API_KEY=...                     # optional; auto-generated if absent \
+#     -e CLIPROXY_AUTH_CLAUDE_B64=...             # optional; base64 of claude auth JSON \
+#     -e CLIPROXY_OVERRIDE_CONFIG_B64=...         # optional; base64 of full config.yaml \
+#     -v corebrain-home:/home/corebrain                 # persist gateway state + cliproxy auth tokens \
 #     -v corebrain-workspace:/app                       # persist cloned repos and worktree state \
 #     corebrain-gateway
 #
-# On first run with no COREBRAIN_GATEWAY_SECURITY_KEY env var the gateway
-# generates one and prints it to stdout. Copy it from `docker logs` and paste
-# (along with the public URL) into the webapp's New Gateway dialog.
+# On first run with no COREBRAIN_GATEWAY_SECURITY_KEY the gateway generates one
+# and prints it to stdout. On first run with no CLIPROXY_API_KEY cliproxy
+# generates one the same way. Copy both from `docker logs`.
+
+# Extract the CLIProxyAPI binary from the upstream image.
+FROM eceasy/cli-proxy-api:latest AS cliproxy-upstream
 
 FROM --platform=linux/amd64 node:22-slim
 
@@ -40,6 +52,7 @@ RUN apt-get update \
         python3 \
         build-essential \
         openssh-client \
+        nginx \
     && rm -rf /var/lib/apt/lists/*
 
 # Coding agents — shipped so every gateway has claude + codex available out
@@ -61,6 +74,15 @@ ARG GATEWAY_GID=1001
 RUN groupadd --gid "${GATEWAY_GID}" corebrain \
     && useradd --uid "${GATEWAY_UID}" --gid "${GATEWAY_GID}" \
         --create-home --shell /bin/bash corebrain
+
+# CLIProxyAPI binary — copied from the upstream image so cliproxy runs inside
+# the same container and is reachable at /llmproxy/v1 through nginx.
+COPY --from=cliproxy-upstream /CLIProxyAPI/CLIProxyAPI /CLIProxyAPI/CLIProxyAPI
+
+# nginx routing — single port (7787) proxies /llmproxy/* to cliproxy (:8317)
+# and everything else to the gateway (:7788).
+COPY docker/nginx-gateway.conf /etc/nginx/conf.d/gateway.conf
+RUN rm -f /etc/nginx/sites-enabled/default
 
 # Browser — Brave (Chromium-based, so Playwright's `chromium.launchPersistentContext`
 # drives it via `executablePath`). We deliberately skip Playwright's bundled
@@ -101,8 +123,10 @@ ENV COREBRAIN_SLOT_FILES=false
 RUN mkdir -p /home/corebrain/.corebrain \
     && chown -R corebrain:corebrain /home/corebrain
 
-# Ensure the gateway's manifest port is the documented default. Users can
-# override with -p <host>:7787 or -e COREBRAIN_GATEWAY_HTTP_PORT=<port>.
+# nginx listens on 7787 (external). Gateway listens on 7788 (internal only).
+# COREBRAIN_GATEWAY_HTTP_PORT tells the gateway daemon which port to bind;
+# nginx is the public entry point and routes traffic to it.
+ENV COREBRAIN_GATEWAY_HTTP_PORT=7788
 EXPOSE 7787
 
 WORKDIR /app
