@@ -68,7 +68,33 @@ services:
       # shell — flip to `true` if you want both tool groups exposed.
       # The same pattern works for BROWSER / CODING / EXEC.
       - COREBRAIN_SLOT_FILES=${COREBRAIN_SLOT_FILES:-false}
+
+      # ── CLIProxy (built-in LLM subscription proxy) ─────────────────
+      # The gateway bundles CLIProxyAPI and exposes it at /llmproxy/v1.
+      # Set CORE's BYOK base URL to: https://<gateway-host>/llmproxy/v1
+      #
+      # CLIPROXY_API_KEY: the bearer token CORE sends to /llmproxy/v1.
+      #   Leave unset on first boot — the container generates one and
+      #   prints it to logs. Pin it here once you have it.
+      - CLIPROXY_API_KEY=${CLIPROXY_API_KEY:-}
+      #
+      # CLIPROXY_AUTH_<name>_B64: base64-encoded OAuth auth JSON for each
+      #   subscription. Obtain by running the login flow locally:
+      #     docker compose exec corebrain-gateway \
+      #       /CLIProxyAPI/CLIProxyAPI -no-browser --claude-login
+      #   then: base64 -i /root/.cli-proxy-api/<file>.json
+      #   (Also available: --codex-login, --gemini-login, --qwen-login.)
+      - CLIPROXY_AUTH_CLAUDE_B64=${CLIPROXY_AUTH_CLAUDE_B64:-}
+      - CLIPROXY_AUTH_CODEX_B64=${CLIPROXY_AUTH_CODEX_B64:-}
+      - CLIPROXY_AUTH_GEMINI_B64=${CLIPROXY_AUTH_GEMINI_B64:-}
+      #
+      # CLIPROXY_OVERRIDE_CONFIG_B64: base64 of a full config.yaml. When
+      #   set, it completely replaces the generated config (including
+      #   api-keys, port, auth-dir, remote-management, etc.).
+      - CLIPROXY_OVERRIDE_CONFIG_B64=${CLIPROXY_OVERRIDE_CONFIG_B64:-}
     ports:
+      # nginx listens on 7787 and routes internally to gateway (:7788)
+      # and cliproxy (:8317). Only this single port needs to be published.
       - "${COREBRAIN_GATEWAY_HTTP_PORT:-7787}:7787"
     volumes:
       - workspace:/app
