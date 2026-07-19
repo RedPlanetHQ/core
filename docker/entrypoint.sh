@@ -202,7 +202,12 @@ echo "[entrypoint] running corebrain browser set-browser brave"
 corebrain browser set-browser brave >/dev/null 2>&1 || true
 
 # ---------- hand off to the gateway ----------
-echo "[entrypoint] handing off to gateway on port ${COREBRAIN_GATEWAY_HTTP_PORT:-7787}"
+# nginx owns port 7787 externally. Force the gateway onto 7788 regardless
+# of what COREBRAIN_GATEWAY_HTTP_PORT is set to in the host environment —
+# Railway often carries a stale value from an older deploy that would cause
+# the gateway to collide with nginx and crash immediately.
+export COREBRAIN_GATEWAY_HTTP_PORT=7788
+echo "[entrypoint] handing off to gateway on port ${COREBRAIN_GATEWAY_HTTP_PORT}"
 # `exec` replaces the shell so the gateway becomes PID 1 and Docker's
 # stop-signal routing + stdout capture go straight to it.
 exec corebrain gateway start --foreground "$@"
