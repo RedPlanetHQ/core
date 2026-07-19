@@ -83,14 +83,11 @@ if [ "$(id -u)" = "0" ]; then
   fi
 
   # Seed per-provider auth JSONs from CLIPROXY_AUTH_<name>_B64 env vars.
-  # Seed-only: if the file already exists (volume has a refreshed token), skip.
+  # Always overwrite on restart — the env var is the source of truth. Update
+  # the env var with a fresh base64 whenever the token expires and redeploy.
   for _var in $(env | awk -F= '/^CLIPROXY_AUTH_.*_B64=/{print $1}'); do
     _name=$(printf '%s' "$_var" | sed -e 's/^CLIPROXY_AUTH_//' -e 's/_B64$//')
     _target="$CLIPROXY_AUTH_DIR/$_name.json"
-    if [ -s "$_target" ]; then
-      echo "[cliproxy] $_target already present, skipping seed from \$$_var"
-      continue
-    fi
     _val=$(eval "printf '%s' \"\$$_var\"")
     if [ -z "$_val" ]; then continue; fi
     if ! printf '%s' "$_val" | base64 -d > "$_target" 2>/dev/null; then

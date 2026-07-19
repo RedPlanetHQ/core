@@ -79,10 +79,14 @@ services:
       - CLIPROXY_API_KEY=${CLIPROXY_API_KEY:-}
       #
       # CLIPROXY_AUTH_<name>_B64: base64-encoded OAuth auth JSON for each
-      #   subscription. Obtain by running the login flow locally:
-      #     docker compose exec corebrain-gateway \
-      #       /CLIProxyAPI/CLIProxyAPI -no-browser --claude-login
-      #   then: base64 -i /root/.cli-proxy-api/<file>.json
+      #   subscription. Written to disk on every restart (env var is the source
+      #   of truth). Update the env var + redeploy whenever a token expires.
+      #   Obtain by running the login flow locally:
+      #     docker compose -f hosting/cliproxy/docker-compose.yaml up -d
+      #     docker compose -f hosting/cliproxy/docker-compose.yaml exec cli-proxy-api \
+      #       /CLIProxyAPI/CLIProxyAPI --config /CLIProxyAPI/config.yaml -no-browser --claude-login
+      #     docker compose -f hosting/cliproxy/docker-compose.yaml exec cli-proxy-api \
+      #       sh -c 'base64 /root/.cli-proxy-api/*.json'
       #   (Also available: --codex-login, --gemini-login, --qwen-login.)
       - CLIPROXY_AUTH_CLAUDE_B64=${CLIPROXY_AUTH_CLAUDE_B64:-}
       - CLIPROXY_AUTH_CODEX_B64=${CLIPROXY_AUTH_CODEX_B64:-}
