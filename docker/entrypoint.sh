@@ -107,12 +107,17 @@ if [ "$(id -u)" = "0" ]; then
 
   # Start nginx in the background. It proxies :7787 → gateway (:7788) or
   # cliproxy (:8317) based on the /llmproxy prefix.
+  echo "[entrypoint] starting nginx"
   nginx -g 'daemon off;' &
+  echo "[entrypoint] nginx pid=$! started"
 
   # Re-exec this script as corebrain. `runuser` (util-linux) is in the base
   # node:22-slim image and doesn't require PAM, unlike `su`.
+  echo "[entrypoint] dropping to corebrain user"
   exec runuser -u corebrain -- "$0" "$@"
 fi
+
+echo "[entrypoint] corebrain phase running as $(id)"
 
 # ---------- git credential helper + identity ----------
 # Credential helper reads $GITHUB_TOKEN at lookup time so the secret stays in
@@ -193,9 +198,11 @@ PY
 # passes the path into Playwright's `executablePath` at launch. Idempotent —
 # rewrites the same prefs every boot, which lets us survive a wiped
 # /home/corebrain volume without losing the setting.
+echo "[entrypoint] running corebrain browser set-browser brave"
 corebrain browser set-browser brave >/dev/null 2>&1 || true
 
 # ---------- hand off to the gateway ----------
+echo "[entrypoint] handing off to gateway on port ${COREBRAIN_GATEWAY_HTTP_PORT:-7787}"
 # `exec` replaces the shell so the gateway becomes PID 1 and Docker's
 # stop-signal routing + stdout capture go straight to it.
 exec corebrain gateway start --foreground "$@"
