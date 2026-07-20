@@ -65,7 +65,7 @@ Open source, self-hosted, yours forever.
 
 Watch CORE take a plain-text task, gather context from GitHub and memory, plan the work, run a Claude Code session, and open a PR:
 
-[![CORE Demo](https://img.youtube.com/vi/7y_kt_UTYQs/maxresdefault.jpg)](https://www.youtube.com/watch?v=7y_kt_UTYQs)
+[![CORE Demo](docs/images/readme/demo.gif)](https://www.youtube.com/watch?v=7y_kt_UTYQs)
 
 ---
 
