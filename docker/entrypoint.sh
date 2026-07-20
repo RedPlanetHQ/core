@@ -70,12 +70,14 @@ if [ "$(id -u)" = "0" ]; then
     printf '%s' "$CLIPROXY_OVERRIDE_CONFIG_B64" | base64 -d > /CLIProxyAPI/config.yaml
     echo "[cliproxy] using config from CLIPROXY_OVERRIDE_CONFIG_B64"
   else
-    # Resolve (or auto-generate) the API key.
-    _cliproxy_key="${CLIPROXY_API_KEY:-}"
+    # Reuse the gateway security key as the cliproxy API key so there is one
+    # shared credential for the whole container. Falls back to CLIPROXY_API_KEY
+    # if set explicitly, then auto-generates if neither is present.
+    _cliproxy_key="${CLIPROXY_API_KEY:-${COREBRAIN_GATEWAY_SECURITY_KEY:-}}"
     if [ -z "$_cliproxy_key" ]; then
       _cliproxy_key=$(head -c 32 /dev/urandom | base64 | tr -dc 'a-zA-Z0-9' | head -c 32 || true)
       echo "[cliproxy] generated API key: $_cliproxy_key"
-      echo "[cliproxy] set CLIPROXY_API_KEY=$_cliproxy_key to pin it across restarts"
+      echo "[cliproxy] set COREBRAIN_GATEWAY_SECURITY_KEY or CLIPROXY_API_KEY to pin it"
     fi
     printf 'host: 0.0.0.0\nport: 8317\nauth-dir: %s\napi-keys:\n  - %s\n' \
       "$CLIPROXY_AUTH_DIR" "$_cliproxy_key" > /CLIProxyAPI/config.yaml
