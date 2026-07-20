@@ -65,7 +65,11 @@ Open source, self-hosted, yours forever.
 
 Watch CORE take a plain-text task, gather context from GitHub and memory, plan the work, run a Claude Code session, and open a PR:
 
-[![CORE Demo](docs/images/readme/demo.gif)](https://www.youtube.com/watch?v=7y_kt_UTYQs)
+<p align="center">
+  <a href="https://www.youtube.com/watch?v=7y_kt_UTYQs">
+    <img src="docs/images/readme/demo.gif" alt="CORE Demo" width="800" />
+  </a>
+</p>
 
 ---
 
@@ -120,7 +124,7 @@ Reach CORE from WhatsApp, Slack, or Telegram. Send a task from the airport or fr
 <tr>
 <td width="40%" valign="middle">
 <h3>Coding agents</h3>
-CORE spins up Claude Code or Codex sessions with the full task context, runs them on your machine or in Docker/Railway, and opens a PR when done. Sessions keep running when your laptop is closed.
+CORE spins up Claude Code or Codex sessions with the full task context, runs them on your machine or in Docker/Railway, and opens a PR when done. Sessions keep running when your laptop is closed. Point CORE at your existing Claude or Codex subscription — the whole stack runs on it, <a href="https://docs.getcore.me/gateway/subscription-proxy">no separate API key needed</a>.
 </td>
 <td width="60%">
 <img width="1512" height="949" alt="Coding agents screenshot" src="docs/images/readme/coding.png" />
@@ -162,6 +166,14 @@ One-click integrations to 50+ apps via MCP — GitHub, Linear, Jira, Slack, Gmai
 | Terminal and browser access via gateway | ✅ | ✅ | ✅ | ✅ |
 | Human-in-loop by default | ✅ | ❌ | ❌ | ❌ |
 | Open source and self-hostable | ✅ | ✅ | ✅ | ❌ |
+
+---
+
+## Run CORE on your Claude or Codex subscription
+
+CORE can point at your existing Claude Pro or Codex subscription instead of API keys. Memory, planning, task execution, and coding sessions all run on the subscription you already pay for — no per-token bill on top.
+
+[Set up the subscription proxy →](https://docs.getcore.me/gateway/subscription-proxy)
 
 ---
 
