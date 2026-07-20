@@ -357,8 +357,11 @@ export const GraphClustering = forwardRef<
       const finalNodes = Array.from(nodeMap.values()).map((node) => {
         const degree = degreeMap.get(node.id) ?? 0;
         // Log scale keeps hub nodes readable without letting them dominate.
-        const finalSize = node.baseSize * (1 + Math.log(1 + degree) * 0.4);
-        return { ...node, degree, baseSize: finalSize, size: finalSize };
+        // baseSize stays as the pre-degree ground truth; restSize is what
+        // nodes return to when not highlighted, and what highlight math
+        // multiplies against.
+        const restSize = node.baseSize * (1 + Math.log(1 + degree) * 0.4);
+        return { ...node, degree, restSize, size: restSize };
       });
 
       return {
@@ -380,11 +383,11 @@ export const GraphClustering = forwardRef<
       graph.forEachNode((node) => {
         const nodeData = graph.getNodeAttribute(node, "nodeData");
         const originalColor = getNodeColor(nodeData);
-        const baseSize = graph.getNodeAttribute(node, "baseSize");
+        const restSize = graph.getNodeAttribute(node, "restSize");
 
         graph.setNodeAttribute(node, "highlighted", false);
         graph.setNodeAttribute(node, "color", originalColor);
-        graph.setNodeAttribute(node, "size", baseSize);
+        graph.setNodeAttribute(node, "size", restSize);
         graph.setNodeAttribute(node, "zIndex", 1);
       });
       graph.forEachEdge((edge) => {
@@ -422,12 +425,12 @@ export const GraphClustering = forwardRef<
             clusterNodes.push(nodeId);
             graph.setNodeAttribute(nodeId, "highlighted", true);
             graph.setNodeAttribute(nodeId, "color", clusterColor);
-            graph.setNodeAttribute(nodeId, "size", attributes.size * 1.75);
+            graph.setNodeAttribute(nodeId, "size", attributes.restSize * 1.75);
             graph.setNodeAttribute(nodeId, "zIndex", 2);
           } else {
             // Dim other nodes
             graph.setNodeAttribute(nodeId, "color", theme.node.dimmed);
-            graph.setNodeAttribute(nodeId, "size", attributes.size * 0.7);
+            graph.setNodeAttribute(nodeId, "size", attributes.restSize * 0.7);
             graph.setNodeAttribute(nodeId, "zIndex", 0);
           }
         });
@@ -805,11 +808,11 @@ export const GraphClustering = forwardRef<
         // Dim all nodes that are NOT connected
         graph.forEachNode((nodeId) => {
           if (!connectedNodes.has(nodeId)) {
-            const baseSize = graph.getNodeAttribute(nodeId, "baseSize");
+            const restSize = graph.getNodeAttribute(nodeId, "restSize");
 
             // Reduce opacity by using dimmed color
             graph.setNodeAttribute(nodeId, "color", "#0000001A");
-            graph.setNodeAttribute(nodeId, "size", baseSize * 0.6);
+            graph.setNodeAttribute(nodeId, "size", restSize * 0.6);
             graph.setNodeAttribute(nodeId, "zIndex", 0);
           }
         });
