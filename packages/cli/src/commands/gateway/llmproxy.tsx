@@ -142,18 +142,24 @@ function bindLocalCallback(
 				signal: AbortSignal.timeout(30_000),
 				redirect: 'manual',
 			});
-			// Regardless of what the gateway/cliproxy returns, show the user a
-			// clean confirmation page. Success/failure details come from polling
-			// /api/llmproxy/login/:provider/status back in the main flow.
-			res.writeHead(forward.ok ? 200 : forward.status, {'content-type': 'text/html'});
+			// CLIProxyAPI often responds with a 302 redirect to its own success
+			// page after processing the code, so anything 2xx or 3xx means the
+			// callback was delivered. Only 4xx/5xx indicate a real failure.
+			// Actual login success/failure is confirmed by the status poll —
+			// we just report "callback got through" here.
+			const delivered = forward.status < 400;
+			res.writeHead(delivered ? 200 : forward.status, {'content-type': 'text/html'});
 			res.end(`<!doctype html>
 <meta charset="utf-8">
 <title>Login complete</title>
 <div style="font-family: -apple-system, sans-serif; max-width: 480px; margin: 8rem auto; text-align: center;">
-  <h2>${forward.ok ? 'Login complete' : 'Login failed'}</h2>
+  <h2>${delivered ? 'Login complete' : 'Login failed'}</h2>
   <p>You can close this tab and return to your terminal.</p>
 </div>`);
-			resolve({ok: forward.ok, error: forward.ok ? undefined : `gateway returned HTTP ${forward.status}`});
+			resolve({
+				ok: delivered,
+				error: delivered ? undefined : `gateway returned HTTP ${forward.status}`,
+			});
 		} catch (err) {
 			res.writeHead(502, {'content-type': 'text/plain'});
 			res.end('failed to relay callback to gateway');
@@ -282,26 +288,26 @@ async function runLoginFlow(opts: zod.infer<typeof options>): Promise<void> {
 	}
 	loginSpinner.stop('Got login details from gateway');
 
-	// Show the user the URL (both flows) and, for device-code, the short code.
-	const noteLines = [
-		chalk.bold(`Open this URL in your browser to sign in to ${meta.displayName}:`),
-		'',
-		chalk.cyan(start.authUrl ?? ''),
-	];
+	// Print the URL raw (no box border) so the user can triple-click and copy
+	// without dragging in decorative characters — long OAuth URLs would
+	// otherwise wrap across `p.note()`'s vertical bar and break selection.
+	console.log();
+	console.log(chalk.bold(`Sign in to ${meta.displayName} — open this URL:`));
+	console.log();
+	console.log(chalk.cyan(start.authUrl ?? ''));
+	console.log();
 	if (meta.flow === 'device-code' && start.userCode) {
-		noteLines.push(
-			'',
+		console.log(
 			`${chalk.bold('Then enter this code on the page:')}  ${chalk.yellow.bold(start.userCode)}`,
 		);
 	} else if (meta.flow === 'callback') {
-		noteLines.push(
-			'',
-			chalk.dim('This CLI is listening on'),
-			chalk.dim(`  http://localhost:${meta.port}${meta.callbackPath}`),
-			chalk.dim('and will forward the OAuth callback to your gateway automatically.'),
+		console.log(
+			chalk.dim(
+				`This CLI is listening on http://localhost:${meta.port}${meta.callbackPath} and will forward the OAuth callback to your gateway.`,
+			),
 		);
 	}
-	p.note(noteLines.join('\n'), `Log in to ${meta.displayName}`);
+	console.log();
 
 	const waitSpinner = p.spinner();
 	waitSpinner.start(
@@ -310,24 +316,24 @@ async function runLoginFlow(opts: zod.infer<typeof options>): Promise<void> {
 			: 'Waiting for you to complete the browser flow...',
 	);
 
-	// Poll status until completed / failed. For callback flow, also race
-	// against the local server receiving the OAuth redirect — either signal
-	// finishes the wait.
+	// The truthful signal for "is this login done?" is the status poll —
+	// the gateway subprocess transitions to `completed` / `failed` after
+	// exchanging the code. The local callback resolving just tells us the
+	// browser redirected; the actual token exchange happens after. So we
+	// poll status regardless, and only use the callback to speed up the
+	// last few seconds.
 	const timeoutMs = 5 * 60_000;
 	const startedAt = Date.now();
+	let callbackReported: {ok: boolean; error?: string} | null = null;
+	if (localServer) {
+		localServer.received.then((r) => {
+			callbackReported = r;
+		});
+	}
+
 	let outcome: {ok: boolean; error?: string} | null = null;
 	while (Date.now() - startedAt < timeoutMs && !outcome) {
-		const waits: Array<Promise<{from: 'callback'; r: {ok: boolean; error?: string}} | {from: 'poll'}>> = [
-			new Promise<{from: 'poll'}>((r) => setTimeout(() => r({from: 'poll'}), 2_000)),
-		];
-		if (localServer) {
-			waits.push(localServer.received.then((r) => ({from: 'callback' as const, r})));
-		}
-		const raced = await Promise.race(waits);
-		if (raced.from === 'callback') {
-			outcome = raced.r;
-			break;
-		}
+		await new Promise((r) => setTimeout(r, 2_000));
 		try {
 			const status = await pollStatus(gateway.baseUrl, opts.login);
 			if (status.status === 'completed') {
@@ -337,6 +343,14 @@ async function runLoginFlow(opts: zod.infer<typeof options>): Promise<void> {
 			if (status.status === 'failed') {
 				outcome = {ok: false, error: status.error ?? 'unknown gateway error'};
 				break;
+			}
+			if (status.status === 'idle') {
+				// Subprocess already exited and its entry was GC'd, but we never
+				// got a completed/failed reading. Trust the callback report.
+				if (callbackReported) {
+					outcome = callbackReported;
+					break;
+				}
 			}
 		} catch {
 			// transient poll failure — keep waiting
