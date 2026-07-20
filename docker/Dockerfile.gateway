@@ -59,7 +59,7 @@ RUN apt-get update \
 # of the box. Users still need to log them in from the webapp (or set
 # ANTHROPIC_API_KEY / OPENAI_API_KEY) to authenticate.
 RUN npm install -g \
-        @redplanethq/corebrain@2.8.31 \
+        @redplanethq/corebrain@2.8.33 \
         @anthropic-ai/claude-code \
         @openai/codex \
         playwright \
