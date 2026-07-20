@@ -80,7 +80,7 @@ services:
       #
       # The subscription API key CORE uses to hit /llmproxy/v1 is the same
       # value as COREBRAIN_GATEWAY_SECURITY_KEY — no separate key to manage.
-      # See DEPLOY.md and docs/guides/subscription-proxy.mdx for details.
+      # See DEPLOY.md and docs/gateway/subscription-proxy.mdx for details.
       #
       # CLIPROXY_OVERRIDE_CONFIG_B64: base64 of a full cliproxy config.yaml.
       #   When set, replaces the auto-generated config completely — use it

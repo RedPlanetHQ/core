@@ -43,7 +43,7 @@ The gateway exposes CLIProxyAPI at `/llmproxy/v1` on the same port. Use it to
 serve Claude Max / Codex / Antigravity / xAI subscriptions as models in CORE.
 
 Full end-to-end flow (deploy → register → CLI → log in) is documented in
-**[Use Your Claude / Codex Subscription](../../docs/guides/subscription-proxy.mdx)**.
+**[Use Your Claude / Codex Subscription](../../docs/gateway/subscription-proxy.mdx)**.
 
 The short version:
 

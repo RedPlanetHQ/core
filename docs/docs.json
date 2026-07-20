@@ -33,7 +33,7 @@
           },
           {
             "group": "Bring Your Own Models",
-            "pages": ["guides/subscription-proxy"]
+            "pages": ["gateway/subscription-proxy"]
           }
         ]
       },
@@ -204,6 +204,10 @@
             "pages": ["gateway/browser", "gateway/coding", "gateway/exec"]
           },
           {
+            "group": "LLM Proxy",
+            "pages": ["gateway/subscription-proxy"]
+          },
+          {
             "group": "Networking",
             "pages": ["gateway/tunnels"]
           },
@@ -237,7 +241,7 @@
             "pages": [
               "self-hosting/environment-variables",
               "self-hosting/model-providers",
-              "guides/subscription-proxy",
+              "gateway/subscription-proxy",
               "self-hosting/embeddings",
               "self-hosting/ai-providers"
             ]
