@@ -275,7 +275,8 @@ export const GraphClustering = forwardRef<
               ? triplet.source.value.split(/\s+/).slice(0, 4).join(" ") +
               (triplet.source.value.split(/\s+/).length > 4 ? " ..." : "")
               : "",
-            size: isSessionNode ? size : size / 2, // Session nodes slightly larger
+            baseSize: isSessionNode ? size : size / 2, // Session nodes slightly larger
+            isSessionNode,
             color: nodeColor,
             x: width,
             y: height,
@@ -299,7 +300,8 @@ export const GraphClustering = forwardRef<
               ? triplet.target.value.split(/\s+/).slice(0, 4).join(" ") +
               (triplet.target.value.split(/\s+/).length > 4 ? " ..." : "")
               : "",
-            size: isSessionNode ? size : size / 2, // Session nodes slightly larger
+            baseSize: isSessionNode ? size : size / 2, // Session nodes slightly larger
+            isSessionNode,
             color: nodeColor,
             x: width,
             y: height,
@@ -343,11 +345,27 @@ export const GraphClustering = forwardRef<
         {} as Record<string, any>,
       );
 
+      // Count unique neighbours per node from the deduped edge list, then
+      // scale node size by degree so hub nodes read as more central.
+      const degreeMap = new Map<string, number>();
+      Object.values(linkGroups).forEach((edge: any) => {
+        if (edge.source === edge.target) return;
+        degreeMap.set(edge.source, (degreeMap.get(edge.source) ?? 0) + 1);
+        degreeMap.set(edge.target, (degreeMap.get(edge.target) ?? 0) + 1);
+      });
+
+      const finalNodes = Array.from(nodeMap.values()).map((node) => {
+        const degree = degreeMap.get(node.id) ?? 0;
+        // Log scale keeps hub nodes readable without letting them dominate.
+        const finalSize = node.baseSize * (1 + Math.log(1 + degree) * 0.4);
+        return { ...node, degree, baseSize: finalSize, size: finalSize };
+      });
+
       return {
-        nodes: Array.from(nodeMap.values()),
+        nodes: finalNodes,
         edges: Object.values(linkGroups),
       };
-    }, [triplets, getNodeColor, width, height]);
+    }, [triplets, getNodeColor, width, height, size]);
 
     // Helper function to reset highlights without affecting camera
     const resetHighlights = useCallback(() => {
@@ -362,13 +380,11 @@ export const GraphClustering = forwardRef<
       graph.forEachNode((node) => {
         const nodeData = graph.getNodeAttribute(node, "nodeData");
         const originalColor = getNodeColor(nodeData);
-        const isSessionNode =
-          nodeData?.attributes.nodeType === "Session" ||
-          (nodeData?.labels && nodeData.labels.includes("Session"));
+        const baseSize = graph.getNodeAttribute(node, "baseSize");
 
         graph.setNodeAttribute(node, "highlighted", false);
         graph.setNodeAttribute(node, "color", originalColor);
-        graph.setNodeAttribute(node, "size", isSessionNode ? size : size / 2);
+        graph.setNodeAttribute(node, "size", baseSize);
         graph.setNodeAttribute(node, "zIndex", 1);
       });
       graph.forEachEdge((edge) => {
@@ -789,19 +805,11 @@ export const GraphClustering = forwardRef<
         // Dim all nodes that are NOT connected
         graph.forEachNode((nodeId) => {
           if (!connectedNodes.has(nodeId)) {
-            const nodeData = graph.getNodeAttribute(nodeId, "nodeData");
-
-            const isSessionNode =
-              nodeData?.attributes.nodeType === "Session" ||
-              (nodeData?.labels && nodeData.labels.includes("Session"));
+            const baseSize = graph.getNodeAttribute(nodeId, "baseSize");
 
             // Reduce opacity by using dimmed color
             graph.setNodeAttribute(nodeId, "color", "#0000001A");
-            graph.setNodeAttribute(
-              nodeId,
-              "size",
-              (isSessionNode ? size : size / 2) * 0.6,
-            );
+            graph.setNodeAttribute(nodeId, "size", baseSize * 0.6);
             graph.setNodeAttribute(nodeId, "zIndex", 0);
           }
         });
