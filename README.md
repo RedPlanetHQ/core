@@ -69,86 +69,83 @@ Watch CORE take a plain-text task, gather context from GitHub and memory, plan t
 
 ---
 
-## Always watching. Always ready.
+## Overview
 
-Most AI tools wait to be asked. CORE watches.
+<table>
+<tr>
+<td width="40%" valign="middle">
+<h3>Memory</h3>
+CORE indexes email, meetings, GitHub, Linear, Slack and every assistant conversation into a temporal knowledge graph. Every task starts with the full picture — preferences, decisions, and prior context already loaded.
+</td>
+<td width="60%">
+<img width="1502" height="939" alt="Memory graph screenshot" src="docs/images/readme/memory.png" />
+</td>
+</tr>
+<tr>
+<td width="40%" valign="middle">
+<h3>Tasks</h3>
+Every unit of work is a task with your spec, CORE's plan, live state, and a dedicated chat thread. One-shot or recurring. Each task can spawn a coding session, drive the browser, or run terminal commands.
+</td>
+<td width="60%">
+<img width="1512" height="948" alt="Tasks screenshot" src="docs/images/readme/tasks.png" />
+</td>
+</tr>
+<tr>
+<td width="40%" valign="middle">
+<h3>Scratchpad</h3>
+Your daily page. Write <code>[ ] Fix the auth bug from issue #47</code> and CORE picks it up within 3 minutes, loads context from your repo and memory, and drafts a plan.
+</td>
+<td width="60%">
+<img width="1512" height="951" alt="Scratchpad screenshot" src="docs/images/readme/scratchpad.png" />
+</td>
+</tr>
+<tr>
+<td width="40%" valign="middle">
+<h3>Voice</h3>
+Press Ctrl+Option on Mac and speak. CORE runs the task in the background without breaking your flow — no window to open, no context switch.
+</td>
+<td width="60%">
+<img width="1512" height="948" alt="Voice overlay screenshot" src="docs/images/readme/voice.png" />
+</td>
+</tr>
+<tr>
+<td width="40%" valign="middle">
+<h3>Messaging</h3>
+Reach CORE from WhatsApp, Slack, or Telegram. Send a task from the airport or from bed — CORE has the same memory and context regardless of where the message comes from.
+</td>
+<td width="60%">
+<img width="1512" height="947" alt="Messaging screenshot" src="docs/images/readme/messaging.png" />
+</td>
+</tr>
+<tr>
+<td width="40%" valign="middle">
+<h3>Coding agents</h3>
+CORE spins up Claude Code or Codex sessions with the full task context, runs them on your machine or in Docker/Railway, and opens a PR when done. Sessions keep running when your laptop is closed.
+</td>
+<td width="60%">
+<img width="1512" height="949" alt="Coding agents screenshot" src="docs/images/readme/coding.png" />
+</td>
+</tr>
+<tr>
+<td width="40%" valign="middle">
+<h3>Browser</h3>
+A built-in browser CORE can drive on your behalf. Because it's isolated from your main browser, you log in only to the accounts you want the assistant to access.
+</td>
+<td width="60%">
+<img width="1512" height="949" alt="Browser screenshot" src="docs/images/readme/browser.png" />
+</td>
+</tr>
+<tr>
+<td width="40%" valign="middle">
+<h3>Integrations</h3>
+One-click integrations to 50+ apps via MCP — GitHub, Linear, Jira, Slack, Gmail, Calendar, Sentry, Notion, Todoist. Webhook triggers turn inbound events into proactive work.
+</td>
+<td width="60%">
+<img width="1512" height="948" alt="Integrations screenshot" src="docs/images/readme/integrations.png" />
+</td>
+</tr>
 
-Connect it to your apps and it monitors activity across all of them. An email arrives from a client, a GitHub issue gets assigned, a Sentry alert fires, a meeting ends. CORE sees it, checks your memory and the skills you have set, and either handles it or surfaces it for your judgment. You do not trigger it. It notices on its own.
-
-Install the CORE plugin in Claude Code, Codex, or Cursor and your agent conversations get watched too. Context discussed, decisions made, code written, all of it feeds the memory knowledge graph. The next task CORE picks up already knows what happened in your last session.
-
-When it acts, it acts directly. It can reply to emails, update Linear issues, file GitHub PRs, send Slack messages, run terminal commands, drive a browser, and spawn a Claude Code or Codex session from any interface. Send a WhatsApp message from the airport and CORE can have a coding session running and a PR open before you board.
-
-You decide where it acts on its own and where it waits for your call. Handle Sentry alerts automatically but always ask before merging. Approve a plan before a coding session starts. Require confirmation before any email goes out. The level of autonomy is yours to set, per task, per app, per action.
-
----
-
-## Four ways to reach it
-
-A chatbot has one interface. An OS has many.
-
-**Voice.** Press Ctrl+Option on Mac and say what needs doing. CORE runs it in the background without breaking your flow.
-
-**Scratchpad.** Open your daily page and write `[ ] Fix the auth bug from issue #47`. CORE picks it up within 3 minutes, loads context from your repo and memory, and drafts a plan.
-
-**Messaging.** WhatsApp, Slack, Telegram. Send a task from the airport, from your phone, from bed. CORE has your full context regardless of where the message comes from.
-
-**Chat.** Open the dashboard and talk directly, like any assistant. When you want a back-and-forth before delegating.
-
-One AI, four surfaces, the same memory and context behind all of them.
-
----
-
-## Make it yours
-
-Give it a name. Choose how it speaks. Set the rules it follows everywhere.
-
-Pick from five built-in personalities — TARS's dry efficiency, Alfred's loyal formality, Hudson's warm practicality — or write your own. The personality carries into every task it runs, every plan it drafts, every message it sends on your behalf.
-
-Choose its voice for spoken interactions. From then on, it sounds and behaves like the AI you configured, across every interface.
-
----
-
-## CORE in action
-
-### Say it, come back to a PR.
-
-*Press Ctrl+Option, speak:* "Fix the race condition in the checkout flow from issue #312."
-
-CORE loads the issue, pulls related commits and Slack threads, drafts a plan, and runs a Claude Code session. You come back to a diff. You were never at your desk.
-
-### Write it at night, review it in the morning.
-
-*Scratchpad:* `[ ] Work through tonight's backlog starting at 11pm`
-
-CORE pulls from Linear, GitHub, and memory, prioritizes, and works through it while you sleep. Smooth runs are waiting for your review. Stuck sessions come back with one tight question, not a stalled tab.
-
-### Message it from anywhere.
-
-*WhatsApp from the airport:* "Ship the auth refactor."
-
-CORE already knows the branch, the context, and your preferences. It is running in Railway. It kicks off the session before you board.
-
-### Investigate alerts before they become incidents.
-
-*Sentry fires at 2am.* CORE investigates, pulls related traces and prior incidents from memory, proposes a fix, and pings you on Slack: "Issue #847, fix proposed, awaiting your review." You approve from your phone.
-
-### Get a brief that already knows your week.
-
-*Recurring task, every morning at 8am.* CORE pulls from email, GitHub, Linear, and Slack, surfaces what actually needs attention, skips what does not, and turns follow-ups into tasks automatically.
-
----
-
-## What is inside CORE
-
-| | |
-|---|---|
-| **Memory** | Temporal knowledge graph across every tool and conversation. Preferences, decisions, goals, and directives, so every task starts with context loaded. |
-| **Tasks** | One-shot or recurring work units with your spec, CORE's plan, live state, and a dedicated chat thread. Each task can spawn coding, browser, or terminal sessions. |
-| **Connectors** | 50+ apps through one MCP endpoint, plus webhook triggers for proactive automation. GitHub, Linear, Jira, Slack, Gmail, Calendar, Sentry, Notion, Todoist, and more. |
-| **Skills** | Reusable instructions that fire automatically based on context. For example: "always pull related Linear issues before planning a fix," "run tests before opening a PR," or "post a Slack summary when a task completes." 100+ built-in, or write your own. |
-| **Gateway** | Runs Claude Code, Codex, browser agents, and terminal commands on your machine or in Docker and Railway, so CORE keeps working when your laptop is closed. |
-| **Model agnostic** | Bring your own provider: Anthropic, OpenAI, or open-weight models. Self-host the full stack for full isolation. |
+</table>
 
 ---
 
