@@ -9,6 +9,7 @@ import {filesRoutes} from './files';
 import {utilsRoutes} from './utils';
 import {folderRoutes} from './folders';
 import {shellRoutes} from './shell';
+import {llmproxyRoutes} from './llmproxy';
 import {isSlotEnabled} from './manifest-builder';
 import {getPreferences} from '@/config/preferences';
 
@@ -28,8 +29,14 @@ export async function buildServer(opts: ApiServerOptions): Promise<FastifyInstan
 
 	await app.register(fastifyWebsocket);
 
-	// Auth for every route except /healthz/public.
-	app.addHook('onRequest', makeAuthHook(['/healthz/public']));
+	// Auth for every route except /healthz/public and the llmproxy login flow.
+	// The trailing slash on `/api/llmproxy/` makes it a prefix match — every
+	// subpath is unauth'd so `corebrain gateway llmproxy --login <provider>`
+	// can drive the OAuth flow using only the gateway's public URL. The threat
+	// model is minimal: an attacker who discovered the URL could trigger a
+	// login subprocess, but completing the flow requires them to sign in with
+	// their own subscription and donate their tokens to someone else's gateway.
+	app.addHook('onRequest', makeAuthHook(['/healthz/public', '/api/llmproxy/']));
 
 	// Ops routes are always on (manifest / healthz / verify).
 	await app.register(opsRoutes);
@@ -58,6 +65,10 @@ export async function buildServer(opts: ApiServerOptions): Promise<FastifyInstan
 
 	// General-purpose shell PTY for the webapp's Terminal tab.
 	await app.register(shellRoutes, {prefix: '/api/shell'});
+
+	// LLM subscription proxy — only available in the bundled gateway image
+	// (routes 404 gracefully when the providers.json isn't present).
+	await app.register(llmproxyRoutes, {prefix: '/api/llmproxy'});
 
 	app.setErrorHandler((err: Error & {statusCode?: number; code?: string}, _req, reply) => {
 		log(`api error: ${err.message}`);

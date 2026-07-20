@@ -69,32 +69,23 @@ services:
       # The same pattern works for BROWSER / CODING / EXEC.
       - COREBRAIN_SLOT_FILES=${COREBRAIN_SLOT_FILES:-false}
 
-      # ── CLIProxy (built-in LLM subscription proxy) ─────────────────
-      # The gateway bundles CLIProxyAPI and exposes it at /llmproxy/v1.
-      # Set CORE's BYOK base URL to: https://<gateway-host>/llmproxy/v1
+      # ── LLM subscription proxy (built into the image) ──────────────
+      # CLIProxyAPI is bundled inside this container and exposed at
+      # `/llmproxy/v1` on the same port as the gateway. Log in to your
+      # Claude / Codex / Antigravity / xAI subscriptions from your laptop:
       #
-      # CLIPROXY_API_KEY: the bearer token CORE sends to /llmproxy/v1.
-      #   Leave unset on first boot — the container generates one and
-      #   prints it to logs. Pin it here once you have it.
-      - CLIPROXY_API_KEY=${CLIPROXY_API_KEY:-}
+      #   npm install -g @redplanethq/corebrain
+      #   corebrain login
+      #   corebrain gateway llmproxy --login claude   # (or codex/antigravity/xai)
       #
-      # CLIPROXY_AUTH_<name>_B64: base64-encoded OAuth auth JSON for each
-      #   subscription. Written to disk on every restart (env var is the source
-      #   of truth). Update the env var + redeploy whenever a token expires.
-      #   Obtain by running the login flow locally:
-      #     docker compose -f hosting/cliproxy/docker-compose.yaml up -d
-      #     docker compose -f hosting/cliproxy/docker-compose.yaml exec cli-proxy-api \
-      #       /CLIProxyAPI/CLIProxyAPI --config /CLIProxyAPI/config.yaml -no-browser --claude-login
-      #     docker compose -f hosting/cliproxy/docker-compose.yaml exec cli-proxy-api \
-      #       sh -c 'base64 /root/.cli-proxy-api/*.json'
-      #   (Also available: --codex-login, --gemini-login, --qwen-login.)
-      - CLIPROXY_AUTH_CLAUDE_B64=${CLIPROXY_AUTH_CLAUDE_B64:-}
-      - CLIPROXY_AUTH_CODEX_B64=${CLIPROXY_AUTH_CODEX_B64:-}
-      - CLIPROXY_AUTH_GEMINI_B64=${CLIPROXY_AUTH_GEMINI_B64:-}
+      # The subscription API key CORE uses to hit /llmproxy/v1 is the same
+      # value as COREBRAIN_GATEWAY_SECURITY_KEY — no separate key to manage.
+      # See DEPLOY.md and docs/guides/subscription-proxy.mdx for details.
       #
-      # CLIPROXY_OVERRIDE_CONFIG_B64: base64 of a full config.yaml. When
-      #   set, it completely replaces the generated config (including
-      #   api-keys, port, auth-dir, remote-management, etc.).
+      # CLIPROXY_OVERRIDE_CONFIG_B64: base64 of a full cliproxy config.yaml.
+      #   When set, replaces the auto-generated config completely — use it
+      #   when you need to pin multiple api-keys, enable remote-management,
+      #   or otherwise diverge from the defaults the entrypoint writes.
       - CLIPROXY_OVERRIDE_CONFIG_B64=${CLIPROXY_OVERRIDE_CONFIG_B64:-}
     ports:
       # nginx listens on 7787 and routes internally to gateway (:7788)

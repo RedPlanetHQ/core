@@ -101,8 +101,16 @@ const TICKET_PATHS: ReadonlySet<string> = new Set([
  * Bearer securityKey — there is no loopback bypass.
  */
 export function makeAuthHook(skip: string[] = ['/healthz/public']) {
+	// Entries ending in "/" match by prefix (e.g. "/api/llmproxy/" skips
+	// every subpath). Entries without a trailing slash match exactly, with
+	// an optional query string. Keep prefix entries narrow — they bypass the
+	// gateway's security key.
 	return async function authHook(req: FastifyRequest, reply: FastifyReply) {
-		if (skip.some((s) => req.url === s || req.url.startsWith(s + '?'))) return;
+		const matched = skip.some((s) => {
+			if (s.endsWith('/')) return req.url === s.slice(0, -1) || req.url.startsWith(s);
+			return req.url === s || req.url.startsWith(s + '?');
+		});
+		if (matched) return;
 
 		// Ticket auth for the browser-direct xterm WS. A request that targets
 		// a TICKET_PATH and supplies `?ticket=…` is verified via HMAC instead

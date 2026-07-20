@@ -80,9 +80,13 @@ RUN groupadd --gid "${GATEWAY_GID}" corebrain \
 COPY --from=cliproxy-upstream /CLIProxyAPI/CLIProxyAPI /CLIProxyAPI/CLIProxyAPI
 
 # nginx routing — single port (7787) proxies /llmproxy/* to cliproxy (:8317)
-# and everything else to the gateway (:7788).
+# and everything else to the gateway (:7788). The entrypoint generates one
+# more file at boot (`/etc/nginx/conf.d/llmproxy-callbacks.conf`) with an
+# OAuth callback route per provider, read from llmproxy-providers.json.
 COPY docker/nginx-gateway.conf /etc/nginx/conf.d/gateway.conf
-RUN rm -f /etc/nginx/sites-enabled/default
+COPY docker/llmproxy-providers.json /etc/gateway/llmproxy-providers.json
+RUN rm -f /etc/nginx/sites-enabled/default \
+    && mkdir -p /etc/gateway
 
 # Browser — Brave (Chromium-based, so Playwright's `chromium.launchPersistentContext`
 # drives it via `executablePath`). We deliberately skip Playwright's bundled

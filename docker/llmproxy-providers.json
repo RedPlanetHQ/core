@@ -1,0 +1,32 @@
+{
+  "$schema": "https://json-schema.org/draft-07/schema#",
+  "description": "Login flow configuration per provider. `flow: callback` needs a local port bind + CLI relay for the OAuth redirect (port/callbackPath must be set — they match CLIProxyAPI's hardcoded redirect URIs). `flow: device-code` shows the user a URL and short code; the gateway subprocess polls the provider until authorization completes. Verified against github.com/router-for-me/CLIProxyAPI internal/auth/*/*.go.",
+  "providers": {
+    "claude": {
+      "flow": "callback",
+      "port": 54545,
+      "callbackPath": "/callback",
+      "loginFlag": "--claude-login",
+      "displayName": "Claude Max / Pro"
+    },
+    "codex": {
+      "flow": "callback",
+      "port": 1455,
+      "callbackPath": "/auth/callback",
+      "loginFlag": "--codex-login",
+      "displayName": "ChatGPT Plus / Pro / Codex"
+    },
+    "antigravity": {
+      "flow": "callback",
+      "port": 51121,
+      "callbackPath": "/oauth-callback",
+      "loginFlag": "--antigravity-login",
+      "displayName": "Google Antigravity"
+    },
+    "xai": {
+      "flow": "device-code",
+      "loginFlag": "--xai-login",
+      "displayName": "xAI Grok"
+    }
+  }
+}
