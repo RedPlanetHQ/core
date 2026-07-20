@@ -6,7 +6,6 @@ import { LogsFilters } from "~/components/logs/logs-filters";
 import { VirtualLogsList } from "~/components/logs/virtual-logs-list";
 import { Card, CardContent } from "~/components/ui/card";
 import { FileText, LoaderCircle } from "lucide-react";
-import { OnboardingModal } from "~/components/onboarding";
 import { LabelService } from "~/services/label.server";
 import { getWorkspaceId, requireUser } from "~/services/session.server";
 
@@ -36,7 +35,6 @@ export default function MemoryDocuments() {
   const [selectedLabel, setSelectedLabel] = useState<string | undefined>(
     searchParams.get("label") ?? undefined,
   );
-  const [onboarding, setOnboarding] = useState(false);
 
   // Sync label filter when URL param changes (e.g. navigating from labels page)
   useEffect(() => {
@@ -57,18 +55,6 @@ export default function MemoryDocuments() {
     type: selectedType,
     label: selectedLabel,
   });
-
-  useEffect(() => {
-    if (!isLoading && documents && documents.length === 1) {
-      const hasCompletedOnboarding =
-        typeof window !== "undefined" &&
-        localStorage.getItem("onboarding_completed") === "true";
-
-      if (!hasCompletedOnboarding) {
-        setOnboarding(true);
-      }
-    }
-  }, [documents?.length, isLoading]);
 
   return (
     <>
@@ -122,12 +108,6 @@ export default function MemoryDocuments() {
           </>
         )}
       </div>
-
-      <OnboardingModal
-        isOpen={onboarding}
-        onClose={() => setOnboarding(false)}
-        onComplete={() => setOnboarding(false)}
-      />
     </>
   );
 }
