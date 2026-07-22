@@ -16,9 +16,14 @@ export const loader = async ({ request }: LoaderFunctionArgs) => {
 
   if (!user.onboardingComplete) {
     return redirect(onboardingPath());
-  } else {
-    return redirect("/home/daily");
   }
+
+  const meta = (user.metadata ?? {}) as Record<string, unknown>;
+  if (!meta.planStepComplete) {
+    return redirect("/onboarding/plan");
+  }
+
+  return redirect("/home/daily");
 };
 
 export default function Index() {

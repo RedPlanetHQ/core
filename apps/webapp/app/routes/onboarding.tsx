@@ -1,6 +1,7 @@
 import { Outlet, useFetcher, useLocation } from "@remix-run/react";
 import Logo from "~/components/logo/logo";
 import { Button } from "~/components/ui/button";
+import { SamAvatar } from "~/components/ui/sam-avatar";
 
 export default function OnboardingLayout() {
   const fetcher = useFetcher();
@@ -18,7 +19,7 @@ export default function OnboardingLayout() {
       <div className="flex items-center justify-between px-6 md:px-10">
         <div className="flex items-center gap-2 py-4">
           <div className="flex size-8 items-center justify-center rounded-md">
-            <Logo size={60} />
+            <SamAvatar size={28} trackCursor />
           </div>
           <span className="font-mono font-medium">CORE</span>
         </div>

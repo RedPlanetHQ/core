@@ -29,7 +29,7 @@ import {
   getUserSession,
 } from "~/services/sessionStorage.server";
 import { env } from "~/env.server";
-import Logo from "~/components/logo/logo";
+import { SamAvatar } from "~/components/ui/sam-avatar";
 import { redirectCookie } from "./auth.google";
 import { requestUrl } from "~/utils/requestUrl.server";
 
@@ -165,7 +165,7 @@ export default function LoginMagicLinkPage() {
 
               <Fieldset className="flex w-full flex-col items-center gap-y-2 px-2">
                 <div className="mb-10 flex justify-center">
-                  <Logo size={60} />
+                  <SamAvatar size={64} trackCursor />
                 </div>
 
                 <p className="text-md text-muted-foreground text-center">
@@ -200,7 +200,7 @@ export default function LoginMagicLinkPage() {
               <CardContent className="pt-2 pl-2">
                 <Fieldset className="flex w-full flex-col items-center gap-y-2">
                   <div className="mb-10 flex justify-center">
-                    <Logo size={60} />
+                    <SamAvatar size={64} trackCursor />
                   </div>
 
                   <p className="text-muted-foreground/70 mb-2 text-center">

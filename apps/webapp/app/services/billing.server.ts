@@ -220,6 +220,13 @@ export async function hasCredits(
     },
   });
 
+  // Onboarding chat runs on the house — the plan step (which zeroes credits
+  // for FREE users) happens AFTER complete_onboarding fires, so gating here
+  // would kill the first conversation.
+  if (user && !user.onboardingComplete) {
+    return true;
+  }
+
   if (!user?.UserUsage || !workspace?.Subscription) {
     return false;
   }

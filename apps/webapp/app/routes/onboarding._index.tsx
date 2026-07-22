@@ -42,7 +42,8 @@ export async function loader({ request }: LoaderFunctionArgs) {
   const user = await requireUser(request);
 
   if (user.onboardingComplete) {
-    return redirect("/home/daily");
+    const meta = (user.metadata ?? {}) as Record<string, unknown>;
+    return redirect(meta.planStepComplete ? "/home/daily" : "/onboarding/plan");
   }
 
   const workspaceId = (await getWorkspaceId(
@@ -122,9 +123,10 @@ export async function loader({ request }: LoaderFunctionArgs) {
 export async function action({ request }: ActionFunctionArgs) {
   const user = await requireUser(request);
 
+  const existingMetadata =
+    (user.metadata as Record<string, unknown> | null) ?? {};
+
   if (!user.onboardingComplete) {
-    const existingMetadata =
-      (user.metadata as Record<string, unknown> | null) ?? {};
     await prisma.user.update({
       where: { id: user.id },
       data: {
@@ -134,7 +136,9 @@ export async function action({ request }: ActionFunctionArgs) {
     });
   }
 
-  return redirect("/home/daily");
+  return redirect(
+    existingMetadata.planStepComplete ? "/home/daily" : "/onboarding/plan",
+  );
 }
 
 export default function OnboardingChat() {
@@ -145,8 +149,11 @@ export default function OnboardingChat() {
 
   // After every streamed turn, re-run the loader. If the agent has
   // called complete_onboarding, the user.onboardingComplete flag will
-  // now be true and the loader will redirect to /home/daily.
-  const handleStreamComplete = useCallback(() => {}, [revalidator]);
+  // now be true and the loader will redirect us out (to /onboarding/plan
+  // when the plan step still needs picking, else /home/daily).
+  const handleStreamComplete = useCallback(() => {
+    revalidator.revalidate();
+  }, [revalidator]);
 
   if (typeof window === "undefined") return null;
 

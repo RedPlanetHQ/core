@@ -21,7 +21,7 @@ export const BILLING_CONFIG = {
   plans: {
     free: {
       name: "Free",
-      monthlyCredits: parseInt(process.env.FREE_PLAN_CREDITS || "200", 10),
+      monthlyCredits: parseInt(process.env.FREE_PLAN_CREDITS || "500", 10),
       features: {
         episodesPerMonth: 200,
         searchesPerMonth: 200,

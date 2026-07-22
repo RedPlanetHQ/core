@@ -76,7 +76,9 @@ export function ConversationPopover({
   const open = !!conversationId && !!anchorRect;
   const currentUser = useOptionalUser();
   const outOfCredits =
-    !!currentUser && (currentUser.availableCredits ?? 0) < 1;
+    !!currentUser &&
+    (currentUser.availableCredits ?? 0) < 1 &&
+    !currentUser.hasBYOK;
   const [historyMessages, setHistoryMessages] = useState<UIMessage[]>([]);
   const [historyMeta, setHistoryMeta] = useState<Record<string, string>>({});
   const [loadingHistory, setLoadingHistory] = useState(false);

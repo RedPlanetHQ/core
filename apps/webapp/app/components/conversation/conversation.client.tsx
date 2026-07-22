@@ -82,8 +82,12 @@ export const ConversationNew = ({
   accentColor?: string;
 }) => {
   const currentUser = useOptionalUser();
+  // BYOK workspaces bypass the credit check server-side; mirror that here
+  // so the composer isn't disabled when their balance shows 0.
   const outOfCredits =
-    !!currentUser && (currentUser.availableCredits ?? 0) < 1;
+    !!currentUser &&
+    (currentUser.availableCredits ?? 0) < 1 &&
+    !currentUser.hasBYOK;
 
   const [content, setContent] = useState(defaultMessage ?? "");
   const [title, setTitle] = useState(defaultMessage ?? "");
