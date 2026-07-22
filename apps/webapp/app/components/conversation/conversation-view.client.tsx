@@ -77,13 +77,13 @@ export function ConversationView({
   initialVoiceMode = false,
 }: ConversationViewProps) {
   const currentUser = useOptionalUser();
-  // Strict UI gate: disable the send when the visible balance is empty.
-  // We intentionally don't exempt BYOK here — the sidebar shows "0 credits"
-  // to BYOK workspaces the same way, and letting the button stay enabled
-  // there looks broken. Server-side gates keep the BYOK exemption so
-  // deductions stay correct.
+  // BYOK workspaces pay their own provider bills, so the credit balance
+  // is irrelevant to them — server-side hasCredits also bypasses BYOK,
+  // so disabling here would be a lie.
   const outOfCredits =
-    !!currentUser && (currentUser.availableCredits ?? 0) < 1;
+    !!currentUser &&
+    (currentUser.availableCredits ?? 0) < 1 &&
+    !currentUser.hasBYOK;
 
   // Local mirror of the loader-provided status — stays fresh across stop/
   // completion events without needing a route revalidation.

@@ -1,4 +1,3 @@
-import Logo from "../logo/logo";
 
 export function LoginPageLayout({ children }: { children: React.ReactNode }) {
   return (

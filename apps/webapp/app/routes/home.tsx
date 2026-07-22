@@ -17,6 +17,9 @@ import { onboardingPath } from "~/utils/pathBuilder";
 import { getConversationSources } from "~/services/conversation.server";
 import { prisma } from "~/db.server";
 import { SetButlerNameModal } from "~/components/onboarding/set-butler-name-modal";
+import { UpgradeRequiredModal } from "~/components/onboarding/upgrade-required-modal";
+import { isBillingEnabled } from "~/config/billing.server";
+import { isWorkspaceBYOK } from "~/services/byok.server";
 import { CollabSocketProvider } from "~/components/editor/collab-socket-context";
 import React from "react";
 import { getIntegrationAccounts } from "~/services/integrationAccount.server";
@@ -96,23 +99,47 @@ export const loader = async ({ request }: LoaderFunctionArgs) => {
 
   if (!user.onboardingComplete) {
     return redirect(onboardingPath());
-  } else {
-    return typedjson(
-      {
-        user,
-        workspace,
-        conversationSources,
-        models,
-        integrationAccountMap,
-        integrationFrontendMap,
-      },
-      {
-        headers: {
-          "Set-Cookie": await commitSession(await clearRedirectTo(request)),
-        },
-      },
-    );
   }
+
+  const userMeta = (user.metadata ?? {}) as Record<string, unknown>;
+  if (!userMeta.planStepComplete) {
+    return redirect("/onboarding/plan");
+  }
+
+  // Hard paywall for FREE users who haven't set up BYOK. The plan step
+  // marks them complete on click but doesn't guarantee they finished
+  // Stripe / added a key — this catches those drop-offs on every /home hit.
+  let needsUpgrade = false;
+  if (isBillingEnabled() && workspace.id) {
+    const [subscription, hasByok] = await Promise.all([
+      prisma.subscription.findUnique({
+        where: { workspaceId: workspace.id },
+        select: { planType: true },
+      }),
+      isWorkspaceBYOK(workspace.id),
+    ]);
+
+
+    const planType = subscription?.planType ?? "FREE";
+    needsUpgrade = planType === "FREE" && !hasByok;
+  }
+
+  return typedjson(
+    {
+      user,
+      workspace,
+      conversationSources,
+      models,
+      integrationAccountMap,
+      integrationFrontendMap,
+      needsUpgrade,
+    },
+    {
+      headers: {
+        "Set-Cookie": await commitSession(await clearRedirectTo(request)),
+      },
+    },
+  );
 };
 
 function HomeInner({
@@ -122,6 +149,7 @@ function HomeInner({
   agentName,
   accentColor,
   needsButlerName,
+  needsUpgrade,
   models,
   integrationAccountMap,
 }: {
@@ -131,6 +159,7 @@ function HomeInner({
   agentName: string;
   accentColor: string;
   needsButlerName: boolean;
+  needsUpgrade: boolean;
   models: LLMModel[];
   integrationAccountMap: Record<string, string>;
 }) {
@@ -153,6 +182,7 @@ function HomeInner({
           workspaceId={workspace.id}
         />
       )}
+      {needsUpgrade && <UpgradeRequiredModal />}
       <AppSidebar
         conversationSources={conversationSources}
         widgetsEnabled={!!meta.widgetsEnabled}
@@ -185,8 +215,13 @@ function HomeInner({
 }
 
 export default function Home() {
-  const { conversationSources, workspace, models, integrationAccountMap } =
-    useLoaderData<typeof loader>() as any;
+  const {
+    conversationSources,
+    workspace,
+    models,
+    integrationAccountMap,
+    needsUpgrade,
+  } = useLoaderData<typeof loader>() as any;
   const meta = (workspace?.metadata ?? {}) as Record<string, unknown>;
   const needsButlerName = !meta.onboardingV2Complete;
   const accentColor = (meta.accentColor as string) || "#c87844";
@@ -202,6 +237,7 @@ export default function Home() {
           agentName={agentName}
           accentColor={accentColor}
           needsButlerName={needsButlerName}
+          needsUpgrade={!!needsUpgrade}
           models={models}
           integrationAccountMap={integrationAccountMap}
         />

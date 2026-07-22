@@ -207,24 +207,26 @@ export function AppSidebar({
         <SidebarFooter className="flex flex-col gap-1 px-2 pb-0">
           <IngestionStatus />
 
-          {user.availableCredits < 1 && (
+          {!user.hasBYOK && user.availableCredits < 1 && (
             <OutOfCreditsCard
               agentName={agentName}
               onUpgrade={() => navigate("/settings/billing")}
             />
           )}
 
-          <div className="flex justify-end">
-            <Button
-              variant="ghost"
-              className="w-fit"
-              onClick={() => {
-                navigate("/settings/billing");
-              }}
-            >
-              <div>{user.availableCredits} credits</div>
-            </Button>
-          </div>
+          {!user.hasBYOK && (
+            <div className="flex justify-end">
+              <Button
+                variant="ghost"
+                className="w-fit"
+                onClick={() => {
+                  navigate("/settings/billing");
+                }}
+              >
+                <div>{user.availableCredits} credits</div>
+              </Button>
+            </div>
+          )}
         </SidebarFooter>
       </Sidebar>
 

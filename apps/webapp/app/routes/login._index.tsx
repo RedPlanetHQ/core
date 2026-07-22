@@ -14,7 +14,7 @@ import { env } from "~/env.server";
 import { Card, CardContent, CardHeader, CardTitle } from "~/components/ui/card";
 import { Button } from "~/components/ui";
 import { Mail, Shield, Lock } from "lucide-react";
-import Logo from "~/components/logo/logo";
+import { SamAvatar } from "~/components/ui/sam-avatar";
 
 export async function loader({ request }: LoaderFunctionArgs) {
   const userId = await getUserId(request);
@@ -53,7 +53,7 @@ function SecurityScreen({ onContinue }: { onContinue: () => void }) {
       <Card className="w-full max-w-[450px] rounded-md bg-transparent p-3">
         <CardHeader className="flex flex-col items-center">
           <div className="mb-4 flex justify-center">
-            <Logo size={60} />
+            <SamAvatar size={64} trackCursor />
           </div>
           <CardTitle className="text-3xl font-normal">Privacy</CardTitle>
         </CardHeader>
@@ -184,7 +184,7 @@ function DesktopLoginPage() {
       <Card className="w-full max-w-[350px] rounded-md bg-transparent p-3">
         <CardHeader className="flex flex-col items-center">
           <div className="mb-4 flex justify-center">
-            <Logo size={60} />
+            <SamAvatar size={64} trackCursor />
           </div>
           <CardTitle className="text-2xl font-normal">
             Welcome to CORE
@@ -277,7 +277,7 @@ export default function LoginPage() {
           <Fieldset className="w-full">
             <div className="flex flex-col gap-y-2">
               <div className="mb-10 flex justify-center">
-                <Logo size={60} />
+                <SamAvatar size={64} trackCursor />
               </div>
 
               <p className="text-muted-foreground/70 mb-2 text-center">

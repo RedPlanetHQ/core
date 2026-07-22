@@ -628,7 +628,7 @@ export default function BillingSettings() {
               </div>
               <ul className="mb-6 space-y-2 text-sm">
                 <li className="flex items-start gap-2">
-                  <span>Credits: 3k/mo</span>
+                  <span>500 credits · one-time</span>
                 </li>
                 <li className="flex items-start gap-2">
                   <span>Top up any time</span>
