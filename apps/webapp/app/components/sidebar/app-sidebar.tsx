@@ -34,6 +34,9 @@ import { Task } from "../icons/task";
 import { TryIt } from "./try-it";
 import { GatewaysNav } from "./gateways";
 import { ButlerStatusPill } from "../common/butler-status-pill";
+import { withOnlineStatus } from "../common/with-online-status";
+
+const ButlerStatusPillWithOnline = withOnlineStatus(ButlerStatusPill);
 
 const data = {
   navMain: [
@@ -178,7 +181,7 @@ export function AppSidebar({
                   agentName={agentName}
                   accentColor={accentColor}
                 />
-                <ButlerStatusPill />
+                <ButlerStatusPillWithOnline />
               </div>
 
               <div className="flex gap-1">
