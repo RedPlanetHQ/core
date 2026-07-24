@@ -35,6 +35,7 @@ import {
   MainCenteredContainer,
 } from "./components/layout/app-layout";
 import { RouteErrorDisplay } from "./components/ErrorDisplay";
+import { AppErrorBoundary } from "./components/AppErrorBoundary";
 import { themeSessionResolver } from "./services/sessionStorage.server";
 import {
   PreventFlashOnWrongTheme,
@@ -169,7 +170,9 @@ function App() {
               __html: `window.sentryDsn = ${JSON.stringify(sentryDsn ?? "")}`,
             }}
           />
-          <Outlet />
+          <AppErrorBoundary>
+            <Outlet />
+          </AppErrorBoundary>
           <DictationOverlay />
           <Toaster />
           <ScrollRestoration />
