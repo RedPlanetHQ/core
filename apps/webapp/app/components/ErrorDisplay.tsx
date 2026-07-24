@@ -1,7 +1,6 @@
 import {
   isRouteErrorResponse,
   useNavigate,
-  useRevalidator,
   useRouteError,
 } from "@remix-run/react";
 import { useEffect } from "react";
@@ -13,6 +12,7 @@ import { Button } from "./ui";
 import { Header1 } from "./ui/Headers";
 import { Paragraph } from "./ui/Paragraph";
 import Logo from "./logo/logo";
+import { NoInternet } from "./common/no-internet";
 
 type ErrorDisplayOptions = {
   button?: {
@@ -23,7 +23,6 @@ type ErrorDisplayOptions = {
 
 export function RouteErrorDisplay(options?: ErrorDisplayOptions) {
   const error = useRouteError();
-  const revalidator = useRevalidator();
 
   const isNetworkError =
     error instanceof Error &&
@@ -38,19 +37,12 @@ export function RouteErrorDisplay(options?: ErrorDisplayOptions) {
     }
   }, [error]);
 
-  useEffect(() => {
-    if (!isNetworkError) return;
-    const onOnline = () => revalidator.revalidate();
-    window.addEventListener("online", onOnline);
-    return () => window.removeEventListener("online", onOnline);
-  }, [isNetworkError, revalidator]);
-
   if (error instanceof Error && error.message.includes("turbo-stream")) {
     return null;
   }
 
   if (isNetworkError) {
-    return null;
+    return <NoInternet />;
   }
 
   return (
