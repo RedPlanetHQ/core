@@ -4,7 +4,8 @@ import { createActionApiRoute } from "~/services/routeBuilders/apiBuilder.server
 import { trackFeatureUsage } from "~/services/telemetry.server";
 
 import { logger } from "~/services/logger.service";
-import { createAgent, resolveModelString } from "~/lib/model.server";
+import { createAgent } from "~/lib/model.server";
+import { resolveModelForWorkspace } from "~/services/llm-provider.server";
 import { streamToUIResponse } from "~/services/agent/mastra-stream.server";
 import { searchMemoryWithAgent } from "~/services/agent/memory";
 
@@ -74,15 +75,22 @@ ${invalidatedFacts.length > 0 ? `INVALIDATED FACTS (outdated information):\n${in
 
 Provide a clear, helpful summary based ONLY on the memory above. Do not add any information not present in the memory.`;
 
+      const { modelId, apiKey, baseUrl } = await resolveModelForWorkspace(
+        authentication.workspaceId,
+        "chat",
+        "medium",
+      );
+      const agentOptions = apiKey
+        ? { apiKey, ...(baseUrl && { baseUrl }) }
+        : undefined;
+
       if (body.stream) {
-        const agent = createAgent(await resolveModelString("chat", "medium"), systemPrompt);
+        const agent = createAgent(modelId, systemPrompt, undefined, agentOptions);
         const result = await agent.stream([{ role: "user", content: userPrompt }]);
         return streamToUIResponse(result);
       } else {
-        const agent = createAgent(await resolveModelString("chat", "medium"), systemPrompt);
+        const agent = createAgent(modelId, systemPrompt, undefined, agentOptions);
         const { text } = await agent.generate(userPrompt);
-
-
         return json({ text });
       }
     } catch (error: any) {

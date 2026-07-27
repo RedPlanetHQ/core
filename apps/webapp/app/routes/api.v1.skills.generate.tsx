@@ -1,6 +1,7 @@
 import { z } from "zod";
 import { createHybridActionApiRoute } from "~/services/routeBuilders/apiBuilder.server";
-import { createAgent, resolveModelString } from "~/lib/model.server";
+import { createAgent } from "~/lib/model.server";
+import { resolveModelForWorkspace } from "~/services/llm-provider.server";
 import { streamToUIResponse } from "~/services/agent/mastra-stream.server";
 import { getConnectedIntegrationAccounts } from "~/services/integrationAccount.server";
 import { SKILL_GENERATOR_SYSTEM_PROMPT } from "~/utils/skill-generator-prompt";
@@ -46,9 +47,16 @@ const { action } = createHybridActionApiRoute(
 
     const userMessage = `User intent: ${validatedData.prompt}${toolsContext}${existingContext}`;
 
+    const { modelId, apiKey, baseUrl } = await resolveModelForWorkspace(
+      authentication.workspaceId,
+      "chat",
+      "low",
+    );
     const agent = createAgent(
-      await resolveModelString("chat", "low"),
+      modelId,
       SKILL_GENERATOR_SYSTEM_PROMPT,
+      undefined,
+      apiKey ? { apiKey, ...(baseUrl && { baseUrl }) } : undefined,
     );
     const result = await agent.stream([{ role: "user", content: userMessage }]);
     return streamToUIResponse(result);

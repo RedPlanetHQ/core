@@ -14,7 +14,8 @@
  * as other lightweight calls in the codebase.
  */
 
-import { createAgent, resolveModelString } from "~/lib/model.server";
+import { createAgent } from "~/lib/model.server";
+import { resolveModelForWorkspace } from "~/services/llm-provider.server";
 import { logger } from "~/services/logger.service";
 
 const VOICE_INSTRUCTIONS = `You are the user's chief of staff giving a one-breath spoken catchup. You've already read everything — you're surfacing what matters, in the order they should think about it. Your output is both spoken via TTS AND shown on a card the user reads along with, so each sentence is one beat.
@@ -33,15 +34,27 @@ Output format:
 - No bullet markers ("-", "•"), no numbering, no markdown. Just sentences separated by newlines.
 - Output the catchup text only. Nothing else.`;
 
-export async function summarize(params: { text: string }): Promise<string> {
-  const { text } = params;
+export async function summarize(params: {
+  text: string;
+  workspaceId?: string;
+}): Promise<string> {
+  const { text, workspaceId } = params;
 
   const trimmed = text.trim();
   if (!trimmed) return "";
 
   try {
-    const modelString = await resolveModelString("chat", "low");
-    const agent = createAgent(modelString, VOICE_INSTRUCTIONS);
+    const { modelId, apiKey, baseUrl } = await resolveModelForWorkspace(
+      workspaceId,
+      "chat",
+      "low",
+    );
+    const agent = createAgent(
+      modelId,
+      VOICE_INSTRUCTIONS,
+      undefined,
+      apiKey ? { apiKey, ...(baseUrl && { baseUrl }) } : undefined,
+    );
     const { text: out } = await agent.generate(trimmed);
     return (out ?? "").trim();
   } catch (error) {

@@ -4,7 +4,8 @@ import { createTool } from "@mastra/core/tools";
 import Exa from "exa-js";
 import { logger } from "~/services/logger.service";
 import { env } from "~/env.server";
-import { createAgent, resolveModelString } from "~/lib/model.server";
+import { createAgent } from "~/lib/model.server";
+import { resolveModelForWorkspace } from "~/services/llm-provider.server";
 import { ExplorerResult } from "../types";
 
 const WEB_COMPLEXITY = "medium";
@@ -47,6 +48,7 @@ RULES:
 export async function runWebExplorer(
   query: string,
   timezone: string = "UTC",
+  workspaceId?: string,
 ): Promise<ExplorerResult> {
   const startTime = Date.now();
   let toolCalls = 0;
@@ -155,10 +157,19 @@ ${r.text || "No content available"}`;
   };
 
   try {
-    const model = await resolveModelString("chat", WEB_COMPLEXITY);
-    logger.info(`complexity: ${WEB_COMPLEXITY}, model: ${model}`);
+    const { modelId, apiKey, baseUrl } = await resolveModelForWorkspace(
+      workspaceId,
+      "chat",
+      WEB_COMPLEXITY,
+    );
+    logger.info(`complexity: ${WEB_COMPLEXITY}, model: ${modelId}`);
 
-    const agent = createAgent(model, getWebExplorerPrompt(timezone), tools);
+    const agent = createAgent(
+      modelId,
+      getWebExplorerPrompt(timezone),
+      tools,
+      apiKey ? { apiKey, ...(baseUrl && { baseUrl }) } : undefined,
+    );
     const result = await agent.generate(query, { maxSteps: 6 });
     const { text } = result;
 

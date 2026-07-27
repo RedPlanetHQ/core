@@ -13,8 +13,11 @@
  */
 
 import { Agent } from "@mastra/core/agent";
-import { toRouterString, resolveModelString } from "~/lib/model.server";
-import { type ModelConfig } from "~/services/llm-provider.server";
+import { resolveModelString } from "~/lib/model.server";
+import {
+  resolveModelConfig,
+  type ModelConfig,
+} from "~/services/llm-provider.server";
 import { getMastra } from "../mastra";
 
 import {
@@ -177,11 +180,15 @@ export async function createThinkAgent(
       )
     : "Analyze triggers and produce structured JSON action plans.";
 
-  const model = await resolveModelString("chat", "low");
+  const modelString = await resolveModelString("chat", "low", workspaceId);
+  const { modelConfig: resolvedModelConfig } = await resolveModelConfig(
+    modelString,
+    workspaceId,
+  );
   const thinkAgent = new Agent({
     id: "thinking-agent",
     name: "Think",
-    model: modelConfig ?? toRouterString(model),
+    model: modelConfig ?? resolvedModelConfig,
     instructions,
     agents: { gather_context: gatherContextAgent },
     tools: { get_skill: getSkillTool(workspaceId) },

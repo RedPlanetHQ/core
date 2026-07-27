@@ -48,7 +48,7 @@ const { loader, action } = createHybridActionApiRoute(
       })
       .join("\n");
 
-    const summary = await summarize({ text: rendered });
+    const summary = await summarize({ text: rendered, workspaceId });
 
     // Stamp instead of delete: the rows stay around as a history of
     // what the user has been caught up on. Only unstamped rows are

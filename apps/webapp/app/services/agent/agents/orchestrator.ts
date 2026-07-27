@@ -575,7 +575,7 @@ export async function createOrchestratorAgent(
       }),
       execute: async (inputData) => {
         logger.info(`Orchestrator: web search - ${inputData.query}`);
-        const result = await runWebExplorer(inputData.query, timezone);
+        const result = await runWebExplorer(inputData.query, timezone, workspaceId);
         return result.success ? result.data : "web search unavailable";
       },
     });

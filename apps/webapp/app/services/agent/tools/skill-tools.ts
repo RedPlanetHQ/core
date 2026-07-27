@@ -9,7 +9,8 @@ import { z } from "zod";
 import { prisma } from "~/db.server";
 import { logger } from "~/services/logger.service";
 import { createSkill, updateSkill, getSkill } from "~/services/skills.server";
-import { createAgent, resolveModelString } from "~/lib/model.server";
+import { createAgent } from "~/lib/model.server";
+import { resolveModelForWorkspace } from "~/services/llm-provider.server";
 import { getConnectedIntegrationAccounts } from "~/services/integrationAccount.server";
 import { SKILL_GENERATOR_SYSTEM_PROMPT } from "~/utils/skill-generator-prompt";
 import {
@@ -108,7 +109,17 @@ export function createSkillTool(workspaceId: string, userId: string): Tool {
 
           const userMessage = `User intent: ${intent}${toolsContext}`;
 
-          const agent = createAgent(await resolveModelString("chat", "low"), SKILL_GENERATOR_SYSTEM_PROMPT);
+          const { modelId, apiKey, baseUrl } = await resolveModelForWorkspace(
+            workspaceId,
+            "chat",
+            "low",
+          );
+          const agent = createAgent(
+            modelId,
+            SKILL_GENERATOR_SYSTEM_PROMPT,
+            undefined,
+            apiKey ? { apiKey, ...(baseUrl && { baseUrl }) } : undefined,
+          );
           const { text: generatedContent } = await agent.generate(userMessage);
 
           if (!generatedContent) {
