@@ -1,6 +1,7 @@
 import { z } from "zod";
 import { logger } from "~/services/logger.service";
-import { createAgent, resolveModelString } from "~/lib/model.server";
+import { createAgent } from "~/lib/model.server";
+import { resolveModelForWorkspace } from "~/services/llm-provider.server";
 import type { StatementAspect } from "@core/types";
 import type { SectionStructure } from "./persona-bullet-ops";
 
@@ -353,11 +354,21 @@ function truncateForPrompt(s: string, max: number): string {
  */
 export async function placeFactsInPersona(
   input: BatchPlacementInput,
+  workspaceId?: string,
 ): Promise<PlacementDecision[] | null> {
   if (input.facts.length === 0) return [];
   try {
-    const modelId = await resolveModelString("chat", "medium");
-    const agent = createAgent(modelId);
+    const { modelId, apiKey, baseUrl } = await resolveModelForWorkspace(
+      workspaceId,
+      "chat",
+      "medium",
+    );
+    const agent = createAgent(
+      modelId,
+      undefined,
+      undefined,
+      apiKey ? { apiKey, ...(baseUrl && { baseUrl }) } : undefined,
+    );
     const prompt = buildBatchPlacementPrompt(input);
     const result = await agent.generate({ role: "user", content: prompt });
     const raw = result.text;
@@ -411,10 +422,20 @@ export async function placeFactsInPersona(
  */
 export async function placeFactInPersona(
   input: PlacementInput,
+  workspaceId?: string,
 ): Promise<PlacementDecision | null> {
   try {
-    const modelId = await resolveModelString("chat", "medium");
-    const agent = createAgent(modelId);
+    const { modelId, apiKey, baseUrl } = await resolveModelForWorkspace(
+      workspaceId,
+      "chat",
+      "medium",
+    );
+    const agent = createAgent(
+      modelId,
+      undefined,
+      undefined,
+      apiKey ? { apiKey, ...(baseUrl && { baseUrl }) } : undefined,
+    );
     const prompt = buildPlacementPrompt(input);
     const result = await agent.generate({ role: "user", content: prompt });
     const raw = result.text;

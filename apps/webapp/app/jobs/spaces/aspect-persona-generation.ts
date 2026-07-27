@@ -12,7 +12,8 @@
 
 import { logger } from "~/services/logger.service";
 import { createBatch, getBatch } from "~/lib/batch.server";
-import { createAgent, resolveModelString } from "~/lib/model.server";
+import { createAgent } from "~/lib/model.server";
+import { resolveModelForWorkspace } from "~/services/llm-provider.server";
 import { z } from "zod";
 
 // Flag to bypass the OpenAI batch API and run full-refresh through direct
@@ -22,10 +23,22 @@ import { z } from "zod";
 //   PERSONA_USE_BATCH unset/true → batch mode (existing behaviour)
 const USE_BATCH = false;
 
-async function directLLMCall(message: ModelMessage): Promise<string | null> {
+async function directLLMCall(
+  message: ModelMessage,
+  workspaceId?: string,
+): Promise<string | null> {
   try {
-    const modelId = await resolveModelString("chat", "medium");
-    const agent = createAgent(modelId);
+    const { modelId, apiKey, baseUrl } = await resolveModelForWorkspace(
+      workspaceId,
+      "chat",
+      "medium",
+    );
+    const agent = createAgent(
+      modelId,
+      undefined,
+      undefined,
+      apiKey ? { apiKey, ...(baseUrl && { baseUrl }) } : undefined,
+    );
     const result = await agent.generate(message);
     return result.text ?? null;
   } catch (err) {
@@ -896,6 +909,7 @@ function chunkAspectData(aspectData: AspectData): ChunkData[] {
 async function generateSectionWithChunking(
   aspectData: AspectData,
   userContext: UserContext,
+  workspaceId?: string,
 ): Promise<string | null> {
   const { aspect, statements, episodes } = aspectData;
   const sectionInfo = ASPECT_SECTION_MAP[aspect];
@@ -961,7 +975,10 @@ async function generateSectionWithChunking(
     // Direct mode: fan out chunk summaries in parallel via plain LLM calls.
     const directResults = await Promise.all(
       chunks.map((chunk) =>
-        directLLMCall(buildChunkSummaryPrompt(aspect, chunk, userContext)),
+        directLLMCall(
+          buildChunkSummaryPrompt(aspect, chunk, userContext),
+          workspaceId,
+        ),
       ),
     );
     for (const content of directResults) {
@@ -1015,6 +1032,7 @@ async function generateSectionWithChunking(
 
   const merged = await directLLMCall(
     buildMergePrompt(aspect, chunkSummaries, userContext),
+    workspaceId,
   );
   return merged ?? chunkSummaries[0];
 }
@@ -1025,6 +1043,7 @@ async function generateSectionWithChunking(
 async function generateAllAspectSections(
   aspectDataMap: Map<StatementAspect, AspectData>,
   userContext: UserContext,
+  workspaceId?: string,
 ): Promise<PersonaSectionResult[]> {
   const sections: PersonaSectionResult[] = [];
 
@@ -1078,7 +1097,7 @@ async function generateAllAspectSections(
   // Task for each large section (chunking handled internally)
   for (const aspectData of largeAspects) {
     parallelTasks.push(
-      generateSectionWithChunking(aspectData, userContext).then((content) => {
+      generateSectionWithChunking(aspectData, userContext, workspaceId).then((content) => {
         if (content && !content.includes("INSUFFICIENT_DATA")) {
           const sectionInfo = ASPECT_SECTION_MAP[aspectData.aspect];
           return [
@@ -1180,7 +1199,10 @@ async function generateAllAspectSections(
 
           const directResults = await Promise.all(
             sortedSmallAspects.map((aspectData) =>
-              directLLMCall(buildAspectSectionPrompt(aspectData, userContext)),
+              directLLMCall(
+                buildAspectSectionPrompt(aspectData, userContext),
+                workspaceId,
+              ),
             ),
           );
 
@@ -1288,6 +1310,7 @@ async function pollBatchCompletion(batchId: string, maxPollingTime: number) {
  */
 export async function generateAspectBasedPersona(
   userId: string,
+  workspaceId?: string,
 ): Promise<string> {
   logger.info("Starting aspect-based persona generation", { userId });
 
@@ -1366,7 +1389,11 @@ export async function generateAspectBasedPersona(
   }
 
   // Step 3: Generate all sections
-  const sections = await generateAllAspectSections(aspectDataMap, userContext);
+  const sections = await generateAllAspectSections(
+    aspectDataMap,
+    userContext,
+    workspaceId,
+  );
   logger.info("Generated persona sections", {
     sectionCount: sections.length,
     sections: sections.map((s) => s.title),

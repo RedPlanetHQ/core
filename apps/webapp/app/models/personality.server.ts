@@ -1,6 +1,7 @@
 import { Prisma } from "@prisma/client";
 import { prisma } from "~/db.server";
-import { createAgent, resolveModelString } from "~/lib/model.server";
+import { createAgent } from "~/lib/model.server";
+import { resolveModelForWorkspace } from "~/services/llm-provider.server";
 
 export interface CustomPersonality {
   id: string;
@@ -201,8 +202,19 @@ Never use horizontal rules, em dashes as separators, or markdown headers anywher
 export async function improvePersonality(
   name: string,
   text: string,
+  workspaceId?: string,
 ): Promise<{ text: string }> {
-  const agent = createAgent(await resolveModelString("chat", "medium"), IMPROVE_SYSTEM_PROMPT);
+  const { modelId, apiKey, baseUrl } = await resolveModelForWorkspace(
+    workspaceId,
+    "chat",
+    "medium",
+  );
+  const agent = createAgent(
+    modelId,
+    IMPROVE_SYSTEM_PROMPT,
+    undefined,
+    apiKey ? { apiKey, ...(baseUrl && { baseUrl }) } : undefined,
+  );
 
   const result = await agent.generate([
     {

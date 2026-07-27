@@ -222,7 +222,7 @@ export const action = async ({ request }: ActionFunctionArgs) => {
       return json({ error: "Missing name or text" }, { status: 400 });
     }
 
-    const improved = await improvePersonality(name, text);
+    const improved = await improvePersonality(name, text, user.workspaceId);
     return json({ success: true, improved });
   }
 
