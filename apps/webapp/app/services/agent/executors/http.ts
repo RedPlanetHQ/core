@@ -36,11 +36,23 @@ export class HttpOrchestratorTools extends OrchestratorTools {
   ): Promise<string> {
     try {
       const result = await this.client.search({ query });
-      // Format episodes to text
       const episodes = (result as any).episodes ?? [];
       if (!episodes.length) return "nothing found";
+      // Keep this format aligned with the direct path
+      // (apps/webapp/app/services/agent/memory.ts formatEpisodes) so the
+      // relevanceScore and UUID surface to the agent regardless of executor.
       return episodes
-        .map((ep: any, i: number) => `### Episode ${i + 1}\n${ep.content}`)
+        .map((ep: any, i: number) => {
+          const created = ep.createdAt
+            ? new Date(ep.createdAt).toLocaleString()
+            : null;
+          const header = [`### Episode ${i + 1}`];
+          if (ep.uuid) header.push(`**UUID**: ${ep.uuid}`);
+          if (created) header.push(`**Created**: ${created}`);
+          if (ep.relevanceScore != null)
+            header.push(`**Relevance**: ${ep.relevanceScore}`);
+          return `${header.join("\n")}\n\n${ep.content}`;
+        })
         .join("\n\n");
     } catch (error) {
       logger.warn("HttpOrchestratorTools: memory search failed", { error });
@@ -87,8 +99,16 @@ export class HttpOrchestratorTools extends OrchestratorTools {
     accountId: string,
     query: string,
     _userId: string,
+    _workspaceId?: string,
   ): Promise<unknown> {
-    const response = await this.client.getIntegrationActions({ accountId, query });
+    // BYOK note: the SDK POST/GET here does not currently forward workspaceId
+    // — the API route reads workspaceId from the authenticated session/JWT and
+    // uses that for model resolution. Passing it as a parameter here would be
+    // ignored server-side.
+    const response = await this.client.getIntegrationActions({
+      accountId,
+      query,
+    });
     return response;
   }
 

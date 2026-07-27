@@ -85,6 +85,7 @@ export abstract class OrchestratorTools {
     accountId: string,
     query: string,
     userId: string,
+    workspaceId?: string,
   ): Promise<unknown>;
 
   /** Execute an action on an integration account. */

@@ -68,6 +68,7 @@ const loader = createHybridLoaderApiRoute(
         integrationAccountId,
         query,
         authentication.userId,
+        authentication.workspaceId,
       );
       return json({ actions });
     } catch (error) {

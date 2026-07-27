@@ -438,6 +438,7 @@ export async function createOrchestratorAgent(
           inputData.accountId,
           inputData.query,
           userId,
+          workspaceId,
         );
         // Unwrap MCP response format { content: [{ text }], isError }
         if (

@@ -112,8 +112,14 @@ export class DirectOrchestratorTools extends OrchestratorTools {
     accountId: string,
     query: string,
     userId: string,
+    workspaceId?: string,
   ): Promise<unknown> {
-    return handleGetIntegrationActions({ accountId, query, userId });
+    return handleGetIntegrationActions({
+      accountId,
+      query,
+      userId,
+      workspaceId,
+    });
   }
 
   async executeIntegrationAction(
