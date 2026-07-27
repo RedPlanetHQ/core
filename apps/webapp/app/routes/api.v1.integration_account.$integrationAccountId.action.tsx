@@ -14,6 +14,17 @@ const ParamsSchema = z.object({
   integrationAccountId: z.string().min(1, "Integration account ID is required"),
 });
 
+// Route-builder's outer catch turns any thrown Error into 500 "Internal Server
+// Error", which strips the account-not-found message the orchestrator relies on
+// to hint the model back toward a valid UUID. Throwing a `Response` bypasses
+// that catch and preserves the message.
+function notFoundResponse(message: string): Response {
+  return new Response(JSON.stringify({ error: message }), {
+    status: 404,
+    headers: { "Content-Type": "application/json" },
+  });
+}
+
 const SearchParamsSchema = z.object({
   query: z.string().optional(),
 });
@@ -36,23 +47,36 @@ const loader = createHybridLoaderApiRoute(
     allowJWT: true,
     corsStrategy: "all",
     findResource: async (params, authentication) => {
-      return IntegrationLoader.getIntegrationAccountById(
-        params.integrationAccountId,
-        authentication.userId,
-      );
+      try {
+        return await IntegrationLoader.getIntegrationAccountById(
+          params.integrationAccountId,
+          authentication.userId,
+        );
+      } catch (error) {
+        throw notFoundResponse(
+          error instanceof Error ? error.message : String(error),
+        );
+      }
     },
   },
   async ({ params, searchParams, authentication }) => {
     const { integrationAccountId } = params;
     const { query } = searchParams;
 
-    const actions = await getIntegrationActions(
-      integrationAccountId,
-      query,
-      authentication.userId,
-    );
-
-    return json({ actions });
+    try {
+      const actions = await getIntegrationActions(
+        integrationAccountId,
+        query,
+        authentication.userId,
+      );
+      return json({ actions });
+    } catch (error) {
+      const message = error instanceof Error ? error.message : String(error);
+      if (/not found or not active|Integration account .* not found/i.test(message)) {
+        throw notFoundResponse(message);
+      }
+      throw error;
+    }
   },
 );
 
@@ -78,15 +102,22 @@ const { action } = createHybridActionApiRoute(
         ? `oauth:${authentication.oauth2.clientId}`
         : undefined);
 
-    const result = await executeIntegrationAction(
-      integrationAccountId,
-      actionName,
-      parameters,
-      authentication.userId,
-      source,
-    );
-
-    return json({ result });
+    try {
+      const result = await executeIntegrationAction(
+        integrationAccountId,
+        actionName,
+        parameters,
+        authentication.userId,
+        source,
+      );
+      return json({ result });
+    } catch (error) {
+      const message = error instanceof Error ? error.message : String(error);
+      if (/not found or not active|Integration account .* not found/i.test(message)) {
+        throw notFoundResponse(message);
+      }
+      throw error;
+    }
   },
 );
 

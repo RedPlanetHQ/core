@@ -125,10 +125,12 @@ YESTERDAY: ${yesterdayDate}
 
   const integrationInstructions = `
 INTEGRATION WORKFLOW:
-1. Call get_integration_actions with the accountId and describe what you want to do
+1. Call get_integration_actions with the accountId (the UUID under "accountId:" in CONNECTED INTEGRATIONS — NOT the slug like "github"/"gmail") and describe what you want to do
 2. Review the returned actions and their inputSchema
 3. Call execute_integration_action with exact parameters matching the schema
 4. If you need more detail (e.g., full email body), call get_integration_actions again to find the "get by id" action
+
+⚠️ ACCOUNT ID: Always pass the UUID from "accountId:" in the CONNECTED INTEGRATIONS list above. Passing the slug ("github", "gmail", "slack") will fail. The examples below use "<slack-uuid>" / "<github-uuid>" as placeholders — substitute the actual UUID from the list.
 
 ⚠️ DATE/TIME QUERIES: Be cautious with datetime filters - each integration has different date formats and query syntax. Check the inputSchema carefully. Relative terms like "newer_than:1d" can be unreliable. Prefer explicit date ranges when available.
 
@@ -185,12 +187,12 @@ EXAMPLES:
 
 Action: "send a slack message to #general saying standup in 5"
 Step 1: memory_search("user's preferences for slack messages")
-Step 2: get_integration_actions(slack accountId, "send message")
-Step 3: execute_integration_action(slack accountId, "send_message", { channel: "#general", text: "standup in 5" })
+Step 2: get_integration_actions(accountId="<slack-uuid-from-list>", query="send message")
+Step 3: execute_integration_action(accountId="<slack-uuid-from-list>", action="send_message", parameters={ channel: "#general", text: "standup in 5" })
 
 Action: "create a github issue for auth bug in core repo"
-Step 1: get_integration_actions(github accountId, "create issue")
-Step 2: execute_integration_action(github accountId, "create_issue", { repo: "core", title: "auth bug", ... })
+Step 1: get_integration_actions(accountId="<github-uuid-from-list>", query="create issue")
+Step 2: execute_integration_action(accountId="<github-uuid-from-list>", action="create_issue", parameters={ repo: "core", title: "auth bug", ... })
 
 RULES:
 - Execute the action. No personality.
@@ -243,18 +245,18 @@ GOOD (clear intent):
 EXAMPLES:
 
 Intent: "Show me my upcoming meetings this week"
-Step 1: get_integration_actions(google-calendar accountId, "list events this week")
-Step 2: execute_integration_action(google-calendar accountId, "list_events", { timeMin: "...", timeMax: "..." })
+Step 1: get_integration_actions(accountId="<google-calendar-uuid-from-list>", query="list events this week")
+Step 2: execute_integration_action(accountId="<google-calendar-uuid-from-list>", action="list_events", parameters={ timeMin: "...", timeMax: "..." })
 
 Intent: "What's in the email from John"
-Step 1: get_integration_actions(gmail accountId, "search emails from John")
-Step 2: execute_integration_action(gmail accountId, "search_emails", { query: "from:john" })
-Step 3: get_integration_actions(gmail accountId, "get email by id")
-Step 4: execute_integration_action(gmail accountId, "get_email", { id: "..." })
+Step 1: get_integration_actions(accountId="<gmail-uuid-from-list>", query="search emails from John")
+Step 2: execute_integration_action(accountId="<gmail-uuid-from-list>", action="search_emails", parameters={ query: "from:john" })
+Step 3: get_integration_actions(accountId="<gmail-uuid-from-list>", query="get email by id")
+Step 4: execute_integration_action(accountId="<gmail-uuid-from-list>", action="get_email", parameters={ id: "..." })
 
 Intent: "what's the status of the rerank evaluation work"
 Step 1: memory_search("past discussions and decisions about the rerank evaluation — approach chosen, metrics discussed, next steps")
-Step 2: get_integration_actions(github accountId, "search PRs for rerank")  [only if memory points at open work]
+Step 2: get_integration_actions(accountId="<github-uuid-from-list>", query="search PRs for rerank")  [only if memory points at open work]
 
 Intent: "What's the weather in SF"
 → web_search (real-time data)
@@ -319,7 +321,7 @@ export async function createOrchestratorAgent(
   const integrationsList = connectedIntegrations
     .map(
       (int, index) =>
-        `${index + 1}. **${int.integrationDefinition.name}** (Account ID: ${int.id}) (Identifier: ${int.accountId})`,
+        `${index + 1}. **${int.integrationDefinition.name}** — accountId: ${int.id} (pass this UUID to get_integration_actions/execute_integration_action; user identifier for reference: ${int.accountId})`,
     )
     .join("\n");
 
@@ -418,7 +420,7 @@ export async function createOrchestratorAgent(
       accountId: z
         .string()
         .describe(
-          "Integration account ID from the connected integrations list",
+          "The UUID from the accountId field in CONNECTED INTEGRATIONS (e.g. 'a1b2c3d4-...'). Do NOT pass the integration slug ('github', 'gmail', 'slack') — pass the UUID.",
         ),
       query: z
         .string()
@@ -468,7 +470,11 @@ export async function createOrchestratorAgent(
     description:
       "Execute an action on a connected integration. Use the inputSchema from get_integration_actions to know what parameters to pass. If this fails, check the error and retry with corrected parameters.",
     inputSchema: z.object({
-      accountId: z.string().describe("Integration account ID"),
+      accountId: z
+        .string()
+        .describe(
+          "The UUID from the accountId field in CONNECTED INTEGRATIONS. Do NOT pass the integration slug ('github', 'gmail', 'slack') — pass the UUID.",
+        ),
       action: z.string().describe("Action name from get_integration_actions"),
       parameters: z
         .string()

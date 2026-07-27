@@ -146,7 +146,7 @@ export const memoryTools = [
         accountId: {
           type: "string",
           description:
-            "Account ID (UUID) from get_integrations. This identifies the specific integration account to use.",
+            "Account ID (UUID) from the `id` field returned by get_integrations. This identifies the specific integration account to use. Do NOT pass the integration slug ('github', 'gmail', 'slack') — pass the UUID.",
         },
         query: {
           type: "string",
@@ -172,7 +172,7 @@ export const memoryTools = [
         accountId: {
           type: "string",
           description:
-            "Account ID (UUID) from get_integrations. This identifies the specific integration account to use.",
+            "Account ID (UUID) from the `id` field returned by get_integrations. This identifies the specific integration account to use. Do NOT pass the integration slug ('github', 'gmail', 'slack') — pass the UUID.",
         },
         action: {
           type: "string",

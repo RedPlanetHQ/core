@@ -31,7 +31,7 @@ export function getListAvailableIntegrationsTool(
 ): Tool {
   return tool({
     description:
-      "Get the catalog of integrations the user's workspace can connect. Returns slug, name, description, and whether the user already has it connected. Call this before suggest_integrations whenever you need to verify which slugs are valid or to avoid recommending something already wired up. Pass an optional query string to filter by slug or name (case-insensitive substring).",
+      "Get the catalog of integrations the user's workspace can connect. Returns slug, name, description, whether the user already has it connected, and — for connected ones — the integrationAccountId to pass into get_integration_actions / execute_integration_action. Call this before suggest_integrations to verify which slugs are valid or to avoid recommending something already wired up, and call it before invoking integration actions to grab the accountId. Pass an optional query string to filter by slug or name (case-insensitive substring).",
     inputSchema: z.object({
       query: z
         .string()
@@ -57,12 +57,12 @@ export function getListAvailableIntegrationsTool(
         }),
         prisma.integrationAccount.findMany({
           where: { integratedById: userId, workspaceId, isActive: true },
-          select: { integrationDefinitionId: true },
+          select: { id: true, integrationDefinitionId: true },
         }),
       ]);
 
-      const connectedDefIds = new Set(
-        accounts.map((a) => a.integrationDefinitionId),
+      const accountByDefId = new Map(
+        accounts.map((a) => [a.integrationDefinitionId, a.id]),
       );
 
       const lowerQuery = query?.trim().toLowerCase();
@@ -74,12 +74,16 @@ export function getListAvailableIntegrationsTool(
           )
         : defs;
 
-      const integrations = filtered.map((d) => ({
-        slug: d.slug,
-        name: d.name,
-        description: d.description,
-        isConnected: connectedDefIds.has(d.id),
-      }));
+      const integrations = filtered.map((d) => {
+        const integrationAccountId = accountByDefId.get(d.id) ?? null;
+        return {
+          slug: d.slug,
+          name: d.name,
+          description: d.description,
+          isConnected: integrationAccountId !== null,
+          integrationAccountId,
+        };
+      });
 
       logger.info(
         `list_available_integrations: ${integrations.length} match${query ? ` (query="${query}")` : ""}`,

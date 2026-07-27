@@ -302,7 +302,7 @@ export async function buildAgentContext({
   const integrationsList = connectedIntegrations
     .map((int, index) =>
       "integrationDefinition" in int
-        ? `${index + 1}. **${int.integrationDefinition.name}** (Account ID: ${int.id})`
+        ? `${index + 1}. **${int.integrationDefinition.name}** — accountId: ${int.id}`
         : "",
     )
     .join("\n");
