@@ -172,7 +172,7 @@ export async function processPersonaGeneration(
   if (!existing) {
     // First-time generation.
     logger.info("Running first-time persona generation", { userId });
-    const summary = await generateAspectBasedPersona(userId);
+    const summary = await generateAspectBasedPersona(userId, workspaceId);
     await savePersonaDocument(workspaceId, userId, summary, labelId);
     await updateLastPersonaGenerationTime(workspaceId);
     return {
@@ -273,12 +273,15 @@ export async function processPersonaGeneration(
       const looseIdToText = new Map(
         structure.looseFacts.map((l) => [l.id, l.text]),
       );
-      const decision = await placeFactInPersona({
-        aspect,
-        fact: facts[0],
-        structure,
-        filterGuidance: ASPECT_SECTION_MAP[aspect].filterGuidance,
-      });
+      const decision = await placeFactInPersona(
+        {
+          aspect,
+          fact: facts[0],
+          structure,
+          filterGuidance: ASPECT_SECTION_MAP[aspect].filterGuidance,
+        },
+        workspaceId,
+      );
       if (!decision) continue;
       doc = applyPlacementDecision(doc, title, decision, looseIdToText);
       continue;
@@ -288,13 +291,16 @@ export async function processPersonaGeneration(
     // structure between each so a `promote` followed by `append_to_subsection`
     // referencing the new subsection name resolves correctly.
     const initialStructure = parseSectionStructure(doc, title);
-    const decisions = await placeFactsInPersona({
-      aspect,
-      facts,
-      structure: initialStructure,
-      filterGuidance: ASPECT_SECTION_MAP[aspect].filterGuidance,
-      episodeContent,
-    });
+    const decisions = await placeFactsInPersona(
+      {
+        aspect,
+        facts,
+        structure: initialStructure,
+        filterGuidance: ASPECT_SECTION_MAP[aspect].filterGuidance,
+        episodeContent,
+      },
+      workspaceId,
+    );
     if (!decisions || decisions.length === 0) continue;
 
     for (const decision of decisions) {
