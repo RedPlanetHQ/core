@@ -65,13 +65,22 @@ export function getListAvailableIntegrationsTool(
         accounts.map((a) => [a.integrationDefinitionId, a.id]),
       );
 
-      const lowerQuery = query?.trim().toLowerCase();
-      const filtered = lowerQuery
-        ? defs.filter(
-            (d) =>
-              d.slug.toLowerCase().includes(lowerQuery) ||
-              d.name.toLowerCase().includes(lowerQuery),
-          )
+      // Match if ANY whitespace-separated token appears in slug, name,
+      // or description. Single-substring matching missed multi-word
+      // queries like "email gmail" (no field contains that phrase), and
+      // AND-matching missed them too (Gmail's description is "Gmail
+      // integration for Core", no "email"). OR gives the agent the
+      // Gmail hit it's looking for plus any other email-adjacent
+      // integrations to consider.
+      const tokens = (query ?? "")
+        .toLowerCase()
+        .split(/\s+/)
+        .filter(Boolean);
+      const filtered = tokens.length
+        ? defs.filter((d) => {
+            const haystack = `${d.slug} ${d.name} ${d.description ?? ""}`.toLowerCase();
+            return tokens.some((t) => haystack.includes(t));
+          })
         : defs;
 
       const integrations = filtered.map((d) => {

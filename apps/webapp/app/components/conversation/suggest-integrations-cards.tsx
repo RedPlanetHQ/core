@@ -208,12 +208,21 @@ export function SuggestIntegrationsCards({
                 <span className="font-medium">{card.name}</span>
                 <p className="text-muted-foreground text-sm">{card.reason}</p>
               </div>
-              <div className="shrink-0">
+              <div className="flex shrink-0 items-center gap-2">
                 {isConnected ? (
-                  <span className="text-success bg-success/10 inline-flex items-center gap-1 rounded px-2 py-1 text-sm">
-                    <Check size={14} />
-                    Connected
-                  </span>
+                  <>
+                    <span className="text-success bg-success/10 inline-flex items-center gap-1 rounded px-2 py-1 text-sm">
+                      <Check size={14} />
+                      Connected
+                    </span>
+                    <Button
+                      variant="ghost"
+                      size="sm"
+                      onClick={() => setOpenCard(card)}
+                    >
+                      Connect another
+                    </Button>
+                  </>
                 ) : (
                   <Button variant="secondary" onClick={() => setOpenCard(card)}>
                     Connect

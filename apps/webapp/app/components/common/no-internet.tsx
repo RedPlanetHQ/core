@@ -1,4 +1,5 @@
 import React from "react";
+import { Button } from "~/components/ui/button";
 import { SamAvatar } from "~/components/ui/sam-avatar";
 
 /**
@@ -12,6 +13,8 @@ import { SamAvatar } from "~/components/ui/sam-avatar";
  * as "sleeping / waiting" rather than looking like the normal app.
  */
 export function NoInternet({ message }: { message?: string } = {}) {
+  const [retrying, setRetrying] = React.useState(false);
+
   React.useEffect(() => {
     if (typeof window === "undefined") return;
     const reload = () => {
@@ -27,6 +30,11 @@ export function NoInternet({ message }: { message?: string } = {}) {
     return () => window.removeEventListener("online", reload);
   }, []);
 
+  const handleRetry = () => {
+    setRetrying(true);
+    window.location.reload();
+  };
+
   return (
     <div className="bg-background-2 flex h-full min-h-screen w-full flex-col items-center justify-center gap-4 p-6 text-center">
       <SamAvatar size={120} eye="bot-zen" eyeColor="#9CA3AF" />
@@ -37,6 +45,14 @@ export function NoInternet({ message }: { message?: string } = {}) {
             "We lost the connection. This page will refresh automatically as soon as you're back online."}
         </p>
       </div>
+      <Button
+        variant="secondary"
+        onClick={handleRetry}
+        disabled={retrying}
+        className="mt-2"
+      >
+        {retrying ? "Retrying..." : "Retry"}
+      </Button>
     </div>
   );
 }
