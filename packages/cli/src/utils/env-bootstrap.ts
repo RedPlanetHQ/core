@@ -76,18 +76,23 @@ export function bootstrapFromEnv(): string[] {
 
 	// Security key. Without this every authed request returns 401, so make
 	// sure a fresh container always boots with one. Three cases:
-	//   1) Env var supplied → use it (user controls the value via Railway/Fly env).
-	//   2) Already on disk    → keep it.
-	//   3) Neither            → generate, persist the hash, print the raw key
-	//                           so the user can paste it into the webapp's
-	//                           "Register gateway" dialog.
+	//   1) Env var supplied → always wins, overwriting any existing hash. Lets
+	//                         ops rotate the key by changing the env var and
+	//                         redeploying without having to wipe the volume.
+	//   2) Already on disk  → keep it.
+	//   3) Neither          → generate, persist the hash, print the raw key
+	//                         so the user can paste it into the webapp's
+	//                         "Register gateway" dialog.
 	const envKey = process.env.COREBRAIN_GATEWAY_SECURITY_KEY;
 	let securityKeyPatch: {securityKeyHash?: string} = {};
 	let printRawKey: string | null = null;
-	if (envKey && !existing.securityKeyHash) {
-		securityKeyPatch.securityKeyHash = hashKey(envKey);
-		applied.push('COREBRAIN_GATEWAY_SECURITY_KEY');
-	} else if (!envKey && !existing.securityKeyHash) {
+	if (envKey) {
+		const envHash = hashKey(envKey);
+		if (existing.securityKeyHash !== envHash) {
+			securityKeyPatch.securityKeyHash = envHash;
+			applied.push('COREBRAIN_GATEWAY_SECURITY_KEY');
+		}
+	} else if (!existing.securityKeyHash) {
 		printRawKey = generateSecurityKey();
 		securityKeyPatch.securityKeyHash = hashKey(printRawKey);
 		applied.push('generated-security-key');
