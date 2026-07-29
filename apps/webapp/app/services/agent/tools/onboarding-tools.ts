@@ -31,7 +31,7 @@ export function getListAvailableIntegrationsTool(
 ): Tool {
   return tool({
     description:
-      "Get the catalog of integrations the user's workspace can connect. Returns slug, name, description, whether the user already has it connected, and — for connected ones — the integrationAccountId to pass into get_integration_actions / execute_integration_action. Call this before suggest_integrations to verify which slugs are valid or to avoid recommending something already wired up, and call it before invoking integration actions to grab the accountId. Pass an optional query string to filter by slug or name (case-insensitive substring).",
+      "Catalog of integrations this workspace can connect. Each entry: slug, name, description, isConnected, and `accounts[]` — one per connected account, since a user can connect the same integration multiple times (e.g. work + personal Gmail). Each account has `integrationAccountId` (UUID for get_integration_actions / execute_integration_action) and `accountLabel` (external handle, e.g. email/username). Call before suggest_integrations to validate slugs, and before executing an action to grab the accountId. If multiple accounts exist and the user's intent doesn't pick one, ask. Optional `query` filters by slug/name (case-insensitive substring).",
     inputSchema: z.object({
       query: z
         .string()
@@ -57,13 +57,31 @@ export function getListAvailableIntegrationsTool(
         }),
         prisma.integrationAccount.findMany({
           where: { integratedById: userId, workspaceId, isActive: true },
-          select: { id: true, integrationDefinitionId: true },
+          select: {
+            id: true,
+            accountId: true,
+            integrationDefinitionId: true,
+          },
+          orderBy: { createdAt: "asc" },
         }),
       ]);
 
-      const accountByDefId = new Map(
-        accounts.map((a) => [a.integrationDefinitionId, a.id]),
-      );
+      // A user CAN have multiple IntegrationAccount rows per definition
+      // (schema uniques on accountId+definition+workspace, not on
+      // definition+workspace). Group into an array so the caller can
+      // see all of them instead of silently collapsing to one.
+      const accountsByDefId = new Map<
+        string,
+        { integrationAccountId: string; accountLabel: string | null }[]
+      >();
+      for (const a of accounts) {
+        const list = accountsByDefId.get(a.integrationDefinitionId) ?? [];
+        list.push({
+          integrationAccountId: a.id,
+          accountLabel: a.accountId ?? null,
+        });
+        accountsByDefId.set(a.integrationDefinitionId, list);
+      }
 
       // Match if ANY whitespace-separated token appears in slug, name,
       // or description. Single-substring matching missed multi-word
@@ -84,13 +102,13 @@ export function getListAvailableIntegrationsTool(
         : defs;
 
       const integrations = filtered.map((d) => {
-        const integrationAccountId = accountByDefId.get(d.id) ?? null;
+        const defAccounts = accountsByDefId.get(d.id) ?? [];
         return {
           slug: d.slug,
           name: d.name,
           description: d.description,
-          isConnected: integrationAccountId !== null,
-          integrationAccountId,
+          isConnected: defAccounts.length > 0,
+          accounts: defAccounts,
         };
       });
 
