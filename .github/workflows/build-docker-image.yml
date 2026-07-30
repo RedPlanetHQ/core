@@ -50,6 +50,9 @@ jobs:
         with:
           ref: main
 
+      - name: Set up QEMU
+        uses: docker/setup-qemu-action@v3
+
       - name: Set up Docker Buildx
         uses: docker/setup-buildx-action@v3
 
@@ -63,13 +66,14 @@ jobs:
         id: ver
         run: echo "tag=${GITHUB_REF_NAME#gateway-}" >> "$GITHUB_OUTPUT"
 
-      # Gateway is amd64-only: Brave's apt repo doesn't ship arm64.
+      # Multi-arch: Dockerfile.gateway installs Brave on amd64 and Debian's
+      # chromium on arm64 (Brave's apt repo doesn't ship arm64).
       - name: Build and Push Gateway Docker Image
         uses: docker/build-push-action@v5
         with:
           context: .
           file: ./docker/Dockerfile.gateway
-          platforms: linux/amd64
+          platforms: linux/amd64,linux/arm64
           push: true
           tags: redplanethq/core-gateway:${{ steps.ver.outputs.tag }}
           cache-from: type=registry,ref=redplanethq/core-gateway:buildcache

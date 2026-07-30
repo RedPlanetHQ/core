@@ -221,15 +221,23 @@ if any(data.get(k) != v for k, v in patch.items()):
         json.dump(data, f, indent=2)
 PY
 
-# ---------- pin Brave as the browser ----------
-# The image ships Brave instead of Playwright's bundled Chromium. Run the
-# CLI's set-browser command so prefs.browser.{browserType,browserExecutable}
+# ---------- pin the system browser ----------
+# The image ships a system Chromium build (Brave on amd64, Debian's
+# chromium package on arm64) instead of Playwright's bundled Chromium. Run
+# the CLI's set-browser command so prefs.browser.{browserType,browserExecutable}
 # are populated; downstream code reads these via `getBrowserExecutable()` and
 # passes the path into Playwright's `executablePath` at launch. Idempotent —
 # rewrites the same prefs every boot, which lets us survive a wiped
 # /home/corebrain volume without losing the setting.
-echo "[entrypoint] running corebrain browser set-browser brave"
-corebrain browser set-browser brave >/dev/null 2>&1 || true
+if [ -x /usr/bin/brave-browser ]; then
+    echo "[entrypoint] running corebrain browser set-browser brave"
+    corebrain browser set-browser brave >/dev/null 2>&1 || true
+elif [ -x /usr/bin/chromium ]; then
+    echo "[entrypoint] running corebrain browser set-browser custom /usr/bin/chromium"
+    corebrain browser set-browser custom /usr/bin/chromium >/dev/null 2>&1 || true
+else
+    echo "[entrypoint] no system chromium/brave found; leaving browser prefs untouched" >&2
+fi
 
 # ---------- hand off to the gateway ----------
 # nginx owns port 7787 externally. Force the gateway onto 7788 regardless
