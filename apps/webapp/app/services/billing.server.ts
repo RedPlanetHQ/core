@@ -14,6 +14,7 @@ import {
 } from "~/config/billing.server";
 import type { PlanType, Subscription } from "@prisma/client";
 import Stripe from "stripe";
+import { isWorkspaceBYOK } from "~/services/byok.server";
 
 export type CreditOperation = "addEpisode" | "search" | "chatMessage";
 
@@ -199,6 +200,11 @@ export async function hasCredits(
 ): Promise<boolean> {
   // If billing is disabled, always return true
   if (!isBillingEnabled()) {
+    return true;
+  }
+
+  // BYOK workspaces pay their own provider bills — bypass credit gating.
+  if (await isWorkspaceBYOK(workspaceId)) {
     return true;
   }
 

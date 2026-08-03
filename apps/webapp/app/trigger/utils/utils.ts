@@ -9,6 +9,7 @@ import { customAlphabet } from "nanoid";
 import { prisma } from "~/db.server";
 import { BILLING_CONFIG, isBillingEnabled } from "~/config/billing.server";
 import { getSubscriptionAmount } from "~/services/billing.server";
+import { isWorkspaceBYOK } from "~/services/byok.server";
 
 // Token generation utilities
 const tokenValueLength = 40;
@@ -356,6 +357,11 @@ export async function hasCredits(
 ): Promise<boolean> {
   // If billing is disabled, always return true
   if (!isBillingEnabled()) {
+    return true;
+  }
+
+  // BYOK workspaces pay their own provider bills — bypass credit gating.
+  if (await isWorkspaceBYOK(workspaceId)) {
     return true;
   }
 
