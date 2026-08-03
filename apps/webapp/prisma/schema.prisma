@@ -46,13 +46,37 @@ model AuthorizationCode {
   updatedAt DateTime @updatedAt
 }
 
+enum AgentStatus {
+  Active
+  Archived
+}
+
 model Agents {
   id String @id @default(cuid())
 
-  name String @unique
+  workspace   Workspace @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+  workspaceId String
+
+  handle       String
+  displayName  String
+  basePrompt   String   @db.Text
+  capabilities String[]
+  model        String?
+  status       AgentStatus @default(Active)
+
+  gateway   Gateway? @relation(fields: [gatewayId], references: [id], onDelete: Cascade)
+  gatewayId String?  @unique
+
+  metadata Json? @default("{}")
+
+  conversationHistory ConversationHistory[]
+  assignedTasks       Task[]                @relation("TaskAssignee")
 
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
+
+  @@unique([workspaceId, handle])
+  @@index([workspaceId, status])
 }
 
 model BillingHistory {
@@ -142,8 +166,13 @@ model ConversationHistory {
   user     User?   @relation(fields: [userId], references: [id], onDelete: Cascade)
   userId   String?
 
+  agent   Agents? @relation(fields: [agentId], references: [id], onDelete: SetNull)
+  agentId String?
+
   conversation   Conversation @relation(fields: [conversationId], references: [id], onDelete: Cascade)
   conversationId String
+
+  @@index([agentId])
 }
 
 model Document {
@@ -439,6 +468,7 @@ model Gateway {
 
   codingSessions  CodingSession[]
   browserSessions BrowserSession[]
+  agent           Agents?
 
   @@unique([workspaceId, name])
   @@index([workspaceId, status])
@@ -1147,6 +1177,7 @@ model Workspace {
   Contact                 Contact[]
   CreditTopup             CreditTopup[]
   DailyTokenUsage         DailyTokenUsage[]
+  agents                  Agents[]
 
   taskRootCounter Int @default(0)
 }
@@ -1178,6 +1209,9 @@ model Task {
   workspace   Workspace @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
   workspaceId String
   userId      String
+
+  assignedAgent   Agents? @relation("TaskAssignee", fields: [assignedAgentId], references: [id], onDelete: SetNull)
+  assignedAgentId String?
 
   jobId    String?
   metadata Json?   @default("{}")
@@ -1222,6 +1256,7 @@ model Task {
   @@index([isActive])
   @@index([parentTaskId])
   @@index([workspaceId, isActive, nextRunAt])
+  @@index([assignedAgentId, status])
 }
 
 enum PageType {

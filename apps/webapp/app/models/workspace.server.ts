@@ -10,6 +10,7 @@ import { DEFAULT_SKILL_DEFINITIONS } from "~/services/skills.defaults";
 import { READINESS_SKILL_DEFINITIONS } from "~/services/skills.readiness";
 import { MORNING_BRIEF_TASK_DESCRIPTION } from "~/services/morning-brief";
 import { createScheduledTask } from "~/services/task.server";
+import { ensureGeneralistAgent } from "~/services/agent.server";
 
 interface CreateWorkspaceDto {
   name: string;
@@ -115,6 +116,12 @@ export async function createWorkspace(
   } catch (e) {
     logger.error(`Error seeding readiness skills: ${e}`);
   }
+
+  // Seed the workspace's generalist agent. This must succeed — downstream
+  // slices (agentId on ConversationHistory, turn dispatcher) assume every
+  // workspace has one. Failure propagates.
+  await ensureGeneralistAgent(workspace.id, input.name);
+  logger.info(`Seeded generalist agent for workspace ${workspace.id}`);
 
   // Seed the daily Morning Brief scheduled task (fires 9am in user's local
   // timezone — defaults to UTC until the user updates it via set_timezone,

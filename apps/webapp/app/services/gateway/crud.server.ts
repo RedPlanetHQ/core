@@ -1,4 +1,8 @@
 import { prisma } from "~/db.server";
+import {
+  archiveGatewayAgent,
+  unarchiveGatewayAgent,
+} from "~/services/agent.server";
 
 /**
  * Read one gateway by ID.
@@ -45,7 +49,7 @@ export async function markConnected(
     hostname?: string | null;
   } = {},
 ) {
-  return prisma.gateway.update({
+  const gw = await prisma.gateway.update({
     where: { id: gatewayId },
     data: {
       status: "CONNECTED",
@@ -57,13 +61,15 @@ export async function markConnected(
       ...(patch.hostname !== undefined ? { hostname: patch.hostname } : {}),
     },
   });
+  await unarchiveGatewayAgent(gatewayId);
+  return gw;
 }
 
 /**
  * Mark a gateway as disconnected (health poller noticed it's unreachable).
  */
 export async function markDisconnected(gatewayId: string, reason?: string) {
-  return prisma.gateway.update({
+  const gw = await prisma.gateway.update({
     where: { id: gatewayId },
     data: {
       status: "DISCONNECTED",
@@ -71,6 +77,8 @@ export async function markDisconnected(gatewayId: string, reason?: string) {
       lastHealthError: reason ?? "unreachable",
     },
   });
+  await archiveGatewayAgent(gatewayId);
+  return gw;
 }
 
 /**

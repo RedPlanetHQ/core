@@ -6,6 +6,12 @@ import { requireUser } from "~/services/session.server";
 import { prisma } from "~/db.server";
 import { OnboardingAgentName } from "~/components/onboarding/onboarding-agent-name";
 import { ensureDefaultEmailChannel } from "~/services/channel.server";
+import {
+  ensureGeneralistAgent,
+  getGeneralistAgent,
+  updateGeneralistAgent,
+} from "~/services/agent.server";
+import { slugifyHandle } from "~/services/agent-slug";
 
 export async function loader({ request }: LoaderFunctionArgs) {
   const user = await requireUser(request);
@@ -58,6 +64,18 @@ export async function action({ request }: ActionFunctionArgs) {
         metadata: nextMeta,
       },
     });
+
+    // Sync the generalist agent's identity to match the chosen agent name.
+    // Fall back to seeding if a legacy workspace somehow doesn't have one yet.
+    const existingGeneralist = await getGeneralistAgent(workspaceId as string);
+    if (existingGeneralist) {
+      await updateGeneralistAgent(workspaceId as string, {
+        displayName: agentName,
+        handle: slugifyHandle(agentName),
+      });
+    } else {
+      await ensureGeneralistAgent(workspaceId as string, agentName);
+    }
 
     await ensureDefaultEmailChannel(workspaceId as string, agentSlug);
   }
