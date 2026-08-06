@@ -52,6 +52,8 @@ import {
   makeStructuredModelCall,
 } from "~/lib/model.server";
 import { normalizePrompt, normalizeDocumentPrompt } from "./prompts";
+import { resolveProfile } from "./prompts/normalizeProfile";
+import { getDefaultChatProviderType } from "./llm-provider.server";
 import { type EpisodeEmbedding, type PrismaClient } from "@prisma/client";
 import {
   storeEpisodeEmbedding,
@@ -769,11 +771,17 @@ export class KnowledgeGraphService {
       userName, // Pass user name for personalized normalization
     };
 
-    // Route to appropriate normalization prompt based on content type
+    // Route to appropriate normalization prompt based on content type.
+    //
+    // The profile is resolved here rather than inside the prompt module so that
+    // module stays pure and unit-testable without server env. On Ollama it caps
+    // every variable-length injection and drops optional sections to fit the
+    // VRAM-pinned 4096-token window; on hosted providers it is a no-op.
+    const profile = resolveProfile(getDefaultChatProviderType());
     const messages =
       contentType === EpisodeTypeEnum.DOCUMENT
-        ? normalizeDocumentPrompt(context)
-        : normalizePrompt(context);
+        ? normalizeDocumentPrompt(context, profile)
+        : normalizePrompt(context, profile);
     // Normalization is LOW complexity (text cleaning and standardization)
     let responseText = "";
     await makeModelCall(

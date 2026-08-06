@@ -15,8 +15,42 @@ import { generateOklchColor } from "~/components/ui/color-utils";
 import { type ModelMessage } from "ai";
 import { ProviderFactory, VECTOR_NAMESPACES } from "@core/providers";
 import { countTokens } from "~/services/search/tokenBudget";
+import {
+  OLLAMA_NUM_CTX,
+  assertPromptWithinBudget,
+  capToTokenBudget,
+} from "~/services/prompts/promptBudget";
+import {
+  resolveProfile,
+  type PromptProfile,
+} from "~/services/prompts/normalizeProfile";
+import { getDefaultChatProviderType } from "~/services/llm-provider.server";
 
 const MAX_CONTENT_TOKENS = 20000;
+
+/**
+ * Label extraction budget for small-context providers.
+ *
+ * `sessionContext` here is the ENTIRE document body (see processLabelAssignment,
+ * where it is set from `document.content`). The only previous guard was
+ * MAX_CONTENT_TOKENS at 20000, which is roughly five times a whole Ollama
+ * context window — so against Ollama this prompt was silently truncated rather
+ * than bounded.
+ *
+ * Measured with the o200k_base tokenizer, the static system prompt is 611
+ * tokens and the user-prompt scaffolding is 21. Reserving 512 tokens of output
+ * leaves 4096 - 512 = 3584 for input. Allowing 400 tokens for the existing
+ * labels list:
+ *   611 static + 21 glue + 400 labels + 2400 content = 3432, inside the 3500
+ *   assertion budget, and 3500 + 512 output = 4012 < 4096.
+ * Pinned by test rather than assumed.
+ */
+export const LABEL_OUTPUT_TOKEN_RESERVE = 512;
+export const LABEL_PROMPT_TOKEN_BUDGET = Math.min(
+  3500,
+  OLLAMA_NUM_CTX - LABEL_OUTPUT_TOKEN_RESERVE,
+);
+export const LABEL_CONTENT_TOKEN_BUDGET_OLLAMA = 2400;
 
 // Similarity threshold for matching labels (higher = stricter matching)
 const LABEL_SIMILARITY_THRESHOLD = 0.85;
@@ -301,7 +335,12 @@ export async function extractLabelsFromEpisode(
   workspaceId: string,
   sessionContext?: string,
 ): Promise<ExtractedLabel[]> {
-  const messages = buildLabelExtractionMessages(episodeBody, availableLabels, sessionContext);
+  const messages = buildLabelExtractionMessages(
+    episodeBody,
+    availableLabels,
+    sessionContext,
+    resolveProfile(getDefaultChatProviderType()),
+  );
 
   logger.info("Extracting labels from episode", {
     episodeTokens: countTokens(episodeBody),
@@ -426,20 +465,28 @@ export function buildLabelExtractionMessages(
     description: string | null;
   }>,
   sessionContext?: string,
+  profile: PromptProfile = "hosted",
 ): ModelMessage[] {
+  // Ollama silently drops anything past num_ctx, so the generous hosted budget
+  // has to shrink to something that actually fits the window.
+  const contentBudget =
+    profile === "ollama" ? LABEL_CONTENT_TOKEN_BUDGET_OLLAMA : MAX_CONTENT_TOKENS;
+
   // Token-aware truncation: prioritise current episode, fill remainder with session context
   const episodeTokens = countTokens(episodeBody);
   let truncatedEpisode = episodeBody;
   let truncatedContext: string | undefined;
 
-  if (episodeTokens > MAX_CONTENT_TOKENS) {
-    // Edge case: episode alone exceeds budget — hard-trim from the end
-    const chars = Math.floor((MAX_CONTENT_TOKENS / episodeTokens) * episodeBody.length);
-    truncatedEpisode = episodeBody.substring(0, chars) + "...[truncated]";
+  if (episodeTokens > contentBudget) {
+    // Edge case: episode alone exceeds budget. This used to scale by character
+    // ratio, which only estimates the resulting token count and can overshoot;
+    // capToTokenBudget converges on the real count, which matters now that
+    // going over the budget throws.
+    truncatedEpisode = capToTokenBudget(episodeBody, contentBudget);
   }
 
   if (sessionContext) {
-    const remaining = MAX_CONTENT_TOKENS - countTokens(truncatedEpisode);
+    const remaining = contentBudget - countTokens(truncatedEpisode);
     if (remaining > 200) {
       const contextTokens = countTokens(sessionContext);
       if (contextTokens <= remaining) {
@@ -476,7 +523,7 @@ ${truncatedContext}
 ${truncatedEpisode}
 </current_episode>`;
 
-  return [
+  const messages: ModelMessage[] = [
     {
       role: "system",
       content: `You extract LABELS from episodes for a USER'S PERSONAL KNOWLEDGE SYSTEM.
@@ -547,4 +594,15 @@ ${sessionContextXml}
 ${currentEpisodeXml}`,
     },
   ];
+
+  if (profile === "ollama") {
+    // Fail loudly rather than let Ollama silently drop the overflow.
+    assertPromptWithinBudget({
+      label: "label extraction prompt (ollama profile)",
+      text: messages.map((m) => m.content as string).join("\n"),
+      budget: LABEL_PROMPT_TOKEN_BUDGET,
+    });
+  }
+
+  return messages;
 }
