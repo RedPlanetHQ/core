@@ -55,23 +55,32 @@ describe("rerank prompt token budget", () => {
 
   it("a full batch of maximally-large episodes stays within the declared budget", () => {
     const episodes = Array.from({ length: BATCH_SIZE }, (_, i) => worstCaseEpisode(i));
-    const prompt = buildRerankValidationPrompt(FILLER, episodes);
+    const prompt = buildRerankValidationPrompt(FILLER, episodes, "ollama");
 
-    // The assertion in validateEpisodesWithLLM throws above this number, so if
-    // this ever regresses, reranking breaks in production rather than degrading.
+    // The assertion in validateEpisodesWithLLM degrades above this number, so if
+    // this ever regresses, reranking silently drops batches rather than filtering.
     expect(countTokens(prompt)).toBeLessThanOrEqual(RERANK_PROMPT_TOKEN_BUDGET);
   });
 
   it("caps an oversized episode content instead of interpolating it whole", () => {
-    const prompt = buildRerankValidationPrompt("q", [worstCaseEpisode(0)]);
+    const prompt = buildRerankValidationPrompt("q", [worstCaseEpisode(0)], "ollama");
     expect(prompt).not.toContain(FILLER);
     expect(prompt).toContain("[truncated]");
   });
 
   it("caps an oversized query", () => {
-    const prompt = buildRerankValidationPrompt(FILLER, []);
+    const prompt = buildRerankValidationPrompt(FILLER, [], "ollama");
     expect(prompt).not.toContain(FILLER);
     expect(countTokens(prompt)).toBeLessThanOrEqual(RERANK_PROMPT_TOKEN_BUDGET);
+  });
+
+  it("does not cap anything on the hosted profile", () => {
+    // Hosted providers are not context-constrained. Capping them clipped real
+    // retrieval content on a path that never needed it, which is the mistake the
+    // normalize prompts avoid by making the hosted profile a strict no-op.
+    const prompt = buildRerankValidationPrompt(FILLER, [worstCaseEpisode(0)]);
+    expect(prompt).toContain(FILLER);
+    expect(prompt).not.toContain("[truncated]");
   });
 
   it("leaves a small, already-within-budget prompt untouched", () => {
@@ -95,9 +104,9 @@ describe("rerank prompt token budget", () => {
   });
 
   it("budgets are internally consistent with the documented arithmetic", () => {
-    const staticOnly = countTokens(buildRerankValidationPrompt("", []));
+    const staticOnly = countTokens(buildRerankValidationPrompt("", [], "ollama"));
     const perEpisodeOverhead =
-      countTokens(buildRerankValidationPrompt("", [worstCaseEpisode(0)])) -
+      countTokens(buildRerankValidationPrompt("", [worstCaseEpisode(0)], "ollama")) -
       staticOnly -
       RERANK_EPISODE_CONTENT_TOKEN_BUDGET -
       5 * RERANK_STATEMENT_FACT_TOKEN_BUDGET;

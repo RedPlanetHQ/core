@@ -5,7 +5,8 @@ import {
   type StatementNode,
 } from "@core/types";
 import { combineAndDeduplicateStatements } from "./utils";
-import { makeModelCall } from "~/lib/model.server";
+import { makeModelCall, resolveProfileForCall } from "~/lib/model.server";
+import { type PromptProfile } from "../prompts/normalizeProfile";
 import { logger } from "../logger.service";
 import { CohereClientV2 } from "cohere-ai";
 import {
@@ -492,16 +493,25 @@ export async function applyEpisodeReranking(
 export function buildRerankValidationPrompt(
   query: string,
   episodes: EpisodeWithProvenance[],
+  profile: PromptProfile = "hosted",
 ): string {
+  // Gate the caps to the provider that actually needs them. These budgets exist
+  // for Ollama's 4096-token window; applying them on hosted providers clipped
+  // episode content and statement facts on a path that was never
+  // context-constrained, which is the mistake the normalize prompts explicitly
+  // avoid by making the hosted profile a no-op.
+  const cap = (text: string, budget: number) =>
+    profile === "ollama" ? capToTokenBudget(text, budget) : text;
+
   return `Given user query, validate which episodes are truly relevant.
 
-Query: "${capToTokenBudget(query, RERANK_QUERY_TOKEN_BUDGET)}"
+Query: "${cap(query, RERANK_QUERY_TOKEN_BUDGET)}"
 
 Episodes (showing episode metadata and top statements):
 ${episodes
   .map(
     (ep, i) => `
-${i + 1}. Episode: ${capToTokenBudget(ep.episode.content || "Untitled", RERANK_EPISODE_CONTENT_TOKEN_BUDGET)} (${new Date(ep.episode.createdAt).toLocaleDateString()})
+${i + 1}. Episode: ${cap(ep.episode.content || "Untitled", RERANK_EPISODE_CONTENT_TOKEN_BUDGET)} (${new Date(ep.episode.createdAt).toLocaleDateString()})
    First-level score: ${ep.firstLevelScore?.toFixed(2)}
    Sources: ${ep.sourceBreakdown.fromEpisodeGraph} EpisodeGraph, ${ep.sourceBreakdown.fromBFS} BFS, ${ep.sourceBreakdown.fromVector} Vector, ${ep.sourceBreakdown.fromBM25} BM25
    Total statements: ${ep.statements.length}
@@ -511,7 +521,7 @@ ${ep.statements
   .slice(0, 5)
   .map(
     (s, idx) =>
-      `   ${idx + 1}) ${capToTokenBudget(s.statement.fact, RERANK_STATEMENT_FACT_TOKEN_BUDGET)}`,
+      `   ${idx + 1}) ${cap(s.statement.fact, RERANK_STATEMENT_FACT_TOKEN_BUDGET)}`,
   )
   .join("\n")}
 `,
@@ -549,18 +559,30 @@ If NO episodes are relevant to the query, return:
 async function validateEpisodesWithLLM(
   query: string,
   episodes: EpisodeWithProvenance[],
-  maxEpisodes: number = 20,
   workspaceId?: string,
 ): Promise<EpisodeWithProvenance[]> {
-  const prompt = buildRerankValidationPrompt(query, episodes);
-
-  assertPromptWithinBudget({
-    label: "search-rerank",
-    text: prompt,
-    budget: RERANK_PROMPT_TOKEN_BUDGET,
-  });
-
   try {
+    const profile = await resolveProfileForCall(workspaceId, "search", "low");
+    const prompt = buildRerankValidationPrompt(query, episodes, profile);
+
+    // Deliberately inside the try. This assertion used to sit outside it, so a
+    // budget miss threw straight past the fallback below — and because the
+    // caller fans batches out through Promise.all, one over-budget batch failed
+    // the entire search rather than one batch.
+    //
+    // Rerank validation is an advisory filter over results that have already
+    // been retrieved, not the source of truth. Degrading to "keep this batch
+    // unfiltered" costs some relevance; throwing costs the user their search
+    // results entirely. The budget miss is still loud in the logs via the
+    // logger.error below, so the condition is reported rather than swallowed.
+    if (profile === "ollama") {
+      assertPromptWithinBudget({
+        label: "search-rerank",
+        text: prompt,
+        budget: RERANK_PROMPT_TOKEN_BUDGET,
+      });
+    }
+
     let responseText = "";
     await makeModelCall(
       false,
@@ -638,7 +660,7 @@ async function validateEpisodesWithLLMInBatches(
   // Process all batches in parallel
   const batchResults = await Promise.all(
     batches.map((batch, batchIndex) =>
-      validateEpisodesWithLLM(query, batch, batch.length, workspaceId).then((result) => {
+      validateEpisodesWithLLM(query, batch, workspaceId).then((result) => {
         logger.info(
           `Batch ${batchIndex + 1}/${batches.length} completed: ${result.length}/${batch.length} episodes validated`,
         );
