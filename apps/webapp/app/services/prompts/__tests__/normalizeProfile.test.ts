@@ -19,6 +19,7 @@ import {
 import { OLLAMA_NUM_CTX } from "../promptBudget";
 import { countTokens } from "~/services/search/tokenBudget";
 import {
+  FIXTURE_ENTITY_TYPES,
   FIXTURE_LONG_CONTENT,
   NORMALIZE_DOCUMENT_FIXTURES,
   NORMALIZE_FIXTURES,
@@ -96,9 +97,17 @@ describe("capNormalizeContext", () => {
     expect(countTokens(capped.ingestionRules)).toBeLessThanOrEqual(
       NORMALIZE_INGESTION_RULES_TOKEN_BUDGET,
     );
-    expect(countTokens(capped.entityTypes)).toBeLessThanOrEqual(
+  });
+
+  it("asserts rather than truncates the real entity-type list", () => {
+    // Guards the live EntityTypes enum: growing it past the budget must fail
+    // loudly here rather than silently shrinking the taxonomy in production.
+    expect(countTokens(FIXTURE_ENTITY_TYPES)).toBeLessThanOrEqual(
       NORMALIZE_ENTITY_TYPES_TOKEN_BUDGET,
     );
+    expect(() =>
+      capNormalizeContext({ entityTypes: FIXTURE_LONG_CONTENT }, "ollama"),
+    ).toThrow(/PromptBudget/);
   });
 
   it("leaves absent values absent so downstream fallbacks still fire", () => {

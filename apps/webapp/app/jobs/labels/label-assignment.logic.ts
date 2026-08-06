@@ -6,7 +6,7 @@
  */
 
 import { z } from "zod";
-import { makeStructuredModelCall, getEmbedding } from "~/lib/model.server";
+import { makeStructuredModelCall, getEmbedding , resolveProfileForCall } from "~/lib/model.server";
 import { logger } from "~/services/logger.service";
 import { prisma } from "~/db.server";
 import { LabelService } from "~/services/label.server";
@@ -21,10 +21,8 @@ import {
   capToTokenBudget,
 } from "~/services/prompts/promptBudget";
 import {
-  resolveProfile,
   type PromptProfile,
 } from "~/services/prompts/normalizeProfile";
-import { getDefaultChatProviderType } from "~/services/llm-provider.server";
 
 const MAX_CONTENT_TOKENS = 20000;
 
@@ -51,6 +49,19 @@ export const LABEL_PROMPT_TOKEN_BUDGET = Math.min(
   OLLAMA_NUM_CTX - LABEL_OUTPUT_TOKEN_RESERVE,
 );
 export const LABEL_CONTENT_TOKEN_BUDGET_OLLAMA = 2400;
+
+/**
+ * Budget for the existing-labels list.
+ *
+ * Previously this was an unenforced claim in a docstring while the list itself
+ * rendered every workspace label. Since this job creates labels, the list only
+ * grows, so the unenforced version fails progressively: measured on Ollama it
+ * threw at ~29 labels with session context (134 without). The hosted budget is
+ * generous because hosted windows are not the constraint; it exists so the list
+ * cannot grow without any bound at all.
+ */
+export const LABEL_LIST_TOKEN_BUDGET_OLLAMA = 400;
+export const LABEL_LIST_TOKEN_BUDGET_HOSTED = 4000;
 
 // Similarity threshold for matching labels (higher = stricter matching)
 const LABEL_SIMILARITY_THRESHOLD = 0.85;
@@ -335,11 +346,16 @@ export async function extractLabelsFromEpisode(
   workspaceId: string,
   sessionContext?: string,
 ): Promise<ExtractedLabel[]> {
+  // Resolved from the model this call actually resolves to, not the global env
+  // var: a workspace override can land on Ollama while CHAT_PROVIDER says
+  // otherwise, which would silently select the uncapped hosted profile.
+  const profile = await resolveProfileForCall(workspaceId, "memory", "medium");
+
   const messages = buildLabelExtractionMessages(
     episodeBody,
     availableLabels,
     sessionContext,
-    resolveProfile(getDefaultChatProviderType()),
+    profile,
   );
 
   logger.info("Extracting labels from episode", {
@@ -356,6 +372,8 @@ export async function extractLabelsFromEpisode(
     0.3, // Low temperature for consistent label extraction
     workspaceId,
     "memory",
+    undefined,
+    profile === "ollama" ? LABEL_OUTPUT_TOKEN_RESERVE : undefined,
   );
 
   // Create lookup map for existing labels (case-insensitive) for exact matching
@@ -471,6 +489,8 @@ export function buildLabelExtractionMessages(
   // has to shrink to something that actually fits the window.
   const contentBudget =
     profile === "ollama" ? LABEL_CONTENT_TOKEN_BUDGET_OLLAMA : MAX_CONTENT_TOKENS;
+  const labelListBudget =
+    profile === "ollama" ? LABEL_LIST_TOKEN_BUDGET_OLLAMA : LABEL_LIST_TOKEN_BUDGET_HOSTED;
 
   // Token-aware truncation: prioritise current episode, fill remainder with session context
   const episodeTokens = countTokens(episodeBody);
@@ -501,15 +521,38 @@ export function buildLabelExtractionMessages(
     }
   }
 
+  // The label list is the one injection that grows on its own: this job creates
+  // labels, so every run can enlarge the next run's prompt. Left unbounded it
+  // does not degrade, it hits the assertion and the job starts failing outright
+  // once a workspace accumulates enough labels. Measured breaking point on
+  // Ollama was ~29 labels with session context.
+  //
+  // Labels are rendered newest-first and dropped from the tail, so the prompt
+  // keeps the most recently created labels — the ones most likely to match the
+  // current episode — and degrades to a shorter list instead of throwing.
+  const renderLabel = (l: { name: string; description: string | null }) =>
+    `  <label name="${l.name}"${l.description ? ` description="${l.description}"` : ""} />`;
+
+  const fittedLabels = [...availableLabels];
+  while (
+    fittedLabels.length > 0 &&
+    countTokens(fittedLabels.map(renderLabel).join("\n")) > labelListBudget
+  ) {
+    fittedLabels.pop();
+  }
+
+  if (fittedLabels.length < availableLabels.length) {
+    logger.warn("Label list truncated to fit the prompt budget", {
+      total: availableLabels.length,
+      kept: fittedLabels.length,
+      budget: labelListBudget,
+    });
+  }
+
   const existingLabelsXml =
-    availableLabels.length > 0
+    fittedLabels.length > 0
       ? `<existing_labels>
-${availableLabels
-  .map(
-    (l) =>
-      `  <label name="${l.name}"${l.description ? ` description="${l.description}"` : ""} />`,
-  )
-  .join("\n")}
+${fittedLabels.map(renderLabel).join("\n")}
 </existing_labels>`
       : "<existing_labels />";
 

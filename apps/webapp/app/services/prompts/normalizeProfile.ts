@@ -143,7 +143,6 @@ export function capNormalizeContext(
     ["relatedMemories", NORMALIZE_RELATED_MEMORIES_TOKEN_BUDGET],
     ["previousVersionContent", NORMALIZE_PREVIOUS_VERSION_TOKEN_BUDGET],
     ["ingestionRules", NORMALIZE_INGESTION_RULES_TOKEN_BUDGET],
-    ["entityTypes", NORMALIZE_ENTITY_TYPES_TOKEN_BUDGET],
   ];
 
   for (const [key, budget] of budgets) {
@@ -151,6 +150,20 @@ export function capNormalizeContext(
     if (typeof value === "string" && value.length > 0) {
       capped[key] = capToTokenBudget(value, budget);
     }
+  }
+
+  // entityTypes is deliberately asserted rather than capped. It is derived from
+  // the EntityTypes enum in code, not from user data, so it cannot be grown by
+  // a request — but silently truncating the entity taxonomy would quietly
+  // degrade every extraction downstream, and the damage would be invisible.
+  // Failing loudly means a developer who grows the enum past the budget finds
+  // out in CI instead of through slow quality decay in production.
+  if (typeof capped.entityTypes === "string" && capped.entityTypes.length > 0) {
+    assertPromptWithinBudget({
+      label: "normalize entity types",
+      text: capped.entityTypes,
+      budget: NORMALIZE_ENTITY_TYPES_TOKEN_BUDGET,
+    });
   }
 
   return capped;

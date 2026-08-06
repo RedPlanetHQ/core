@@ -50,10 +50,9 @@ import {
   getEmbedding,
   makeModelCall,
   makeStructuredModelCall,
-} from "~/lib/model.server";
+ resolveProfileForCall } from "~/lib/model.server";
 import { normalizePrompt, normalizeDocumentPrompt } from "./prompts";
-import { resolveProfile } from "./prompts/normalizeProfile";
-import { getDefaultChatProviderType } from "./llm-provider.server";
+import { NORMALIZE_OUTPUT_TOKEN_RESERVE } from "./prompts/normalizeProfile";
 import { type EpisodeEmbedding, type PrismaClient } from "@prisma/client";
 import {
   storeEpisodeEmbedding,
@@ -777,7 +776,12 @@ export class KnowledgeGraphService {
     // module stays pure and unit-testable without server env. On Ollama it caps
     // every variable-length injection and drops optional sections to fit the
     // VRAM-pinned 4096-token window; on hosted providers it is a no-op.
-    const profile = resolveProfile(getDefaultChatProviderType());
+    //
+    // Resolved from the actual model for THIS call (same useCase/complexity the
+    // makeModelCall below uses), not the global CHAT_PROVIDER env var: a
+    // workspace override can land on Ollama while the env var says otherwise,
+    // and reading the env var there would hand it the uncapped hosted profile.
+    const profile = await resolveProfileForCall(workspaceId, "memory", "medium");
     const messages =
       contentType === EpisodeTypeEnum.DOCUMENT
         ? normalizeDocumentPrompt(context, profile)
@@ -796,7 +800,10 @@ export class KnowledgeGraphService {
           tokenMetrics.high.cached += (usage.cachedInputTokens as number) || 0;
         }
       },
-      undefined,
+      // The budget arithmetic in normalizeProfile.ts reserves this many output
+      // tokens; passing undefined here silently fell back to a different
+      // default, so the declared reserve was never the one actually applied.
+      { maxTokens: NORMALIZE_OUTPUT_TOKEN_RESERVE },
       "medium",
       "normalization",
       undefined,
