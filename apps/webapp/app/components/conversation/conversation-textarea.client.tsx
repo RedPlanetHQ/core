@@ -20,6 +20,7 @@ import {
 } from "../ui/select";
 import {
   createSkillSlashCommand,
+  SkillMention,
   SkillSlashPluginKey,
 } from "./slash-command-extension";
 import { VoiceComposer } from "~/components/voice/voice-composer";
@@ -147,6 +148,7 @@ export function ConversationTextarea({
         includeChildren: true,
       }),
       History,
+      SkillMention,
       createSkillSlashCommand(skillsRef),
     ],
     immediatelyRender: false,
