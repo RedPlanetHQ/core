@@ -15,6 +15,10 @@ import {
   recordTokenUsage,
   type TokenUsageSource,
 } from "~/services/tokenUsage.server";
+import {
+  OLLAMA_NUM_CTX,
+  OLLAMA_NUM_PREDICT_DEFAULT,
+} from "~/services/prompts/promptBudget";
 
 import { createOllama } from "ollama-ai-provider-v2";
 import { createAzure } from "@ai-sdk/azure";
@@ -48,6 +52,11 @@ export interface AvailableModel {
   id: string; // "openai/gpt-5-2025-08-07"
   label: string; // "GPT-5"
   provider: string; // "openai"
+}
+
+export interface ModelCallOptions {
+  temperature?: number;
+  maxTokens?: number;
 }
 
 // ---------------------------------------------------------------------------
@@ -198,7 +207,7 @@ function buildOpenAIProviderOptions(
   model: string,
   cacheKey: string,
   reasoningEffort?: ModelComplexity,
-): Record<string, any> | undefined {
+): ProviderOptionsMap | undefined {
   const provider = getProvider(model);
   if (provider !== "openai") return undefined;
 
@@ -229,6 +238,59 @@ function buildOpenAIProviderOptions(
   }
 
   return { openai: options };
+}
+
+/**
+ * Provider-scoped call options, keyed by provider id (e.g. "openai", "ollama").
+ *
+ * Mastra's own ProviderOptions type is not exported from a public entrypoint,
+ * and the per-provider payloads are provider-defined, so the values stay loose
+ * here — the same shape this module already used before provider options were
+ * split per provider.
+ */
+type ProviderOptionsMap = Record<string, any>;
+
+function buildOllamaProviderOptions(
+  model: string,
+  options?: ModelCallOptions,
+): ProviderOptionsMap | undefined {
+  const provider = getProvider(model);
+  const isOllama =
+    provider === "ollama" || getDefaultChatProviderType() === "ollama";
+
+  if (!isOllama) {
+    return undefined;
+  }
+
+  return {
+    // Keep Ollama pinned to promptBudget.ts's validated VRAM-safe context window.
+    // AI SDK v6 maps maxOutputTokens to max_output_tokens here, but Ollama /api/chat
+    // ignores that field. providerOptions.ollama.options.num_predict is the channel
+    // Ollama actually honors, so do not "simplify" this away.
+    ollama: {
+      options: {
+        num_ctx: OLLAMA_NUM_CTX,
+        num_predict: options?.maxTokens ?? OLLAMA_NUM_PREDICT_DEFAULT,
+      },
+    },
+  };
+}
+
+function mergeProviderOptions(
+  ...providerOptions: Array<ProviderOptionsMap | undefined>
+): ProviderOptionsMap | undefined {
+  const merged = providerOptions.reduce<ProviderOptionsMap>((acc, option) => {
+    if (!option) {
+      return acc;
+    }
+
+    return {
+      ...acc,
+      ...option,
+    };
+  }, {});
+
+  return Object.keys(merged).length > 0 ? merged : undefined;
 }
 
 // ---------------------------------------------------------------------------
@@ -399,7 +461,7 @@ export async function makeModelCall(
   stream: boolean,
   messages: ModelMessage[],
   onFinish: (text: string, model: string, usage?: TokenUsage) => void,
-  options?: any,
+  options?: ModelCallOptions,
   complexity: ModelComplexity = "medium",
   cacheKey?: string,
   reasoningEffort?: "low" | "medium" | "high",
@@ -410,10 +472,13 @@ export async function makeModelCall(
   const { modelId: model, apiKey, isBYOK, baseUrl } = await resolveModelForWorkspace(workspaceId, useCase, complexity);
   logger.info(`[${useCase}/${complexity}] model: ${model}${isBYOK ? " (BYOK)" : ""}`);
 
-  const providerOptions = buildOpenAIProviderOptions(
-    model,
-    cacheKey || `${useCase}-${complexity}`,
-    reasoningEffort,
+  const providerOptions = mergeProviderOptions(
+    buildOpenAIProviderOptions(
+      model,
+      cacheKey || `${useCase}-${complexity}`,
+      reasoningEffort,
+    ),
+    buildOllamaProviderOptions(model, options),
   );
 
   const agentOptions = apiKey ? { apiKey, ...(baseUrl && { baseUrl }) } : undefined;
@@ -421,6 +486,8 @@ export async function makeModelCall(
 
   if (stream) {
     const result = await agent.stream(messages as any, {
+      ...(options?.temperature !== undefined && { temperature: options.temperature }),
+      ...(options?.maxTokens !== undefined && { maxOutputTokens: options.maxTokens }),
       ...(providerOptions && { providerOptions }),
     });
     const text = await result.text;
@@ -433,6 +500,8 @@ export async function makeModelCall(
   }
 
   const result = await agent.generate(messages as any, {
+    ...(options?.temperature !== undefined && { temperature: options.temperature }),
+    ...(options?.maxTokens !== undefined && { maxOutputTokens: options.maxTokens }),
     ...(providerOptions && { providerOptions }),
   });
 
