@@ -8,6 +8,46 @@ import { combineAndDeduplicateStatements } from "./utils";
 import { makeModelCall } from "~/lib/model.server";
 import { logger } from "../logger.service";
 import { CohereClientV2 } from "cohere-ai";
+import {
+  OLLAMA_NUM_CTX,
+  capToTokenBudget,
+  assertPromptWithinBudget,
+} from "../prompts/promptBudget";
+
+/**
+ * Rerank prompt budget, derived from measured token costs rather than estimated.
+ *
+ * Ceiling: OLLAMA_NUM_CTX (4096) must cover input AND output. This call reserves
+ * 500 output tokens (see `maxTokens` at the makeModelCall site), so the input
+ * ceiling is 3596.
+ *
+ * Measured costs (o200k_base, via app/services/search/__tests__/rerank-budget.test.ts):
+ *   static template ............................. 209 tokens
+ *   per-episode fixed overhead (metadata/format) . 72 tokens
+ * A batch is at most 10 episodes (BATCH_SIZE in validateEpisodesWithLLMInBatches),
+ * each rendering its content plus up to 5 statement facts.
+ *
+ * Worst case = 209 static
+ *            + 180 query
+ *            + 10 x (140 content + 5 x 16 facts + 72 overhead)   = 2920
+ *            = 3309 tokens, against a 3400 assertion budget (91 spare),
+ * and 3400 + 500 output = 3900 < 4096. Verified by test, not assumed.
+ *
+ * The design tension: these caps apply on every provider, including Gemini, which
+ * is not context-constrained. Content is therefore kept deliberately generous at
+ * 140 tokens — this prompt only asks the model to judge *relevance*, for which the
+ * opening of an episode plus its top facts is sufficient signal, so the cap costs
+ * hosted providers almost nothing on typical episodes while making the 4096 bound
+ * guaranteed rather than hoped for.
+ */
+export const RERANK_EPISODE_CONTENT_TOKEN_BUDGET = 140;
+export const RERANK_STATEMENT_FACT_TOKEN_BUDGET = 16;
+export const RERANK_QUERY_TOKEN_BUDGET = 180;
+export const RERANK_OUTPUT_TOKEN_RESERVE = 500;
+export const RERANK_PROMPT_TOKEN_BUDGET = Math.min(
+  3400,
+  OLLAMA_NUM_CTX - RERANK_OUTPUT_TOKEN_RESERVE,
+);
 
 /**
  * Apply Cohere Rerank 3.5 to search results for improved question-to-fact matching
@@ -441,21 +481,27 @@ export async function applyEpisodeReranking(
  * Validate episodes with LLM for borderline confidence cases
  * Only used when confidence is between 0.3 and 0.7
  */
-async function validateEpisodesWithLLM(
+/**
+ * Assemble the rerank-validation prompt with every variable-length injection
+ * capped to a named token budget.
+ *
+ * Exported so the worst-case budget arithmetic is directly testable — the
+ * `assertPromptWithinBudget` call below turns an over-budget prompt into a
+ * loud failure, so the worst case has to be proven, not assumed.
+ */
+export function buildRerankValidationPrompt(
   query: string,
   episodes: EpisodeWithProvenance[],
-  maxEpisodes: number = 20,
-  workspaceId?: string,
-): Promise<EpisodeWithProvenance[]> {
-  const prompt = `Given user query, validate which episodes are truly relevant.
+): string {
+  return `Given user query, validate which episodes are truly relevant.
 
-Query: "${query}"
+Query: "${capToTokenBudget(query, RERANK_QUERY_TOKEN_BUDGET)}"
 
 Episodes (showing episode metadata and top statements):
 ${episodes
   .map(
     (ep, i) => `
-${i + 1}. Episode: ${ep.episode.content || "Untitled"} (${new Date(ep.episode.createdAt).toLocaleDateString()})
+${i + 1}. Episode: ${capToTokenBudget(ep.episode.content || "Untitled", RERANK_EPISODE_CONTENT_TOKEN_BUDGET)} (${new Date(ep.episode.createdAt).toLocaleDateString()})
    First-level score: ${ep.firstLevelScore?.toFixed(2)}
    Sources: ${ep.sourceBreakdown.fromEpisodeGraph} EpisodeGraph, ${ep.sourceBreakdown.fromBFS} BFS, ${ep.sourceBreakdown.fromVector} Vector, ${ep.sourceBreakdown.fromBM25} BM25
    Total statements: ${ep.statements.length}
@@ -463,7 +509,10 @@ ${i + 1}. Episode: ${ep.episode.content || "Untitled"} (${new Date(ep.episode.cr
    Top statements:
 ${ep.statements
   .slice(0, 5)
-  .map((s, idx) => `   ${idx + 1}) ${s.statement.fact}`)
+  .map(
+    (s, idx) =>
+      `   ${idx + 1}) ${capToTokenBudget(s.statement.fact, RERANK_STATEMENT_FACT_TOKEN_BUDGET)}`,
+  )
   .join("\n")}
 `,
   )
@@ -495,6 +544,21 @@ If NO episodes are relevant to the query, return:
   "valid_episodes": []
 }
 </output>`;
+}
+
+async function validateEpisodesWithLLM(
+  query: string,
+  episodes: EpisodeWithProvenance[],
+  maxEpisodes: number = 20,
+  workspaceId?: string,
+): Promise<EpisodeWithProvenance[]> {
+  const prompt = buildRerankValidationPrompt(query, episodes);
+
+  assertPromptWithinBudget({
+    label: "search-rerank",
+    text: prompt,
+    budget: RERANK_PROMPT_TOKEN_BUDGET,
+  });
 
   try {
     let responseText = "";
