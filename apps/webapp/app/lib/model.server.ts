@@ -15,10 +15,11 @@ import {
   recordTokenUsage,
   type TokenUsageSource,
 } from "~/services/tokenUsage.server";
+import { OLLAMA_NUM_CTX } from "~/services/prompts/promptBudget";
 import {
-  OLLAMA_NUM_CTX,
-  OLLAMA_NUM_PREDICT_DEFAULT,
-} from "~/services/prompts/promptBudget";
+  resolveProfile,
+  type PromptProfile,
+} from "~/services/prompts/normalizeProfile";
 
 import { createOllama } from "ollama-ai-provider-v2";
 import { createAzure } from "@ai-sdk/azure";
@@ -250,15 +251,28 @@ function buildOpenAIProviderOptions(
  */
 type ProviderOptionsMap = Record<string, any>;
 
+/**
+ * Whether a call against this model string will actually be served by Ollama.
+ *
+ * Single source of truth. Three layers used to re-derive this independently
+ * (provider options, tolerant parsing, prompt profile selection) and disagreed
+ * with each other, which let a call take the Ollama transport while the prompt
+ * builder believed it was talking to a hosted model — no caps, no assertion,
+ * and the silent 4096-token truncation straight back.
+ *
+ * The env clause is deliberate and must stay: getModel() routes everything to
+ * Ollama when CHAT_PROVIDER=ollama regardless of the model string, so the
+ * predicate has to mirror real routing rather than the string alone.
+ */
+export function isOllamaModel(model: string): boolean {
+  return getProvider(model) === "ollama" || getDefaultChatProviderType() === "ollama";
+}
+
 function buildOllamaProviderOptions(
   model: string,
   options?: ModelCallOptions,
 ): ProviderOptionsMap | undefined {
-  const provider = getProvider(model);
-  const isOllama =
-    provider === "ollama" || getDefaultChatProviderType() === "ollama";
-
-  if (!isOllama) {
+  if (!isOllamaModel(model)) {
     return undefined;
   }
 
@@ -267,13 +281,48 @@ function buildOllamaProviderOptions(
     // AI SDK v6 maps maxOutputTokens to max_output_tokens here, but Ollama /api/chat
     // ignores that field. providerOptions.ollama.options.num_predict is the channel
     // Ollama actually honors, so do not "simplify" this away.
+    //
+    // num_predict is opt-in: it is emitted only when the caller actually asked
+    // for a cap. Defaulting it silently hard-capped eight call sites that never
+    // had an output limit before (title generation, description update, session
+    // compaction, graph resolution, integration operations, recurrence) — a new
+    // silent truncation introduced by the very fix meant to remove one. "No cap
+    // requested" must mean "no cap applied". OLLAMA_NUM_PREDICT_DEFAULT remains
+    // the documented reserve that prompt-budget arithmetic subtracts from the
+    // window, not a ceiling applied behind the caller's back.
     ollama: {
       options: {
         num_ctx: OLLAMA_NUM_CTX,
-        num_predict: options?.maxTokens ?? OLLAMA_NUM_PREDICT_DEFAULT,
+        ...(options?.maxTokens !== undefined && {
+          num_predict: options.maxTokens,
+        }),
       },
     },
   };
+}
+
+/**
+ * Resolve the prompt profile for a specific call.
+ *
+ * Prompts must be built before the model call, so the caller needs to know the
+ * provider up front. This resolves it through the same path the call itself
+ * will use (resolveModelForWorkspace), rather than reading the global
+ * CHAT_PROVIDER env var — which ignores the per-workspace and per-use-case
+ * overrides getModelForUseCase supports, and so could hand the uncapped hosted
+ * profile to a call that actually lands on Ollama.
+ *
+ * Taking `useCase` is deliberate rather than incidental: a pending routing
+ * change excludes conversation-normalization from Ollama while keeping other
+ * use-cases on it. Because this reads the per-call resolved provider, that
+ * change produces the correct profile here with no further edits.
+ */
+export async function resolveProfileForCall(
+  workspaceId: string | null | undefined,
+  useCase: UseCase = "chat",
+  complexity: ModelComplexity = "medium",
+): Promise<PromptProfile> {
+  const { modelId } = await resolveModelForWorkspace(workspaceId, useCase, complexity);
+  return resolveProfile(isOllamaModel(modelId) ? "ollama" : "hosted");
 }
 
 function mergeProviderOptions(
@@ -556,9 +605,8 @@ function needsTolerantParsing(model: string, workspaceBaseUrl?: string): boolean
   // Per-workspace openai BYOK with a baseUrl is by definition a third-party
   // proxy (CLIProxyAPI, Vercel AI Gateway, etc.) — always tolerant.
   const isWorkspaceProxy = provider === "openai" && !!workspaceBaseUrl;
-  const isOllama = provider === "ollama" || getDefaultChatProviderType() === "ollama";
   const isOpenRouter = provider === "openrouter";
-  return isServerProxyChatMode || isWorkspaceProxy || isOllama || isOpenRouter;
+  return isServerProxyChatMode || isWorkspaceProxy || isOllamaModel(model) || isOpenRouter;
 }
 
 export async function makeStructuredModelCall<T extends z.ZodType>(
@@ -570,6 +618,7 @@ export async function makeStructuredModelCall<T extends z.ZodType>(
   workspaceId?: string,
   useCase: UseCase = "chat",
   userId?: string | null,
+  maxTokens?: number,
 ): Promise<{ object: z.infer<T>; usage: TokenUsage | undefined }> {
   const { modelId: model, apiKey, baseUrl } = await resolveModelForWorkspace(workspaceId, useCase, complexity);
   logger.info(`[Structured/${useCase}/${complexity}] model: ${model}`);
@@ -620,6 +669,7 @@ export async function makeStructuredModelCall<T extends z.ZodType>(
       temperature,
       apiKey,
       baseUrl,
+      maxTokens,
     );
     const tokenUsage = toTokenUsage(usage);
     logTokenUsage(`Structured/${complexity.toUpperCase()}`, model, tokenUsage);
@@ -739,6 +789,7 @@ async function structuredCallWithTolerantParsing<T extends z.ZodType>(
   temperature?: number,
   apiKey?: string,
   baseUrl?: string,
+  maxTokens?: number,
 ): Promise<{ object: z.infer<T>; usage: any }> {
   const schemaHint = schemaInstruction(schema);
   // Claude (via subscription proxies) is more likely than GPT to respond with
@@ -760,9 +811,18 @@ async function structuredCallWithTolerantParsing<T extends z.ZodType>(
   const agentOpts = apiKey ? { apiKey, ...(baseUrl && { baseUrl }) } : undefined;
   const agent = createAgent(modelString, jsonPreamble, undefined, agentOpts);
 
-  const textResult = await agent.generate(messages as any, {
+  // This path had no Ollama provider options at all, so num_ctx never reached
+  // the heaviest prompts in the system — the six fact/statement-extraction
+  // calls and label extraction all run through here. Without it they inherited
+  // Ollama's silent 4096 default, which is the exact bug the fix was for.
+  const ollamaOptions = buildOllamaProviderOptions(modelString, { maxTokens });
+  const callOptions = {
     ...(temperature !== undefined && { temperature }),
-  } as any);
+    ...(maxTokens !== undefined && { maxOutputTokens: maxTokens }),
+    ...(ollamaOptions && { providerOptions: ollamaOptions }),
+  };
+
+  const textResult = await agent.generate(messages as any, callOptions as any);
 
   const parsed = tryParseJsonFromText(textResult.text);
   const validated = parsed ? schema.safeParse(parsed) : undefined;
@@ -784,9 +844,12 @@ async function structuredCallWithTolerantParsing<T extends z.ZodType>(
     agentOpts,
   );
 
+  // The repair call needs the same bounds as the first. It is the retry path,
+  // and an unbounded retry against a 4096-token window truncates silently in
+  // exactly the way the original call would have.
   const repairResult = await repairAgent.generate(
     [{ role: "user", content: textResult.text }] as any,
-    { temperature: 0 } as any,
+    { ...callOptions, temperature: 0 } as any,
   );
 
   const repairedParsed = tryParseJsonFromText(repairResult.text);
