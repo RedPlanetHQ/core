@@ -6,7 +6,11 @@
  */
 
 import { z } from "zod";
-import { makeStructuredModelCall, getEmbedding , resolveProfileForCall } from "~/lib/model.server";
+import {
+  makeStructuredModelCall,
+  getEmbedding,
+  resolveProfileForCall,
+} from "~/lib/model.server";
 import { logger } from "~/services/logger.service";
 import { prisma } from "~/db.server";
 import { LabelService } from "~/services/label.server";
@@ -19,6 +23,7 @@ import {
   OLLAMA_NUM_CTX,
   assertPromptWithinBudget,
   capToTokenBudget,
+  capToTokenBudgetFromEnd,
 } from "~/services/prompts/promptBudget";
 import {
   type PromptProfile,
@@ -512,11 +517,11 @@ export function buildLabelExtractionMessages(
       if (contextTokens <= remaining) {
         truncatedContext = sessionContext;
       } else {
-        // Keep the most recent part of the session (tail), drop oldest
-        const ratio = remaining / contextTokens;
-        const startChar = Math.floor((1 - ratio) * sessionContext.length);
-        truncatedContext =
-          "...[earlier context omitted]\n" + sessionContext.substring(startChar);
+        // Keep the most recent part of the session (tail), drop oldest.
+        // Token-exact rather than scaled by character ratio: the ratio only
+        // estimates the result, and a document with a sparse-ASCII head and a
+        // dense CJK/emoji tail overshoots enough to blow the budget and throw.
+        truncatedContext = capToTokenBudgetFromEnd(sessionContext, remaining);
       }
     }
   }
@@ -527,9 +532,20 @@ export function buildLabelExtractionMessages(
   // once a workspace accumulates enough labels. Measured breaking point on
   // Ollama was ~29 labels with session context.
   //
-  // Labels are rendered newest-first and dropped from the tail, so the prompt
-  // keeps the most recently created labels — the ones most likely to match the
-  // current episode — and degrades to a shorter list instead of throwing.
+  // KNOWN LIMITATION — the drop order is alphabetical, not by relevance or
+  // recency. LabelService.getWorkspaceLabels orders by `name: "asc"`, so this
+  // truncates from the end of the alphabet: a workspace with 300 labels shows
+  // the model roughly "000".."020" and permanently hides everything later in
+  // the alphabet. Because hidden labels cannot be matched, the model proposes
+  // new ones instead, so those workspaces will accumulate near-duplicate labels
+  // over time.
+  //
+  // This bounds the crash, it does not solve label selection. Doing that
+  // properly means selecting candidates by embedding similarity to the episode
+  // (the machinery already exists here for dedup) rather than taking a
+  // prefix of an alphabetical list. Filed as follow-up rather than folded in,
+  // because it changes which labels the model can see and deserves its own
+  // evaluation.
   const renderLabel = (l: { name: string; description: string | null }) =>
     `  <label name="${l.name}"${l.description ? ` description="${l.description}"` : ""} />`;
 

@@ -4,10 +4,20 @@ import {
   OLLAMA_NUM_PREDICT_DEFAULT,
   assertPromptWithinBudget,
   capToTokenBudget,
+  capToTokenBudgetFromEnd,
 } from "../promptBudget";
 import { countTokens } from "~/services/search/tokenBudget";
 
 const LONG = "lorem ipsum dolor sit amet consectetur adipiscing elit ".repeat(100);
+
+/**
+ * Sparse-ASCII head, dense CJK/emoji tail. Token density varies by more than an
+ * order of magnitude across this string, which is exactly what defeats
+ * character-ratio slicing: a ratio computed from the whole string wildly
+ * under-counts the tokens actually present in the tail it keeps.
+ */
+const MIXED_DENSITY =
+  "a ".repeat(4000) + "私はこれを覚えています🎉🔥".repeat(400);
 
 describe("OLLAMA_NUM_CTX", () => {
   it("is pinned to 4096 — raising it evicted qwen3:8b from an 8GB RTX 4060", () => {
@@ -74,5 +84,45 @@ describe("assertPromptWithinBudget", () => {
     expect(() =>
       assertPromptWithinBudget({ label: "ingest", text: LONG, budget: 5 }),
     ).toThrow();
+  });
+});
+
+describe("capToTokenBudgetFromEnd", () => {
+  it("returns short text untouched", () => {
+    expect(capToTokenBudgetFromEnd("short", 100)).toBe("short");
+  });
+
+  it("keeps the tail, not the head", () => {
+    // Session context is oldest-first, so truncation must drop the beginning.
+    const text = `OLDEST ${"filler ".repeat(300)}NEWEST`;
+    const capped = capToTokenBudgetFromEnd(text, 50);
+    expect(capped).toContain("NEWEST");
+    expect(capped).not.toContain("OLDEST");
+    expect(countTokens(capped)).toBeLessThanOrEqual(50);
+  });
+
+  it("respects the budget on mixed-density text that defeats ratio slicing", () => {
+    // Regression: the char-ratio version measured 4075 tokens against a 3500
+    // budget on this shape and threw. Token-exact convergence must not.
+    const budget = 3500;
+    expect(countTokens(capToTokenBudgetFromEnd(MIXED_DENSITY, budget)))
+      .toBeLessThanOrEqual(budget);
+  });
+
+  it("beats the character-ratio estimate it replaced", () => {
+    const budget = 3500;
+    const contextTokens = countTokens(MIXED_DENSITY);
+    const ratio = budget / contextTokens;
+    const startChar = Math.floor((1 - ratio) * MIXED_DENSITY.length);
+    const estimated = "...[earlier context omitted]\n" + MIXED_DENSITY.substring(startChar);
+
+    // Proves the old approach genuinely overshot rather than being merely untidy.
+    expect(countTokens(estimated)).toBeGreaterThan(budget);
+    expect(countTokens(capToTokenBudgetFromEnd(MIXED_DENSITY, budget)))
+      .toBeLessThanOrEqual(budget);
+  });
+
+  it("degrades to empty rather than overflowing on a zero budget", () => {
+    expect(capToTokenBudgetFromEnd(LONG, 0)).toBe("");
   });
 });
