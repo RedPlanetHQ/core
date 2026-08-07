@@ -620,7 +620,21 @@ async function validateEpisodesWithLLM(
     // Return validated episodes
     return validIndices.map((idx: number) => episodes[idx - 1]).filter(Boolean);
   } catch (error) {
-    logger.error("LLM validation failed:", { error });
+    // Distinguish a budget miss from a genuine model/API failure. Both degrade
+    // to the same unfiltered batch, but they need different responses: a budget
+    // miss means the declared arithmetic is wrong and should be re-measured,
+    // whereas an API error is an operational event. Logging both under one
+    // generic message made the former invisible inside the latter's noise.
+    const message = error instanceof Error ? error.message : String(error);
+    if (message.startsWith("[PromptBudget]")) {
+      logger.error(
+        "Rerank prompt exceeded its token budget — returning this batch unfiltered. " +
+          "The declared budget arithmetic needs re-measuring, not just a bigger number.",
+        { error, episodeCount: episodes.length },
+      );
+    } else {
+      logger.error("LLM validation failed:", { error });
+    }
     // Fallback: return original episodes
     return episodes;
   }

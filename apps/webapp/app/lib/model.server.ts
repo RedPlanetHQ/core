@@ -260,12 +260,26 @@ type ProviderOptionsMap = Record<string, any>;
  * builder believed it was talking to a hosted model — no caps, no assertion,
  * and the silent 4096-token truncation straight back.
  *
- * The env clause is deliberate and must stay: getModel() routes everything to
- * Ollama when CHAT_PROVIDER=ollama regardless of the model string, so the
- * predicate has to mirror real routing rather than the string alone.
+ * getProvider() alone is the correct test, and an extra
+ * `|| getDefaultChatProviderType() === "ollama"` clause was removed from here
+ * because it produced false positives. Both directions were traced through
+ * createAgent(), which is the path makeModelCall actually takes (it does not go
+ * through getModel):
+ *
+ *   - Bare model id under CHAT_PROVIDER=ollama: getProvider delegates to
+ *     inferProvider, which already returns "ollama" for bare ids in that
+ *     configuration. Still detected, no env clause needed.
+ *   - Explicit "openai/gpt-5" override under CHAT_PROVIDER=ollama: getProvider
+ *     returns "openai", createAgent skips every Ollama branch and falls through
+ *     to the Mastra router, so the call genuinely runs on OpenAI. The env clause
+ *     used to report Ollama here and cap the prompt for a model that never
+ *     needed it.
+ *   - Explicit "ollama/qwen3:8b" override under CHAT_PROVIDER=openai: getProvider
+ *     returns "ollama" from the prefix, which is the direction that actually
+ *     matters, and it is unaffected by dropping the clause.
  */
 export function isOllamaModel(model: string): boolean {
-  return getProvider(model) === "ollama" || getDefaultChatProviderType() === "ollama";
+  return getProvider(model) === "ollama";
 }
 
 function buildOllamaProviderOptions(
@@ -646,6 +660,7 @@ export async function makeStructuredModelCall<T extends z.ZodType>(
         apiKey!,
         baseUrl!,
         temperature,
+        maxTokens,
       );
       const tokenUsage = toTokenUsage(usage);
       logTokenUsage(`Structured/${complexity.toUpperCase()}`, model, tokenUsage);
@@ -689,6 +704,7 @@ export async function makeStructuredModelCall<T extends z.ZodType>(
           : undefined,
       },
       ...(temperature !== undefined && { temperature }),
+      ...(maxTokens !== undefined && { maxOutputTokens: maxTokens }),
     });
 
     const tokenUsage = toTokenUsage(result.usage);
@@ -747,6 +763,7 @@ async function structuredCallViaTools<T extends z.ZodType>(
   apiKey: string,
   baseUrl: string,
   temperature?: number,
+  maxTokens?: number,
 ): Promise<{ object: z.infer<T>; usage: any }> {
   const modelId = getModelId(modelString);
   const openaiClient = createOpenAI({ baseURL: baseUrl, apiKey });
@@ -763,6 +780,7 @@ async function structuredCallViaTools<T extends z.ZodType>(
     tools: { return_result: returnResultTool },
     toolChoice: { type: "tool", toolName: "return_result" },
     ...(temperature !== undefined && { temperature }),
+    ...(maxTokens !== undefined && { maxOutputTokens: maxTokens }),
   });
 
   const toolCall = result.toolCalls?.[0];

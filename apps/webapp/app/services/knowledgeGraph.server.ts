@@ -50,7 +50,8 @@ import {
   getEmbedding,
   makeModelCall,
   makeStructuredModelCall,
- resolveProfileForCall } from "~/lib/model.server";
+  resolveProfileForCall,
+} from "~/lib/model.server";
 import { normalizePrompt, normalizeDocumentPrompt } from "./prompts";
 import { NORMALIZE_OUTPUT_TOKEN_RESERVE } from "./prompts/normalizeProfile";
 import { type EpisodeEmbedding, type PrismaClient } from "@prisma/client";
