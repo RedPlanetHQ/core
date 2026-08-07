@@ -15,7 +15,11 @@ import {
   recordTokenUsage,
   type TokenUsageSource,
 } from "~/services/tokenUsage.server";
-import { OLLAMA_NUM_CTX } from "~/services/prompts/promptBudget";
+import {
+  OLLAMA_NUM_CTX,
+  OLLAMA_NUM_PREDICT_DEFAULT,
+  checkPromptBoundary,
+} from "~/services/prompts/promptBudget";
 import {
   resolveProfile,
   type PromptProfile,
@@ -158,7 +162,12 @@ export const getModel = (takeModel?: string) => {
       throw new Error("No chat model configured for Ollama.");
     }
     const ollama = createOllama({ baseURL: toOllamaApiBase(ollamaUrl) });
-    return ollama(modelId);
+    // Pinned at construction, not left to per-call providerOptions: every
+    // consumer of getModel()/createAgent gets this for free, including the
+    // ~13 call sites that build an Agent directly and never pass
+    // buildOllamaProviderOptions — those previously got Ollama's silent
+    // 4096-token default with no pinning at all.
+    return ollama.chat(modelId, { options: { num_ctx: OLLAMA_NUM_CTX } });
   }
 
   // Azure: use direct AI SDK provider (needs base URL + API key)
@@ -339,6 +348,30 @@ export async function resolveProfileForCall(
   return resolveProfile(isOllamaModel(modelId) ? "ollama" : "hosted");
 }
 
+/**
+ * Best-effort text extraction for the boundary check only — not the actual
+ * payload sent to the model. Message content is either a plain string or an
+ * array of parts (text/image/etc per the AI SDK's ModelMessage shape); only
+ * text parts count toward the token budget the same way Ollama's tokenizer
+ * would see them.
+ */
+function flattenMessagesForBudgetCheck(messages: ModelMessage[]): string {
+  return messages
+    .map((message) => {
+      const content = (message as { content: unknown }).content;
+      if (typeof content === "string") {
+        return content;
+      }
+      if (Array.isArray(content)) {
+        return content
+          .map((part) => (typeof (part as { text?: unknown })?.text === "string" ? (part as { text: string }).text : ""))
+          .join("");
+      }
+      return "";
+    })
+    .join("\n");
+}
+
 function mergeProviderOptions(
   ...providerOptions: Array<ProviderOptionsMap | undefined>
 ): ProviderOptionsMap | undefined {
@@ -414,7 +447,9 @@ export function createAgent(
     return new Agent({
       id: `model-call-${modelString}`,
       name: `Model Call (${modelString})`,
-      model: ollama(modelId) as any,
+      // Pinned at construction — see the matching comment in getModel()'s
+      // Ollama branch for why this can't be left to callers.
+      model: ollama.chat(modelId, { options: { num_ctx: OLLAMA_NUM_CTX } }) as any,
       instructions: instructions || "",
       ...(tools && { tools }),
     });
@@ -534,6 +569,14 @@ export async function makeModelCall(
 ) {
   const { modelId: model, apiKey, isBYOK, baseUrl } = await resolveModelForWorkspace(workspaceId, useCase, complexity);
   logger.info(`[${useCase}/${complexity}] model: ${model}${isBYOK ? " (BYOK)" : ""}`);
+
+  if (isOllamaModel(model)) {
+    checkPromptBoundary({
+      label: `makeModelCall:${useCase}/${complexity}`,
+      text: flattenMessagesForBudgetCheck(messages),
+      reserved: options?.maxTokens ?? OLLAMA_NUM_PREDICT_DEFAULT,
+    });
+  }
 
   const providerOptions = mergeProviderOptions(
     buildOpenAIProviderOptions(
@@ -685,6 +728,7 @@ export async function makeStructuredModelCall<T extends z.ZodType>(
       apiKey,
       baseUrl,
       maxTokens,
+      `makeStructuredModelCall:${useCase}/${complexity}`,
     );
     const tokenUsage = toTokenUsage(usage);
     logTokenUsage(`Structured/${complexity.toUpperCase()}`, model, tokenUsage);
@@ -808,6 +852,7 @@ async function structuredCallWithTolerantParsing<T extends z.ZodType>(
   apiKey?: string,
   baseUrl?: string,
   maxTokens?: number,
+  label = "structuredCallWithTolerantParsing",
 ): Promise<{ object: z.infer<T>; usage: any }> {
   const schemaHint = schemaInstruction(schema);
   // Claude (via subscription proxies) is more likely than GPT to respond with
@@ -840,6 +885,19 @@ async function structuredCallWithTolerantParsing<T extends z.ZodType>(
     ...(ollamaOptions && { providerOptions: ollamaOptions }),
   };
 
+  if (isOllamaModel(modelString)) {
+    checkPromptBoundary({
+      label,
+      // jsonPreamble becomes the agent's system instructions above, so it
+      // reaches the model alongside `messages` — the per-site budget
+      // assertions upstream only measure their own prompt text and don't
+      // know about this preamble, so it must be counted here to reflect
+      // what Ollama actually receives.
+      text: `${jsonPreamble}\n${flattenMessagesForBudgetCheck(messages)}`,
+      reserved: maxTokens ?? OLLAMA_NUM_PREDICT_DEFAULT,
+    });
+  }
+
   const textResult = await agent.generate(messages as any, callOptions as any);
 
   const parsed = tryParseJsonFromText(textResult.text);
@@ -849,22 +907,29 @@ async function structuredCallWithTolerantParsing<T extends z.ZodType>(
   }
 
   // Repair attempt (reuse the same agentOpts so proxy baseUrl + key stay applied)
-  const repairAgent = createAgent(
-    modelString,
+  const repairInstructions =
     "You are a strict JSON repair assistant. The user will paste text that was " +
-      "supposed to be JSON matching a schema, but isn't. Convert it into a single " +
-      "valid JSON object matching the schema. If the text is prose saying there " +
-      "is nothing to extract, return the schema with empty arrays, nulls, or " +
-      "empty strings — do not echo the prose. Return ONLY the JSON object, no " +
-      "Markdown fences, no explanation." +
-      schemaHint,
-    undefined,
-    agentOpts,
-  );
+    "supposed to be JSON matching a schema, but isn't. Convert it into a single " +
+    "valid JSON object matching the schema. If the text is prose saying there " +
+    "is nothing to extract, return the schema with empty arrays, nulls, or " +
+    "empty strings — do not echo the prose. Return ONLY the JSON object, no " +
+    "Markdown fences, no explanation." +
+    schemaHint;
+  const repairAgent = createAgent(modelString, repairInstructions, undefined, agentOpts);
 
-  // The repair call needs the same bounds as the first. It is the retry path,
-  // and an unbounded retry against a 4096-token window truncates silently in
-  // exactly the way the original call would have.
+  // The repair call needs the same bounds as the first — it's a second,
+  // distinct Ollama call (repair preamble + the first call's raw output as
+  // input), not covered by the check above. An unbounded retry against a
+  // 4096-token window truncates silently in exactly the way the original
+  // call would have.
+  if (isOllamaModel(modelString)) {
+    checkPromptBoundary({
+      label: `${label}:repair`,
+      text: `${repairInstructions}\n${textResult.text}`,
+      reserved: maxTokens ?? OLLAMA_NUM_PREDICT_DEFAULT,
+    });
+  }
+
   const repairResult = await repairAgent.generate(
     [{ role: "user", content: textResult.text }] as any,
     { ...callOptions, temperature: 0 } as any,

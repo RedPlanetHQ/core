@@ -1,5 +1,6 @@
 import { decode, encode } from "gpt-tokenizer/encoding/o200k_base";
 import { countTokens } from "~/services/search/tokenBudget";
+import { logger } from "~/services/logger.service";
 
 /**
  * Pinned to 4096 on purpose.
@@ -131,4 +132,45 @@ export function assertPromptWithinBudget(params: {
   throw new Error(
     `[PromptBudget] ${params.label} is ${actualTokens} tokens, exceeds budget ${params.budget}`,
   );
+}
+
+/**
+ * Last-resort safety net at the actual provider boundary (model.server.ts's
+ * makeModelCall / structuredCallWithTolerantParsing), not a substitute for
+ * per-call-site budgeting. Per-site caps remain the correct fix — they know
+ * their own content shape and can degrade gracefully (drop a section, fall
+ * back to unfiltered, etc). This exists because a per-site cap is an
+ * obligation every call site must remember to add, and that obligation has
+ * already been missed twice on this branch (F1, F4) — this catches whatever
+ * call site misses it next, instead of relying on every future PR to notice.
+ *
+ * Mode is env-gated so it can ship now without risk: "warn" (default) logs
+ * loudly but lets the call proceed exactly as it did before this existed;
+ * "throw" turns it into a hard failure. Flip to "throw" only once every real
+ * Ollama call site has its own budget protection — until then, throwing here
+ * would turn today's silent truncation on unprotected sites into a harder
+ * production failure before their fixes land.
+ */
+export function checkPromptBoundary(params: {
+  label: string;
+  text: string;
+  reserved: number;
+}): void {
+  const budget = OLLAMA_NUM_CTX - params.reserved;
+  const actualTokens = countTokens(params.text);
+  if (actualTokens <= budget) {
+    return;
+  }
+
+  const message =
+    `[PromptBudget:boundary] ${params.label} is ${actualTokens} tokens against a ` +
+    `${budget}-token Ollama budget (num_ctx ${OLLAMA_NUM_CTX} - reserved ${params.reserved} ` +
+    `output tokens). This call site has no per-site budget protection and would ` +
+    `silently truncate on Ollama.`;
+
+  if (process.env.OLLAMA_PROMPT_BOUNDARY_MODE === "throw") {
+    throw new Error(message);
+  }
+
+  logger.error(message);
 }

@@ -1,12 +1,14 @@
-import { describe, it, expect } from "vitest";
+import { describe, it, expect, afterEach, vi } from "vitest";
 import {
   OLLAMA_NUM_CTX,
   OLLAMA_NUM_PREDICT_DEFAULT,
   assertPromptWithinBudget,
   capToTokenBudget,
   capToTokenBudgetFromEnd,
+  checkPromptBoundary,
 } from "../promptBudget";
 import { countTokens } from "~/services/search/tokenBudget";
+import { logger } from "~/services/logger.service";
 
 const LONG = "lorem ipsum dolor sit amet consectetur adipiscing elit ".repeat(100);
 
@@ -83,6 +85,57 @@ describe("assertPromptWithinBudget", () => {
     ).not.toThrow();
     expect(() =>
       assertPromptWithinBudget({ label: "ingest", text: LONG, budget: 5 }),
+    ).toThrow();
+  });
+});
+
+describe("checkPromptBoundary", () => {
+  const originalMode = process.env.OLLAMA_PROMPT_BOUNDARY_MODE;
+
+  afterEach(() => {
+    if (originalMode === undefined) {
+      delete process.env.OLLAMA_PROMPT_BOUNDARY_MODE;
+    } else {
+      process.env.OLLAMA_PROMPT_BOUNDARY_MODE = originalMode;
+    }
+  });
+
+  it("does nothing when the text is within the reserved-adjusted budget", () => {
+    delete process.env.OLLAMA_PROMPT_BOUNDARY_MODE;
+    expect(() =>
+      checkPromptBoundary({ label: "test", text: "short", reserved: 512 }),
+    ).not.toThrow();
+  });
+
+  it("defaults to warn-only: over-budget does not throw when the env mode is unset, but still logs loudly", () => {
+    delete process.env.OLLAMA_PROMPT_BOUNDARY_MODE;
+    const errorSpy = vi.spyOn(logger, "error").mockImplementation(() => {});
+
+    // reserved shrinks the budget below LONG's real token count, so this is genuinely over budget
+    expect(() =>
+      checkPromptBoundary({ label: "unprotected-call-site", text: LONG, reserved: OLLAMA_NUM_CTX - 100 }),
+    ).not.toThrow();
+
+    expect(errorSpy).toHaveBeenCalledWith(expect.stringContaining("unprotected-call-site"));
+    errorSpy.mockRestore();
+  });
+
+  it("throws only when explicitly flipped to enforce mode", () => {
+    process.env.OLLAMA_PROMPT_BOUNDARY_MODE = "throw";
+    const actual = countTokens(LONG);
+    const reserved = OLLAMA_NUM_CTX - 100; // shrinks the budget below LONG's real token count
+    const budget = OLLAMA_NUM_CTX - reserved;
+    expect(() =>
+      checkPromptBoundary({ label: "unprotected-call-site", text: LONG, reserved }),
+    ).toThrow(new RegExp(`unprotected-call-site.*${actual}.*${budget}`));
+  });
+
+  it("accounts for the reserved output budget, not just num_ctx", () => {
+    // A prompt that fits under num_ctx alone but not once output tokens are reserved.
+    process.env.OLLAMA_PROMPT_BOUNDARY_MODE = "throw";
+    const nearCtxText = "a ".repeat(OLLAMA_NUM_CTX - 100);
+    expect(() =>
+      checkPromptBoundary({ label: "test", text: nearCtxText, reserved: OLLAMA_NUM_PREDICT_DEFAULT }),
     ).toThrow();
   });
 });
