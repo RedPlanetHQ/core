@@ -8,7 +8,7 @@
  *    think subagents via Mastra's native `agents: {}` mechanism.
  */
 
-import { type Tool, tool } from "ai";
+import { type Tool } from "ai";
 import { z } from "zod";
 import { Agent } from "@mastra/core/agent";
 import { createTool } from "@mastra/core/tools";
@@ -19,8 +19,6 @@ import {
   type OrchestratorTools,
   type GatewayAgentInfo,
 } from "../executors/base";
-import { type Trigger, type DecisionContext } from "../types/decision-agent";
-import { createThinkAgent } from "./decision";
 import { logger } from "../../logger.service";
 import { prisma } from "~/db.server";
 import {
@@ -40,13 +38,15 @@ import {
   getSuggestIntegrationsTool,
   getCompleteOnboardingTool,
 } from "../tools/onboarding-tools";
-import {
-  getSupportedWidgetsTool,
-  getWidgetInfoTool,
-} from "../tools/widget-tools";
-import { createOrchestratorAgent } from "./orchestrator";
+// Widget tools temporarily removed from the main agent's surface. Their
+// factories still live in ../tools/widget-tools; re-import when we bring
+// the inline widget affordance back.
+import { buildOrchestratorTools } from "./orchestrator";
 import { createGatewayAgents } from "./gateway";
 import { getWorkspaceChannelContext } from "~/services/channel.server";
+import { toRouterString } from "~/lib/model.server";
+import { getDefaultChatModelId } from "~/services/llm-provider.server";
+import { stepCountIs } from "ai";
 
 // ---------------------------------------------------------------------------
 // Params
@@ -77,6 +77,26 @@ interface CreateCoreToolsParams {
   userPhoneNumber?: string;
   /** Executor tools — used to resolve gateways and call tools in non-websocket contexts */
   executorTools?: OrchestratorTools;
+  /** User persona — passed through to the orchestrator tool block (mirrors
+   *  what the read/write sub-agents used to receive). */
+  persona?: string;
+  /** Interactive turns get requireApproval on risky integration writes.
+   *  Non-interactive (scheduled/background) callers pass false. */
+  interactive?: boolean;
+  /** Resolved model config — needed by spawn_subagent so a spawned sub-turn
+   *  runs on the same model as the main agent. */
+  modelConfig?: ModelConfig;
+  /** The agent id driving THIS turn. Used by list_colleagues to exclude
+   *  self, and by delegate_to_agent to block self-delegation. Null when the
+   *  caller hasn't resolved an agent yet. */
+  currentAgentId?: string | null;
+  /** The human user's display name — piped into delegated sub-turns so the
+   *  target agent's `{{USER_NAME}}` substitutes correctly. */
+  userName?: string;
+  /** The conversation this turn is running against. Used by
+   *  delegate_to_agent to post the delegated agent's reply back into the
+   *  same conversation, attributed to that agent. */
+  conversationId?: string | null;
 }
 
 interface CreateCoreAgentsParams {
@@ -87,15 +107,6 @@ interface CreateCoreAgentsParams {
   persona?: string;
   skills?: SkillRef[];
   executorTools?: OrchestratorTools;
-  triggerContext?: {
-    trigger: Trigger;
-    context: DecisionContext;
-    userPersona?: string;
-  };
-  /** For think agent tools */
-  defaultChannel?: string;
-  availableChannels?: string[];
-  minRecurrenceMinutes?: number;
   /** When false, tools run without requireApproval */
   interactive?: boolean;
   /** Resolved model config (string or OpenAICompatibleConfig for BYOK) */
@@ -119,7 +130,6 @@ export async function createCoreTools(
     source,
     readOnly = false,
     skills,
-    onMessage,
     defaultChannel,
     availableChannels,
     isBackgroundExecution,
@@ -168,11 +178,12 @@ export async function createCoreTools(
   // anytime, not just during onboarding.
   tools["suggest_integrations"] = getSuggestIntegrationsTool();
 
-  // Inline-widget catalog — agent calls these to discover which UI
-  // widgets it can embed in chat (gateway file viewer today, more
-  // later) and to fetch their prop contracts before emitting one.
-  tools["get_supported_widgets"] = getSupportedWidgetsTool();
-  tools["get_widget_info"] = getWidgetInfoTool();
+  // Inline-widget catalog — temporarily removed. The main agent doesn't
+  // emit inline widgets in the current UI. Bring these back when we
+  // re-introduce widget rendering in chat.
+  //
+  //   tools["get_supported_widgets"] = getSupportedWidgetsTool();
+  //   tools["get_widget_info"] = getWidgetInfoTool();
 
   // complete_onboarding — only while user.onboardingComplete === false.
   // Flips the flag and persists the final profile summary.
@@ -180,25 +191,9 @@ export async function createCoreTools(
     tools["complete_onboarding"] = getCompleteOnboardingTool(userId);
   }
 
-  // Acknowledge tool for channels with intermediate message support
-  if (onMessage) {
-    tools["acknowledge"] = tool({
-      description:
-        "Send a quick heads-up to the user on their channel before you start working. Call this BEFORE delegating to the orchestrator so they know you're on it. One short message per conversation — don't spam.",
-      inputSchema: z.object({
-        message: z
-          .string()
-          .describe(
-            'One short sentence. Max 6 words. Examples: "on it.", "let me check.", "looking into it.", "one sec."',
-          ),
-      }),
-      execute: async ({ message }) => {
-        logger.info(`Core brain: Acknowledging: ${message}`);
-        await onMessage(message);
-        return "acknowledged";
-      },
-    });
-  }
+  // `acknowledge` was removed on both the core and orchestrator sides —
+  // `progress_update` covers the same "on it" narration for interactive
+  // and background contexts alike.
 
   // Resolve channel context for task tools
   const channel =
@@ -262,131 +257,111 @@ export async function createCoreTools(
     }
   }
 
-  // Session lookup tools — replace the previous prompt-injection of last
-  // coding/browser session details. Available in every context (interactive
-  // chat too, for asking "what was the session for that task?").
-  const sessionTools = getSessionTools({ workspaceId, currentTaskId });
+  // Session lookup tools — only relevant inside task execution (they read
+  // the running task's coding/browser sessions). Skip in interactive chat
+  // so the tool surface stays lean.
+  const sessionTools =
+    currentTaskId || isBackgroundExecution
+      ? getSessionTools({ workspaceId, currentTaskId })
+      : {};
 
-  return { ...tools, ...taskTools, ...messageTools, ...sessionTools };
-}
+  // Orchestrator tools — integrations, docs, web search, acknowledge, etc.
+  // Previously these lived on the gather_context / take_action sub-agents.
+  // Now the main agent owns them directly (no delegation hop).
+  const { tools: orchestratorTools } = await buildOrchestratorTools(
+    userId,
+    workspaceId,
+    timezone,
+    source,
+    params.persona,
+    skills,
+    executorTools,
+    params.interactive ?? true,
+    params.modelConfig,
+  );
 
-// ---------------------------------------------------------------------------
-// createAskUserTool — must be registered directly on the Agent (not toolsets)
-// so Mastra's requireApproval middleware applies correctly on approveToolCall.
-// ---------------------------------------------------------------------------
+  // Aggregate the main agent's toolset. spawn_subagent is added after this
+  // block so its execute-time closure can reference the final tool map
+  // (including itself, letting a sub-agent spawn its own sub-agents).
+  const allTools: Record<string, Tool> = {
+    ...tools,
+    ...taskTools,
+    ...messageTools,
+    ...sessionTools,
+    ...orchestratorTools,
+  };
 
-export function createAskUserTool() {
-  return createTool({
-    id: "ask_user",
+  // Colleague delegation is no longer a tool. Agents hand off by emitting
+  // <mention colleague="handle" /> in their reply; dispatchMentions parses
+  // the row after it lands and spawns a background turn for each mentioned
+  // agent. See ~/services/agent/dispatch-mentions.ts.
+
+  // spawn_subagent — lets the main agent create a fresh instance of itself
+  // to run a delimited sub-task in an isolated context. The child inherits
+  // the current turn's model + full tool set (including this same spawn
+  // tool so a sub-agent can spawn its own sub-agents). Returns the child's
+  // final synthesized text.
+  //
+  // For now the child uses a generic sub-agent instruction rather than the
+  // parent's system prompt — the parent's prompt isn't finalized at
+  // createCoreTools time. Passing the parent prompt through would need a
+  // reorder in context.ts and is a follow-up.
+  const modelConfig = params.modelConfig;
+
+  allTools.spawn_subagent = createTool({
+    id: "spawn_subagent",
     description:
-      "Ask the user 1–4 questions during execution. Use this to gather preferences, clarify ambiguous instructions, get decisions on implementation choices, or offer direction options. Don't overuse — only ask when you genuinely can't proceed without the answer.",
+      "Spawn a fresh sub-instance of yourself to run a delimited task in an isolated context. The sub-agent has the same tools and model you do. Use for parallelizable work or when you want to keep the sub-turn's tool-call chatter out of your own thread. Returns the sub-agent's final text.",
     inputSchema: z.object({
-      questions: z
-        .array(
-          z.object({
-            question: z
-              .string()
-              .describe(
-                "The complete question to ask. Should be clear and specific, ending with a question mark.",
-              ),
-            header: z
-              .string()
-              .optional()
-              .describe(
-                "Very short label shown as a chip (max 12 chars). E.g. 'Auth method', 'Priority'.",
-              ),
-            options: z
-              .array(
-                z.object({
-                  label: z
-                    .string()
-                    .describe("Display text for this option (1–5 words)"),
-                  description: z
-                    .string()
-                    .optional()
-                    .describe(
-                      "Explanation of what this option means or its trade-offs",
-                    ),
-                  markdown: z
-                    .string()
-                    .optional()
-                    .describe(
-                      "Optional preview content (code snippet, ASCII mockup) shown when this option is focused",
-                    ),
-                }),
-              )
-              .min(2)
-              .max(4)
-              .describe(
-                "2–4 mutually exclusive options for the user to choose from",
-              ),
-            multiSelect: z
-              .boolean()
-              .optional()
-              .default(false)
-              .describe(
-                "Set true to allow the user to select multiple options",
-              ),
-          }),
-        )
-        .min(1)
-        .max(4)
-        .describe("1–4 questions to ask the user"),
-      answers: z
-        .record(z.string(), z.string())
-        .optional()
+      task: z
+        .string()
         .describe(
-          "The user's answers keyed by question text — set automatically when the user responds, do not set this yourself",
+          "Full self-contained instruction for the sub-agent — as if you were briefing another instance of yourself. Include all context it needs; the sub-agent starts fresh.",
         ),
-      annotations: z
-        .record(
-          z.string(),
-          z.object({
-            markdown: z.string().optional(),
-            notes: z.string().optional(),
-          }),
-        )
+      maxSteps: z
+        .number()
+        .int()
+        .min(1)
+        .max(50)
         .optional()
-        .describe("Per-answer annotations from the user — set automatically"),
+        .describe("Optional step-count cap for the sub-turn. Defaults to 20."),
     }),
-    requireApproval: true,
-    execute: async (inputData, args) => {
-      // The user's answers are sent as toolArgOverrides and must be read
-      // from requestContext — they are NOT auto-applied to inputData.
-      const ctx = args as {
-        agent?: { toolCallId?: string };
-        requestContext?: { get: (key: string) => unknown };
-      };
-      const callId = ctx?.agent?.toolCallId;
-      const overrideRaw = ctx?.requestContext?.get("toolArgsOverride");
-
-      let answers = inputData.answers;
-      let annotations = inputData.annotations;
-
-      if (callId && overrideRaw) {
-        try {
-          const overrideMap: Record<
-            string,
-            Record<string, unknown>
-          > = typeof overrideRaw === "string"
-            ? JSON.parse(overrideRaw)
-            : (overrideRaw as Record<string, Record<string, unknown>>);
-          if (overrideMap[callId]) {
-            answers =
-              (overrideMap[callId].answers as typeof answers) ?? answers;
-            annotations =
-              (overrideMap[callId].annotations as typeof annotations) ??
-              annotations;
-          }
-        } catch {
-          // fall through to original inputData
-        }
+    execute: async (input) => {
+      const resolvedModel =
+        modelConfig ?? (toRouterString(getDefaultChatModelId()) as any);
+      const child = new Agent({
+        id: `subagent-${Date.now()}`,
+        name: "Subagent",
+        model: resolvedModel as any,
+        instructions:
+          "You are a sub-agent spawned by the main agent to complete a delimited task. You have the same tools your parent does. Work efficiently, use tools as needed, and return a concise final answer.",
+        tools: allTools,
+      });
+      const stream = await child.stream(
+        [{ role: "user", content: input.task }],
+        { stopWhen: [stepCountIs(input.maxSteps ?? 20)] },
+      );
+      let text = "";
+      for await (const part of (stream as any).textStream ?? []) {
+        text += typeof part === "string" ? part : "";
       }
-
-      return { answers: answers ?? {}, annotations: annotations ?? {} };
+      if (!text && typeof (stream as any).text === "string") {
+        text = (stream as any).text;
+      }
+      return text || "(sub-agent produced no output)";
     },
-  });
+  }) as unknown as Tool;
+
+  return allTools;
 }
+
+// ask_user + the requireApproval-driven tool-approval flow were retired
+// alongside the useChat → fire-and-forget migration. Agents that need
+// clarification just ask the user in plain text; the user replies as a
+// normal turn and the agent picks it up next cycle. The removed tool
+// factory lived here and its client-side scaffolding lived under
+// components/conversation/tool-approval-panel + tool-ui/ask-user-question
+// — check git history if reintroduction becomes necessary.
 
 // ---------------------------------------------------------------------------
 // createCoreAgents — orchestrator + gateway subagents
@@ -395,30 +370,23 @@ export function createAskUserTool() {
 export async function createCoreAgents(
   params: CreateCoreAgentsParams,
 ): Promise<{
-  gatherContextAgent: Agent;
-  takeActionAgent: Agent;
-  thinkAgent?: Agent;
   gatewayAgents: Agent[];
 }> {
   const {
     userId,
     workspaceId,
-    timezone,
-    source,
-    persona,
-    skills,
     executorTools,
-    triggerContext,
-    defaultChannel,
-    availableChannels,
-    minRecurrenceMinutes,
     interactive = true,
     modelConfig,
     conversationId,
     taskId,
+    skills,
   } = params;
 
-  // Load gateways for subagent creation
+  // Gateway-backed agents are still real Mastra sub-agents — each one wraps
+  // a remote gateway's tool set behind a per-gateway HTTP client. The main
+  // agent delegates to them by name. This is distinct from the removed
+  // gather_context / take_action / think delegation model.
   const gateways: GatewayAgentInfo[] = executorTools
     ? await executorTools.getGateways(workspaceId)
     : (
@@ -437,73 +405,19 @@ export async function createCoreAgents(
         status: g.status as "CONNECTED" | "DISCONNECTED",
       }));
 
-  const [reader, writer, { agentList: gatewayAgents }] = await Promise.all([
-    createOrchestratorAgent(
-      userId,
+  const { agentList: gatewayAgents } = await createGatewayAgents(
+    gateways,
+    executorTools,
+    interactive,
+    modelConfig,
+    {
+      conversationId,
+      taskId,
       workspaceId,
-      "read",
-      timezone,
-      source,
-      persona,
-      skills,
-      executorTools,
-      interactive,
-      modelConfig,
-    ),
-    createOrchestratorAgent(
       userId,
-      workspaceId,
-      "write",
-      timezone,
-      source,
-      persona,
-      skills,
-      executorTools,
-      interactive,
-      modelConfig,
-    ),
-    createGatewayAgents(
-      gateways,
-      executorTools,
-      interactive,
-      modelConfig,
-      {
-        conversationId,
-        taskId,
-        workspaceId,
-        userId,
-      },
-      skills,
-    ),
-  ]);
+    },
+    skills,
+  );
 
-  // Think agent — only when triggered (scheduled tasks, webhooks, integration jobs)
-  const channel =
-    source === "whatsapp"
-      ? "whatsapp"
-      : source === "slack"
-        ? "slack"
-        : defaultChannel || "email";
-
-  const thinkAgent = triggerContext
-    ? await createThinkAgent(
-        reader.agent,
-        workspaceId,
-        userId,
-        channel,
-        timezone,
-        availableChannels || ["email"],
-        minRecurrenceMinutes ?? 60,
-        modelConfig,
-        triggerContext,
-        skills,
-      )
-    : undefined;
-
-  return {
-    gatherContextAgent: reader.agent,
-    takeActionAgent: writer.agent,
-    thinkAgent,
-    gatewayAgents,
-  };
+  return { gatewayAgents };
 }

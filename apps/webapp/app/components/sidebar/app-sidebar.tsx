@@ -16,7 +16,6 @@ import {
   Library,
   CalendarDays,
   LayoutDashboard,
-  MessageSquare,
   ArrowLeft,
   ArrowRight,
 } from "lucide-react";
@@ -32,7 +31,7 @@ import { useTauri } from "~/hooks/use-tauri";
 import { IngestionStatus } from "./ingestion-status";
 import { Task } from "../icons/task";
 import { TryIt } from "./try-it";
-import { GatewaysNav } from "./gateways";
+import { AgentsNav } from "./agents";
 import { ButlerStatusPill } from "../common/butler-status-pill";
 import { withOnlineStatus } from "../common/with-online-status";
 
@@ -44,11 +43,6 @@ const data = {
       title: "Daily",
       url: "/home/daily",
       icon: CalendarDays,
-    },
-    {
-      title: "Chat",
-      url: "/home/conversation",
-      icon: MessageSquare,
     },
     {
       title: "Overview",
@@ -124,7 +118,6 @@ export function AppSidebar({
         e.preventDefault();
         setCommandBar(true);
       },
-      "g c": whenNotEditing(() => navigate("/home/conversation")),
       "g d": whenNotEditing(() => navigate("/home/daily")),
       "g t": whenNotEditing(() => navigate("/home/tasks")),
       "g m": whenNotEditing(() => navigate("/home/memory")),
@@ -203,7 +196,7 @@ export function AppSidebar({
               (item) => item.url !== "/home/overview" || widgetsEnabled,
             )}
           />
-          <GatewaysNav />
+          <AgentsNav />
           <TryIt />
         </SidebarContent>
 

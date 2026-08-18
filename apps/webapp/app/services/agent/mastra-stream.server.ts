@@ -47,6 +47,11 @@ export interface SaveConversationResultParams {
   id?: string;
   parts: any[];
   conversationId: string;
+  /** The agent whose reply this is — stamped on the ConversationHistory row
+   *  so multi-agent threads render with proper attribution. Same value we
+   *  pass to dispatchMentions as authorAgentId so the self-mention guard
+   *  and the specialist-vs-owner check work correctly. */
+  authorAgentId?: string | null;
   incomingUserText: string | undefined;
   incognito: boolean | undefined;
   userId: string;
@@ -65,6 +70,7 @@ export async function saveConversationResult({
   id,
   parts,
   conversationId,
+  authorAgentId,
   incomingUserText,
   incognito,
   userId,
@@ -84,25 +90,77 @@ export async function saveConversationResult({
   }
 
   if (parts.length > 0) {
+    const rowId = id ?? crypto.randomUUID();
     await upsertConversationHistory(
-      id ?? crypto.randomUUID(),
+      rowId,
       parts,
       conversationId,
       UserTypeEnum.Agent,
+      false,
+      undefined,
+      authorAgentId ?? null,
     );
+
+    // Dispatch any <mention colleague="…" /> the agent emitted. The gate
+    // inside dispatchMentions short-circuits for 1:1 conversations, so
+    // this is a no-op in agent chats and only routes in task threads.
+    const { dispatchMentions } = await import("./dispatch-mentions");
+    dispatchMentions({
+      sourceRow: {
+        id: rowId,
+        conversationId,
+        workspaceId,
+        parts: parts as unknown,
+        // Streaming assistant turns are always depth 0 — they're the
+        // direct reply to a user message. Chains grow from there via
+        // the run-agent-turn job's dispatchMentions call.
+        delegationDepth: 0,
+        authorAgentId: authorAgentId ?? null,
+      },
+    }).catch((err) => {
+      logger.error("saveConversationResult: dispatchMentions failed", {
+        error: err,
+        conversationId,
+      });
+    });
 
     const textParts = parts
       .filter((p: any) => p.type === "text" && p.text)
       .map((p: any) => p.text);
 
     if (textParts.length > 0 && !incognito) {
+      // Multi-agent-aware ingest: attribute to the author's handle when
+      // known, use per-day session buckets so long threads don't compact
+      // into one blob. Handle resolution is a single Prisma read on the
+      // last-known author — fine to inline here.
+      const {
+        buildEpisodeBody,
+        buildSessionBucketId,
+      } = await import("./conversation-ingest");
+      const { getUserTimezone } = await import("~/models/user.server");
+      const { prisma } = await import("~/db.server");
+
+      const handle = authorAgentId
+        ? await prisma.agents
+            .findUnique({
+              where: { id: authorAgentId },
+              select: { handle: true },
+            })
+            .then((a) => a?.handle ?? null)
+        : null;
+      const timezone = await getUserTimezone(userId);
+
       await addToQueue(
         {
-          episodeBody: `<user>${incomingUserText ?? ""}</user><assistant>${textParts.join("\n")}</assistant>`,
+          episodeBody: buildEpisodeBody({
+            userText: incomingUserText,
+            agentText: textParts.join("\n"),
+            agentHandle: handle,
+          }),
           source: "core",
           referenceTime: new Date().toISOString(),
           type: EpisodeType.CONVERSATION,
-          sessionId: conversationId,
+          sessionId: buildSessionBucketId(conversationId, timezone),
         },
         userId,
         workspaceId,

@@ -2,12 +2,12 @@ import { EditorContent, useEditor } from "@tiptap/react";
 import { useEffect, memo, useMemo, useState } from "react";
 import { cn } from "~/lib/utils";
 import { extensionsForConversation } from "./editor-extensions";
-import { type ChatAddToolApproveResponseFunction, type UIMessage } from "ai";
+import { type UIMessage } from "ai";
 import { Button } from "../ui";
+import { SamAvatar } from "../ui/sam-avatar";
 import {
   findFirstPendingApprovalIndex,
   findAllToolsDeep,
-  findPendingApprovals,
   isToolDisabled,
   mergeAgentParts,
   groupToolParts,
@@ -15,17 +15,32 @@ import {
   type ExtendedPart,
 } from "./conversation-utils";
 import { Tool } from "./tool-item";
-import { ToolApprovalPanel } from "./tool-approval-panel.client";
+
+/**
+ * Per-message sender attribution. `user` maps to the human; `agent` to
+ * one of the workspace agents. When the agent's `appearance` is null we
+ * render a neutral avatar so a legacy row without SamAvatar props still
+ * displays something.
+ */
+export type ConversationItemSender =
+  | { kind: "user"; name: string }
+  | {
+      kind: "agent";
+      name: string;
+      appearance: {
+        eye?: string;
+        eyeColor?: string;
+        accentColor?: string;
+      } | null;
+    };
 
 interface AIConversationItemProps {
   message: UIMessage;
   createdAt?: string | Date;
-  addToolApprovalResponse: ChatAddToolApproveResponseFunction;
-  setToolArgOverride: (
-    toolCallId: string,
-    args: Record<string, unknown>,
-  ) => void;
-  isChatBusy?: boolean;
+  /** Who authored this message. Rendered as an avatar + name row above
+   *  the message body — Slack-style. Optional so legacy call sites keep
+   *  compiling; when absent the header is omitted. */
+  sender?: ConversationItemSender;
   integrationAccountMap?: Record<string, string>;
   integrationFrontendMap?: Record<string, string>;
   className?: string;
@@ -34,9 +49,7 @@ interface AIConversationItemProps {
 const ConversationItemComponent = ({
   message,
   createdAt,
-  addToolApprovalResponse,
-  setToolArgOverride,
-  isChatBusy = false,
+  sender,
   integrationAccountMap = {},
   integrationFrontendMap = {},
   className,
@@ -92,11 +105,11 @@ const ConversationItemComponent = ({
     [mergedParts],
   );
 
-  // Pending approvals from merged parts (so nested tools inside take_action are visible)
-  const pendingApprovals = useMemo(
-    () => (isUser ? [] : findPendingApprovals(mergedParts)),
-    [isUser, mergedParts],
-  );
+  // Pending-approval / ask_user rendering was removed alongside the
+  // fire-and-forget migration. See services/agent/agents/core.ts for the
+  // rationale. isUser is retained above only for potential future
+  // per-role rendering; not currently branched on.
+  void isUser;
 
   // Use mergedParts so data-tool-agent nested tools are included in the flat list
   const allToolsFlat = useMemo(
@@ -112,11 +125,6 @@ const ConversationItemComponent = ({
     return null;
   }
 
-  // Pass approval responses straight through — cascade-reject is handled inside ToolApprovalPanel.
-  const handleToolApproval = (params: { id: string; approved: boolean }) => {
-    addToolApprovalResponse(params);
-  };
-
   const getComponent = (part: ExtendedPart, isDisabled = false) => {
     const partType = (part as { type?: string }).type;
 
@@ -124,12 +132,10 @@ const ConversationItemComponent = ({
       return (
         <Tool
           part={part as unknown as ConversationToolPart}
-          addToolApprovalResponse={handleToolApproval}
           isDisabled={isDisabled}
           firstPendingApprovalIdx={firstPendingApprovalIdx}
           integrationAccountMap={integrationAccountMap}
           integrationFrontendMap={integrationFrontendMap}
-          setToolArgOverride={setToolArgOverride}
         />
       );
     }
@@ -138,12 +144,7 @@ const ConversationItemComponent = ({
       return (
         <EditorContent
           editor={editor}
-          className={cn("editor-container", !isUser && "mt-2")}
-          defaultValue={
-            "content" in part
-              ? String((part as { content?: unknown }).content ?? "")
-              : ""
-          }
+          className={cn("editor-container", "mt-1")}
         />
       );
     }
@@ -188,21 +189,55 @@ const ConversationItemComponent = ({
     return null;
   };
 
+  // Slack-style layout: every message left-aligned, with an avatar
+  // column on the left and a header row (name • timestamp) above the
+  // body. No bubble background — the vertical spacing carries the
+  // grouping. Both user and agent messages share this shape so multi-
+  // participant threads read cleanly.
   return (
     <div
       className={cn(
-        "group/message flex w-full gap-2 px-5 pb-2",
-        isUser && "my-4 justify-end",
+        "group/message flex w-full gap-3 px-5 py-2",
         className,
       )}
     >
-      <div className={cn("flex w-full flex-col", isUser && "w-fit items-end")}>
-        <div
-          className={cn(
-            "flex w-full flex-col",
-            isUser && "bg-grayAlpha-100 rounded-md p-2",
-          )}
-        >
+      <div className="flex shrink-0 pt-0.5">
+        {sender?.kind === "agent" && sender.appearance ? (
+          <SamAvatar
+            size={28}
+            eye={sender.appearance.eye}
+            eyeColor={sender.appearance.eyeColor}
+          />
+        ) : (
+          <div
+            className={cn(
+              "flex h-7 w-7 items-center justify-center rounded-md text-xs font-medium",
+              sender?.kind === "user"
+                ? "bg-primary/20 text-primary"
+                : "bg-muted text-muted-foreground",
+            )}
+            aria-hidden
+          >
+            {(sender?.name ?? "?").slice(0, 1).toUpperCase()}
+          </div>
+        )}
+      </div>
+
+      <div className="flex min-w-0 flex-1 flex-col">
+        {sender && (
+          <div className="flex items-baseline gap-2">
+            <span className="text-foreground text-sm font-medium">
+              {sender.name}
+            </span>
+            {formattedTime && (
+              <span className="text-muted-foreground text-[10px] opacity-0 transition-opacity group-hover/message:opacity-100">
+                {formattedTime}
+              </span>
+            )}
+          </div>
+        )}
+
+        <div className="flex w-full min-w-0 flex-col">
           {groupedParts.map((group, groupIndex) => {
             if (group.type === "single") {
               return (
@@ -250,29 +285,7 @@ const ConversationItemComponent = ({
               </div>
             );
           })}
-
-          {pendingApprovals.length > 0 && (
-            <ToolApprovalPanel
-              pendingApprovals={pendingApprovals}
-              addToolApprovalResponse={handleToolApproval}
-              isChatBusy={isChatBusy}
-              integrationAccountMap={integrationAccountMap}
-              integrationFrontendMap={integrationFrontendMap}
-              setToolArgOverride={setToolArgOverride}
-            />
-          )}
         </div>
-
-        {formattedTime && (
-          <div
-            className={cn(
-              "text-muted-foreground/70 pt-1 text-[10px] opacity-0 transition-opacity group-hover/message:opacity-100",
-              isUser ? "self-end" : "self-start",
-            )}
-          >
-            {formattedTime}
-          </div>
-        )}
       </div>
     </div>
   );
@@ -282,6 +295,9 @@ const ConversationItemComponent = ({
 export const ConversationItem = memo(
   ConversationItemComponent,
   (prevProps, nextProps) => {
-    return prevProps.message === nextProps.message;
+    return (
+      prevProps.message === nextProps.message &&
+      prevProps.sender?.name === nextProps.sender?.name
+    );
   },
 );

@@ -12,7 +12,6 @@
 
 import { env } from "~/env.server";
 import type { IngestEpisodePayload } from "~/jobs/ingest/ingest-episode.logic";
-import type { CreateConversationTitlePayload } from "~/jobs/conversation/create-title.logic";
 import type { SessionCompactionPayload } from "~/jobs/session/session-compaction.logic";
 import type { LabelAssignmentPayload } from "~/jobs/labels/label-assignment.logic";
 import type { TitleGenerationPayload } from "~/jobs/titles/title-generation.logic";
@@ -22,6 +21,7 @@ import type { TaskPayload } from "~/jobs/task/task.logic";
 import type { CasePayload } from "~/jobs/case/case.logic";
 import type { ScratchpadScanPayload } from "~/jobs/scratchpad/scratchpad-scan.logic";
 import type { CodingDescriptionUpdatePayload } from "~/jobs/coding/description-update.logic";
+import type { RunAgentTurnPayload } from "~/jobs/conversation/run-agent-turn.logic";
 import { runs } from "@trigger.dev/sdk";
 
 export type QueueProvider = "trigger" | "bullmq";
@@ -87,29 +87,30 @@ export async function enqueueIngestEpisode(
 }
 
 /**
- * Enqueue conversation title creation job
+ * Enqueue a specialist agent's turn on an existing conversation.
+ * Called by dispatchMentions after a placeholder row has been reserved.
+ * Returns the queue's run/job id so dispatchMentions can persist it as
+ * `ConversationHistory.asyncJobId` — that's what lets a fresh mention of
+ * the same agent cancel this run via `jobManager.cancel(id)`.
  */
-export async function enqueueCreateConversationTitle(
-  payload: CreateConversationTitlePayload,
+export async function enqueueAgentTurn(
+  payload: RunAgentTurnPayload,
 ): Promise<{ id?: string }> {
   const provider = env.QUEUE_PROVIDER as QueueProvider;
 
   if (provider === "trigger") {
-    const { createConversationTitle } =
-      await import("~/trigger/conversation/create-conversation-title");
-    const handler = await createConversationTitle.trigger(payload);
+    const { runAgentTurn } = await import(
+      "~/trigger/conversation/run-agent-turn"
+    );
+    const handler = await runAgentTurn.trigger(payload);
     return { id: handler.id };
   } else {
-    // BullMQ
-    const { conversationTitleQueue } = await import("~/bullmq/queues");
-    const job = await conversationTitleQueue.add(
-      "create-conversation-title",
-      payload,
-      {
-        attempts: 3,
-        backoff: { type: "exponential", delay: 2000 },
-      },
-    );
+    const { agentTurnQueue } = await import("~/bullmq/queues");
+    const job = await agentTurnQueue.add("run-agent-turn", payload, {
+      // Superseded turns aren't worth retrying — the conversation has
+      // moved on. Match trigger.dev's default (attempts: 1).
+      attempts: 1,
+    });
     return { id: job.id };
   }
 }

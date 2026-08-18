@@ -52,27 +52,6 @@ export const ingestQueue = new Queue("ingest-queue", {
 });
 
 /**
- * Conversation title creation queue
- */
-export const conversationTitleQueue = new Queue("conversation-title-queue", {
-  connection: getRedisConnection(),
-  defaultJobOptions: {
-    attempts: 3,
-    backoff: {
-      type: "exponential",
-      delay: 2000,
-    },
-    removeOnComplete: {
-      age: 3600,
-      count: 1000,
-    },
-    removeOnFail: {
-      age: 86400,
-    },
-  },
-});
-
-/**
  * Session compaction queue
  */
 export const sessionCompactionQueue = new Queue("session-compaction-queue", {
@@ -297,6 +276,28 @@ export const taskQueue = new Queue("task-queue", {
     removeOnComplete: {
       age: 7200,
       count: 100,
+    },
+    removeOnFail: {
+      age: 86400,
+    },
+  },
+});
+
+/**
+ * Agent-turn queue
+ * Runs one specialist agent's turn on an existing conversation after a
+ * mention has reserved a placeholder row. Cancellable — dispatchMentions
+ * calls the runs cancel API when a fresh mention supersedes an in-flight
+ * turn. attempts=1 because retrying a superseded turn would re-do a
+ * conversation that has already moved on.
+ */
+export const agentTurnQueue = new Queue("agent-turn-queue", {
+  connection: getRedisConnection(),
+  defaultJobOptions: {
+    attempts: 1,
+    removeOnComplete: {
+      age: 3600,
+      count: 500,
     },
     removeOnFail: {
       age: 86400,

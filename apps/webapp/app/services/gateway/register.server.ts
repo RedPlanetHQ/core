@@ -1,7 +1,6 @@
 import { prisma } from "~/db.server";
 import { ciphertext } from "./secrets.server";
 import { verifyGateway } from "./transport.server";
-import { ensureGatewayAgent } from "~/services/agent.server";
 
 export interface RegisterGatewayInput {
   /** Optional friendly override. If omitted, derived from manifest.gateway.name
@@ -140,14 +139,9 @@ export async function registerGateway(
         },
       });
 
-  // Surface the gateway as an agent in the workspace so it can be @mentioned
-  // and assigned to tasks like any other agent. Idempotent.
-  await ensureGatewayAgent({
-    id: gateway.id,
-    workspaceId: gateway.workspaceId,
-    name: gateway.name,
-    description: gateway.description ?? undefined,
-  });
-
+  // Historically we auto-created a gateway-backed Agent here so the
+  // gateway showed up alongside chat teammates. Retired — gateways are
+  // infrastructure managed under Settings › Gateways, not a chatteable
+  // agent, so we don't materialize one anymore.
   return { ok: true, gatewayId: gateway.id };
 }

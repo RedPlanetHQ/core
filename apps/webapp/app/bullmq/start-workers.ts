@@ -12,7 +12,6 @@ import { logger } from "~/services/logger.service";
 import {
   ingestWorker,
   preprocessWorker,
-  conversationTitleWorker,
   sessionCompactionWorker,
   closeAllWorkers,
   labelAssignmentWorker,
@@ -20,11 +19,11 @@ import {
   integrationRunWorker,
   scratchpadScanWorker,
   caseWorker,
+  agentTurnWorker,
 } from "./workers";
 import { initializeScheduledTaskScheduler } from "~/services/task-scheduler";
 import {
   ingestQueue,
-  conversationTitleQueue,
   sessionCompactionQueue,
   labelAssignmentQueue,
   titleGenerationQueue,
@@ -32,6 +31,7 @@ import {
   integrationRunQueue,
   scratchpadScanQueue,
   caseQueue,
+  agentTurnQueue,
 } from "./queues";
 import {
   setupWorkerLogging,
@@ -53,11 +53,7 @@ export async function initWorkers(): Promise<void> {
   // Setup comprehensive logging for all workers
   setupWorkerLogging(ingestWorker, ingestQueue, "ingest-episode");
   setupWorkerLogging(preprocessWorker, preprocessQueue, "preprocess-episode");
-  setupWorkerLogging(
-    conversationTitleWorker,
-    conversationTitleQueue,
-    "conversation-title",
-  );
+  setupWorkerLogging(agentTurnWorker, agentTurnQueue, "agent-turn");
 
   setupWorkerLogging(
     sessionCompactionWorker,
@@ -97,9 +93,9 @@ export async function initWorkers(): Promise<void> {
         name: "preprocess-episode",
       },
       {
-        worker: conversationTitleWorker,
-        queue: conversationTitleQueue,
-        name: "conversation-title",
+        worker: agentTurnWorker,
+        queue: agentTurnQueue,
+        name: "agent-turn",
       },
       {
         worker: sessionCompactionWorker,
@@ -143,7 +139,7 @@ export async function initWorkers(): Promise<void> {
     `✓ Document ingest worker: ${preprocessWorker.name} (concurrency: 3)`,
   );
   logger.log(
-    `✓ Conversation title worker: ${conversationTitleWorker.name} (concurrency: 10)`,
+    `✓ Agent turn worker: ${agentTurnWorker.name} (concurrency: 5)`,
   );
   logger.log(
     `✓ Session compaction worker: ${sessionCompactionWorker.name} (concurrency: 3)`,

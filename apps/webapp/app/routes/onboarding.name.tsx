@@ -53,9 +53,10 @@ export async function action({ request }: ActionFunctionArgs) {
       ...existingMeta,
       onboardingV2Complete: true,
     };
-    if (agentEye) nextMeta.agentEye = agentEye;
-    if (agentEyeColor) nextMeta.agentEyeColor = agentEyeColor;
 
+    // Workspace name IS the generalist agent's name. Whenever workspace name
+    // changes, the generalist syncs (see settings.workspace._index.tsx). The
+    // slug drives inbound email routing.
     await prisma.workspace.update({
       where: { id: workspaceId as string },
       data: {
@@ -65,16 +66,26 @@ export async function action({ request }: ActionFunctionArgs) {
       },
     });
 
-    // Sync the generalist agent's identity to match the chosen agent name.
+    // Sync the generalist agent's identity + appearance to the workspace name.
     // Fall back to seeding if a legacy workspace somehow doesn't have one yet.
     const existingGeneralist = await getGeneralistAgent(workspaceId as string);
     if (existingGeneralist) {
       await updateGeneralistAgent(workspaceId as string, {
         displayName: agentName,
-        handle: slugifyHandle(agentName),
+        handle: slugifyHandle(agentSlug),
+        appearance: {
+          ...(agentEye ? { eye: agentEye } : {}),
+          ...(agentEyeColor ? { eyeColor: agentEyeColor } : {}),
+        },
       });
     } else {
-      await ensureGeneralistAgent(workspaceId as string, agentName);
+      await ensureGeneralistAgent(workspaceId as string, agentName, {
+        handle: agentSlug,
+        appearance: {
+          ...(agentEye ? { eye: agentEye } : {}),
+          ...(agentEyeColor ? { eyeColor: agentEyeColor } : {}),
+        },
+      });
     }
 
     await ensureDefaultEmailChannel(workspaceId as string, agentSlug);

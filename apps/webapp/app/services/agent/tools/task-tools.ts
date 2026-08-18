@@ -32,7 +32,6 @@ import { createEmptyConversation } from "~/services/conversation.server";
 import { logger } from "~/services/logger.service";
 import { Prisma, type TaskStatus } from "@prisma/client";
 import { UserTypeEnum } from "@core/types";
-import { getTaskPhase, setTaskPhaseInMetadata } from "~/services/task.phase";
 import { env } from "~/env.server";
 import {
   computeNextRun,
@@ -740,7 +739,7 @@ REPARENTING: Pass newParentId to move a task under a different parent (or null t
     // unblock_task — available in all flows (web chat, channels, etc.)
     ...(source && {
       unblock_task: tool({
-        description: `Approve a Waiting task so execution can resume. Requires a reason explaining why the wait is resolved. The reason is appended to the task's conversation as the user's reply, and the task is enqueued immediately — the agent picks it up on its next turn and decides the new status itself. The task's status and phase are left untouched, so a task that went Waiting from PLAN mind resumes in plan mind. Only works on tasks currently in Waiting status.`,
+        description: `Approve a Waiting task so execution can resume. Requires a reason explaining why the wait is resolved. The reason is appended to the task's conversation as the user's reply, and the task is enqueued immediately — the agent picks it up on its next turn and decides the new status itself. Only works on tasks currently in Waiting status.`,
         inputSchema: z.object({
           taskId: z
             .string()
@@ -809,97 +808,6 @@ REPARENTING: Pass newParentId to move a task under a different parent (or null t
             return `Task "${task.title}" unblocked and resumed in its own conversation. Tell the user it's being worked on. Do NOT take any further action on this task — it handles itself from here.`;
           } catch (error) {
             return `Failed to unblock task: ${error instanceof Error ? error.message : "Unknown error"}`;
-          }
-        },
-      }),
-    }),
-
-    // enter_plan_mode / exit_plan_mode — phase toggle on the current task.
-    // Both are always registered when a task is in scope; the tool body is
-    // idempotent (no-op when called in the matching phase). The agent flips
-    // mind WITHIN the same turn — there's no forced turn boundary. The
-    // current turn's prompt still reflects the pre-flip phase, but the
-    // tool's response message tells the agent to adopt the new mental
-    // model immediately. The next prompt build (next user message, next
-    // scheduled wake-up, or an explicit reschedule_self / update_task)
-    // will render the matching block.
-    ...(currentTaskId && {
-      enter_plan_mode: tool({
-        description: `Switch this task into PLAN mind. Call when you can't execute yet because the goal is ambiguous, the shape is undefined, you need to gather information, or the work is open-ended and needs to be sketched out first.
-
-Plan mind is for gathering info, loading readiness skills (Gather Information / Brainstorm / Plan / Decompose Task), and writing a plan into the task description via update_task with <plan>...</plan> HTML. When the plan is ready, call exit_plan_mode and act on it.
-
-The task's status does NOT change — only the phase metadata. You can continue working in the same turn after this call.`,
-        inputSchema: z.object({
-          reason: z
-            .string()
-            .describe(
-              "Why you can't execute yet — what gap plan mind needs to close (e.g. 'goal is open-ended, need to brainstorm shape', 'need to gather code structure before I can fix this', 'description names entities I don't recognize').",
-            ),
-        }),
-        execute: async ({ reason }) => {
-          try {
-            const task = await getTaskById(currentTaskId);
-            if (!task) return `Task ${currentTaskId} not found.`;
-
-            const currentPhase = getTaskPhase(task);
-            if (currentPhase === "prep") {
-              return "Already in PLAN mind. Continue planning, or call exit_plan_mode when ready.";
-            }
-
-            await prisma.task.update({
-              where: { id: currentTaskId },
-              data: {
-                metadata: setTaskPhaseInMetadata(
-                  task.metadata,
-                  "prep",
-                ) as Prisma.InputJsonValue,
-              },
-            });
-
-            logger.info(
-              `Task ${currentTaskId} entered PLAN mind: ${reason}`,
-            );
-
-            return `Now in PLAN mind. Reason recorded: "${reason}". Continue in this turn: load the readiness skill that fits the gap, gather context, write your plan into the description with <plan>...</plan> HTML via update_task, then call exit_plan_mode and act on the plan.`;
-          } catch (error) {
-            logger.error("Failed to enter plan mode", { error });
-            return `Failed to enter plan mode: ${error instanceof Error ? error.message : "Unknown error"}`;
-          }
-        },
-      }),
-
-      exit_plan_mode: tool({
-        description: `Switch this task back to EXECUTE mind. Call after you've written the plan into the task description and you're ready to act on it. You can continue working in the same turn — the next prompt build will render the execute block.
-
-The task's status does NOT change. If your plan involves splitting into subtasks, do that AFTER exit_plan_mode. If you need user approval before executing the plan, call update_task(status: "Waiting") + send_message FIRST.`,
-        inputSchema: z.object({}),
-        execute: async () => {
-          try {
-            const task = await getTaskById(currentTaskId);
-            if (!task) return `Task ${currentTaskId} not found.`;
-
-            const currentPhase = getTaskPhase(task);
-            if (currentPhase === "execute") {
-              return "Already in EXECUTE mind. Continue executing.";
-            }
-
-            await prisma.task.update({
-              where: { id: currentTaskId },
-              data: {
-                metadata: setTaskPhaseInMetadata(
-                  task.metadata,
-                  "execute",
-                ) as Prisma.InputJsonValue,
-              },
-            });
-
-            logger.info(`Task ${currentTaskId} exited PLAN mind`);
-
-            return "Now in EXECUTE mind. Continue in this turn: act on the plan you wrote into the description.";
-          } catch (error) {
-            logger.error("Failed to exit plan mode", { error });
-            return `Failed to exit plan mode: ${error instanceof Error ? error.message : "Unknown error"}`;
           }
         },
       }),

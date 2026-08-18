@@ -35,13 +35,19 @@ import { SuggestIntegrationsCards } from "./suggest-integrations-cards";
 
 interface ToolProps {
   part: ConversationToolPart;
-  addToolApprovalResponse: ChatAddToolApproveResponseFunction;
+  /** Legacy: was called when the user clicked an inline approve/decline
+   *  affordance on a tool card (ask_user, requireApproval integrations).
+   *  Those flows were retired — the prop is optional and unused now, kept
+   *  so tool-item stays backwards-compatible if any old caller passes it.
+   *  Delete once no callers remain. */
+  addToolApprovalResponse?: ChatAddToolApproveResponseFunction;
   isDisabled?: boolean;
   allToolsFlat?: ConversationToolPart[];
   firstPendingApprovalIdx?: number;
   isNested?: boolean;
   integrationAccountMap?: Record<string, string>;
   integrationFrontendMap?: Record<string, string>;
+  /** Legacy — see addToolApprovalResponse. Kept optional for the same reason. */
   setToolArgOverride?: (
     toolCallId: string,
     args: Record<string, unknown>,
@@ -216,13 +222,13 @@ const ToolInner = ({
                 parameters: JSON.stringify(newInput),
               });
             }
-            if (part.approval?.id) {
+            if (part.approval?.id && addToolApprovalResponse) {
               addToolApprovalResponse({ id: part.approval.id, approved: true });
             }
             // keep collapsible open so user can see the submitted state
           },
           () => {
-            if (part.approval?.id) {
+            if (part.approval?.id && addToolApprovalResponse) {
               addToolApprovalResponse({
                 id: part.approval.id,
                 approved: false,

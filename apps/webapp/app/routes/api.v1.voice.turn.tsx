@@ -33,6 +33,7 @@ import {
 import { buildAgentContext } from "~/services/agent/context";
 import { prepareHistoryParts } from "~/services/agent/context-window";
 import { mastra } from "~/services/agent/mastra";
+import { prisma } from "~/db.server";
 import {
   saveConversationResult,
   createResumableUIResponse,
@@ -84,21 +85,43 @@ const { loader, action } = createHybridActionApiRoute(
 
     // Build conversation history snapshot for the model
     const conversation = await getConversationAndHistory(conversationId, userId);
-    const history = (conversation?.ConversationHistory ?? []).map(
-      (h: any) => {
-        const role: "assistant" | "user" =
-          h.userType === "Agent" ? "assistant" : "user";
-        const rawParts =
-          h.parts && Array.isArray(h.parts) && h.parts.length > 0
-            ? h.parts
-            : [{ type: "text", text: h.message ?? "" }];
-        return {
-          id: h.id,
-          role,
-          parts: prepareHistoryParts(role, rawParts),
-        };
-      },
+    const historyRows = conversation?.ConversationHistory ?? [];
+
+    // Speaker attribution for multi-agent threads.
+    const historyAgentIds = Array.from(
+      new Set(
+        (historyRows as any[])
+          .map((h) => h.agentId as string | null)
+          .filter((id): id is string => !!id),
+      ),
     );
+    const agentDisplayNames: Record<string, string> = {};
+    if (historyAgentIds.length > 0) {
+      const rows = await prisma.agents.findMany({
+        where: { id: { in: historyAgentIds } },
+        select: { id: true, displayName: true },
+      });
+      for (const r of rows) agentDisplayNames[r.id] = r.displayName;
+    }
+    const conversationOwnerId = conversation?.agentId ?? null;
+
+    const history = historyRows.map((h: any) => {
+      const role: "assistant" | "user" =
+        h.userType === "Agent" ? "assistant" : "user";
+      const rawParts =
+        h.parts && Array.isArray(h.parts) && h.parts.length > 0
+          ? h.parts
+          : [{ type: "text", text: h.message ?? "" }];
+      return {
+        id: h.id,
+        role,
+        parts: prepareHistoryParts(role, rawParts, {
+          rowAgentId: h.agentId,
+          runningAgentId: conversationOwnerId,
+          agentDisplayNames,
+        }),
+      };
+    });
 
     const modelString =
       body.modelId ?? (await resolveDefaultChatModelId(workspaceId));
@@ -111,8 +134,6 @@ const { loader, action } = createHybridActionApiRoute(
       systemPrompt,
       tools,
       modelMessages,
-      gatherContextAgent,
-      takeActionAgent,
       gatewayAgents,
     } = await buildAgentContext({
       userId,
@@ -126,10 +147,7 @@ const { loader, action } = createHybridActionApiRoute(
       screenContext: body.screenContext ?? null,
     });
 
-    const subagents: Record<string, Agent> = {
-      gather_context: gatherContextAgent,
-      take_action: takeActionAgent,
-    };
+    const subagents: Record<string, Agent> = {};
     for (const gw of gatewayAgents) {
       subagents[gw.id] = gw;
     }
@@ -142,8 +160,6 @@ const { loader, action } = createHybridActionApiRoute(
       agents: subagents,
     });
     agent.__registerMastra(mastra);
-    gatherContextAgent.__registerMastra(mastra);
-    takeActionAgent.__registerMastra(mastra);
     for (const gw of gatewayAgents) {
       (gw as any).__registerMastra(mastra);
     }
@@ -183,6 +199,7 @@ const { loader, action } = createHybridActionApiRoute(
         await saveConversationResult({
           parts: last ? last.parts : [],
           conversationId,
+          authorAgentId: conversationOwnerId,
           incomingUserText: body.transcript,
           incognito: conversation?.incognito,
           userId,

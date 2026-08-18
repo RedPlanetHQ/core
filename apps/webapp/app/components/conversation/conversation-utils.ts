@@ -589,3 +589,47 @@ export const groupToolParts = (parts: ExtendedPart[]): GroupedPart[] => {
 
   return grouped;
 };
+
+/**
+ * Local-calendar-day key for a message timestamp. Used to decide where a
+ * date divider belongs — two rows share a divider iff they share this key.
+ * Deliberately local-time: the user groups by *their* day, not UTC's.
+ */
+export const conversationDayKey = (value: string | Date): string => {
+  const d = new Date(value);
+  return `${d.getFullYear()}-${d.getMonth()}-${d.getDate()}`;
+};
+
+/**
+ * Human label for a date divider: "Today" / "Yesterday" / a weekday within
+ * the last week / an explicit date beyond that. The year is only shown when
+ * it isn't the current one — it's noise the other 99% of the time.
+ *
+ * `now` is injectable so this stays pure and testable.
+ */
+export const formatConversationDayLabel = (
+  value: string | Date,
+  now: Date = new Date(),
+): string => {
+  const d = new Date(value);
+  const startOfDay = (x: Date) =>
+    new Date(x.getFullYear(), x.getMonth(), x.getDate()).getTime();
+  const diffDays = Math.round(
+    (startOfDay(now) - startOfDay(d)) / (24 * 60 * 60 * 1000),
+  );
+
+  if (diffDays === 0) return "Today";
+  if (diffDays === 1) return "Yesterday";
+  // Only look back a week — "last Tuesday" stops being a useful anchor
+  // beyond that, and forward dates (clock skew) fall through to the
+  // explicit format too.
+  if (diffDays > 1 && diffDays < 7) {
+    return d.toLocaleDateString(undefined, { weekday: "long" });
+  }
+  return d.toLocaleDateString(undefined, {
+    weekday: "short",
+    month: "short",
+    day: "numeric",
+    ...(d.getFullYear() === now.getFullYear() ? {} : { year: "numeric" }),
+  });
+};

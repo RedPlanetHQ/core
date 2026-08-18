@@ -1,6 +1,8 @@
-import { enqueueCreateConversationTitle } from "~/lib/queue-adapter.server";
+import { dispatchMentions } from "./dispatch-mentions";
+import { prisma } from "~/db.server";
 import {
   getConversationAndHistory,
+  sliceTurnContext,
   updateConversationStatus,
   upsertConversationHistory,
 } from "../conversation.server";
@@ -28,6 +30,11 @@ import {
   recordTokenUsage,
 } from "~/services/tokenUsage.server";
 import { addToQueue } from "~/lib/ingest.server";
+import {
+  buildEpisodeBody,
+  buildSessionBucketId,
+} from "./conversation-ingest";
+import { getUserTimezone } from "~/models/user.server";
 import {
   selectModelMessages,
   compactSurvivedInModelMessages,
@@ -102,15 +109,6 @@ export async function noStreamProcess(
 
   const conversationHistory = conversation?.ConversationHistory ?? [];
 
-  if (conversationHistory.length === 1 && !isAssistantApproval) {
-    const message = body.message?.parts[0].text;
-    // Trigger conversation title task
-    await enqueueCreateConversationTitle({
-      conversationId: body.id,
-      message,
-    });
-  }
-
   const messageUserType = body.messageUserType ?? UserTypeEnum.User;
 
   if (
@@ -118,11 +116,10 @@ export async function noStreamProcess(
     !isAssistantApproval &&
     !body.skipUserMessage
   ) {
-    const message = body.message?.parts[0].text;
     const messageParts = body.message?.parts;
 
     await upsertConversationHistory(
-      message.id ?? crypto.randomUUID(),
+      body.message?.id ?? crypto.randomUUID(),
       messageParts,
       body.id,
       messageUserType,
@@ -130,18 +127,76 @@ export async function noStreamProcess(
     );
   }
 
+  // NB: no user-side dispatchMentions here. The conversation-owning agent
+  // (butler in 1:1s, assigned specialist in task chats) is always the
+  // first speaker on a user turn — they can read any @mention the user
+  // wrote and choose to relay via their own <mention colleague="…" /> in
+  // the reply. That keeps the flow consistent whether or not the target
+  // conversation supports collaboration, and dodges the "empty SSE on
+  // user @X" edge case entirely.
+
   const normalizeParts = (parts: any[] | undefined) =>
     (Array.isArray(parts) ? parts : []).filter(Boolean);
 
   const hasNonEmptyParts = (parts: any[] | undefined) =>
     normalizeParts(parts).length > 0;
 
-  const historyMessages: MessageEntry[] = conversationHistory
+  // Trim to the live turn context window BEFORE building MessageEntry rows so
+  // the pre-filter runs on the DB shape and downstream selectors see the
+  // slice, not the full backlog. Rules: today's messages (default), fall back
+  // to last MIN_LIVE_CONTEXT overall when today is sparse, hard-cap busy days
+  // at MAX_LIVE_CONTEXT. Older turns stay in the DB and remain reachable via
+  // memory search.
+  const liveHistory = sliceTurnContext(conversationHistory);
+
+  // Resolve display names for every agentId that appears in history so
+  // prepareHistoryParts can render "[Alfred] ..." style prefixes for
+  // cross-agent rows. Single query — the running agent isn't known here
+  // (this codepath is butler-owned) so runningAgentId comes from the
+  // conversation record below.
+  const historyAgentIds = Array.from(
+    new Set(
+      (liveHistory as any[])
+        .map((h) => h.agentId as string | null)
+        .filter((id): id is string => !!id),
+    ),
+  );
+  const agentDisplayNames: Record<string, string> = {};
+  if (historyAgentIds.length > 0) {
+    const rows = await prisma.agents.findMany({
+      where: { id: { in: historyAgentIds } },
+      select: { id: true, displayName: true },
+    });
+    for (const r of rows) agentDisplayNames[r.id] = r.displayName;
+  }
+  const conversationOwner = await prisma.conversation
+    .findUnique({ where: { id: body.id }, select: { agentId: true } })
+    .then((c) => c?.agentId ?? null);
+
+  // Role assignment per row — buzz-style: only the running agent's own
+  // past turns are role="assistant"; every other agent's turns get
+  // demoted to role="user" with a `[SpeakerName] ` prefix (stamped by
+  // prepareHistoryParts). Prevents the running agent from reading a
+  // teammate's reply as its own past turn.
+  const historyMessages: MessageEntry[] = liveHistory
     .map((history: any) => {
-      const role =
-        history.role ?? (history.userType === "Agent" ? "assistant" : "user");
+      let role: "user" | "assistant";
+      if (history.role) {
+        role = history.role as "user" | "assistant";
+      } else if (history.userType === "Agent") {
+        role =
+          conversationOwner && history.agentId === conversationOwner
+            ? "assistant"
+            : "user";
+      } else {
+        role = "user";
+      }
       const normalized = normalizeParts(history.parts);
-      const parts = prepareHistoryParts(role, normalized);
+      const parts = prepareHistoryParts(role, normalized, {
+        rowAgentId: history.agentId,
+        runningAgentId: conversationOwner,
+        agentDisplayNames,
+      });
       return { parts, role, id: history.id, createdAt: history.createdAt };
     })
     .filter((m) => hasNonEmptyParts(m.parts));
@@ -184,13 +239,10 @@ export async function noStreamProcess(
     workspaceId,
   );
 
-  const {
+  let {
     systemPrompt,
     tools,
     modelMessages,
-    gatherContextAgent,
-    takeActionAgent,
-    thinkAgent,
     gatewayAgents,
   } = await buildAgentContext({
     userId,
@@ -206,6 +258,25 @@ export async function noStreamProcess(
     modelConfig,
     scratchpadPageId: body.scratchpadPageId,
   });
+
+  // For OpenAI-compat BYOK endpoints (cliproxy, Claude Code proxies,
+  // CLI-agent wrappers), the upstream agent's own system prompt will
+  // fight ours. Fold system + history into a single user-message
+  // "assignment brief" — the upstream agent keeps its identity and
+  // treats our content as the task. Same trick as buzz-acp; validated
+  // in prompt-lab.
+  const { buildUserBrief, shouldUseUserBriefDelivery } = await import(
+    "~/services/agent/user-brief-delivery"
+  );
+  if (shouldUseUserBriefDelivery(modelConfig)) {
+    ({ systemPrompt, modelMessages } = buildUserBrief({
+      systemPrompt,
+      modelMessages,
+    }));
+    logger.info("no-stream-process: using user-brief delivery (BYOK openai-compat)", {
+      conversationId: body.id,
+    });
+  }
 
   // Delivery invariant: in compact+recent mode the compact summary MUST reach
   // the model — it is the agent's only view of everything older than the recent
@@ -224,13 +295,12 @@ export async function noStreamProcess(
     }
   }
 
-  // Create core agent with subagents — think only present for triggered flows
-  const subagents: Record<string, Agent> = {
-    gather_context: gatherContextAgent,
-    take_action: takeActionAgent,
-  };
-
-  if (thinkAgent) subagents.think = thinkAgent;
+  // Main agent's sub-agents are only the gateway-backed ones now — every
+  // other tool the main agent needs (memory search, integrations, tasks,
+  // skills, etc.) lives directly on the main agent's `tools` map. Gateway
+  // agents remain sub-agents because each wraps a remote gateway with its
+  // own manifest-driven tool set.
+  const subagents: Record<string, Agent> = {};
   for (const gw of gatewayAgents) {
     subagents[gw.id] = gw;
   }
@@ -246,9 +316,6 @@ export async function noStreamProcess(
   // Wire Mastra for storage on all agent levels
   const mastra = getMastra();
   (agent as any).__registerMastra(mastra);
-  (gatherContextAgent as any).__registerMastra(mastra);
-  (takeActionAgent as any).__registerMastra(mastra);
-  if (thinkAgent) (thinkAgent as any).__registerMastra(mastra);
   for (const gw of gatewayAgents) {
     (gw as any).__registerMastra(mastra);
   }
@@ -371,6 +438,16 @@ export async function noStreamProcess(
     parts: assistantParts,
   };
 
+  // Attribute the main agent's reply to the conversation's owning agent
+  // so multi-agent threads render correctly (and so dispatchMentions'
+  // self-mention guard has an author to check against).
+  const owningAgentId = await prisma.conversation
+    .findUnique({
+      where: { id: body.id },
+      select: { agentId: true },
+    })
+    .then((c) => c?.agentId ?? null);
+
   try {
     await upsertConversationHistory(
       assistantMessageId,
@@ -378,16 +455,63 @@ export async function noStreamProcess(
       body.id,
       UserTypeEnum.Agent,
       false,
+      undefined,
+      owningAgentId,
     );
 
+    // If the assistant emitted <mention colleague="…" /> tags, spin up
+    // specialist turns on this conversation. The main agent's row is
+    // depth 0 (it's a direct reply to the user); mention chains grow from
+    // there. Skipped if a triggerContext is present since scheduled task
+    // triggers shouldn't fan out to specialists mid-run.
+    if (!body.triggerContext) {
+      await dispatchMentions({
+        sourceRow: {
+          id: assistantMessageId,
+          conversationId: body.id,
+          workspaceId,
+          parts: assistantParts as unknown,
+          delegationDepth: 0,
+          authorAgentId: owningAgentId,
+        },
+      }).catch((err) => {
+        logger.error("noStreamProcess: dispatchMentions failed", {
+          error: err,
+          conversationId: body.id,
+        });
+      });
+    }
+
     if (agentResult.text) {
+      // Resolve owning agent's handle for the episode's <agent> attribution.
+      // If the conversation has no agentId (edge case) we fall back to
+      // "agent" inside buildEpisodeBody. Same DB read below could be
+      // reused across multi-ingest paths — small enough to leave.
+      const owningAgentHandle = owningAgentId
+        ? await prisma.agents
+            .findUnique({
+              where: { id: owningAgentId },
+              select: { handle: true },
+            })
+            .then((a) => a?.handle ?? null)
+        : null;
+
+      // Per-day session bucket so long-running conversations don't compact
+      // into one giant blob and recall can slice by day.
+      const timezone = await getUserTimezone(userId);
+      const sessionId = buildSessionBucketId(body.id, timezone);
+
       await addToQueue(
         {
-          episodeBody: `<user>${message}</user><assistant>${agentResult.text}</assistant>`,
+          episodeBody: buildEpisodeBody({
+            userText: message,
+            agentText: agentResult.text,
+            agentHandle: owningAgentHandle,
+          }),
           source: body.source,
           referenceTime: new Date().toISOString(),
           type: EpisodeType.CONVERSATION,
-          sessionId: body.id,
+          sessionId,
         },
         userId,
         workspaceId,

@@ -20,8 +20,8 @@ async function getAllQueues() {
     labelAssignmentQueue,
     titleGenerationQueue,
     personaGenerationQueue,
-    conversationTitleQueue,
     sessionCompactionQueue,
+    agentTurnQueue,
   } = await import("../queues");
 
   return [
@@ -30,8 +30,8 @@ async function getAllQueues() {
     labelAssignmentQueue,
     titleGenerationQueue,
     personaGenerationQueue,
-    conversationTitleQueue,
     sessionCompactionQueue,
+    agentTurnQueue,
   ];
 }
 

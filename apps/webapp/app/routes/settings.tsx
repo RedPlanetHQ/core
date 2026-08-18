@@ -13,6 +13,7 @@ import {
   MessageSquare,
   Cpu,
   Brain,
+  Server,
 } from "lucide-react";
 
 import {
@@ -71,6 +72,7 @@ export default function Settings() {
       icon: MessageSquare,
       path: "/settings/workspace/channels",
     },
+    { name: "Gateways", icon: Server, path: "/settings/workspace/gateways" },
     ...(isDesktop
       ? [{ name: "Memory", icon: Brain, path: "/settings/workspace/memory" }]
       : []),

@@ -88,10 +88,6 @@ export async function createTask(
 
   const effectiveStatus = options?.status ?? "Todo";
 
-  // Execute-first lifecycle: every new task starts in execute mind. We do
-  // NOT write metadata.phase at creation — the absence of phase IS execute
-  // (see getTaskPhase). Only enter_plan_mode writes metadata.phase = "prep"
-  // when the agent self-promotes; exit_plan_mode flips it back to execute.
   const task = await prisma.task.create({
     data: {
       title,
@@ -652,8 +648,7 @@ export async function createScheduledTask(
     nextRunAt = computeNextRun(data.schedule, timezone, afterTime);
   }
 
-  // Scheduled/recurring tasks land directly in Ready — execute mind is the
-  // implicit default (absence of metadata.phase). The first execution
+  // Scheduled/recurring tasks land directly in Ready. The first execution
   // handles any clarification in the execution conversation.
   const status: TaskStatus = "Ready";
 

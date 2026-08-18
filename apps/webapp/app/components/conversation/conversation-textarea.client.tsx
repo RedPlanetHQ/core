@@ -22,6 +22,11 @@ import {
   createSkillSlashCommand,
   SkillSlashPluginKey,
 } from "./slash-command-extension";
+import {
+  buildColleagueMentionExtension,
+  ColleagueMentionPluginKey,
+  type ColleagueSuggestion,
+} from "~/components/editor/extensions/colleague-mention";
 import { VoiceComposer } from "~/components/voice/voice-composer";
 import type { STTProviderId } from "~/components/voice/stt-providers";
 import type { VoiceVadTurnResult } from "~/hooks/use-voice-vad";
@@ -66,6 +71,14 @@ interface ConversationTextareaProps {
   leftActions?: React.ReactNode;
   rightActions?: React.ReactNode;
   skills?: Array<{ id: string; title: string }>;
+  /** Active workspace agents surfaced in the `@` picker. Only consulted
+   *  when `enableMentionPicker` is true. */
+  colleagues?: ColleagueSuggestion[];
+  /** Turn on the @-mention picker. Collaboration only works in task-scoped
+   *  conversations — default false so 1:1 agent chats don't expose an
+   *  affordance that would be inert. Loaders pass true when the
+   *  conversation has `asyncJobId` set (task-linked). */
+  enableMentionPicker?: boolean;
   /**
    * Show the voice mode switch in the composer. When toggled on,
    * the editor area is replaced by a VAD-driven voice composer.
@@ -102,6 +115,8 @@ export function ConversationTextarea({
   rightActions,
   className,
   skills,
+  colleagues,
+  enableMentionPicker = false,
   enableVoiceMode = true,
   voiceProvider,
   voiceMode: voiceModeProp,
@@ -131,6 +146,13 @@ export function ConversationTextarea({
     skillsRef.current = skills ?? [];
   }, [skills]);
 
+  // Colleagues ref for @ mention (same ref-indirection pattern as skills so
+  // loader revalidations refresh the picker without re-mounting the editor).
+  const colleaguesRef = useRef<ColleagueSuggestion[]>(colleagues ?? []);
+  useEffect(() => {
+    colleaguesRef.current = colleagues ?? [];
+  }, [colleagues]);
+
   const editor = useEditor({
     extensions: [
       Document,
@@ -148,7 +170,17 @@ export function ConversationTextarea({
       }),
       History,
       createSkillSlashCommand(skillsRef),
+      // Only register the @-mention extension when the host wants it —
+      // collaboration only routes in task chats, so 1:1 conversations
+      // don't get an inert picker.
+      ...(enableMentionPicker
+        ? [buildColleagueMentionExtension(colleaguesRef)]
+        : []),
     ],
+    // One-shot prefill from `defaultValue` — used by callers like the
+    // command-bar "Add Task" affordance that wants to land the user in
+    // the composer with a starter phrase already typed.
+    content: defaultValue ?? undefined,
     immediatelyRender: false,
     editorProps: {
       attributes: {
@@ -160,9 +192,11 @@ export function ConversationTextarea({
         }
 
         if (event.key === "Enter" && !event.shiftKey) {
-          // Let the slash command suggestion handle Enter when active
-          const suggestionState = SkillSlashPluginKey.getState(view.state);
-          if (suggestionState?.active) {
+          // If any suggestion popup is open (skills, mentions), let its
+          // plugin claim Enter for selection. Otherwise Enter submits.
+          const slashState = SkillSlashPluginKey.getState(view.state);
+          const mentionState = ColleagueMentionPluginKey.getState(view.state);
+          if (slashState?.active || mentionState?.active) {
             return false;
           }
           event.preventDefault();
@@ -425,35 +459,29 @@ export function ConversationTextarea({
             </label>
           )}
           {rightActions}
+          {/* Fire-and-forget send: no in-flight lock, no stop control.
+              An assistant reply is a background job — the composer stays
+              interactive while it's running so the user can send follow-
+              ups (cancel-on-re-mention on the server handles the "wait
+              no do Y" case). Button gates only on empty input + pending
+              uploads. `isLoading` / `isStopping` / `stop` props are kept
+              in the interface for callers that still pass them, but
+              they no longer drive UI state. */}
           <Button
             variant="secondary"
-            className="gap-1 shadow-none transition-all duration-500 ease-in-out"
+            className="gap-1 shadow-none"
             onClick={() => {
-              if (isStopping || disabled) return;
-              if (isLoading) {
-                stop && stop();
-              } else {
-                handleSend();
-              }
+              if (disabled) return;
+              handleSend();
             }}
             disabled={
               disabled ||
-              isStopping ||
-              (!isLoading && uploadingCount > 0) ||
-              (!isLoading && !text && attachments.length === 0)
+              uploadingCount > 0 ||
+              (!text && attachments.length === 0)
             }
             size="lg"
           >
-            {isStopping ? (
-              <>
-                <LoaderCircle size={18} className="mr-1 animate-spin" />
-                Stopping
-              </>
-            ) : isLoading ? (
-              <>Stop</>
-            ) : (
-              <>Chat</>
-            )}
+            Send
           </Button>
         </div>
       </div>

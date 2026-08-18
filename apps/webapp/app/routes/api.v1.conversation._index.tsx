@@ -17,11 +17,10 @@ import {
   resolveModelConfig,
 } from "~/services/llm-provider.server";
 import { UserTypeEnum } from "@core/types";
-import { enqueueCreateConversationTitle } from "~/lib/queue-adapter.server";
 import { buildAgentContext } from "~/services/agent/context";
-import { createAskUserTool } from "~/services/agent/agents/core";
 import { mastra } from "~/services/agent/mastra";
 import { logger } from "~/services/logger.service";
+import { prisma } from "~/db.server";
 
 import {
   saveConversationResult,
@@ -244,13 +243,6 @@ const { loader, action } = createHybridActionApiRoute(
     // Persist incoming user message (skip on approval flows)
     // -----------------------------------------------------------------------
     if (!isAssistantApproval) {
-      if (conversationHistory.length === 1 && incomingUserText) {
-        await enqueueCreateConversationTitle({
-          conversationId: body.id,
-          message: incomingUserText,
-        });
-      }
-
       const messageParts = normalizeParts(body.message?.parts);
       if (
         hasNonEmptyParts(messageParts) &&
@@ -269,12 +261,36 @@ const { loader, action } = createHybridActionApiRoute(
     // -----------------------------------------------------------------------
     // Build message list for the model
     // -----------------------------------------------------------------------
+    // Resolve display names for every agent that has spoken in this
+    // history — prepareHistoryParts uses them to prefix cross-agent rows
+    // with `[Alfred] ...` so the running agent can distinguish colleagues.
+    const historyAgentIds = Array.from(
+      new Set(
+        (conversationHistory as any[])
+          .map((h) => h.agentId as string | null)
+          .filter((id): id is string => !!id),
+      ),
+    );
+    const agentDisplayNames: Record<string, string> = {};
+    if (historyAgentIds.length > 0) {
+      const rows = await prisma.agents.findMany({
+        where: { id: { in: historyAgentIds } },
+        select: { id: true, displayName: true },
+      });
+      for (const r of rows) agentDisplayNames[r.id] = r.displayName;
+    }
+    const conversationOwnerId = conversation?.agentId ?? null;
+
     const historyMessages: MessageEntry[] = conversationHistory.map(
       (history: any) => {
         const role =
           history.role ?? (history.userType === "Agent" ? "assistant" : "user");
         const normalized = normalizeParts(history.parts);
-        const parts = prepareHistoryParts(role, normalized);
+        const parts = prepareHistoryParts(role, normalized, {
+          rowAgentId: history.agentId,
+          runningAgentId: conversationOwnerId,
+          agentDisplayNames,
+        });
         return { parts, role, id: history.id, createdAt: history.createdAt };
       },
     );
@@ -368,8 +384,6 @@ const { loader, action } = createHybridActionApiRoute(
       systemPrompt,
       tools,
       modelMessages,
-      gatherContextAgent,
-      takeActionAgent,
       gatewayAgents,
       isBackgroundExecution,
     } = await buildAgentContext({
@@ -401,10 +415,7 @@ const { loader, action } = createHybridActionApiRoute(
       }
     }
 
-    const subagents: Record<string, Agent> = {
-      gather_context: gatherContextAgent,
-      take_action: takeActionAgent,
-    };
+    const subagents: Record<string, Agent> = {};
     for (const gw of gatewayAgents) {
       subagents[gw.id] = gw;
     }
@@ -415,24 +426,18 @@ const { loader, action } = createHybridActionApiRoute(
       model: modelConfig as any,
       instructions: systemPrompt,
       agents: subagents,
-      // ask_user must be a direct agent tool (not in toolsets) so Mastra's
-      // requireApproval middleware applies correctly on approveToolCall.
-      // In "full" permission mode, skip ask_user entirely — it has requireApproval:true
-      // hardcoded so it would still trigger approval dialogs even with interactive:false.
-      ...(!isBackgroundExecution &&
-        body.permissionMode !== "full" && {
-          tools: { ask_user: createAskUserTool() },
-        }),
     });
     agent.__registerMastra(mastra);
-    gatherContextAgent.__registerMastra(mastra);
-    takeActionAgent.__registerMastra(mastra);
     for (const gw of gatewayAgents) {
       (gw as any).__registerMastra(mastra);
     }
 
     const saveParams = {
       conversationId: body.id,
+      // Owning agent stamps the assistant row's agentId so dispatchMentions'
+      // self-mention guard + auto-owner-trigger rule work correctly, and
+      // multi-agent renderers can attribute the reply.
+      authorAgentId: conversationOwnerId,
       incomingUserText,
       incognito: conversation?.incognito,
       userId: authentication.userId,

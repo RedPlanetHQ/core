@@ -6,7 +6,6 @@ import {
 } from "~/services/hocuspocus/content.server";
 import { prisma } from "~/db.server";
 import { changeTaskStatus } from "~/services/task.server";
-import { getTaskPhase } from "~/services/task.phase";
 import { logger } from "~/services/logger.service";
 
 // `OutcomeNode.parseHTML` accepts both <outcome> and the legacy <output>
@@ -173,19 +172,13 @@ export async function checkWaitingTaskReply(
   });
 
   for (const task of tasks) {
-    // Phase-aware: prep → back to Todo (continue planning),
-    // execute → Ready (auto-enqueues, resumes execution)
-    const phase = getTaskPhase(task);
-    const targetStatus = phase === "prep" ? "Todo" : "Ready";
+    // Waiting task got a user reply → move to Ready so the runner
+    // auto-enqueues and picks it up on the next tick.
+    await changeTaskStatus(task.id, "Ready", workspaceId, userId, "user");
 
-    await changeTaskStatus(task.id, targetStatus, workspaceId, userId, "user");
-
-    logger.info(
-      `Waiting task reply detected, moved to ${targetStatus} (phase: ${phase})`,
-      {
-        taskId: task.id,
-        conversationId,
-      },
-    );
+    logger.info(`Waiting task reply detected, moved to Ready`, {
+      taskId: task.id,
+      conversationId,
+    });
   }
 }

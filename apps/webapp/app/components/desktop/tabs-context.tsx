@@ -53,7 +53,7 @@ const routeMeta: Array<{
   { match: (p) => p.startsWith("/home/overview"), title: "Overview", icon: LayoutDashboard },
   { match: (p) => p.startsWith("/home/agent/skills"), title: "Skills", icon: Library },
   { match: (p) => p.startsWith("/home/integrations") || p.startsWith("/home/integration"), title: "Integrations", icon: Plug },
-  { match: (p) => p.startsWith("/home/gateways"), title: "Gateway", icon: Server },
+  { match: (p) => p.startsWith("/settings/workspace/gateways"), title: "Gateway", icon: Server },
 ];
 
 function getMetaFromPath(path: string): { title: string; icon: Tab["icon"] } {

@@ -1,10 +1,10 @@
 import { Loader2 } from "lucide-react";
 import { Link } from "@remix-run/react";
 import { ConversationView } from "~/components/conversation";
-import type { getConversationAndHistory } from "~/services/conversation.server";
+import type { getConversationHistoryPage } from "~/services/conversation.server";
 
 type ConversationItem = NonNullable<
-  Awaited<ReturnType<typeof getConversationAndHistory>>
+  Awaited<ReturnType<typeof getConversationHistoryPage>>
 >;
 
 export function formatRunLabel(conv: ConversationItem, index: number): string {

@@ -23,16 +23,9 @@ import {
   AlertDialogTrigger,
 } from "~/components/ui/alert-dialog";
 import { Card, CardContent } from "~/components/ui/card";
-import { AvatarText } from "~/components/ui/avatar";
 import { Trash2 } from "lucide-react";
-import {
-  SamAvatar,
-  SAM_EYE_OPTIONS,
-  SAM_EYE_COLOR_OPTIONS,
-} from "~/components/ui/sam-avatar";
-import { cn } from "~/lib/utils";
-
-const DEFAULT_ACCENT = "#c87844";
+import { updateGeneralistAgent } from "~/services/agent.server";
+import { slugifyHandle } from "~/services/agent-slug";
 
 export async function loader({ request }: LoaderFunctionArgs) {
   const { workspaceId } = await requireUser(request);
@@ -47,7 +40,6 @@ export async function loader({ request }: LoaderFunctionArgs) {
     throw new Error("Workspace not found");
   }
 
-  // Get member count
   const memberCount = await prisma.userWorkspace.count({
     where: {
       workspaceId,
@@ -55,12 +47,7 @@ export async function loader({ request }: LoaderFunctionArgs) {
     },
   });
 
-  const meta = (workspace.metadata ?? {}) as Record<string, unknown>;
-  const accentColor = (meta.accentColor as string) || DEFAULT_ACCENT;
-  const agentEye = (meta.agentEye as string) || "bot-pixel-classic";
-  const agentEyeColor = (meta.agentEyeColor as string) || "#74E07A";
-
-  return json({ workspace, memberCount, accentColor, agentEye, agentEyeColor });
+  return json({ workspace, memberCount });
 }
 
 export async function action({ request }: ActionFunctionArgs) {
@@ -75,14 +62,11 @@ export async function action({ request }: ActionFunctionArgs) {
   if (intent === "update") {
     const name = (formData.get("name") as string)?.trim();
     const slug = (formData.get("slug") as string)?.trim();
-    const agentEye = (formData.get("agentEye") as string)?.trim();
-    const agentEyeColor = (formData.get("agentEyeColor") as string)?.trim();
 
     if (!name || !slug) {
       return json({ error: "Name and slug are required" }, { status: 400 });
     }
 
-    // Check slug uniqueness (exclude current workspace)
     const conflict = await prisma.workspace.findFirst({
       where: { slug, id: { not: workspaceId } },
     });
@@ -91,55 +75,23 @@ export async function action({ request }: ActionFunctionArgs) {
       return json({ error: "Slug is already taken" }, { status: 400 });
     }
 
-    const existing = await prisma.workspace.findFirst({
-      where: { id: workspaceId },
-      select: { metadata: true },
-    });
-    const existingMeta = (existing?.metadata ?? {}) as Record<string, unknown>;
-    const nextMeta: Record<string, unknown> = { ...existingMeta };
-    if (agentEye) nextMeta.agentEye = agentEye;
-    if (agentEyeColor) nextMeta.agentEyeColor = agentEyeColor;
-
     await prisma.workspace.update({
       where: { id: workspaceId },
-      data: { name, slug, metadata: nextMeta },
+      data: { name, slug },
     });
 
-    return json({ success: true });
-  }
-
-  if (intent === "updateAccentColor") {
-    const accentColor = (formData.get("accentColor") as string)?.trim();
-    if (!accentColor) {
-      return json({ error: "Missing color" }, { status: 400 });
+    // The generalist agent's display name + handle mirror the workspace,
+    // so rename it here too.
+    try {
+      await updateGeneralistAgent(workspaceId as string, {
+        displayName: name,
+        handle: slugifyHandle(slug),
+      });
+    } catch {
+      // If the workspace somehow doesn't have a generalist yet, don't fail
+      // the whole save — the ensure path will pick it up later.
     }
-    const existing = await prisma.workspace.findFirst({
-      where: { id: workspaceId },
-      select: { metadata: true },
-    });
-    const existingMeta = (existing?.metadata ?? {}) as Record<string, unknown>;
-    await prisma.workspace.update({
-      where: { id: workspaceId },
-      data: { metadata: { ...existingMeta, accentColor } },
-    });
-    return json({ success: true });
-  }
 
-  if (intent === "updateAgentEye") {
-    const agentEye = (formData.get("agentEye") as string)?.trim();
-    const agentEyeColor = (formData.get("agentEyeColor") as string)?.trim();
-    if (!agentEye || !agentEyeColor) {
-      return json({ error: "Missing eye or color" }, { status: 400 });
-    }
-    const existing = await prisma.workspace.findFirst({
-      where: { id: workspaceId },
-      select: { metadata: true },
-    });
-    const existingMeta = (existing?.metadata ?? {}) as Record<string, unknown>;
-    await prisma.workspace.update({
-      where: { id: workspaceId },
-      data: { metadata: { ...existingMeta, agentEye, agentEyeColor } },
-    });
     return json({ success: true });
   }
 
@@ -155,7 +107,6 @@ export async function action({ request }: ActionFunctionArgs) {
       return json({ error: "Workspace name does not match" }, { status: 400 });
     }
 
-    // Check if user has other workspaces
     const otherWorkspaces = await prisma.userWorkspace.findMany({
       where: {
         userId,
@@ -174,7 +125,6 @@ export async function action({ request }: ActionFunctionArgs) {
       );
     }
 
-    // Soft delete: deactivate the user's membership
     await prisma.userWorkspace.updateMany({
       where: {
         workspaceId,
@@ -185,10 +135,8 @@ export async function action({ request }: ActionFunctionArgs) {
       },
     });
 
-    // Switch to the next available workspace
     const nextWorkspace = otherWorkspaces[0];
 
-    // Update session with new workspaceId
     const session = await sessionStorage.getSession(
       request.headers.get("Cookie"),
     );
@@ -208,29 +156,18 @@ export async function action({ request }: ActionFunctionArgs) {
 }
 
 export default function WorkspaceSettings() {
-  const {
-    workspace,
-    memberCount,
-    agentEye: savedAgentEye,
-    agentEyeColor: savedAgentEyeColor,
-  } = useLoaderData<typeof loader>();
+  const { workspace } = useLoaderData<typeof loader>();
   const fetcher = useFetcher<{ error?: string; success?: boolean }>();
   const updateFetcher = useFetcher<{ error?: string; success?: boolean }>();
   const [confirmName, setConfirmName] = useState("");
   const [isDeleteDialogOpen, setIsDeleteDialogOpen] = useState(false);
   const [name, setName] = useState(workspace.name);
   const [slug, setSlug] = useState(workspace.slug);
-  const [agentEye, setAgentEye] = useState(savedAgentEye);
-  const [agentEyeColor, setAgentEyeColor] = useState(savedAgentEyeColor);
 
   const isDeleting = fetcher.state === "submitting";
   const canDelete = confirmName === workspace.name;
   const isSaving = updateFetcher.state === "submitting";
-  const hasChanges =
-    name !== workspace.name ||
-    slug !== workspace.slug ||
-    agentEye !== savedAgentEye ||
-    agentEyeColor !== savedAgentEyeColor;
+  const hasChanges = name !== workspace.name || slug !== workspace.slug;
 
   const handleDelete = () => {
     fetcher.submit({ intent: "delete", confirmName }, { method: "POST" });
@@ -244,27 +181,18 @@ export default function WorkspaceSettings() {
       >
         <div className="flex flex-col gap-6">
           <div>
-            <h2 className="text-md mb-4">Butler settings</h2>
             <Card>
               <CardContent className="flex flex-col gap-5 p-4">
-                {/* Live preview */}
-                <div className="flex items-center gap-4">
-                  <SamAvatar size={72} eye={agentEye} eyeColor={agentEyeColor} />
-                  <div className="flex flex-col">
-                    <span className="text-sm font-medium">{name || "Butler"}</span>
-                    <span className="text-muted-foreground text-xs">
-                      {SAM_EYE_OPTIONS.find((o) => o.id === agentEye)?.label ?? agentEye}
-                    </span>
-                  </div>
-                </div>
-
                 <div className="flex flex-col gap-1.5">
                   <label className="text-sm font-medium">Name</label>
                   <Input
                     value={name}
                     onChange={(e) => setName(e.target.value)}
-                    placeholder="Butler name"
+                    placeholder="Workspace name"
                   />
+                  <p className="text-muted-foreground text-xs">
+                    Also renames the generalist agent.
+                  </p>
                 </div>
 
                 <div className="flex flex-col gap-1.5">
@@ -275,60 +203,8 @@ export default function WorkspaceSettings() {
                     placeholder="workspace-slug"
                   />
                   <p className="text-muted-foreground text-xs">
-                    Used as the butler's email prefix. Must be unique.
+                    Used as the generalist agent's email prefix. Must be unique.
                   </p>
-                </div>
-
-                {/* Mood (eye pattern) */}
-                <div className="flex flex-col gap-2">
-                  <label className="text-sm font-medium">Mood</label>
-                  <div className="grid grid-cols-6 gap-2">
-                    {SAM_EYE_OPTIONS.map((opt) => {
-                      const selected = agentEye === opt.id;
-                      return (
-                        <button
-                          key={opt.id}
-                          type="button"
-                          title={opt.desc}
-                          onClick={() => setAgentEye(opt.id)}
-                          className={cn(
-                            "bg-background flex flex-col items-center gap-1 rounded-md border-2 p-2 transition-all hover:scale-[1.03] focus:outline-none",
-                            selected
-                              ? "border-primary"
-                              : "border-transparent hover:border-border",
-                          )}
-                        >
-                          <SamAvatar size={40} eye={opt.id} eyeColor={agentEyeColor} />
-                          <span className="text-muted-foreground text-[10px]">
-                            {opt.label}
-                          </span>
-                        </button>
-                      );
-                    })}
-                  </div>
-                </div>
-
-                {/* Color */}
-                <div className="flex flex-col gap-2">
-                  <label className="text-sm font-medium">Color</label>
-                  <div className="flex flex-wrap gap-2">
-                    {SAM_EYE_COLOR_OPTIONS.map((opt) => {
-                      const selected = agentEyeColor === opt.hex;
-                      return (
-                        <button
-                          key={opt.id}
-                          type="button"
-                          title={opt.label}
-                          onClick={() => setAgentEyeColor(opt.hex)}
-                          className={cn(
-                            "h-7 w-7 rounded-full border-2 transition-transform hover:scale-110 focus:outline-none",
-                            selected ? "border-border" : "border-transparent",
-                          )}
-                          style={{ backgroundColor: opt.hex }}
-                        />
-                      );
-                    })}
-                  </div>
                 </div>
 
                 {updateFetcher.data?.error && (
@@ -346,13 +222,7 @@ export default function WorkspaceSettings() {
                     size="lg"
                     onClick={() =>
                       updateFetcher.submit(
-                        {
-                          intent: "update",
-                          name,
-                          slug,
-                          agentEye,
-                          agentEyeColor,
-                        },
+                        { intent: "update", name, slug },
                         { method: "POST" },
                       )
                     }

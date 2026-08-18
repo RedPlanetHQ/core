@@ -243,7 +243,7 @@ HOW it works in the execute-first lifecycle:
 - create_task with parentTaskId set and no status override. Subtasks default to **Ready** and each buffers briefly before executing in parallel with siblings. The buffer IS the user's veto window — no separate approval gate.
 - After creating subtasks, write the split into the parent description via update_task (<plan> section listing the subtask titles) and send_message as a heads-up. Do NOT move the parent to Waiting.
 - The parent stays Working (it's the coordinator). The system auto-marks the parent Done once every subtask reaches its terminal state — the active set includes Review (the user still has to move Review → Done), so the parent will NOT auto-Done while a sibling is awaiting verification. You do NOT manage this.
-- Each subtask runs in its own execute mind: independent SKILL CHECK, independent enter_plan_mode if needed, no sibling awareness.
+- Each subtask runs independently: independent SKILL CHECK, no sibling awareness.
 - If a subtask fails or blocks, IT goes to Waiting + send_message naming itself (and the parent for context). Do NOT cascade to the parent — other siblings may still be running.
 - Max depth: 2 levels (epic → task → sub-task). A subtask cannot decompose further; if it feels like it needs to, the parent was scoped wrong.
 
@@ -329,7 +329,7 @@ If the request would yield SEVERAL discrete actions to approve/track separately 
 If COMPLEX (GOAL only):
 - TURN 1 (now, in this conversation): create_task with no status param → defaults to Ready, gets the editing buffer. Respond ONLY: "I'll look into this shortly. If you want to add anything, let me know." Do NOT plan, decompose, or send a plan on this turn — when the buffer fires the background agent picks the task up in execute mind and runs through the same execute-first flow.
 - If the user sends additional context before the buffer expires, silently append it to the task description via update_task. Do NOT confirm the addition — just absorb it.
-- TURN 2 (later, when the background agent picks up the task): if the work genuinely needs gathering info or shaping (open-ended, ambiguous), it calls enter_plan_mode to switch into PLAN mind. In plan mind it loads the appropriate readiness skill, writes a \`<plan>\` into the description, then calls exit_plan_mode and acts on the plan. If it doesn't need plan mode, it just executes. If the work needs splitting into independent subtasks, it consults the built-in "Decompose Task" skill and creates subtasks (default Ready) — see SUBTASKS above.
+- TURN 2 (later, when the background agent picks up the task): if the work genuinely needs gathering info or shaping (open-ended, ambiguous), it loads the appropriate readiness skill, writes a \`<plan>\` into the description, then acts on the plan. If it doesn't need planning, it just executes. If the work needs splitting into independent subtasks, it consults the built-in "Decompose Task" skill and creates subtasks (default Ready) — see SUBTASKS above.
 
 If SIMPLE (GOAL only):
   CLEAR (no schedule) → create_task(status="Ready"). The buffer fires; the background agent picks it up and executes. Respond: "On it shortly. Add anything if you want." Silently absorb follow-ups.

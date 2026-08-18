@@ -1,36 +1,27 @@
-import { type LoaderFunctionArgs } from "@remix-run/server-runtime";
-import { useTypedLoaderData } from "remix-typedjson";
+import { redirect, type LoaderFunctionArgs } from "@remix-run/node";
 import { requireUser, requireWorkpace } from "~/services/session.server";
-import { ConversationNew } from "~/components/conversation";
-import { getChatComposerModels } from "~/services/llm-provider.server";
+import {
+  ensureGeneralistAgent,
+  getGeneralistAgent,
+} from "~/services/agent.server";
 
+/**
+ * Bare `/home/conversation` — redirect to the workspace generalist's
+ * conversation. Each agent owns one endless-scroll thread; the URL is
+ * always agent-scoped from here on.
+ */
 export async function loader({ request }: LoaderFunctionArgs) {
-  // Only return userId, not the heavy nodeLinks
-  const user = await requireUser(request);
+  await requireUser(request);
   const workspace = await requireWorkpace(request);
-  const models = await getChatComposerModels(workspace?.id);
+  if (!workspace) throw redirect("/");
 
-  const meta = (workspace?.metadata ?? {}) as Record<string, unknown>;
-  const accentColor = (meta.accentColor as string) || "#c87844";
-  const url = new URL(request.url);
-  const defaultMessage = url.searchParams.get("msg") ?? undefined;
-  return { user, models, workspace, accentColor, defaultMessage };
+  let generalist = await getGeneralistAgent(workspace.id);
+  if (!generalist) {
+    generalist = await ensureGeneralistAgent(workspace.id, workspace.name);
+  }
+  return redirect(`/home/conversation/${generalist.handle}`);
 }
 
-
-export default function Chat() {
-  const { user, models, workspace, accentColor, defaultMessage } =
-    useTypedLoaderData<typeof loader>();
-
-  if (typeof window === "undefined") return null;
-
-  return (
-    <ConversationNew
-      user={user}
-      models={models}
-      name={workspace?.name ?? "core"}
-      accentColor={accentColor}
-      defaultMessage={defaultMessage}
-    />
-  );
+export default function ConversationIndex() {
+  return null;
 }

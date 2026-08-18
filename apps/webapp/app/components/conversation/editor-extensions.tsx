@@ -15,6 +15,7 @@ import { mergeAttributes } from "@tiptap/core";
 import { type Extension } from "@tiptap/react";
 import { Markdown } from "tiptap-markdown";
 import { ChatWidgetExtension } from "./extensions/widget-extension";
+import { colleagueMentionReader } from "~/components/editor/extensions/colleague-mention";
 
 // create a lowlight instance with all languages loaded
 export const lowlight = createLowlight(all);
@@ -137,7 +138,7 @@ export const starterKit = StarterKit.configure({
 
 export const extensionsForConversation = [
   starterKit,
-  tiptapLink,
+
   horizontalRule,
   heading,
   Table.configure({
@@ -149,6 +150,11 @@ export const extensionsForConversation = [
   CodeBlockLowlight.configure({
     lowlight,
   }),
+  // Shared mention node — same class the composer registers via
+  // `buildColleagueMentionExtension`, so `<mention colleague="cass" />`
+  // that an agent emits parses into the same chip the composer produces
+  // for a user-typed @mention.
+  colleagueMentionReader,
   // Inline UI widgets the agent embeds in replies (e.g. gateway
   // file viewer). See `extensions/widget-extension.tsx` for the
   // node + the catalog at `~/services/widgets/registry.server.ts`.

@@ -70,11 +70,6 @@ vi.mock("~/env.server", () => ({
   env: {},
 }));
 
-vi.mock("~/services/task.phase", () => ({
-  getTaskPhase: vi.fn(() => "execute"),
-  setTaskPhaseInMetadata: vi.fn(),
-}));
-
 vi.mock("~/utils/schedule-utils", () => ({
   computeNextRun: vi.fn(),
   getRecurrenceIntervalMinutes: vi.fn(() => 60),

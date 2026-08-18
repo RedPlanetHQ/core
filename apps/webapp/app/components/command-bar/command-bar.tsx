@@ -7,9 +7,9 @@ import {
   Tag,
   Brain,
   Library,
-  MessagesSquare,
   CalendarDays,
   Terminal,
+  User as UserIcon,
 } from "lucide-react";
 import {
   CommandDialog,
@@ -28,12 +28,6 @@ import { Task } from "../icons/task";
 import { NewSessionDialog } from "~/components/coding/new-session-dialog";
 
 const NAV_ITEMS = [
-  {
-    label: "Go to Chats",
-    url: "/home/conversation",
-    icon: MessagesSquare,
-    shortcut: "G C",
-  },
   {
     label: "Go to Tasks",
     url: "/home/tasks",
@@ -74,12 +68,6 @@ interface DocumentResult {
   updatedAt: string;
 }
 
-interface ConversationResult {
-  id: string;
-  title: string | null;
-  updatedAt: string;
-}
-
 interface LabelResult {
   id: string;
   name: string;
@@ -99,23 +87,70 @@ interface CodingTarget {
   agent: string;
 }
 
+interface AgentTarget {
+  handle: string;
+  displayName: string;
+  /** "system" for the workspace generalist, "user" for user-authored,
+   *  "gateway" for gateway-backed. Used to pick the default agent for
+   *  actions like "Add Task" that want to hit the generalist. */
+  kind: "system" | "user" | "gateway";
+}
+
 export function CommandBar({ open, onOpenChange }: CommandBarProps) {
   const [searchQuery, setSearchQuery] = useState("");
   const debouncedQuery = useDebounce(searchQuery, 300);
   const [documentResults, setDocumentResults] = useState<DocumentResult[]>([]);
-  const [conversationResults, setConversationResults] = useState<
-    ConversationResult[]
-  >([]);
   const [labelResults, setLabelResults] = useState<LabelResult[]>([]);
   const [taskResults, setTaskResults] = useState<TaskResult[]>([]);
   const [isSearching, setIsSearching] = useState(false);
   const [codingTargets, setCodingTargets] = useState<CodingTarget[]>([]);
+  // Active workspace agents. Fetched fresh each time the bar opens so
+  // freshly-added agents (Create Agent) show up without a page reload.
+  const [agentTargets, setAgentTargets] = useState<AgentTarget[]>([]);
   // When set, NewSessionDialog opens prefilled with this gateway+agent so
   // the user only has to pick (or type) a folder.
   const [pendingTarget, setPendingTarget] = useState<CodingTarget | null>(
     null,
   );
   const navigate = useNavigate();
+
+  // Load workspace agents whenever the bar opens so the "Go to {agent}"
+  // list reflects what's currently active.
+  useEffect(() => {
+    if (!open) {
+      setAgentTargets([]);
+      return;
+    }
+    let cancelled = false;
+    (async () => {
+      try {
+        const res = await fetch("/api/v1/agents");
+        if (!res.ok) return;
+        const body = (await res.json()) as {
+          agents: Array<{
+            handle: string;
+            displayName: string;
+            status: string;
+            kind: "system" | "user" | "gateway";
+          }>;
+        };
+        if (cancelled) return;
+        const active = (body.agents ?? [])
+          .filter((a) => a.status === "Active")
+          .map((a) => ({
+            handle: a.handle,
+            displayName: a.displayName,
+            kind: a.kind,
+          }));
+        setAgentTargets(active);
+      } catch {
+        if (!cancelled) setAgentTargets([]);
+      }
+    })();
+    return () => {
+      cancelled = true;
+    };
+  }, [open]);
 
   // Load connected gateways + their agents whenever the bar opens so the
   // "New session" items reflect what's actually reachable right now.
@@ -196,11 +231,12 @@ export function CommandBar({ open, onOpenChange }: CommandBarProps) {
     navigate(`/home/tasks/${args.taskId}/coding/${args.id}`);
   };
 
-  // Search documents and conversations when debounced query changes
+  // Search documents, labels, and tasks when debounced query changes.
+  // Conversation search removed — chats live per-agent now, not as a
+  // searchable global list.
   useEffect(() => {
     if (!debouncedQuery.trim() || debouncedQuery.length < 2) {
       setDocumentResults([]);
-      setConversationResults([]);
       setLabelResults([]);
       setTaskResults([]);
       return;
@@ -209,12 +245,9 @@ export function CommandBar({ open, onOpenChange }: CommandBarProps) {
     const search = async () => {
       setIsSearching(true);
       try {
-        const [docsRes, convsRes, labelsRes, tasksRes] = await Promise.all([
+        const [docsRes, labelsRes, tasksRes] = await Promise.all([
           fetch(
             `/api/v1/documents/search?${new URLSearchParams({ q: debouncedQuery, mode: "full", limit: "10" })}`,
-          ),
-          fetch(
-            `/api/v1/conversations?${new URLSearchParams({ search: debouncedQuery, limit: "10" })}`,
           ),
           fetch(
             `/api/v1/labels?${new URLSearchParams({ search: debouncedQuery })}`,
@@ -226,10 +259,6 @@ export function CommandBar({ open, onOpenChange }: CommandBarProps) {
         if (docsRes.ok) {
           const data = await docsRes.json();
           setDocumentResults(data.documents || []);
-        }
-        if (convsRes.ok) {
-          const data = await convsRes.json();
-          setConversationResults(data.conversations || []);
         }
         if (labelsRes.ok) {
           const data = await labelsRes.json();
@@ -254,23 +283,21 @@ export function CommandBar({ open, onOpenChange }: CommandBarProps) {
     onOpenChange(false);
   };
 
-  const handleNewChat = () => {
-    navigate(`/home/conversation`);
-    onOpenChange(false);
-  };
-
   const handleAddTask = () => {
+    // Route into the system generalist's conversation with the composer
+    // pre-filled. The generalist owns task creation; if for some reason
+    // we haven't resolved one yet (initial mount, request in flight),
+    // fall through to the bare route which redirects to the generalist.
+    const generalist = agentTargets.find((a) => a.kind === "system");
+    const dest = generalist
+      ? `/home/conversation/${generalist.handle}?msg=Create+a+task`
+      : "/home/conversation?msg=Create+a+task";
     onOpenChange(false);
-    navigate("/home/conversation?msg=Create+a+new+task");
+    navigate(dest);
   };
 
   const handleDocumentClick = (documentId: string) => {
     navigate(`/home/memory/documents/${documentId}`);
-    onOpenChange(false);
-  };
-
-  const handleConversationClick = (conversationId: string) => {
-    navigate(`/home/conversation/${conversationId}`);
     onOpenChange(false);
   };
 
@@ -294,8 +321,14 @@ export function CommandBar({ open, onOpenChange }: CommandBarProps) {
     matchesQuery(item.label),
   );
 
+  // "Go to {agent}" — one entry per active workspace agent, filtered by
+  // the current search query on displayName OR handle so users can type
+  // either "cass" or "Cass Coder".
+  const filteredAgentTargets = agentTargets.filter((a) =>
+    matchesQuery(`go to ${a.displayName} ${a.handle}`),
+  );
+
   const actionItems = [
-    { label: "New Chat", icon: MessageSquare, onSelect: handleNewChat },
     { label: "Add Task", icon: Task, onSelect: handleAddTask },
     { label: "Add Document", icon: Plus, onSelect: handleAddDocument },
   ].filter((action) => matchesQuery(action.label));
@@ -364,6 +397,33 @@ export function CommandBar({ open, onOpenChange }: CommandBarProps) {
                 </CommandItem>
               ))}
             </CommandGroup>
+          )}
+
+          {/* One "Go to <Agent>" per active workspace agent. Chat with an
+              agent = go to their conversation. */}
+          {filteredAgentTargets.length > 0 && (
+            <>
+              {filteredNavItems.length > 0 && <CommandSeparator />}
+              <CommandGroup heading="Agents" className="p-2">
+                {filteredAgentTargets.map((a) => (
+                  <CommandItem
+                    key={a.handle}
+                    value={`agent-${a.handle}`}
+                    onSelect={() => {
+                      navigate(`/home/conversation/${a.handle}`);
+                      onOpenChange(false);
+                    }}
+                    className="flex items-center gap-2 py-1"
+                  >
+                    <UserIcon className="mr-2 h-4 w-4" />
+                    <span className="flex-1">Go to {a.displayName}</span>
+                    <span className="text-muted-foreground text-xs">
+                      @{a.handle}
+                    </span>
+                  </CommandItem>
+                ))}
+              </CommandGroup>
+            </>
           )}
 
           {actionItems.length > 0 && (
@@ -451,34 +511,6 @@ export function CommandBar({ open, onOpenChange }: CommandBarProps) {
                   <span className="text-foreground truncate text-sm">
                     {task.title}
                   </span>
-                </CommandItem>
-              ))}
-            </CommandGroup>
-          )}
-
-          {/* Conversations */}
-          {conversationResults.length > 0 && (
-            <CommandGroup heading="Conversations" className="max-w-[700px] p-2">
-              {conversationResults.map((conv) => (
-                <CommandItem
-                  key={conv.id}
-                  value={conv.id}
-                  onSelect={() => handleConversationClick(conv.id)}
-                  className="flex items-center gap-2 py-2"
-                >
-                  <MessageSquare className="h-4 w-4 flex-shrink-0" />
-                  <div className="min-w-0 flex-1">
-                    <p className="text-foreground truncate text-sm">
-                      {conv.title || "Untitled Conversation"}
-                    </p>
-                    <p className="text-muted-foreground text-xs">
-                      {new Date(conv.updatedAt).toLocaleDateString("en-US", {
-                        month: "short",
-                        day: "numeric",
-                        year: "numeric",
-                      })}
-                    </p>
-                  </div>
                 </CommandItem>
               ))}
             </CommandGroup>

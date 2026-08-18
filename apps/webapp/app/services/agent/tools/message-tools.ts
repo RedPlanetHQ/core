@@ -161,68 +161,37 @@ export function getMessageTools(
             preview: message.slice(0, 100),
           });
 
-          const sendResult = await handler.sendReply(replyTo, message, metadata);
+          await handler.sendReply(replyTo, message, metadata);
 
-          const slackTs =
-            channelType === "slack" &&
-            sendResult &&
-            typeof sendResult === "object"
-              ? (sendResult as { ts?: string }).ts
-              : undefined;
-
-          // ---------------------------------------------------------------
-          // Mirror to conversation for reply context.
-          // If this send belongs to a task, mirror into the TASK's
-          // conversation (asyncJobId=taskId) and stamp slackTs so a Slack
-          // thread-reply routes back here. Otherwise, daily-bucket mirror.
-          // ---------------------------------------------------------------
+          // Mirror the outbound into the CHANNEL conversation (email
+          // thread, Slack DM daily bucket, etc.) so replies from that
+          // channel have context. We deliberately do NOT also mirror
+          // into the task conversation — the task conversation already
+          // holds Cass's turn row that invoked send_message, and adding
+          // a second row for the same content shows up as a duplicate
+          // "Assistant" reply with no agentId (the sender resolver in
+          // conversation-view can't attribute it to the running agent).
           try {
-            let taskConversationId: string | undefined;
-            if (currentTaskId) {
-              const taskConv = await prisma.conversation.findFirst({
-                where: {
-                  asyncJobId: currentTaskId,
-                  userId,
-                  deleted: null,
-                },
-                orderBy: { createdAt: "desc" },
-                select: { id: true },
-              });
-              taskConversationId = taskConv?.id;
-            }
-
-            if (taskConversationId) {
-              await prisma.conversationHistory.create({
-                data: {
-                  conversationId: taskConversationId,
-                  parts: [{ text: message, type: "text" }],
-                  message: "",
-                  userType: UserTypeEnum.Agent,
-                  ...(slackTs ? { context: { slackTs } } : {}),
-                },
-              });
-            } else {
-              const channelConversationId =
-                await getOrCreateChannelConversation(
-                  userId,
-                  workspaceId,
-                  message,
-                  channelType,
-                  undefined,
-                  UserTypeEnum.Agent,
-                );
-              await upsertConversationHistory(
-                crypto.randomUUID(),
-                [{ text: message, type: "text" }],
-                channelConversationId,
-                UserTypeEnum.Agent,
-                false,
-              );
-            }
+            const channelConversationId = await getOrCreateChannelConversation(
+              userId,
+              workspaceId,
+              message,
+              channelType,
+              undefined,
+              UserTypeEnum.Agent,
+            );
+            await upsertConversationHistory(
+              crypto.randomUUID(),
+              [{ text: message, type: "text" }],
+              channelConversationId,
+              UserTypeEnum.Agent,
+              false,
+            );
           } catch (mirrorError) {
-            logger.warn("[send_message] Failed to mirror to conversation", {
-              error: mirrorError,
-            });
+            logger.warn(
+              "[send_message] Failed to mirror to channel conversation",
+              { error: mirrorError },
+            );
           }
 
           // ---------------------------------------------------------------

@@ -21,7 +21,6 @@ import { getOrCreatePersonalAccessToken } from "~/services/personalAccessToken.s
 import {
   deleteTask,
   incrementTaskOccurrenceCount,
-  incrementTaskUnrespondedCount,
   scheduleNextTaskOccurrence,
   updateTaskConversationIds,
 } from "~/services/task.server";
@@ -31,6 +30,7 @@ import { HttpOrchestratorTools } from "~/services/agent/orchestrator-tools.http"
 import { getPageContentAsHtml } from "~/services/hocuspocus/content.server";
 import { removeTaskItemFromPages } from "~/services/hocuspocus/page-outlinks.server";
 import { enqueueTask } from "~/lib/queue-adapter.server";
+import { getGeneralistAgent } from "~/services/agent.server";
 import type { Task } from "@prisma/client";
 
 // ============================================================================
@@ -174,10 +174,8 @@ export async function processScheduledTask(
 
 /**
  * Buffer expiry: the 2-minute editing window is up. Clear nextRunAt and
- * hand off to the task runner. The agent picks up in execute mind by
- * default; if a prior turn called enter_plan_mode (metadata.phase = "prep")
- * the task_planning block renders instead. Status stays as it was —
- * Todo or Ready — and the runner flips it to Working when execution starts.
+ * hand off to the task runner. Status stays as it was — Todo or Ready —
+ * and the runner flips it to Working when execution starts.
  *
  * Parity with the client-side delete-on-removal in scratchpad-task-item.tsx:
  * if a scratchpad-created task (`source === "daily"`) sits in the editor
@@ -306,6 +304,17 @@ async function runExecutionPipeline(
   const client = new CoreClient({ baseUrl: env.APP_ORIGIN, token: token! });
   const executorTools = new HttpOrchestratorTools(client);
 
+  // Resolve the owning agent for this scheduled fire. Prefer the task's
+  // explicit assignedAgentId; fall back to the workspace generalist so the
+  // pipeline still has an agent to key the new conversation to (and the
+  // context builder renders that agent's basePrompt, not a hard-coded
+  // generalist).
+  let owningAgentId: string | null = task.assignedAgentId ?? null;
+  if (!owningAgentId) {
+    const generalist = await getGeneralistAgent(workspaceId);
+    owningAgentId = generalist?.id ?? null;
+  }
+
   // runCASEPipeline runs its own pre-flight credit check and short-circuits
   // with error: "insufficient_credits" for non-BYOK workspaces with empty
   // balances. Recurring tasks survive credit outages via the failure path
@@ -329,13 +338,12 @@ async function runExecutionPipeline(
       timezone,
       executorTools,
       forceNewConversation: true,
+      ...(owningAgentId ? { agentId: owningAgentId } : {}),
     });
   } catch (error) {
     logger.error(`[scheduled-task] Pipeline threw for ${taskId}`, { error });
     result = {
       success: false,
-      shouldMessage: false,
-      reasoning: "Pipeline error",
       error: error instanceof Error ? error.message : "Unknown error",
     };
   }
@@ -354,9 +362,11 @@ async function runExecutionPipeline(
     }
   }
 
-  if (result.success && result.shouldMessage) {
-    await incrementTaskUnrespondedCount(taskId);
-  }
+  // The shouldMessage gate is gone — the agent owns delivery decisions via
+  // its own tools. Unresponded-count bookkeeping used to hinge on that
+  // gate; we no longer bump it from the pipeline. If auto-deactivation of
+  // ignored tasks becomes a need, wire it off a separate user-reply signal
+  // rather than reintroducing the think stage.
 
   const { shouldDeactivate } = await incrementTaskOccurrenceCount(taskId);
   if (shouldDeactivate) {

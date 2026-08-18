@@ -175,11 +175,6 @@ const EnvironmentSchema = z
     // reduce concurrency for BullMQ workers to smooth out bursts.
     BULLMQ_CONCURRENCY_PREPROCESS: z.coerce.number().int().positive().default(5),
     BULLMQ_CONCURRENCY_INGEST: z.coerce.number().int().positive().default(3),
-    BULLMQ_CONCURRENCY_CONVERSATION_TITLE: z.coerce
-      .number()
-      .int()
-      .positive()
-      .default(10),
     BULLMQ_CONCURRENCY_SESSION_COMPACTION: z.coerce
       .number()
       .int()

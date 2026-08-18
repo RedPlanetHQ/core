@@ -14,6 +14,8 @@ import { getUserById } from "~/models/user.server";
 import { getPersonaDocumentForUser } from "~/services/document.server";
 import { IntegrationLoader } from "~/utils/mcp/integration-loader";
 import { getCorePrompt } from "~/services/agent/prompts";
+import { classifyAgent } from "~/services/agent.server";
+import { renderPrompt } from "~/services/agent-prompts";
 import {
   buildDefaultVoiceToneBlock,
   buildSpokenMechanicsBlock,
@@ -43,7 +45,6 @@ import { type MessageListInput } from "@mastra/core/agent/message-list";
 import { type ModelConfig } from "~/services/llm-provider.server";
 import { getPageContentAsHtml } from "~/services/hocuspocus/content.server";
 import { DirectOrchestratorTools } from "./executors";
-import { getTaskPhase } from "~/services/task.phase";
 import { BUILTIN_SKILLS } from "~/services/skills.builtin";
 import { getDefaultSkill } from "~/services/skills.server";
 import { fetchManifest } from "~/services/gateway/transport.server";
@@ -79,6 +80,13 @@ interface BuildAgentContextParams {
   mode?: "voice" | "text";
   /** Optional macOS Accessibility snapshot for the frontmost window when invoked from the voice widget */
   screenContext?: ScreenContext | null;
+  /** When set, run this turn as if it were owned by the given agent even
+   *  if the conversation record has a different `agentId`. Used by the
+   *  mention-dispatch background job so a specialist can post into a
+   *  butler-owned conversation. The agent's basePrompt becomes the
+   *  system prompt and `currentAgentId` on the tool surface is set to
+   *  this id (so list_colleagues excludes self, etc.). */
+  overrideAgentId?: string | null;
 }
 
 interface AgentContext {
@@ -88,9 +96,6 @@ interface AgentContext {
   modelMessages: MessageListInput;
   user: Awaited<ReturnType<typeof getUserById>>;
   timezone: string;
-  gatherContextAgent: Agent;
-  takeActionAgent: Agent;
-  thinkAgent?: Agent;
   gatewayAgents: Agent[];
   /** True when running as a background task — ask_user should not be registered */
   isBackgroundExecution: boolean;
@@ -111,6 +116,7 @@ export async function buildAgentContext({
   scratchpadPageId,
   mode,
   screenContext,
+  overrideAgentId,
 }: BuildAgentContextParams): Promise<AgentContext> {
   // Load context in parallel
   const [
@@ -134,7 +140,7 @@ export async function buildAgentContext({
     }),
     prisma.conversation.findUnique({
       where: { id: conversationId },
-      select: { asyncJobId: true },
+      select: { asyncJobId: true, agentId: true, source: true },
     }),
     prisma.workspace.findUnique({
       where: { id: workspaceId },
@@ -224,11 +230,11 @@ export async function buildAgentContext({
   // gather_context subagent, not via dedicated tools on the main agent.
   const isOnboardingMode = user?.onboardingComplete === false;
 
-  // Build tools and agents in parallel (no dependency between them)
-  const [
-    tools,
-    { gatherContextAgent, takeActionAgent, thinkAgent, gatewayAgents },
-  ] = await Promise.all([
+  // Build tools + gateway sub-agents in parallel (no dependency between them).
+  // The gather_context / take_action / think sub-agents used to live alongside
+  // gatewayAgents here — those are gone now; the main agent owns every
+  // orchestrator tool directly via createCoreTools.
+  const [tools, { gatewayAgents }] = await Promise.all([
     createCoreTools({
       userId,
       workspaceId,
@@ -247,6 +253,12 @@ export async function buildAgentContext({
       userEmail: user?.email ?? undefined,
       userPhoneNumber: user?.phoneNumber ?? undefined,
       executorTools,
+      persona: persona ?? undefined,
+      interactive,
+      modelConfig,
+      currentAgentId: overrideAgentId ?? conversationRecord?.agentId ?? null,
+      userName: user?.displayName ?? user?.name ?? user?.email ?? undefined,
+      conversationId,
     }),
     createCoreAgents({
       userId,
@@ -256,15 +268,6 @@ export async function buildAgentContext({
       persona: persona ?? undefined,
       skills,
       executorTools,
-      triggerContext: triggerContext
-        ? {
-            trigger: triggerContext.trigger,
-            context: triggerContext.context,
-            userPersona: triggerContext.userPersona,
-          }
-        : undefined,
-      defaultChannel,
-      availableChannels,
       interactive,
       modelConfig,
       conversationId,
@@ -272,31 +275,124 @@ export async function buildAgentContext({
     }),
   ]);
 
-  const customPersonality = customPersonalities.find(
-    (p) => p.id === personality,
-  );
+  // Resolve the running agent up-front so we know whose basePrompt +
+  // personality to render. `overrideAgentId` wins (dispatchMentions
+  // spawning a specialist onto a butler-owned thread); otherwise the
+  // conversation's owning agent. Only falls back to getCorePrompt
+  // (deep-legacy path) if neither is present.
+  const runningAgentId = overrideAgentId ?? conversationRecord?.agentId;
+  const owningAgent = runningAgentId
+    ? await prisma.agents.findUnique({ where: { id: runningAgentId } })
+    : null;
 
-  // Build system prompt
-  let systemPrompt = getCorePrompt(
-    source,
-    {
-      name: user?.displayName ?? user?.name ?? user?.email ?? "",
-      email: user?.email ?? "",
-      timezone,
-      phoneNumber: user?.phoneNumber ?? undefined,
-      personality,
-      pronoun,
-      customPersonality: customPersonality
-        ? {
-            text: customPersonality.text,
-            useHonorifics: customPersonality.useHonorifics,
-          }
-        : undefined,
-    },
-    persona ?? undefined,
-    workspace?.name ?? undefined,
-    mode ?? "text",
-  );
+  // Voice/personality lives on the agent row now — a workspace can have
+  // Cass on TARS and the generalist on Hudson. Falls back to the user's
+  // historical `user.metadata.personality` when the agent's column is
+  // blank (pre-migration rows) and finally to "tars".
+  const agentPersonality =
+    (owningAgent?.personality as string | undefined) ||
+    personality ||
+    "tars";
+  const resolvedCustomPersonality =
+    customPersonalities.find((p) => p.id === agentPersonality) ?? undefined;
+
+  const userNameForPrompt =
+    user?.displayName ?? user?.name ?? user?.email ?? "";
+  const localTime = new Date().toLocaleString("en-US", {
+    timeZone: timezone,
+    dateStyle: "full",
+    timeStyle: "short",
+  });
+  const userBlock = user
+    ? `<user>\nName: ${userNameForPrompt}\nEmail: ${user.email ?? ""}\nTimezone: ${timezone}${user.phoneNumber ? `\nPhone: ${user.phoneNumber}` : ""}\n</user>`
+    : "";
+  const personaBlock = persona
+    ? `<user-persona>\n${persona}\n</user-persona>`
+    : "";
+
+  // Voice block: `PERSONALITY` renders the whole legacy BASE_CONTEXT +
+  // voice, but we only want the <voice>…</voice> tail. `resolvePersonalityPrompt`
+  // returns exactly that. Custom personalities are just a user-authored
+  // <voice> string. Voice-mode variants get selected by the same helper.
+  let voiceBlock = "";
+  if (resolvedCustomPersonality) {
+    voiceBlock = `<voice>\n${resolvedCustomPersonality.text}\n</voice>`;
+  } else {
+    const { prompt: voicePrompt } = resolvePersonalityPrompt(
+      agentPersonality as PersonalityType,
+      mode ?? "text",
+    );
+    voiceBlock = voicePrompt;
+  }
+  // Pronoun-honorific line, kept as a leading annotation on the voice
+  // block so personalities that use honorifics (Alfred/Jeeves) get their
+  // "sir/ma'am" directive without needing a whole extra token.
+  const HONORIFIC_PERSONALITIES = new Set(["alfred", "jeeves"]);
+  const useHonorifics = resolvedCustomPersonality
+    ? resolvedCustomPersonality.useHonorifics
+    : HONORIFIC_PERSONALITIES.has(agentPersonality);
+  if (useHonorifics && pronoun) {
+    const honorific =
+      pronoun === "she/her"
+        ? "ma'am"
+        : pronoun === "they/them"
+          ? "their name — avoid gendered honorifics entirely"
+          : "sir";
+    voiceBlock = `Preferred honorific: ${honorific}. Use naturally when addressing them directly — not in every sentence.\n\n${voiceBlock}`;
+  }
+
+  // Build system prompt. Preferred path (every real conversation): render
+  // the owning agent's basePrompt with the full runtime var set including
+  // {{VOICE}}. System (generalist) and user (specialist) agents both flow
+  // through the same renderer — the template differences live in the
+  // stored basePrompt, not in branching code here. The `getCorePrompt`
+  // fallback below is only hit by legacy paths that reach the context
+  // builder without any agent row at all.
+  //
+  // Identity block is prepended at runtime so it's guaranteed regardless
+  // of how the user has edited their agent's basePrompt (they can garble
+  // <behavior> as much as they want, but the "who you are + who they
+  // are" framing always lands first). Branched between generalist and
+  // specialist so the specialist doesn't accidentally think it's the
+  // primary butler.
+  let systemPrompt: string;
+  if (owningAgent) {
+    const identityBlock = buildIdentityBlock({
+      kind: classifyAgent(owningAgent),
+      agentName: owningAgent.displayName,
+      userName: userNameForPrompt,
+    });
+    const body = renderPrompt(owningAgent.basePrompt, {
+      AGENT_NAME: owningAgent.displayName,
+      USER_NAME: userNameForPrompt,
+      VOICE: voiceBlock,
+      TIME: `Current time: ${localTime} (${timezone})`,
+      USER: userBlock,
+      PERSONA: personaBlock,
+    });
+    systemPrompt = `${identityBlock}\n\n${body}`;
+  } else {
+    systemPrompt = getCorePrompt(
+      source,
+      {
+        name: userNameForPrompt,
+        email: user?.email ?? "",
+        timezone,
+        phoneNumber: user?.phoneNumber ?? undefined,
+        personality: agentPersonality,
+        pronoun,
+        customPersonality: resolvedCustomPersonality
+          ? {
+              text: resolvedCustomPersonality.text,
+              useHonorifics: resolvedCustomPersonality.useHonorifics,
+            }
+          : undefined,
+      },
+      persona ?? undefined,
+      workspace?.name ?? undefined,
+      mode ?? "text",
+    );
+  }
 
   // Integrations context
   const integrationsList = connectedIntegrations
@@ -367,6 +463,40 @@ export async function buildAgentContext({
 
     Scheduled tasks and notifications go via ${channelCtx.defaultChannelName} unless they say otherwise.
     </messaging_channels>`;
+
+  // Colleagues context — who else is on the team, and whether the
+  // current thread lets you actually route to them. This is the
+  // authoritative runtime source; base prompts have a static <team>
+  // block that points here. The block is built now (needs teammate
+  // roster which is loaded here) but APPENDED late — near the end of
+  // the prompt below — so mention/handoff rules stay high-attention
+  // when the model reads back.
+  const teammateRows = await prisma.agents.findMany({
+    where: {
+      workspaceId,
+      status: "Active",
+      ...(runningAgentId ? { id: { not: runningAgentId } } : {}),
+    },
+    select: { handle: true, displayName: true, metadata: true },
+    orderBy: { displayName: "asc" },
+  });
+  const teammates = teammateRows
+    .filter((a) => {
+      const meta = (a.metadata ?? {}) as Record<string, unknown>;
+      // Hide gateway-backed agents — they aren't chatteable teammates,
+      // just infra.
+      return meta.gatewaySource !== true;
+    })
+    .map((a) => ({ handle: a.handle, displayName: a.displayName }));
+
+  const isTaskConversation =
+    conversationRecord?.source === "task" || !!conversationRecord?.asyncJobId;
+
+  const colleaguesBlock = buildColleaguesBlock({
+    isTaskConversation,
+    teammates,
+    userName: userDisplayName(user),
+  });
 
   // Skills context — merge DB-backed user skills with always-available
   // built-ins. Built-ins use synthetic `builtin:*` IDs so get_skill can
@@ -492,92 +622,15 @@ export async function buildAgentContext({
 
     const isSubtask = !!linkedTask.parentTaskId;
 
-    // Execute-first lifecycle. New tasks land in execute mind. The agent
-    // self-promotes to plan mind via the enter_plan_mode tool when it
-    // genuinely can't see the shape of the work (ambiguous goal, missing
-    // context, open-ended brainstorm). In plan mind it gathers info and
-    // writes a plan into the task description, then calls exit_plan_mode
-    // to drop back into execute. The phase metadata tracks which block to
-    // render. <task_context> below covers Review/Done — inert states where
-    // the task is in scope but you're not actively driving it.
-    const phase = getTaskPhase(linkedTask);
-    const isActive = linkedTask.status !== "Review" && linkedTask.status !== "Done";
-    const isPlanning = isActive && phase === "prep";
-    const isExecuting = isActive && !isPlanning;
+    // Tasks live in a single execution mode now — the plan/execute phase
+    // toggle is gone. Review/Done render the inert <task_context> block
+    // below; everything active renders <task_execution>.
+    const isActive =
+      linkedTask.status !== "Review" && linkedTask.status !== "Done";
 
-    if (isPlanning) {
-      systemPrompt += `\n\n<task_planning>
-You're in PLAN mind because you (or a prior turn) called enter_plan_mode on this task. Your job is to gather information, clarify scope, and produce a plan. Do NOT do the actual work yet.
-
-Task: ${linkedTask.title}${linkedTask.description ? `\nContext: ${linkedTask.description}` : ""}
-Task ID: ${taskHandle}
-Status: ${linkedTask.status}${isSubtask ? `\nThis is a SUBTASK of a larger task.${parentTaskRecord ? `\nParent task: ${parentTaskRecord.title}${parentTaskDescription ? `\nParent context: ${parentTaskDescription}` : ""}` : ""}` : ""}
-${
-  isSubtask
-    ? `
-SUBTASK PLAN RULES:
-1. You are planning ONE CHUNK of a larger task. Read the parent task description and any prior sibling outputs for context.
-2. Self-resolve questions using available context (parent description, gather_context, code reading). ONLY move to Waiting and ask the user if you genuinely cannot proceed without their input.
-3. For CODING tasks (when a gateway is connected): delegate brainstorming/planning to the gateway sub-agent. Before delegating, call get_task_coding_session. If status is "starting" (gateway hasn't echoed back the sessionId — the session is still spinning up), call reschedule_self(minutesFromNow=2); do NOT call the gateway. If status is "ready", resume by default: pass sessionId, dir, and worktreeBranch. EXCEPTION: if the user explicitly asked for a fresh session or a different coding agent, omit the sessionId so the gateway starts a new session with the requested agent.
-4. For NON-CODING tasks: do the planning yourself using gather_context, take_action, and the readiness skills.
-5. Write your plan into the task description using update_task with a <plan>...</plan> section.
-6. When the plan is ready, call exit_plan_mode. On your next turn you'll be back in execute mind with the plan in front of you.
-7. Send a brief summary via send_message of what you plan to do.
-
-DO NOT:
-- Execute the actual work in plan mind (no sending emails, no writing code, no making changes)
-- Mark the task as Review or Done
-- Create further subtasks — you are a subtask, just plan YOUR work
-- Create independent top-level tasks
-`
-    : `
-PLAN RULES:
-0. CHECK INPUT SHAPE FIRST. Read the task description and decide what the user gave you (see STARTING WORK > INPUT SHAPE in <capabilities>):
-
-   - If the description is a PLAN / RUNBOOK (explicit numbered or named steps, named data sources, named tools — the user already did the planning work):
-     → You shouldn't be in plan mind. Call exit_plan_mode and execute the steps directly.
-
-   - If the description is a GOAL (a desired outcome — you need to figure out the steps):
-     → Apply the COMPLEXITY rules from STARTING WORK.
-     → If on second look the task is actually SIMPLE (one artifact: summary, profile, brief, recap, list, lookup, single send) → call exit_plan_mode. Then in execute mind, just do it using gather_context / take_action, write the result to the description via update_task with <outcome>...</outcome> HTML, send the result via send_message, and mark Review. Do NOT produce a "plan" of how you'll do it.
-     → If genuinely COMPLEX (multiple independent deliverables, irreversibly bulk, user explicitly said "plan/think through", or coding) → continue to step 1 below to do the planning.
-
-1. Run the READINESS CHECK (see <capabilities>). Load the appropriate skill from <skills>:
-   - Unclear what's needed? → load "Gather Information" skill
-   - Open-ended, needs shaping? → load "Brainstorm" skill
-   - Multi-step, needs decomposition? → load "Plan" skill
-   - Considering splitting into subtasks? → load "Decompose Task" skill (built-in)
-2. For CODING tasks (when a gateway is connected): delegate brainstorming/planning to the gateway sub-agent. Pass the task title and description. The gateway will return questions or a plan — do NOT tell it to execute. Before delegating, call get_task_coding_session. If status is "starting" (gateway hasn't echoed back the sessionId — the session is still spinning up), call reschedule_self(minutesFromNow=2); do NOT call the gateway. If status is "ready", resume by default (pass sessionId, dir, worktreeBranch). EXCEPTION: if the user explicitly asked for a fresh session or a different coding agent, omit the sessionId so the gateway starts a new session.
-3. For NON-CODING tasks: do the planning yourself using gather_context, take_action, and the readiness skills.
-4. Write your findings/plan into the task description using update_task with a <plan>...</plan> section.
-5. When the plan is ready, call exit_plan_mode. On your next turn you'll be back in execute mind with the plan in front of you and you'll act on it.
-6. Send the user a brief summary via send_message: what you found and what the plan is.
-7. If this task needs decomposition (the Decompose Task skill says SPLIT): exit_plan_mode first. Subtasks are created in execute mind after exiting, NOT in plan mind.
-`
-}
-WHEN TO ASK THE USER (mark Waiting):
-- You hit a BLOCKING question you cannot self-resolve from available context → update_task(status: "Waiting") + send_message with ONE focused question. On resume you stay in plan mind until you call exit_plan_mode.
-- Gateway returned questions from the coding agent → relay to user via send_message (include sessionId), mark Waiting.
-
-WHEN TO EXIT PLAN MIND (call exit_plan_mode):
-- The plan is written into the description and you're ready to act.
-- The task turned out to be simpler than expected — just exit and do it in execute mind.
-- The description was already a runbook — exit and execute.
-
-DO NOT:
-- Execute the actual work in plan mind (no sending emails, no writing code, no making changes)
-- Mark the task as Review or Done — exit_plan_mode + execute mind handles completion
-
-CODING SESSION POLLING (during plan mind):
-- "Session still running, brainstorming/planning phase" → call reschedule_self(minutesFromNow=5)
-- Gateway returns questions → relay to user via send_message (include sessionId), mark Waiting
-- Gateway returns plan → write to description via update_task with <plan>...</plan> HTML, call exit_plan_mode, send_message
-
-NEVER write error logs or debug output into the task description.
-</task_planning>`;
-    } else if (isExecuting) {
+    if (isActive) {
       systemPrompt += `\n\n<task_execution>
-You're handling this task. Default mind: EXECUTE. Read the task, do the work, mark Review when done. If you genuinely can't see the shape (ambiguous goal, missing context, open-ended brainstorm), call enter_plan_mode to switch to PLAN mind.
+You're handling this task. Read the task, do the work, mark Review when done.
 
 Task: ${linkedTask.title}${linkedTask.description ? `\nContext: ${linkedTask.description}` : ""}
 Task ID: ${taskHandle}
@@ -587,7 +640,7 @@ Status: ${linkedTask.status}${isSubtask ? `\nThis is a SUBTASK. Do ONLY this spe
 
 THIS TASK IS WAITING. The user's message in this conversation is the reply that resumes it.
 - Call unblock_task(taskId: "${taskHandle}", reason: "<the user's reply, summarized>") FIRST, then STOP. unblock_task moves the task to Ready and the system re-enqueues execution with the user's reply.
-- Do NOT do the work yourself, delegate to any sub-agent (gateway, gather_context, take_action, etc.), or send a message before unblock_task — the resume handler does that.
+- Do NOT do the work yourself, delegate to any sub-agent (gateway, etc.), or send a message before unblock_task — the resume handler does that.
 - Exception: if the user's message is clearly NOT a reply to this task (a new unrelated request), ignore the rule above and treat it as new direction.`
           : ""
       }
@@ -597,7 +650,7 @@ RULES:
   - PLAN / RUNBOOK (numbered steps, named tools, the user did the planning) → execute the steps in order. Don't re-plan. If a step has a blocking gap (referenced field missing, destination ambiguous in a way that changes the action), mark Waiting + send_message with ONE focused question. Cosmetic mismatches and obvious defaults are NOT blockers.
   - GOAL (desired outcome, no steps given) → just execute. If the work is genuinely big (multiple independent deliverables, irreversibly bulk, or the user explicitly said "plan/decompose"), load the "Decompose Task" skill from <skills> and let it tell you whether and how to split. Otherwise: do it directly.
 - ROUTING.
-  - Integration work (email, calendar, github, etc.) → delegate to the orchestrator via gather_context / take_action.
+  - Integration work (email, calendar, github, etc.) → call get_integration_actions + execute_integration_action directly.
   - Coding / browser / shell → use the gateway tools directly (coding_*, browser_*, exec_*) when a gateway is connected. Before delegating coding work, call get_task_coding_session. If status is "starting", call reschedule_self(minutesFromNow=2). If "ready", resume by default (sessionId, dir, worktreeBranch). EXCEPTION: if the user asked for a fresh session or a different coding agent, omit sessionId so a new session starts.
 - IF the user sends a new message mid-execution → treat as additional direction for this task.${
         isSubtask
@@ -726,6 +779,11 @@ Keep your response concise — this shows up on a scratchpad, not a chat convers
     systemPrompt += `\n\n${buildOnboardingModeBlock()}`;
   }
 
+  // Colleagues / routing block — appended near the end so the mention
+  // rules stay at high attention when the model is about to generate.
+  // The content was assembled earlier (needed the teammate roster).
+  systemPrompt += `\n\n${colleaguesBlock}`;
+
   // Voice-mode blocks. Order matters — personality first (already in
   // systemPrompt from PERSONALITY()), then optional tone defaults for
   // personalities without their own voice variant, then the universal
@@ -737,13 +795,13 @@ Keep your response concise — this shows up on a scratchpad, not a chat convers
   // hard rails (word budget, no markdown, identifier transformations)
   // that apply equally to TARS, Alfred, Hudson, or any custom voice.
   if (mode === "voice") {
-    if (customPersonality) {
+    if (resolvedCustomPersonality) {
       // Custom personalities never define a voice variant — give them
       // the generic tone defaults so spoken delivery stays sane.
       systemPrompt += `\n\n${buildDefaultVoiceToneBlock()}`;
     } else {
       const personalityHasVoiceVariant = resolvePersonalityPrompt(
-        personality as PersonalityType,
+        agentPersonality as PersonalityType,
         "voice",
       ).hasVoiceVariant;
       if (!personalityHasVoiceVariant) {
@@ -771,10 +829,143 @@ Keep your response concise — this shows up on a scratchpad, not a chat convers
     modelMessages,
     user,
     timezone,
-    gatherContextAgent,
-    takeActionAgent,
-    thinkAgent,
     gatewayAgents,
     isBackgroundExecution,
   };
+}
+
+/** Best display for the user in a system-prompt block. Falls back to
+ *  "the user" so we never render undefined into the prompt. */
+function userDisplayName(user: Awaited<ReturnType<typeof getUserById>>): string {
+  return (
+    user?.displayName ?? user?.name ?? user?.email ?? "the user"
+  );
+}
+
+/**
+ * Build the `<colleagues>` block. This is the authoritative,
+ * thread-aware source for "who's on the team and how routing works in
+ * this specific thread". The seed `<team>` block in each agent's
+ * template points here.
+ *
+ * Two shapes:
+ *   - Task conversation: multi-agent handoff is live. Explicit mention
+ *     is the ONLY way to wake a colleague — silence means they don't
+ *     hear you. The rules emphasize this because the model otherwise
+ *     tends to write "I'll ask Cass about this…" as prose without
+ *     emitting the actual mention tag, and the thread stalls.
+ *   - 1:1 conversation: mentions render as chips in the UI but do not
+ *     route. The block tells the agent so and points at task threads
+ *     as the escape hatch for real collaboration.
+ */
+function buildColleaguesBlock(params: {
+  isTaskConversation: boolean;
+  teammates: Array<{ handle: string; displayName: string }>;
+  userName: string;
+}): string {
+  const { isTaskConversation, teammates, userName } = params;
+
+  if (isTaskConversation) {
+    const roster =
+      teammates.length > 0
+        ? teammates
+            .map((t) => `- ${t.displayName} (handle: ${t.handle})`)
+            .join("\n")
+        : "You're the only agent on the team right now.";
+
+    return `<colleagues>
+You are working alongside these colleagues on this task thread. Every message is attributed to whoever wrote it — ${userName} sees exactly who said what.
+
+Your teammates on this thread:
+${roster}
+
+**Read the thread before you speak.** The message history above is not a monologue — every entry with a name label was authored by a real speaker (${userName} or one of the colleagues listed). Before you reply:
+- Skim the whole thread, not just the last message. A colleague 2–3 messages up may have already answered part of what's being asked, or done work you'd otherwise redo.
+- If a teammate already fetched data, opened a page, or checked something, use their result — do not repeat the tool call.
+- Never respond as if the thread just started. Prior messages are context you own, not noise you can ignore.
+- If a teammate asked ${userName} a clarifying question and ${userName} hasn't answered yet, don't jump in and answer for them — wait or hand back with a mention.
+
+**How to bring a colleague in.** Drop this HTML inline in your reply text where you'd naturally reference them:
+
+    <mention colleague="handle" />
+
+The renderer turns it into a chip like @Cass in the UI AND wakes that colleague to post their own reply here.
+
+**If you want a colleague to respond, you MUST emit the mention tag.** Writing "I'll check with Cass" or "Let me loop Cass in" as prose does nothing — Cass never hears you. The mention tag is the only signal that routes. No mention = no wake-up.
+
+**When to mention someone:**
+- Delegate work that fits their brief better than yours.
+- Ask a question only they can answer.
+- Hand back to whoever asked you to look at something — name them explicitly to return control.
+- Forward the thread to whoever should act next.
+
+**When NOT to mention someone:**
+- To say "thanks" or "done" — that re-wakes them for no reason.
+- Yourself. It's a no-op.
+- ${userName} directly — they read every message; address them in prose instead.
+
+**What happens after a mention:**
+- Fire-and-forget. The mentioned colleague wakes on this same thread, reads context, posts their own reply. You do NOT get their answer back inline — close your turn, don't wait, don't try to predict what they'll say.
+- Re-mentioning the same colleague while they're still working supersedes their prior turn (fresh instruction wins).
+- Chain depth is capped — don't rely on 5-hop delegation.
+- Silence ends your turn. If you owe someone a hand-back, mention them explicitly; do not assume the thread will magically continue.
+</colleagues>`;
+  }
+
+  const rosterLine =
+    teammates.length > 0
+      ? teammates.map((t) => `${t.displayName} (${t.handle})`).join(", ")
+      : "no other agents currently";
+
+  return `<colleagues>
+This is a 1:1 conversation with ${userName}. Multi-agent collaboration does not route in this thread — a \`<mention colleague="…" />\` tag renders as a chip in the UI but will NOT wake anyone.
+
+Other agents on the team (for reference): ${rosterLine}.
+
+If a question would land better with one of them, tell ${userName} to either open that agent's chat directly or create a task for it — task threads DO support colleague mentions and multi-agent collaboration.
+</colleagues>`;
+}
+
+/**
+ * Build the `<identity>` block that gets prepended to every rendered
+ * system prompt. Kept out of the stored `basePrompt` template so it's
+ * guaranteed present even if the user has hand-edited their agent's
+ * prompt into something weird. Branched between generalist and
+ * specialist because the framing is genuinely different — the butler
+ * runs the workspace, a specialist is a colleague brought in for a
+ * brief.
+ *
+ * Gateway agents (chat-facing surface for a connected gateway) get the
+ * specialist framing — they're teammates on a specific brief, just
+ * one whose brief happens to be "operate this gateway".
+ */
+function buildIdentityBlock(params: {
+  kind: "system" | "gateway" | "user";
+  agentName: string;
+  userName: string;
+}): string {
+  const { kind, agentName, userName } = params;
+  const name = agentName || "your agent";
+  const user = userName || "the user";
+
+  if (kind === "system") {
+    return `<identity>
+You are ${name}, the personal butler of ${user}. You run this workspace on their behalf — their memory, their connected tools, their tasks all flow through you.
+
+When emails, messages, or system notifications reference "CORE" (e.g. "CORE has access to gmail", "CORE sent this", "authorized by CORE"), that is you — ${name}.
+
+You know ${user}: their people, their preferences, how they communicate, what they care about. You have been in their life. Generic answers are for strangers — you are not a stranger.
+
+You also know your own house. CORE is your system: the toolkit, the gateways, the channels, the memory, the skills. When ${user} asks how something works or why something broke, you look it up in your own documentation and give the real answer with exact steps — you do not guess.
+</identity>`;
+  }
+
+  // Specialist framing — covers user-created agents and gateway agents.
+  return `<identity>
+You are ${name}, a specialist on ${user}'s team. You are a colleague brought in for the work that matches your brief — not their primary butler and not their point of contact. The rest of this prompt (your voice, your scope, your behavior) defines what that brief is; stay in it.
+
+You know ${user} and you share the team's memory and connected tools with the other agents. Use them the way any competent teammate would — to do the work, not to interrogate them.
+
+When emails, messages, or system notifications reference "CORE", that refers to your team as a whole, of which you are one member.
+</identity>`;
 }

@@ -392,18 +392,10 @@ function TaskDetailLayout() {
   ];
 
   const activePath = navigation.location?.pathname ?? location.pathname;
-  const isRunsTab = activePath.endsWith("/runs");
   const isCodingTab = /\/coding(\/|$)/.test(activePath);
   const isBrowserTab = /\/browser(\/|$)/.test(activePath);
-  const isRecurring = !!task.schedule && (task.occurrenceCount ?? 0) > 1;
 
   const toggleTaskChat = () => setTaskChatOpen((v) => !v);
-
-  React.useEffect(() => {
-    if (isRunsTab && taskChatOpen) {
-      setTaskChatOpen(false);
-    }
-  }, [isRunsTab]);
 
   React.useEffect(() => {
     const handler = (e: KeyboardEvent) => {
@@ -426,7 +418,7 @@ function TaskDetailLayout() {
             {
               label: "Info",
               value: "info",
-              isActive: !isRunsTab && !isCodingTab && !isBrowserTab,
+              isActive: !isCodingTab && !isBrowserTab,
               onClick: () => navigate(`/home/tasks/${task.id}`),
             },
 
@@ -443,17 +435,6 @@ function TaskDetailLayout() {
               isActive: isBrowserTab,
               onClick: () => navigate(`/home/tasks/${task.id}/browser`),
             },
-
-            ...(isRecurring
-              ? [
-                  {
-                    label: "Runs",
-                    value: "runs",
-                    isActive: isRunsTab,
-                    onClick: () => navigate(`/home/tasks/${task.id}/runs`),
-                  },
-                ]
-              : []),
           ]}
           showChatToggle={false}
           actionsNode={
@@ -508,9 +489,10 @@ function TaskDetailLayout() {
                 maxSize="50%"
               >
                 <TaskChatPanel
-                  runs={runs}
+                  taskId={task.id}
+                  assignedAgentId={task.assignedAgentId ?? null}
+                  isRecurring={task.schedule != null}
                   integrationAccountMap={integrationAccountMap}
-                  onClose={() => setTaskChatOpen(false)}
                 />
               </ResizablePanel>
             </>

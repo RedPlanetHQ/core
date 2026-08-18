@@ -1,21 +1,29 @@
-import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import {
+  useCallback,
+  useEffect,
+  useLayoutEffect,
+  useMemo,
+  useRef,
+  useState,
+} from "react";
 import { useFetcher } from "@remix-run/react";
 import { useLocalCommonState } from "~/hooks/use-local-state";
-import { useChat, type UIMessage } from "@ai-sdk/react";
-import {
-  DefaultChatTransport,
-  lastAssistantMessageIsCompleteWithApprovalResponses,
-} from "ai";
+import { type UIMessage } from "ai";
+import { useConversationLive } from "~/hooks/use-conversation-live";
 import { UserTypeEnum } from "@core/types";
-import { ConversationItem } from "./conversation-item.client";
+import {
+  ConversationItem,
+  type ConversationItemSender,
+} from "./conversation-item.client";
 import {
   ConversationTextarea,
   type ChatAttachment,
   type LLMModel,
 } from "./conversation-textarea.client";
-import { ThinkingIndicator } from "./thinking-indicator.client";
 import {
   collectApprovalRequests,
+  conversationDayKey,
+  formatConversationDayLabel,
   hasNeedsApprovalDeep,
   mergeAgentParts,
   type ConversationToolPart,
@@ -35,11 +43,34 @@ interface ConversationHistory {
   message: string;
   parts: any;
   createdAt?: string | Date;
+  /** Which agent authored this row (assistant messages only). Used to
+   *  render the correct name + avatar in the Slack-style item header. */
+  agentId?: string | null;
+}
+
+/** Agent record shape used for per-message sender attribution. Loader
+ *  passes this in via `colleagues`; ConversationView builds an id-keyed
+ *  map from it and hands each ConversationItem its resolved author. */
+export interface AgentBadge {
+  id: string;
+  handle: string;
+  displayName: string;
+  appearance?: {
+    eye?: string;
+    eyeColor?: string;
+    accentColor?: string;
+  } | null;
 }
 
 interface ConversationViewProps {
   conversationId: string;
+  /** The NEWEST page of history from the loader, not the whole thread. */
   history: ConversationHistory[];
+  /** Whether older rows exist above `history`. Drives the load-on-scroll
+   *  sentinel; omit (or false) to disable paging for this surface. */
+  hasMore?: boolean;
+  /** Keyset cursor for the page above `history`. */
+  nextCursor?: string | null;
   className?: string;
   integrationAccountMap?: Record<string, string>;
   integrationFrontendMap?: Record<string, string>;
@@ -48,6 +79,20 @@ interface ConversationViewProps {
   /** DB conversation status — input is disabled when "running" */
   conversationStatus?: string;
   models?: LLMModel[];
+  /** Active workspace agents. Used both for the composer's `@` mention
+   *  picker (handle + displayName only) AND for per-message sender
+   *  attribution in the Slack-style item header (needs id + appearance).
+   *  Include every agent that might have authored a message in this
+   *  thread, not just the ones you want mentioned. */
+  colleagues?: AgentBadge[];
+  /** Enable the @-mention picker. Only meaningful in task-scoped
+   *  conversations (collaboration doesn't route in 1:1 chats). */
+  enableMentionPicker?: boolean;
+  /** Optional starter text seeded into the composer on mount. Used by
+   *  entry points that deep-link a specific ask ("Add Task" from the
+   *  command bar, etc.). One-shot — the editor takes it as initial
+   *  content and the user edits from there. */
+  defaultMessage?: string;
   /** When true, hide the very first user message from the rendered chat
    *  while still keeping it in history (so the agent sees it). Used by
    *  onboarding to keep the hidden seed instruction out of the UI. */
@@ -66,12 +111,17 @@ interface ConversationViewProps {
 export function ConversationView({
   conversationId,
   history: historyProp,
+  hasMore: hasMoreProp = false,
+  nextCursor = null,
   className,
   integrationAccountMap = {},
   integrationFrontendMap = {},
   autoRegenerate = false,
   conversationStatus: conversationStatusProp,
   models: modelsProp = [],
+  colleagues = [],
+  enableMentionPicker = false,
+  defaultMessage,
   hideFirstUserMessage = false,
   onStreamComplete,
   initialVoiceMode = false,
@@ -105,11 +155,26 @@ export function ConversationView({
     skillsFetcher.load("/api/v1/skills?limit=100");
   }, []);
   const composerRef = useRef<HTMLDivElement>(null);
+  const contentRef = useRef<HTMLDivElement>(null);
   const messageRefs = useRef<(HTMLDivElement | null)[]>([]);
-  // initialize to history.length so mount doesn't trigger the scroll effect
-  const prevMessageCountRef = useRef(history.length);
-  // spacer height = scroll container clientHeight so any message can scroll to top
-  const [spacerHeight, setSpacerHeight] = useState(0);
+  const topSentinelRef = useRef<HTMLDivElement>(null);
+  // Identity of the newest row, not a count — a prepend from "load older"
+  // also grows the count, and keying the scroll-into-view effect off the
+  // count would yank the viewport back down every time an older page lands.
+  const prevLastRowIdRef = useRef<string | undefined>(
+    history[history.length - 1]?.id,
+  );
+  // Distance from the bottom of the scroll content, captured just before an
+  // older page is prepended and restored right after it commits. Anchoring
+  // on the bottom rather than the top is what keeps the viewport still
+  // while content is inserted above it.
+  const pendingAnchorRef = useRef<number | null>(null);
+  // Viewport height of the scroll container, and the measured height of the
+  // in-flight turn (last user message → end of the reply). The spacer is the
+  // difference: just enough pad to float the user's question to the top while
+  // the answer streams, and nothing once the turn outgrows the viewport.
+  const [containerHeight, setContainerHeight] = useState(0);
+  const [lastTurnHeight, setLastTurnHeight] = useState(0);
   // keeps spacer alive after streaming ends until user scrolls back to bottom
   const [keepSpacer, setKeepSpacer] = useState(false);
 
@@ -133,73 +198,33 @@ export function ConversationView({
     setSelectedModelId(modelId);
   };
 
-  // Captures useChat.stop so handleStop can reference it without depending on
-  // the hook call order.
-  const stopRef = useRef<(() => void) | null>(null);
+  // Stop / cancel-in-flight was removed with the fire-and-forget
+  // migration. Composer never locks on a pending reply — user can just
+  // send another message; cancel-on-re-mention on the server handles
+  // "actually do Y instead" for owner/specialist re-mentions.
 
-  const [isStopping, setIsStopping] = useState(false);
-
-  const handleStop = useCallback(async () => {
-    setIsStopping(true);
-    try {
-      await fetch(`/api/v1/conversation/${conversationId}/stop`, {
-        method: "POST",
-      });
-    } catch {
-      // best-effort: network issues shouldn't block the local UI stop
-    }
-    stopRef.current?.();
-    setConversationStatus("cancelled");
-    setIsStopping(false);
-  }, [conversationId]);
-
-  const [permissionMode, setPermissionMode] =
-    useLocalCommonState<PermissionMode>("conversationPermissionMode", "full");
-  const permissionModeRef = useRef<PermissionMode>(permissionMode ?? "full");
-  permissionModeRef.current = permissionMode ?? "full";
-  // toolCallId → { approved, ...argOverrides }
-  // Single ref for both approval decisions and arg overrides
-  const toolArgOverridesRef = useRef<Record<string, Record<string, unknown>>>(
-    {},
-  );
-
-  // {approvalId, toolCallId}[] — one entry per suspended agent/tool call.
-  // Populated by deep-scanning the last assistant message; reset on chat finish.
-  const pendingApprovalRequestsRef = useRef<
-    Array<{ approvalId: string; toolCallId: string }>
-  >([]);
-
-  const setToolArgOverride = useCallback(
-    (toolCallId: string, args: Record<string, unknown>) => {
-      toolArgOverridesRef.current = {
-        ...toolArgOverridesRef.current,
-        [toolCallId]: {
-          ...(toolArgOverridesRef.current[toolCallId] ?? {}),
-          ...args,
-        },
-      };
-    },
-    [],
-  );
-
+  // Live conversation hook — POST to send + Redis-pubsub SSE for updates.
+  // Consumers that used to lean on useChat internals (regenerate, tool
+  // approvals, permission mode) either have a no-op shim below or are
+  // just dropped since the underlying flow doesn't need them anymore.
   const {
-    sendMessage,
     messages,
-    status,
+    historyRows,
+    status: liveStatus,
+    sendMessage: sendMessageParts,
+    sendText,
     stop,
-    regenerate,
-    addToolApprovalResponse,
-  } = useChat({
-    id: conversationId,
-    resume: true,
-    // Sub-agents (e.g. take_action) can emit hundreds of tool-call chunks
-    // per second. Without throttling, each chunk triggers a full re-render
-    // + deep parts-tree walk on the active assistant message and freezes
-    // the main thread. 100ms coalesces updates to ~10fps of streaming.
-    experimental_throttle: 100,
-    onFinish: () => {
-      toolArgOverridesRef.current = {};
-      pendingApprovalRequestsRef.current = [];
+    hasMore,
+    isLoadingOlder,
+    loadOlder,
+  } = useConversationLive({
+    conversationId,
+    initialHistory: history as unknown as Parameters<
+      typeof useConversationLive
+    >[0]["initialHistory"],
+    initialHasMore: hasMoreProp,
+    initialCursor: nextCursor,
+    onAssistantMessage: () => {
       setConversationStatus("completed");
       readFetcher.submit(null, {
         method: "GET",
@@ -207,58 +232,30 @@ export function ConversationView({
       });
       onStreamComplete?.();
     },
-    messages: history.map(
-      (h) =>
-        ({
-          id: h.id,
-          role: h.userType === UserTypeEnum.Agent ? "assistant" : "user",
-          parts: h.parts ? h.parts : [{ text: h.message, type: "text" }],
-        }) as UIMessage,
-    ),
-    transport: new DefaultChatTransport({
-      api: "/api/v1/conversation",
-      prepareSendMessagesRequest({ messages, id }) {
-        const toolArgOverrides = toolArgOverridesRef.current;
-        const hasApprovals = Object.values(toolArgOverrides).some(
-          (e) => "approved" in e,
-        );
-
-        const permissionMode = permissionModeRef.current;
-
-        if (hasApprovals) {
-          return {
-            body: {
-              messages,
-              needsApproval: true,
-              id,
-              toolArgOverrides,
-              permissionMode,
-              mode: voiceModeRef.current ? "voice" : "text",
-            },
-          };
-        }
-
-        return {
-          body: {
-            message: messages[messages.length - 1],
-            id,
-            toolArgOverrides,
-            modelId: selectedModelRef.current,
-            permissionMode,
-            mode: voiceModeRef.current ? "voice" : "text",
-          },
-        };
-      },
-      prepareReconnectToStreamRequest: ({ id }) => ({
-        api: `/api/v1/conversation/${id}/stream`,
-      }),
-    }),
-    // Fire when every suspended tool (across the full agent hierarchy) has a
-    // recorded approve/decline decision in toolArgOverridesRef.
-    sendAutomaticallyWhen: lastAssistantMessageIsCompleteWithApprovalResponses,
   });
+  // useConversationLive returns a boolean-ish status; the render code was
+  // written against useChat's string enum. Map to a compatible shape so
+  // downstream `status === "streaming"` checks keep working without a
+  // sweep of the JSX.
+  const status: "ready" | "submitted" | "streaming" =
+    liveStatus === "sending"
+      ? "submitted"
+      : liveStatus === "working"
+        ? "streaming"
+        : "ready";
 
-  stopRef.current = stop;
+  // useChat's sendMessage took { role, parts } — new API takes just parts.
+  // Wrapper preserves the old signature so composer callbacks don't need
+  // to change.
+  const sendMessage = useCallback(
+    (input: { role?: string; parts: unknown[] } | string) => {
+      if (typeof input === "string") return sendText(input);
+      return sendMessageParts(input.parts);
+    },
+    [sendMessageParts, sendText],
+  );
+
+  void stop;
 
   // Auto-fire the initial regenerate when we land on a conversation that
   // only has the seed user message. `sendAutomaticallyWhen` from the AI
@@ -277,20 +274,79 @@ export function ConversationView({
       conversationStatus !== "running"
     ) {
       autoRegenerateFiredRef.current = true;
-      regenerate();
+      // useChat had a native `regenerate()` that re-fired the last turn.
+      // The new flow doesn't need it — the seed user message is already
+      // in history, and if the owner hasn't replied yet, the SSE will
+      // deliver it whenever the background job wraps. If we ever need to
+      // manually kick the owner from the client, POST to the message
+      // endpoint with the existing seed row id (no-op upsert + fresh
+      // enqueue). Currently no path needs that.
     }
   }, []);
 
-  // Measure scroll container and keep spacer in sync so any message can reach the top
+  // Index of the message that opened the current turn. The spacer only ever
+  // exists to lift *that* message to the top of the viewport, so with no user
+  // message in the thread (a bare agent greeting) there is nothing to lift
+  // and no pad is warranted.
+  const lastUserIndex = useMemo(() => {
+    for (let i = messages.length - 1; i >= 0; i--) {
+      // A hidden seed message has no DOM node to measure against.
+      if (hideFirstUserMessage && i === 0) continue;
+      if (messages[i].role === "user") return i;
+    }
+    return -1;
+  }, [messages, hideFirstUserMessage]);
+
+  // Track the scroll container's viewport height.
   useEffect(() => {
     const container = scrollContainerRef.current;
     if (!container) return;
-    const update = () => setSpacerHeight(container.clientHeight);
+    const update = () => setContainerHeight(container.clientHeight);
     update();
     const ro = new ResizeObserver(update);
     ro.observe(container);
     return () => ro.disconnect();
   }, []);
+
+  // Measure the current turn: top of the last user message → bottom of the
+  // last rendered message. Deliberately measured off the message elements
+  // rather than the content column, since the column also contains the
+  // spacer we're sizing (that would be circular).
+  useEffect(() => {
+    const content = contentRef.current;
+    if (!content) return;
+
+    let frame = 0;
+    const measure = () => {
+      frame = 0;
+      if (lastUserIndex < 0) {
+        setLastTurnHeight(0);
+        return;
+      }
+      const first = messageRefs.current[lastUserIndex];
+      const last = messageRefs.current[messages.length - 1];
+      if (!first || !last) return;
+      const height =
+        last.getBoundingClientRect().bottom -
+        first.getBoundingClientRect().top;
+      setLastTurnHeight(height);
+    };
+
+    measure();
+    // Re-measure as the reply streams in and the turn grows.
+    const ro = new ResizeObserver(() => {
+      if (frame) return;
+      frame = requestAnimationFrame(measure);
+    });
+    ro.observe(content);
+    return () => {
+      if (frame) cancelAnimationFrame(frame);
+      ro.disconnect();
+    };
+  }, [lastUserIndex, messages.length]);
+
+  const spacerHeight =
+    lastUserIndex < 0 ? 0 : Math.max(0, containerHeight - lastTurnHeight);
 
   // On initial load, scroll to bottom to show latest messages
   useEffect(() => {
@@ -314,6 +370,13 @@ export function ConversationView({
     return () => window.clearTimeout(timer);
   }, [conversationId]);
 
+  // Collapse the spacer as soon as the turn finishes. Without this it
+  // survives until the user happens to scroll to the bottom, leaving a
+  // screen-high void under the last reply that you can scroll into.
+  useEffect(() => {
+    if (status === "ready") setKeepSpacer(false);
+  }, [status]);
+
   // Remove spacer when user scrolls back to bottom
   useEffect(() => {
     const container = scrollContainerRef.current;
@@ -328,10 +391,48 @@ export function ConversationView({
     return () => container.removeEventListener("scroll", handleScroll);
   }, []);
 
+  // Ask for the next page up when the sentinel above the first message
+  // scrolls into view. rootMargin starts the fetch a screenful early so the
+  // rows are usually in place before the user reaches the top.
+  const handleLoadOlder = useCallback(() => {
+    const container = scrollContainerRef.current;
+    if (container) {
+      pendingAnchorRef.current = container.scrollHeight - container.scrollTop;
+    }
+    void loadOlder();
+  }, [loadOlder]);
+
+  useEffect(() => {
+    const sentinel = topSentinelRef.current;
+    const container = scrollContainerRef.current;
+    if (!sentinel || !container || !hasMore) return;
+    const io = new IntersectionObserver(
+      (entries) => {
+        if (entries.some((e) => e.isIntersecting)) handleLoadOlder();
+      },
+      { root: container, rootMargin: "400px 0px 0px 0px" },
+    );
+    io.observe(sentinel);
+    return () => io.disconnect();
+  }, [hasMore, handleLoadOlder]);
+
+  // Restore the scroll position after a prepend commits. Keyed on the id of
+  // the topmost row — that changes exactly when older rows land, and never
+  // when a new message arrives at the bottom.
+  const topRowId = historyRows[0]?.id;
+  useLayoutEffect(() => {
+    const anchor = pendingAnchorRef.current;
+    if (anchor === null) return;
+    pendingAnchorRef.current = null;
+    const container = scrollContainerRef.current;
+    if (container) container.scrollTop = container.scrollHeight - anchor;
+  }, [topRowId]);
+
   // When a new user message is added, force-scroll it to the top of the container
   useEffect(() => {
     const newCount = messages.length;
-    if (newCount > prevMessageCountRef.current) {
+    const lastRowId = messages[newCount - 1]?.id;
+    if (lastRowId && lastRowId !== prevLastRowIdRef.current) {
       const lastMsg = messages[newCount - 1];
       if (lastMsg.role === "user") {
         setKeepSpacer(true);
@@ -347,8 +448,8 @@ export function ConversationView({
         });
       }
     }
-    prevMessageCountRef.current = newCount;
-  }, [messages.length]);
+    prevLastRowIdRef.current = lastRowId;
+  }, [messages]);
 
   const lastAssistant = useMemo(
     () =>
@@ -391,50 +492,81 @@ export function ConversationView({
     [tts],
   );
 
-  // The two walks below run per render of ConversationView. Memoize on
-  // lastAssistant so unrelated state changes (voiceMode, tts internals,
-  // spacer height) don't re-walk the parts tree.
-  const needsApproval = useMemo(
-    () =>
-      lastAssistant?.parts
-        ? hasNeedsApprovalDeep(lastAssistant.parts as ConversationToolPart[])
-        : false,
-    [lastAssistant],
-  );
+  // Tool-approval scaffolding removed with the useChat migration —
+  // ask_user is gone and requireApproval integrations no longer pause
+  // for a UI click. `needsApproval` is stubbed to false so downstream
+  // props (composer's disabled=needsApproval) never gate on it.
+  const needsApproval = false;
+  // Legacy imports kept in scope purely to avoid an import-diff churn.
+  // TODO(cleanup): drop these imports + the whole conversation-utils
+  // approval helpers in the next tool-item pass.
+  void hasNeedsApprovalDeep;
+  void collectApprovalRequests;
+  void mergeAgentParts;
 
-  // Deep-scan the last assistant message for all suspended tool calls.
-  // Keep the ref at the max seen set (stable during approval processing);
-  // reset on chat finish (onFinish above).
-  const currentApprovalRequests = useMemo(
-    () =>
-      lastAssistant
-        ? collectApprovalRequests(mergeAgentParts(lastAssistant.parts))
-        : [],
-    [lastAssistant],
-  );
-  if (
-    currentApprovalRequests.length > pendingApprovalRequestsRef.current.length
-  ) {
-    pendingApprovalRequestsRef.current = currentApprovalRequests;
-  }
+  // Id-keyed lookup for per-message sender attribution. Recomputes only
+  // when the colleagues roster identity changes — negligible cost.
+  const agentBadgeById = useMemo(() => {
+    const map = new Map<string, AgentBadge>();
+    for (const a of colleagues) {
+      if (a.id) map.set(a.id, a);
+    }
+    return map;
+  }, [colleagues]);
 
-  // Real decisions are recorded directly into toolArgOverridesRef via setToolArgOverride,
-  // called from ToolApprovalPanel per card. This wrapper only updates AI SDK state
-  // (approval-requested → approval-responded) — always approved:true.
-  const handleToolApprovalResponse = useCallback(
-    (params: { id: string; approved: boolean }) => {
-      addToolApprovalResponse({ id: params.id, approved: true });
-    },
-    [addToolApprovalResponse],
-  );
+  // Flattened render list: date dividers interleaved with messages as
+  // first-class items rather than decorations hung off a message. That's
+  // what lets a windowing library measure and recycle them later — a
+  // divider is just another row with a height.
+  //
+  // Each message item carries its ORIGINAL index into `messages`, because
+  // `messageRefs`, `historyRows` and the spacer measurement are all keyed
+  // by that index. Only the render order is flattened; the index space is
+  // untouched.
+  const renderItems = useMemo(() => {
+    const items: Array<
+      | { kind: "divider"; key: string; label: string }
+      | { kind: "message"; key: string; index: number }
+    > = [];
+    let lastDayKey: string | null = null;
 
-  // Bridge useChat's sendMessage to a simple text-in API so that
-  // nested tool renderers (e.g. suggest_integrations cards) can fire
-  // a programmatic user turn via ChatContext without knowing the AI
-  // SDK shape.
+    for (let i = 0; i < messages.length; i++) {
+      // Onboarding: the very first user message is a seed instruction we
+      // keep in history (so the agent sees it) but don't render.
+      if (hideFirstUserMessage && i === 0 && messages[i].role === "user") {
+        continue;
+      }
+      const createdAt = historyRows[i]?.createdAt;
+      if (createdAt) {
+        const dayKey = conversationDayKey(createdAt);
+        if (dayKey !== lastDayKey) {
+          items.push({
+            kind: "divider",
+            key: `day-${dayKey}`,
+            label: formatConversationDayLabel(createdAt),
+          });
+          lastDayKey = dayKey;
+        }
+      }
+      items.push({
+        kind: "message",
+        // Row id, not array index — a prepend from "load older" shifts
+        // every index, and index keys would remount the whole thread.
+        key: messages[i].id ?? `msg-${i}`,
+        index: i,
+      });
+    }
+    return items;
+  }, [messages, historyRows, hideFirstUserMessage]);
+
+  // Nested tool renderers (e.g. suggest_integrations cards) fire a
+  // programmatic user turn via ChatContext without knowing the internal
+  // parts shape — this is a thin wrapper that awaits nothing.
   const sendTextMessage = useCallback(
-    (text: string) => sendMessage({ text }),
-    [sendMessage],
+    (text: string) => {
+      void sendText(text);
+    },
+    [sendText],
   );
 
   return (
@@ -449,64 +581,124 @@ export function ConversationView({
           ref={scrollContainerRef}
           className="flex grow flex-col items-center overflow-y-auto"
         >
-          <div className="flex w-full max-w-[90ch] flex-col pb-4">
-            {messages.map((message: UIMessage, i: number) => {
-              // Onboarding: the very first user message is a seed
-              // instruction we keep in history (so the agent sees it)
-              // but don't render in the UI.
-              if (hideFirstUserMessage && i === 0 && message.role === "user") {
-                return null;
+          {/* mt-auto: a thread shorter than the viewport hugs the composer
+              instead of hanging at the top with dead space beneath it. Once
+              content overflows there's no free space and mt-auto is inert. */}
+          <div
+            ref={contentRef}
+            className="mt-auto flex w-full max-w-[90ch] flex-col pb-4"
+          >
+            {/* Top-of-thread sentinel. Kept mounted (not swapped for the
+                loading row) so the observer target doesn't churn between
+                pages. */}
+            {hasMore && (
+              <div ref={topSentinelRef} className="h-px w-full shrink-0" />
+            )}
+            {isLoadingOlder && (
+              <div className="text-muted-foreground py-3 text-center text-xs">
+                Loading earlier messages…
+              </div>
+            )}
+            {renderItems.map((item) => {
+              if (item.kind === "divider") {
+                return (
+                  <div
+                    key={item.key}
+                    className="sticky top-0 z-10 flex justify-center py-2"
+                  >
+                    {/* Opaque background (the chat surface is bg-background-2)
+                        so messages scrolling underneath don't bleed through
+                        the sticky chip. All theme tokens — inverts with dark
+                        mode for free. */}
+                    <span className="bg-background-3 text-muted-foreground border-border flex h-5 items-center rounded border px-1.5 text-xs">
+                      {item.label}
+                    </span>
+                  </div>
+                );
               }
+
+              const i = item.index;
+              const message = messages[i];
+              // Resolve the sender for the item header (Slack-style
+              // "avatar + name" above every message). User messages use
+              // the current user; agent messages resolve by agentId
+              // against the workspace roster. Falls back to a generic
+              // "Assistant" label when neither is available (legacy rows
+              // written before we started stamping agentId).
+              //
+              // Read from `historyRows` (live), not `history` (loader
+              // snapshot) — otherwise any assistant row that arrives via
+              // SSE after mount has no agentId lookup and falls through
+              // to the generic "Assistant" avatar. When the row has no
+              // agentId (legacy write), fall back to the sole colleague
+              // if there is exactly one — every non-task conversation is
+              // scoped to a single agent.
+              const liveRow = historyRows[i];
+              const rawAgentId =
+                liveRow?.agentId ??
+                (colleagues.length === 1 ? colleagues[0].id : null);
+              const sender: ConversationItemSender =
+                message.role === "user"
+                  ? {
+                      kind: "user",
+                      name:
+                        currentUser?.displayName ??
+                        currentUser?.name ??
+                        currentUser?.email ??
+                        "You",
+                    }
+                  : rawAgentId && agentBadgeById.has(rawAgentId)
+                    ? {
+                        kind: "agent",
+                        name: agentBadgeById.get(rawAgentId)!.displayName,
+                        appearance:
+                          agentBadgeById.get(rawAgentId)!.appearance ?? null,
+                      }
+                    : { kind: "agent", name: "Assistant", appearance: null };
               return (
                 <div
-                  key={i}
+                  key={item.key}
                   ref={(el) => {
                     messageRefs.current[i] = el;
                   }}
                 >
                   <ConversationItem
                     message={message}
-                    createdAt={history[i]?.createdAt}
-                    addToolApprovalResponse={handleToolApprovalResponse}
-                    setToolArgOverride={setToolArgOverride}
-                    isChatBusy={
-                      status === "streaming" || status === "submitted"
-                    }
+                    // `historyRows` only — the loader `history` snapshot is
+                    // just the newest page, so its indices stop lining up
+                    // the moment an older page is prepended.
+                    createdAt={liveRow?.createdAt}
+                    sender={sender}
                     integrationAccountMap={integrationAccountMap}
                     integrationFrontendMap={integrationFrontendMap}
                   />
                 </div>
               );
             })}
-            {/* Spacer while streaming or until user scrolls back to bottom */}
-            {(status === "streaming" ||
-              status === "submitted" ||
-              keepSpacer) && (
-              <div style={{ height: spacerHeight, flexShrink: 0 }} />
-            )}
+            {/* Spacer while streaming or until user scrolls back to bottom.
+                Height is what's left of the viewport after the current turn,
+                so it shrinks to nothing as the reply grows past one screen. */}
+            {spacerHeight > 0 &&
+              (status === "streaming" ||
+                status === "submitted" ||
+                keepSpacer) && (
+                <div style={{ height: spacerHeight, flexShrink: 0 }} />
+              )}
           </div>
         </div>
 
         <div className="flex w-full shrink-0 flex-col items-center">
           <div ref={composerRef} className="w-full max-w-[90ch] px-4">
-            {!voiceMode && (
-              <ThinkingIndicator
-                isLoading={
-                  status === "streaming" ||
-                  status === "submitted" ||
-                  conversationStatus === "running"
-                }
-              />
-            )}
+            {/* ThinkingIndicator ("Coordinating…") removed — placeholder
+                rows in the timeline (status="working") already show which
+                agent is thinking, per-row, and the global banner just
+                added redundant noise above them. */}
             <ConversationTextarea
               className="pt-4"
-              isLoading={
-                status === "streaming" ||
-                status === "submitted" ||
-                conversationStatus === "running"
-              }
-              isStopping={isStopping}
-              disabled={needsApproval || outOfCredits}
+              colleagues={colleagues}
+              enableMentionPicker={enableMentionPicker}
+              defaultValue={defaultMessage}
+              disabled={outOfCredits}
               placeholder={
                 outOfCredits
                   ? "You're out of credits — top up to keep chatting"
@@ -528,10 +720,9 @@ export function ConversationView({
                   }
                   sendMessage({ role: "user", parts: parts as any });
                 } else {
-                  sendMessage({ text: message });
+                  sendMessage(message);
                 }
               }}
-              stop={handleStop}
               models={modelsProp}
               selectedModelId={selectedModelId}
               onModelChange={handleModelChange}
@@ -541,14 +732,15 @@ export function ConversationView({
               onVoiceSpeechOnset={handleVoiceSpeechOnset}
               onVoiceTurnResult={handleVoiceTurnResult}
               rightActions={
-                <PermissionModeSelector
-                  value={permissionMode ?? "full"}
-                  onChange={setPermissionMode}
-                  disabled={
-                    status === "streaming" ||
-                    status === "submitted" ||
-                    conversationStatus === "running"
-                  }
+                // PermissionModeSelector gated tool-approval behavior;
+                // approvals were removed alongside the useChat migration
+                // so the selector has no meaning anymore. Leaving the
+                // right-actions slot empty for now — reintroduce if a
+                // future gate needs a global toggle.
+                <span
+                  className="hidden"
+                  aria-hidden
+                  data-permission-mode-legacy
                 />
               }
             />

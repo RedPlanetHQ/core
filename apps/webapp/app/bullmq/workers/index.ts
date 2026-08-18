@@ -12,10 +12,6 @@ import {
 } from "~/jobs/ingest/ingest-episode.logic";
 import { processEpisodePreprocessing } from "~/jobs/ingest/preprocess-episode.logic";
 import {
-  processConversationTitleCreation,
-  type CreateConversationTitlePayload,
-} from "~/jobs/conversation/create-title.logic";
-import {
   processSessionCompaction,
   type SessionCompactionPayload,
 } from "~/jobs/session/session-compaction.logic";
@@ -74,6 +70,10 @@ import {
   type CodingDescriptionUpdatePayload,
   processCodingDescriptionUpdate,
 } from "~/jobs/coding/description-update.logic";
+import {
+  type RunAgentTurnPayload,
+  processAgentTurn,
+} from "~/jobs/conversation/run-agent-turn.logic";
 import {
   type ScheduledTaskPayload,
   processScheduledTask,
@@ -137,21 +137,6 @@ export const ingestWorker = new Worker(
   {
     connection: getRedisConnection(),
     concurrency: env.BULLMQ_CONCURRENCY_INGEST, // Global limit for ingestion jobs
-  },
-);
-
-/**
- * Conversation title creation worker
- */
-export const conversationTitleWorker = new Worker(
-  "conversation-title-queue",
-  async (job) => {
-    const payload = job.data as CreateConversationTitlePayload;
-    return await processConversationTitleCreation(payload);
-  },
-  {
-    connection: getRedisConnection(),
-    concurrency: env.BULLMQ_CONCURRENCY_CONVERSATION_TITLE, // Process title creations in parallel
   },
 );
 
@@ -342,13 +327,30 @@ export const codingDescriptionUpdateWorker = new Worker(
 );
 
 /**
+ * Agent-turn worker
+ * Runs one specialist agent's turn on a conversation after a mention has
+ * reserved a placeholder row. Cancellable via job-finder — dispatchMentions
+ * calls the cancel path when a fresh mention supersedes an in-flight turn.
+ */
+export const agentTurnWorker = new Worker(
+  "agent-turn-queue",
+  async (job) => {
+    const payload = job.data as RunAgentTurnPayload;
+    return await processAgentTurn(payload);
+  },
+  {
+    connection: getRedisConnection(),
+    concurrency: 5,
+  },
+);
+
+/**
  * Graceful shutdown handler
  */
 export async function closeAllWorkers(): Promise<void> {
   await Promise.all([
     preprocessWorker.close(),
     ingestWorker.close(),
-    conversationTitleWorker.close(),
     sessionCompactionWorker.close(),
     labelAssignmentWorker.close(),
     titleGenerationWorker.close(),
@@ -363,6 +365,7 @@ export async function closeAllWorkers(): Promise<void> {
     scratchpadScanWorker.close(),
     scratchpadScanQueue.close(),
     codingDescriptionUpdateWorker.close(),
+    agentTurnWorker.close(),
   ]);
   logger.log("All BullMQ workers closed");
 }

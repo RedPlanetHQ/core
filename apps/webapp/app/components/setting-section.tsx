@@ -15,14 +15,14 @@ export function SettingSection({
 }: SettingSectionProps) {
   return (
     <div className="flex w-auto flex-col gap-6 p-3 md:w-3xl">
-      <div className="flex justify-between">
-        <div className="flex shrink-0 flex-col">
+      <div className="flex items-start justify-between gap-4">
+        <div className="flex min-w-0 flex-1 flex-col">
           <h3 className="text-lg"> {title} </h3>
           <p className="text-muted-foreground">{description}</p>
           {metadata ? metadata : null}
         </div>
 
-        <div>{actions}</div>
+        <div className="shrink-0">{actions}</div>
       </div>
       <div className="grow">
         <div className="flex h-full w-full justify-center">

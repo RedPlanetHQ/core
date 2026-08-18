@@ -8,24 +8,17 @@
  * write actions (send, delete, create, post).
  */
 
-import { Agent } from "@mastra/core/agent";
 import { createTool } from "@mastra/core/tools";
 import PQueue from "p-queue";
 import { z } from "zod";
 
 import { runWebExplorer, searchCoreDocs } from "../explorers";
 import { logger } from "~/services/logger.service";
-import { toRouterString } from "~/lib/model.server";
-import {
-  getDefaultChatModelId,
-  type ModelConfig,
-} from "~/services/llm-provider.server";
+import { type ModelConfig } from "~/services/llm-provider.server";
 import { type SkillRef } from "../types";
 import { type OrchestratorTools, DirectOrchestratorTools } from "../executors";
 import { getProgressUpdateTool } from "../tools/utils-tools";
 import { truncateToolResult } from "../tools/truncate-result";
-
-export type OrchestratorMode = "read" | "write";
 
 // ---------------------------------------------------------------------------
 // Date helpers
@@ -48,263 +41,39 @@ function getDateTimeInTimezone(date: Date, timezone: string): string {
 }
 
 // ---------------------------------------------------------------------------
-// Risky action detection — only these get requireApproval in write mode
-// ---------------------------------------------------------------------------
-
-const RISKY_ACTION_PATTERNS = [
-  /^send/i,
-  /^delete/i,
-  /^create/i,
-  /^post/i,
-  /^remove/i,
-  /^update/i,
-  /^add/i,
-  /^move/i,
-  /^archive/i,
-  /^trash/i,
-];
-
-function isRiskyWriteAction(actionName: string): boolean {
-  return RISKY_ACTION_PATTERNS.some((pattern) => pattern.test(actionName));
-}
-
-// ---------------------------------------------------------------------------
-// Orchestrator prompt (unchanged from original)
-// ---------------------------------------------------------------------------
-
-const getOrchestratorPrompt = (
-  integrations: string,
-  mode: OrchestratorMode,
-  timezone: string = "UTC",
-  userPersona?: string,
-  skills?: SkillRef[],
-) => {
-  const personaSection = userPersona
-    ? `\nUSER PERSONA (use identity + directives only — style/preference sections are for the front-end agent, not you):\n${userPersona}\n`
-    : "";
-
-  const skillsSection =
-    skills && skills.length > 0
-      ? `\n<skills>
-User-defined skills you can apply. Each description below is "when to use" — pick by INTENT, not by title.
-
-Match the delegated intent against what each skill is for: debugging skills apply when the user is solving an issue or chasing an error; brainstorm skills apply when shaping a feature or open-ended problem; format/style skills apply when writing in a defined voice (investor update, digest, code review); planning skills apply when decomposing multi-step work. A skill applies if its purpose helps with the current intent, even if its name was never mentioned.
-
-If there is even a small chance a skill applies, load it. Cost of loading a wrong one: one tool call. Cost of skipping the right one: wrong-shape output.
-
-When multiple skills fit, process skills (debugging / brainstorm / planning — shape HOW you approach) come before domain or format skills (shape the OUTPUT). Load the process skill first.
-
-Load a skill when:
-- The delegated intent matches a skill's purpose → call get_skill and follow it.
-- The intent contains an explicit skill reference (name + ID, slash command) → load that one.
-If multiple fit, prefer the most specific. If none fit, don't force one.
-
-Available skills:
-${skills
-  .map((s, i) => {
-    const meta = s.metadata as Record<string, unknown> | null;
-    const desc = meta?.shortDescription as string | undefined;
-    return `${i + 1}. "${s.title}" (id: ${s.id})${desc ? ` — when to use: ${desc}` : ""}`;
-  })
-  .join("\n")}
-</skills>\n`
-      : "";
-
-  const now = new Date();
-  const today = getDateInTimezone(now, timezone);
-  const currentDateTime = getDateTimeInTimezone(now, timezone);
-  const yesterday = new Date(now);
-  yesterday.setDate(yesterday.getDate() - 1);
-  const yesterdayDate = getDateInTimezone(yesterday, timezone);
-
-  const dateTimeSection = `
-NOW: ${currentDateTime} (${timezone})
-TODAY: ${today}
-YESTERDAY: ${yesterdayDate}
-`;
-
-  const integrationInstructions = `
-INTEGRATION WORKFLOW:
-1. Call get_integration_actions with the accountId (the UUID under "accountId:" in CONNECTED INTEGRATIONS — NOT the slug like "github"/"gmail") and describe what you want to do
-2. Review the returned actions and their inputSchema
-3. Call execute_integration_action with exact parameters matching the schema
-4. If you need more detail (e.g., full email body), call get_integration_actions again to find the "get by id" action
-
-⚠️ ACCOUNT ID: Always pass the UUID from "accountId:" in the CONNECTED INTEGRATIONS list above. Passing the slug ("github", "gmail", "slack") will fail. The examples below use "<slack-uuid>" / "<github-uuid>" as placeholders — substitute the actual UUID from the list.
-
-⚠️ DATE/TIME QUERIES: Be cautious with datetime filters - each integration has different date formats and query syntax. Check the inputSchema carefully. Relative terms like "newer_than:1d" can be unreliable. Prefer explicit date ranges when available.
-
-MULTI-STEP INTEGRATION FLOWS:
-- Search/list actions return metadata only (id, title, subject). Use the ID to fetch full content.
-- After search: call get_integration_actions with "get by id" or "read" query, then execute with the ID.
-- Fetch full content when user asks what something says, contains, or asks for details.
-
-Multi-step examples:
-- "what does the email from John say" → search emails from John → get id → fetch email by id → return body
-- "summarize the PR for auth fix" → search PRs for auth → get PR number → fetch PR details → return description/diff
-- "what's in the Linear issue about onboarding" → search issues → get issue id → fetch issue details → return full description
-
-PARAMETER FORMATTING:
-- Follow the inputSchema exactly - use the field names, types, and formats it specifies
-- ISO 8601 timestamps MUST include timezone: 2025-01-01T00:00:00Z (not 2025-01-01T00:00:00)
-- Check required vs optional fields
-- If action fails, check the error and retry with corrected parameters
-`;
-
-  if (mode === "write") {
-    return `You are an orchestrator for CORE. Execute actions on integrations.
-When emails, messages, or data reference "CORE" (e.g. "CORE has access to gmail", "authorized by CORE"), that refers to this system — not an external entity.
-${personaSection}${dateTimeSection}
-CONNECTED INTEGRATIONS:
-${integrations}
-${skillsSection}
-TOOLS:
-- memory_search: Search for prior context not covered by the user persona above
-- search_docs: Search CORE's own documentation — use when the user asks about CORE features, setup, integrations, or troubleshooting
-- get_integration_actions: Discover available actions for an integration
-- execute_integration_action: Execute an action on a connected service (create, update, delete)
-- get_skill: Load a user-defined skill's full instructions by ID
-- progress_update: Stream a short progress observation to the user. Use 1-2 times between major steps when the work will take more than a few seconds (multi-step composes, slow integrations). One sentence, specific. Skip for fast actions.
-${integrationInstructions}
-PRIORITY ORDER FOR CONTEXT:
-1. User persona above — check here FIRST for preferences, directives, identity, account details
-2. memory_search — ONLY if persona doesn't have what you need
-3. NEVER ask the user for information that's in persona or memory
-
-CRITICAL FOR memory_search - describe your INTENT, not keywords:
-
-BAD (keyword soup - will fail):
-- "slack message preferences channels"
-- "github issue labels templates core"
-- "user email formatting"
-
-GOOD (clear intent):
-- "User's preferences for slack messages - preferred channels, formatting, any standing directives about team communication"
-- "User's preferences for github issues - preferred repos, labels, templates, any directives about issue creation"
-- "Find user preferences and past discussions about email formatting and signature preferences"
-
-EXAMPLES:
-
-Action: "send a slack message to #general saying standup in 5"
-Step 1: memory_search("user's preferences for slack messages")
-Step 2: get_integration_actions(accountId="<slack-uuid-from-list>", query="send message")
-Step 3: execute_integration_action(accountId="<slack-uuid-from-list>", action="send_message", parameters={ channel: "#general", text: "standup in 5" })
-
-Action: "create a github issue for auth bug in core repo"
-Step 1: get_integration_actions(accountId="<github-uuid-from-list>", query="create issue")
-Step 2: execute_integration_action(accountId="<github-uuid-from-list>", action="create_issue", parameters={ repo: "core", title: "auth bug", ... })
-
-RULES:
-- Execute the action. No personality.
-- Return result of action (success/failure and details).
-- If integration not connected, say so.
-- CHRONOLOGY: When returning threaded data (email threads, slack threads, PR comments, issue comments), preserve chronological order. Clearly distinguish who initiated vs who responded. Use the user's identity from persona/integrations to label messages as "user" vs others. Never say someone "replied" if they sent the original.
-
-DUPLICATE PREVENTION:
-- NEVER retry create/send/post operations if the first call returned a success result (URL, ID, or confirmation). If you got a success response, the action is done — do not call it again.
-- If a create/send call fails with a timeout or ambiguous error, search for the resource first (e.g. search by title/subject) before retrying to avoid duplicates.
-
-RESOLVING REFERENCES:
-- When an action references a person by name (assignee, recipient, etc.), resolve their identifier for that integration. Check user persona first, then memory_search for known usernames/handles. If not found, ask the user.
-- When an action references an entity by name (milestone, project, label, channel, etc.), look it up via get_integration_actions first to get the correct ID/number before using it in the create/update call. If not found, proceed without it and inform the user.
-
-CRITICAL - FINAL SUMMARY:
-When you have completed the action, write a clear, concise summary as your final response.
-Include: what was done, result (success/failure), relevant details (IDs, URLs, errors).`;
-  }
-
-  return `You are a read orchestrator for CORE. Gather data from integrations, memory, and the web based on the intent, then return structured results to the calling agent.
-When emails, messages, or data reference "CORE" (e.g. "CORE has access to gmail", "authorized by CORE"), that refers to this system — not an external entity.
-
-OUTPUT: Return facts and raw data — no personality, no prose. Include IDs and metadata needed for follow-up actions.
-${personaSection}${dateTimeSection}
-CONNECTED INTEGRATIONS:
-${integrations}
-${skillsSection}
-TOOLS:
-- memory_search: Search for prior context not covered by the user persona above
-- search_docs: Search CORE's own documentation — use when the user asks about CORE features, setup, integrations, or troubleshooting. Prefer this over web_search for CORE-related questions.
-- get_integration_actions: Discover available actions for an integration
-- execute_integration_action: Query data from a connected service (read operations)
-- web_search: Real-time information from the web (news, docs, prices, weather). Also reads URLs.
-- get_skill: Load a user-defined skill's full instructions by ID
-- progress_update: Stream a short progress observation to the user — they see it live as a transient status line. Use as you page through batches, switch sources, or hit interesting findings. One sentence, specific. 1-2 between integration calls, never more than 6-8 total across a single delegation. The calling agent may include narration guidance in the intent (e.g. "drop witty observations while reading") — follow that tone when given.
-${integrationInstructions}
-CRITICAL FOR memory_search - describe your INTENT, not keywords:
-
-BAD (keyword soup - will fail):
-- "rerank evaluation metrics NDCG MRR pairwise"
-- "deployment plan blockers timeline"
-- "calendar meetings scheduling preferences"
-
-GOOD (clear intent):
-- "Find user preferences, directives, and past discussions about rerank evaluation - what approach was decided, any metrics discussed, next steps"
-- "User's preferences and previous conversations about the deployment plan - decisions made, timeline, blockers mentioned"
-- "What has user said about their calendar preferences, meeting scheduling habits, and any directives about availability"
-
-EXAMPLES:
-
-Intent: "Show me my upcoming meetings this week"
-Step 1: get_integration_actions(accountId="<google-calendar-uuid-from-list>", query="list events this week")
-Step 2: execute_integration_action(accountId="<google-calendar-uuid-from-list>", action="list_events", parameters={ timeMin: "...", timeMax: "..." })
-
-Intent: "What's in the email from John"
-Step 1: get_integration_actions(accountId="<gmail-uuid-from-list>", query="search emails from John")
-Step 2: execute_integration_action(accountId="<gmail-uuid-from-list>", action="search_emails", parameters={ query: "from:john" })
-Step 3: get_integration_actions(accountId="<gmail-uuid-from-list>", query="get email by id")
-Step 4: execute_integration_action(accountId="<gmail-uuid-from-list>", action="get_email", parameters={ id: "..." })
-
-Intent: "what's the status of the rerank evaluation work"
-Step 1: memory_search("past discussions and decisions about the rerank evaluation — approach chosen, metrics discussed, next steps")
-Step 2: get_integration_actions(accountId="<github-uuid-from-list>", query="search PRs for rerank")  [only if memory points at open work]
-
-Intent: "What's the weather in SF"
-→ web_search (real-time data)
-
-Intent: "summarize this: https://example.com/article"
-→ web_search (reads the URL content)
-
-Intent: "how do I connect GitHub" / "what integrations do you support" / "what is the gateway"
-→ search_docs (CORE's own features and setup)
-
-Intent: "what toolkits do you have" / "how to set up WhatsApp" / "how does memory work"
-→ search_docs (CORE's own documentation)
-
-RULES:
-- For questions about CORE itself (features, setup, integrations, channels, gateway, toolkit, skills, memory), ALWAYS use search_docs FIRST. This is your own system — use your own documentation, not web_search.
-- Check user persona FIRST — use identity and directives; ignore style/preference sections.
-- Call memory_search for anything not in persona (prior conversations, specific history).
-- NEVER ask the user for info that's already in persona or memory.
-- If a specific query returns empty, try a broader one before reporting "nothing found".
-- Call multiple tools in parallel when data could be in multiple places.
-- No personality. Return raw facts.
-- CHRONOLOGY: When returning threaded data (email threads, slack threads, PR comments, issue comments), preserve chronological order. Clearly distinguish who initiated vs who responded. Use the user's identity from persona/integrations to label messages as "user" vs others. Never say someone "replied" if they sent the original.
-
-FINAL SUMMARY:
-When you have gathered all relevant data, write a concise summary as your final response.
-Include: what was found, key facts, relevant IDs/metadata the caller will need.`;
-};
-
-// ---------------------------------------------------------------------------
 // Factory
 // ---------------------------------------------------------------------------
 
-export interface CreateOrchestratorAgentResult {
-  agent: Agent;
+export interface BuildOrchestratorToolsResult {
+  tools: Record<string, any>;
+  integrationsList: string;
 }
 
-export async function createOrchestratorAgent(
+/**
+ * Build the orchestrator's tool set as a flat map, ready to fold into the
+ * main agent's tools. Previously this returned two Mastra Agents (read +
+ * write) that the main agent delegated to; that split is gone — the main
+ * agent now owns every tool directly and there's no gather_context /
+ * take_action indirection.
+ *
+ * The old `mode` split gated `acknowledge` (write) and `web_search` (read);
+ * both are now unconditional (`acknowledge` was later removed entirely in
+ * favor of `progress_update`).
+ * `execute_integration_action` still uses `requireApproval` when
+ * `interactive` is true so the user can review risky writes; scheduled and
+ * background contexts pass `interactive=false` and skip the gate.
+ */
+export async function buildOrchestratorTools(
   userId: string,
   workspaceId: string,
-  mode: OrchestratorMode,
   timezone: string,
   source: string,
   userPersona?: string,
   skills?: SkillRef[],
   executorTools?: OrchestratorTools,
   interactive: boolean = true,
-  modelConfig?: ModelConfig,
-): Promise<CreateOrchestratorAgentResult> {
+  _modelConfig?: ModelConfig,
+): Promise<BuildOrchestratorToolsResult> {
   const executor = executorTools ?? new DirectOrchestratorTools();
 
   // Per-turn cap on parallel integration actions. A single morning-brief turn
@@ -346,7 +115,7 @@ export async function createOrchestratorAgent(
   };
 
   logger.info(
-    `Orchestrator: Loaded ${connectedIntegrations.length} integrations, mode: ${mode}`,
+    `Orchestrator tools: loaded ${connectedIntegrations.length} integrations`,
   );
 
   // Build Mastra tools
@@ -483,8 +252,10 @@ export async function createOrchestratorAgent(
           "Action parameters as JSON string, matching the inputSchema exactly",
         ),
     }),
-    // Only require approval for risky write actions in interactive mode
-    requireApproval: mode === "write" && interactive,
+    // Only require approval for risky write actions in interactive mode.
+    // Non-interactive callers (scheduled fires, background workers) skip the
+    // gate — they run under trusted context and can't surface prompts anyway.
+    requireApproval: interactive,
     execute: async (inputData, args: any) => {
       // Apply toolArgsOverride if the user modified args during approval
       const callId = args?.agent?.toolCallId;
@@ -542,44 +313,25 @@ export async function createOrchestratorAgent(
     },
   });
 
-  // acknowledge — only in write mode
-  if (mode === "write") {
-    tools.acknowledge = createTool({
-      id: "acknowledge",
-      description:
-        "Send a brief progress update to the user while executing a task. Call this ONCE before starting a multi-step action. One short sentence, max 6 words. Examples: 'on it.', 'creating the issue.', 'sending the message.'",
-      inputSchema: z.object({
-        message: z
-          .string()
-          .describe(
-            "One short sentence, max 6 words describing what you're doing.",
-          ),
-      }),
-      execute: async (inputData) => {
-        logger.info(`Orchestrator: acknowledge - ${inputData.message}`);
-        return "acknowledged";
-      },
-    });
-  }
+  // `acknowledge` removed — `progress_update` handles the same "on it"
+  // narration across interactive and background contexts.
 
-  // web_search — only in read mode
-  if (mode === "read") {
-    tools.web_search = createTool({
-      id: "web_search",
-      description:
-        "Search the web for real-time information: news, current events, documentation, prices, weather, general knowledge. Use when info is not in memory or integrations.",
-      inputSchema: z.object({
-        query: z
-          .string()
-          .describe("What to search for - be specific and clear"),
-      }),
-      execute: async (inputData) => {
-        logger.info(`Orchestrator: web search - ${inputData.query}`);
-        const result = await runWebExplorer(inputData.query, timezone, workspaceId);
-        return result.success ? result.data : "web search unavailable";
-      },
-    });
-  }
+  // web_search — real-time lookups when memory + integrations don't cover it
+  tools.web_search = createTool({
+    id: "web_search",
+    description:
+      "Search the web for real-time information: news, current events, documentation, prices, weather, general knowledge. Use when info is not in memory or integrations.",
+    inputSchema: z.object({
+      query: z
+        .string()
+        .describe("What to search for - be specific and clear"),
+    }),
+    execute: async (inputData) => {
+      logger.info(`Orchestrator tools: web search - ${inputData.query}`);
+      const result = await runWebExplorer(inputData.query, timezone, workspaceId);
+      return result.success ? result.data : "web search unavailable";
+    },
+  });
 
   // search_docs — CORE documentation search, available in both modes
   tools.search_docs = createTool({
@@ -602,25 +354,9 @@ export async function createOrchestratorAgent(
     },
   });
 
-  // Build orchestrator agent with gateway agents as subagents
-  const resolvedModel = modelConfig ?? toRouterString(getDefaultChatModelId());
-  const agent = new Agent({
-    id: `orchestrator-${mode}`,
-    name: mode === "read" ? "Gather Context" : "Take Action",
-    model: resolvedModel as any,
-    instructions: getOrchestratorPrompt(
-      integrationsList,
-      mode,
-      timezone,
-      userPersona,
-      skills,
-    ),
-    tools,
-  });
-
   logger.info(
-    `Orchestrator: Created agent with ${Object.keys(tools).length} tools, mode: ${mode}`,
+    `Orchestrator tools: built ${Object.keys(tools).length} tools`,
   );
 
-  return { agent };
+  return { tools, integrationsList };
 }

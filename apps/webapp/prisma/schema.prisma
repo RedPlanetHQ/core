@@ -70,6 +70,7 @@ model Agents {
   metadata Json? @default("{}")
 
   conversationHistory ConversationHistory[]
+  conversations       Conversation[]        @relation("AgentConversations")
   assignedTasks       Task[]                @relation("TaskAssignee")
 
   createdAt DateTime @default(now())
@@ -123,12 +124,22 @@ model Conversation {
   workspace   Workspace? @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
   workspaceId String?
 
+  /// Which agent this conversation belongs to (the "owning" agent). Message-
+  /// level attribution still lives on ConversationHistory.agentId — that
+  /// column records who actually replied on each turn, which can differ from
+  /// the owning agent when delegation happens.
+  agent   Agents? @relation("AgentConversations", fields: [agentId], references: [id], onDelete: SetNull)
+  agentId String?
+
   status         String  @default("pending") // Can be "pending", "running", "completed", "failed", "cancelled", "need_attention"
   activeStreamId String? // Set while background stream is active; cleared on completion
 
   ConversationHistory ConversationHistory[]
   RecallLog           RecallLog[]
   codingSessions      CodingSession[]
+
+  @@index([workspaceId, agentId])
+  @@index([asyncJobId, agentId])
 }
 
 model CompactedSessionEmbedding {
@@ -169,10 +180,26 @@ model ConversationHistory {
   agent   Agents? @relation(fields: [agentId], references: [id], onDelete: SetNull)
   agentId String?
 
+  /// Row-level lifecycle for agent-authored turns. Null for legacy rows and
+  /// user messages. Values: "working" (background job in flight), "done",
+  /// "error", "cancelled" (superseded by a fresh mention of the same agent).
+  status String?
+
+  /// Handle for the background job driving this row when status="working".
+  /// Populated right after enqueueAgentTurn so dispatchMentions can cancel
+  /// it if a fresh mention of the same agent lands on this conversation.
+  asyncJobId String?
+
+  /// Bounded fan-out for agent↔agent mentions. Rows started by a user
+  /// mention are depth=0; each nested mention increments. dispatchMentions
+  /// refuses to spawn beyond a fixed cap.
+  delegationDepth Int @default(0)
+
   conversation   Conversation @relation(fields: [conversationId], references: [id], onDelete: Cascade)
   conversationId String
 
   @@index([agentId])
+  @@index([conversationId, agentId, status])
 }
 
 model Document {

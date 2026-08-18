@@ -1,8 +1,4 @@
 import { prisma } from "~/db.server";
-import {
-  archiveGatewayAgent,
-  unarchiveGatewayAgent,
-} from "~/services/agent.server";
 
 /**
  * Read one gateway by ID.
@@ -61,7 +57,6 @@ export async function markConnected(
       ...(patch.hostname !== undefined ? { hostname: patch.hostname } : {}),
     },
   });
-  await unarchiveGatewayAgent(gatewayId);
   return gw;
 }
 
@@ -77,7 +72,6 @@ export async function markDisconnected(gatewayId: string, reason?: string) {
       lastHealthError: reason ?? "unreachable",
     },
   });
-  await archiveGatewayAgent(gatewayId);
   return gw;
 }
 

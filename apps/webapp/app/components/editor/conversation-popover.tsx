@@ -319,9 +319,6 @@ export function ConversationPopover({
                   key={msg.id}
                   message={message}
                   createdAt={msg.createdAt}
-                  addToolApprovalResponse={handleToolApprovalResponse}
-                  setToolArgOverride={setToolArgOverride}
-                  isChatBusy={sending}
                   className="my-1 px-1"
                 />
               );

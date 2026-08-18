@@ -11,7 +11,11 @@ import { env } from "~/env.server";
 import { getOrCreatePersonalAccessToken } from "~/services/personalAccessToken.server";
 import { CoreClient } from "@redplanethq/sdk";
 import { HttpOrchestratorTools } from "~/services/agent/orchestrator-tools.http";
-import { createConversation } from "~/services/conversation.server";
+import {
+  createConversation,
+  getOrCreateTaskConversation,
+} from "~/services/conversation.server";
+import { getGeneralistAgent } from "~/services/agent.server";
 import { processInboundMessage } from "~/services/agent/message-processor";
 import { UserTypeEnum } from "@core/types";
 
@@ -42,26 +46,65 @@ export async function processTask(payload: TaskPayload): Promise<TaskResult> {
 
     const intent = (task.pageId ? await getPageContentAsHtml(task.pageId) : null) ?? task.title;
 
-    // Reuse the last conversation if one exists, otherwise create new
-    let conversationId: string;
-    const existingConversationIds = task.conversationIds ?? [];
+    // Resolve the owning agent for this task. Falls back to the workspace
+    // generalist when the task has no explicit assignee — that way even
+    // legacy/unassigned tasks always resolve to a valid conversation.
+    let owningAgentId = task.assignedAgentId ?? null;
+    if (!owningAgentId) {
+      const generalist = await getGeneralistAgent(workspaceId);
+      owningAgentId = generalist?.id ?? null;
+    }
+    if (!owningAgentId) {
+      throw new Error(
+        `Task ${taskId} has no assigned agent and workspace has no generalist`,
+      );
+    }
 
-    if (existingConversationIds.length > 0) {
-      // Reuse the last conversation — preserves full context
-      conversationId = existingConversationIds[existingConversationIds.length - 1];
-      logger.info(`Task ${taskId} reusing conversation ${conversationId}`);
-    } else {
-      // First run — create a new conversation
+    // Recurring tasks (schedule != null) create a fresh conversation per run
+    // so the runs list stays clean and each firing is a discrete thread.
+    // One-shot tasks share the single (task, agent) conversation so re-runs
+    // and reassignments preserve context.
+    const isRecurring = task.schedule != null;
+    let conversationId: string;
+    if (isRecurring) {
       const result = await createConversation(workspaceId, userId, {
         message: intent,
         parts: [{ text: intent, type: "text" }],
         userType: UserTypeEnum.User,
         asyncJobId: task.id,
+        agentId: owningAgentId,
         source: "task",
       });
       conversationId = result.conversationId;
-      await updateTaskConversationIds(taskId, [conversationId]);
-      logger.info(`Task ${taskId} created new conversation ${conversationId}`);
+      await updateTaskConversationIds(taskId, [
+        ...(task.conversationIds ?? []),
+        conversationId,
+      ]);
+      logger.info(
+        `Task ${taskId} (recurring) created run conversation ${conversationId}`,
+      );
+    } else {
+      const { conversationId: convId, created } =
+        await getOrCreateTaskConversation(
+          workspaceId,
+          userId,
+          task.id,
+          owningAgentId,
+        );
+      conversationId = convId;
+      if (created) {
+        await updateTaskConversationIds(taskId, [
+          ...(task.conversationIds ?? []),
+          conversationId,
+        ]);
+        logger.info(
+          `Task ${taskId} (one-shot) created conversation ${conversationId}`,
+        );
+      } else {
+        logger.info(
+          `Task ${taskId} (one-shot) reusing conversation ${conversationId}`,
+        );
+      }
     }
 
     const { token } = await getOrCreatePersonalAccessToken({
@@ -76,12 +119,23 @@ export async function processTask(payload: TaskPayload): Promise<TaskResult> {
     const abortController = new AbortController();
     const timeoutId = setTimeout(() => abortController.abort(), timeoutMs);
 
-    // Prefix intent with task context so the agent knows its own taskId
-    // and can embed it in any follow-up tasks it creates (e.g. after starting a coding session)
+    // Ephemeral trigger for the LLM. Task title/description already live
+    // in the system prompt's <task_execution> block (rendered by
+    // buildAgentContext when conversation.asyncJobId is set) — the user
+    // turn is just the pulse that starts the model call. Not persisted:
+    // task.logic passes `skipUserMessage: true` below so this doesn't
+    // land in ConversationHistory. Include the displayId for grounding
+    // and a reschedule note when we're re-firing an existing task.
     const metadata = (task.metadata as Record<string, unknown>) ?? {};
     const rescheduleCount = (metadata.rescheduleCount as number) ?? 0;
-    const rescheduleNote = rescheduleCount > 0 ? ` [reschedule:${rescheduleCount}/10]` : "";
-    const taskMessage = `[background-task taskId:${taskId}${rescheduleNote}]\n${intent}`;
+    const rescheduleNote =
+      rescheduleCount > 0 ? ` (reschedule ${rescheduleCount}/10)` : "";
+    const taskHandle = task.displayId ?? `tk-${taskId}`;
+    const taskMessage = `Work on the task ${taskHandle}${rescheduleNote}.`;
+    // Silence the unused-variable lint for the pre-existing `intent` —
+    // it's kept around in case a caller wants to reintroduce a richer
+    // trigger message later without re-plumbing the DB read.
+    void intent;
 
     try {
       await processInboundMessage({

@@ -5,8 +5,6 @@ import {
   Mail,
   MessageCircle,
   Phone,
-  Plug,
-  Puzzle,
 } from "lucide-react";
 import { useLocation, useNavigate } from "@remix-run/react";
 import { useState } from "react";
@@ -60,17 +58,7 @@ export function TryIt() {
                   Integrations
                 </Button>
               </SidebarMenuItem>
-              <SidebarMenuItem>
-                <Button
-                  variant="ghost"
-                  className="text-foreground w-fit gap-2 !rounded-md"
-                  onClick={() => navigate("/home/agent/connect")}
-                  isActive={location.pathname.includes("/home/agent/connect")}
-                >
-                  <Plug size={16} />
-                  Connect
-                </Button>
-              </SidebarMenuItem>
+
               <SidebarMenuItem>
                 <DropdownMenu>
                   <DropdownMenuTrigger asChild>

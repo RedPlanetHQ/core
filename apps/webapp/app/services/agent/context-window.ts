@@ -45,16 +45,79 @@ export interface MessageEntry {
  * following text part and carrying the full sub-agent trace forward bloats
  * context turn after turn.
  */
+/** Per-row context threaded through prepareHistoryParts so cross-agent
+ *  messages get a `[SpeakerName] ` prefix in the LLM's view. Modeled on
+ *  buzz's `[N] Name (ts): content` scheme — but we keep AI-SDK role
+ *  semantics and only prepend the speaker label so we don't rewrite the
+ *  whole message-list pipeline. Skip the prefix when the row is from the
+ *  running agent itself (that's just "you" from the model's POV) or when
+ *  agentId is null (user messages already carry role="user"). */
+export interface SpeakerContext {
+  /** The agentId stamped on this ConversationHistory row, if any. */
+  rowAgentId?: string | null;
+  /** The agent whose turn is currently running. When it matches rowAgentId
+   *  we omit the prefix so the assistant's own past turns look natural. */
+  runningAgentId?: string | null;
+  /** Resolver: agentId → display name for the prefix. Pre-populated by
+   *  the caller from a single DB read at turn start. Missing entries fall
+   *  back to a generic "Colleague" prefix so we never crash on stale
+   *  attribution. */
+  agentDisplayNames?: Record<string, string>;
+}
+
 export function prepareHistoryParts(
   role: "user" | "assistant" | "system",
   parts: MessagePart[],
+  speaker?: SpeakerContext,
 ): MessagePart[] {
-  if (role !== "assistant") return parts;
+  // Speaker prefix — applies to any row authored by a *different* agent
+  // than the one running, whether the caller assigned it role="assistant"
+  // or (per the buzz-style role split) demoted it to role="user". Plain
+  // human-user rows (rowAgentId is null) get no prefix — the "user" role
+  // itself carries their attribution. The running agent's own past turns
+  // also skip the prefix — that's just "you" from the model's POV.
+  let prefix: string | null = null;
+  if (
+    speaker?.rowAgentId &&
+    speaker.rowAgentId !== speaker.runningAgentId
+  ) {
+    const name =
+      speaker.agentDisplayNames?.[speaker.rowAgentId] ?? "Colleague";
+    prefix = `[${name}] `;
+  }
+
+  // Tool-call collapsing only applies to assistant rows — a demoted
+  // cross-agent row keeps its original parts intact so the reader sees
+  // what the other agent actually did.
+  const isSelfAssistant = role === "assistant" && !prefix;
+
+  if (!prefix && !isSelfAssistant) return parts;
+
+  let prefixed = false;
   return parts.map((p) => {
-    if (typeof p.type === "string" && p.type.startsWith("tool-agent-")) {
+    if (
+      isSelfAssistant &&
+      typeof p.type === "string" &&
+      p.type.startsWith("tool-agent-")
+    ) {
       const output = (p as { output?: { text?: unknown } }).output ?? {};
       const text = typeof output.text === "string" ? output.text : "";
       return { ...p, output: { text } };
+    }
+    // Stamp the speaker prefix on the first text-bearing part only —
+    // subsequent text parts on the same message are continuations of the
+    // same speaker's turn.
+    if (
+      prefix &&
+      !prefixed &&
+      typeof p.type === "string" &&
+      p.type === "text"
+    ) {
+      const t = (p as { text?: unknown }).text;
+      if (typeof t === "string" && t.length > 0) {
+        prefixed = true;
+        return { ...p, text: `${prefix}${t}` };
+      }
     }
     return p;
   });
