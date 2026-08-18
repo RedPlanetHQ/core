@@ -36,12 +36,6 @@ export default defineConfig({
         // shows the reply". Only these get synced because everything
         // else the worker touches (DB, model keys, etc.) is configured
         // in trigger.dev's own env dashboard.
-        REDIS_HOST: process.env.REDIS_HOST as string,
-        REDIS_PORT: process.env.REDIS_PORT as string,
-        REDIS_PASSWORD: process.env.REDIS_PASSWORD as string,
-        ...(process.env.REDIS_TLS_DISABLED
-          ? { REDIS_TLS_DISABLED: process.env.REDIS_TLS_DISABLED as string }
-          : {}),
       })),
       prismaExtension({
         schema: "prisma/schema.prisma",
