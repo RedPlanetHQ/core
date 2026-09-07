@@ -59,23 +59,16 @@ import {
   scratchpadScanQueue,
 } from "~/bullmq/queues";
 import {
-  type TaskPayload,
-  processTask,
-} from "~/jobs/task/task.logic";
-import {
   type CodingDescriptionUpdatePayload,
   processCodingDescriptionUpdate,
 } from "~/jobs/coding/description-update.logic";
-import {
-  type ScheduledTaskPayload,
-  processScheduledTask,
-} from "~/jobs/task/scheduled-task.logic";
 import { env } from "~/env.server";
 import { closeAlwaysOnWorkers } from "./always-on";
 
 /**
- * run-agent-turn, scratchpad-scan and case live in ./always-on because the
- * trigger.dev deployment starts those three and nothing else. Re-exported
+ * run-agent-turn, scratchpad-scan, case, task and scheduled-task live in
+ * ./always-on because the trigger.dev deployment starts those five and
+ * nothing else. Re-exported
  * here so the BullMQ deployment keeps importing every worker from one place
  * — same module, same instances, no second consumer per queue.
  */
@@ -83,6 +76,8 @@ export {
   agentTurnWorker,
   scratchpadScanWorker,
   caseWorker,
+  taskWorker,
+  scheduledTaskWorker,
 } from "./always-on";
 
 /**
@@ -249,38 +244,6 @@ export const integrationRunWorker = new Worker(
 );
 
 /**
- * Scheduled task worker
- * Processes scheduled/recurring tasks
- */
-export const scheduledTaskWorker = new Worker(
-  "scheduled-task-queue",
-  async (job) => {
-    const payload = job.data as ScheduledTaskPayload;
-    return await processScheduledTask(payload);
-  },
-  {
-    connection: getRedisConnection(),
-    concurrency: 10,
-  },
-);
-
-/**
- * Task worker
- * Processes long-running tasks
- */
-export const taskWorker = new Worker(
-  "task-queue",
-  async (job) => {
-    const payload = job.data as TaskPayload;
-    return await processTask(payload);
-  },
-  {
-    connection: getRedisConnection(),
-    concurrency: 5,
-  },
-);
-
-/**
  * Coding description update worker
  * Refreshes Task.title (first turn only) and Task.description from the
  * latest set of session turns when the gateway reports a turn ended.
@@ -310,8 +273,6 @@ export async function closeAllWorkers(): Promise<void> {
     personaGenerationWorker.close(),
     graphResolutionWorker.close(),
     integrationRunWorker.close(),
-    scheduledTaskWorker.close(),
-    taskWorker.close(),
     scheduledTaskQueue.close(),
     taskQueue.close(),
     scratchpadScanQueue.close(),

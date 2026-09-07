@@ -22,7 +22,6 @@ import {
   ALWAYS_ON_WORKERS,
   initAlwaysOnWorkers,
 } from "./workers/always-on";
-import { initializeScheduledTaskScheduler } from "~/services/task-scheduler";
 import {
   ingestQueue,
   sessionCompactionQueue,
@@ -47,9 +46,10 @@ let metricsInterval: NodeJS.Timeout | null = null;
  * ProviderFactory first.
  */
 export async function initWorkers(): Promise<void> {
-  // The always-on three are shared with the trigger.dev deployment; their
-  // metrics ride along in this function's interval below.
-  initAlwaysOnWorkers({ withMetrics: false });
+  // The always-on set is shared with the trigger.dev deployment; their
+  // metrics ride along in this function's interval below. It also recovers
+  // missed scheduled tasks, which is why initWorkers no longer does.
+  await initAlwaysOnWorkers({ withMetrics: false });
 
   // Setup comprehensive logging for all workers
   setupWorkerLogging(ingestWorker, ingestQueue, "ingest-episode");
@@ -111,9 +111,6 @@ export async function initWorkers(): Promise<void> {
     ],
     60000, // Log metrics every 60 seconds
   );
-
-  // Initialize scheduled task scheduler (recovers missed scheduled task jobs)
-  await initializeScheduledTaskScheduler();
 
   // Log worker startup
   logger.log("\n🚀 Starting BullMQ workers...");

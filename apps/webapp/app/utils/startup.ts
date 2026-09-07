@@ -100,12 +100,12 @@ export async function initializeStartupServices() {
       await waitForTriggerLogin(triggerApiUrl);
       await addEnvVariablesInTrigger();
 
-      // run-agent-turn, scratchpad-scan and case run on BullMQ even here.
-      // They write ConversationHistory rows, and the SSE fan-out for those
-      // rows is a PUBLISH on this process's Redis — a trigger.dev worker
-      // has its own Redis and would publish into the void. See
-      // ~/bullmq/workers/always-on.
-      initAlwaysOnWorkers({ withMetrics: true });
+      // run-agent-turn, scratchpad-scan, case, task and scheduled-task run
+      // on BullMQ even here. They write ConversationHistory rows, and the
+      // SSE fan-out for those rows is a PUBLISH on this process's Redis — a
+      // trigger.dev worker has its own Redis and would publish into the
+      // void. See ~/bullmq/workers/always-on.
+      await initAlwaysOnWorkers({ withMetrics: true });
 
       process.on("SIGTERM", async () => {
         await closeAlwaysOnWorkers();
