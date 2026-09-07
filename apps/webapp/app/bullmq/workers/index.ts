@@ -63,23 +63,27 @@ import {
   processTask,
 } from "~/jobs/task/task.logic";
 import {
-  type ScratchpadScanPayload,
-  processScratchpadScan,
-} from "~/jobs/scratchpad/scratchpad-scan.logic";
-import {
   type CodingDescriptionUpdatePayload,
   processCodingDescriptionUpdate,
 } from "~/jobs/coding/description-update.logic";
 import {
-  type RunAgentTurnPayload,
-  processAgentTurn,
-} from "~/jobs/conversation/run-agent-turn.logic";
-import {
   type ScheduledTaskPayload,
   processScheduledTask,
 } from "~/jobs/task/scheduled-task.logic";
-import { type CasePayload, processCase } from "~/jobs/case/case.logic";
 import { env } from "~/env.server";
+import { closeAlwaysOnWorkers } from "./always-on";
+
+/**
+ * run-agent-turn, scratchpad-scan and case live in ./always-on because the
+ * trigger.dev deployment starts those three and nothing else. Re-exported
+ * here so the BullMQ deployment keeps importing every worker from one place
+ * — same module, same instances, no second consumer per queue.
+ */
+export {
+  agentTurnWorker,
+  scratchpadScanWorker,
+  caseWorker,
+} from "./always-on";
 
 /**
  * Episode preprocessing worker
@@ -245,23 +249,6 @@ export const integrationRunWorker = new Worker(
 );
 
 /**
- * CASE pipeline worker — single worker for every non-user trigger that flows
- * through the decision pipeline. Dispatch happens inside `processCase` based
- * on `payload.type` ("activity" | "memory_ingest").
- */
-export const caseWorker = new Worker(
-  "case-queue",
-  async (job) => {
-    const payload = job.data as CasePayload;
-    return await processCase(payload);
-  },
-  {
-    connection: getRedisConnection(),
-    concurrency: 5,
-  },
-);
-
-/**
  * Scheduled task worker
  * Processes scheduled/recurring tasks
  */
@@ -294,22 +281,6 @@ export const taskWorker = new Worker(
 );
 
 /**
- * Scratchpad scan worker
- * Processes mention and proactive scratchpad scan jobs
- */
-export const scratchpadScanWorker = new Worker(
-  "scratchpad-scan-queue",
-  async (job) => {
-    const payload = job.data as ScratchpadScanPayload;
-    return await processScratchpadScan(payload);
-  },
-  {
-    connection: getRedisConnection(),
-    concurrency: 5,
-  },
-);
-
-/**
  * Coding description update worker
  * Refreshes Task.title (first turn only) and Task.description from the
  * latest set of session turns when the gateway reports a turn ended.
@@ -319,24 +290,6 @@ export const codingDescriptionUpdateWorker = new Worker(
   async (job) => {
     const payload = job.data as CodingDescriptionUpdatePayload;
     return await processCodingDescriptionUpdate(payload);
-  },
-  {
-    connection: getRedisConnection(),
-    concurrency: 5,
-  },
-);
-
-/**
- * Agent-turn worker
- * Runs one specialist agent's turn on a conversation after a mention has
- * reserved a placeholder row. Cancellable via job-finder — dispatchMentions
- * calls the cancel path when a fresh mention supersedes an in-flight turn.
- */
-export const agentTurnWorker = new Worker(
-  "agent-turn-queue",
-  async (job) => {
-    const payload = job.data as RunAgentTurnPayload;
-    return await processAgentTurn(payload);
   },
   {
     connection: getRedisConnection(),
@@ -357,15 +310,13 @@ export async function closeAllWorkers(): Promise<void> {
     personaGenerationWorker.close(),
     graphResolutionWorker.close(),
     integrationRunWorker.close(),
-    caseWorker.close(),
     scheduledTaskWorker.close(),
     taskWorker.close(),
     scheduledTaskQueue.close(),
     taskQueue.close(),
-    scratchpadScanWorker.close(),
     scratchpadScanQueue.close(),
     codingDescriptionUpdateWorker.close(),
-    agentTurnWorker.close(),
+    closeAlwaysOnWorkers(),
   ]);
   logger.log("All BullMQ workers closed");
 }

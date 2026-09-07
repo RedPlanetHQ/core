@@ -33,8 +33,10 @@ import { UserTypeEnum } from "@core/types";
 import { prisma } from "~/db.server";
 import { logger } from "~/services/logger.service";
 import { parseMentions, resolveColleague } from "./mentions";
-import { cancelJob } from "~/services/jobManager.server";
-import { enqueueAgentTurn } from "~/lib/queue-adapter.server";
+import {
+  cancelAgentTurn,
+  enqueueAgentTurn,
+} from "~/lib/queue-adapter.server";
 import { upsertConversationHistory } from "~/services/conversation.server";
 
 /** Max depth of agent↔agent mention chains. User-initiated mentions start
@@ -167,7 +169,7 @@ export async function dispatchMentions(
     if (inFlight) {
       if (inFlight.asyncJobId) {
         try {
-          await cancelJob(inFlight.asyncJobId);
+          await cancelAgentTurn(inFlight.asyncJobId);
         } catch (err) {
           logger.warn("dispatchMentions: cancel job failed (superseding anyway)", {
             error: err instanceof Error ? err.message : String(err),
@@ -347,7 +349,7 @@ async function dispatchChainResume(params: {
   if (inFlight) {
     if (inFlight.asyncJobId) {
       try {
-        await cancelJob(inFlight.asyncJobId);
+        await cancelAgentTurn(inFlight.asyncJobId);
       } catch (err) {
         logger.warn(
           "dispatchChainResume: cancel prior job failed (superseding anyway)",

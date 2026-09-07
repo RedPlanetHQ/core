@@ -17,10 +17,11 @@ import {
   labelAssignmentWorker,
   titleGenerationWorker,
   integrationRunWorker,
-  scratchpadScanWorker,
-  caseWorker,
-  agentTurnWorker,
 } from "./workers";
+import {
+  ALWAYS_ON_WORKERS,
+  initAlwaysOnWorkers,
+} from "./workers/always-on";
 import { initializeScheduledTaskScheduler } from "~/services/task-scheduler";
 import {
   ingestQueue,
@@ -29,9 +30,6 @@ import {
   titleGenerationQueue,
   preprocessQueue,
   integrationRunQueue,
-  scratchpadScanQueue,
-  caseQueue,
-  agentTurnQueue,
 } from "./queues";
 import {
   setupWorkerLogging,
@@ -41,7 +39,6 @@ import { ProviderFactory } from "@core/providers";
 import { prisma } from "~/db.server";
 
 let metricsInterval: NodeJS.Timeout | null = null;
-
 /**
  * Initialize and start all BullMQ workers with comprehensive logging
  *
@@ -50,10 +47,13 @@ let metricsInterval: NodeJS.Timeout | null = null;
  * ProviderFactory first.
  */
 export async function initWorkers(): Promise<void> {
+  // The always-on three are shared with the trigger.dev deployment; their
+  // metrics ride along in this function's interval below.
+  initAlwaysOnWorkers({ withMetrics: false });
+
   // Setup comprehensive logging for all workers
   setupWorkerLogging(ingestWorker, ingestQueue, "ingest-episode");
   setupWorkerLogging(preprocessWorker, preprocessQueue, "preprocess-episode");
-  setupWorkerLogging(agentTurnWorker, agentTurnQueue, "agent-turn");
 
   setupWorkerLogging(
     sessionCompactionWorker,
@@ -76,12 +76,6 @@ export async function initWorkers(): Promise<void> {
     integrationRunQueue,
     "integration-run",
   );
-  setupWorkerLogging(
-    scratchpadScanWorker,
-    scratchpadScanQueue,
-    "scratchpad-scan",
-  );
-  setupWorkerLogging(caseWorker, caseQueue, "case");
 
   // Start periodic metrics logging (every 60 seconds)
   metricsInterval = startPeriodicMetricsLogging(
@@ -92,11 +86,7 @@ export async function initWorkers(): Promise<void> {
         queue: preprocessQueue,
         name: "preprocess-episode",
       },
-      {
-        worker: agentTurnWorker,
-        queue: agentTurnQueue,
-        name: "agent-turn",
-      },
+      ...ALWAYS_ON_WORKERS,
       {
         worker: sessionCompactionWorker,
         queue: sessionCompactionQueue,
@@ -118,12 +108,6 @@ export async function initWorkers(): Promise<void> {
         queue: integrationRunQueue,
         name: "integration-run",
       },
-      {
-        worker: scratchpadScanWorker,
-        queue: scratchpadScanQueue,
-        name: "scratchpad-scan",
-      },
-      { worker: caseWorker, queue: caseQueue, name: "case" },
     ],
     60000, // Log metrics every 60 seconds
   );
@@ -139,9 +123,6 @@ export async function initWorkers(): Promise<void> {
     `✓ Document ingest worker: ${preprocessWorker.name} (concurrency: 3)`,
   );
   logger.log(
-    `✓ Agent turn worker: ${agentTurnWorker.name} (concurrency: 5)`,
-  );
-  logger.log(
     `✓ Session compaction worker: ${sessionCompactionWorker.name} (concurrency: 3)`,
   );
   logger.log(
@@ -153,8 +134,6 @@ export async function initWorkers(): Promise<void> {
   logger.log(
     `✓ Integration run worker: ${integrationRunWorker.name} (concurrency: 3)`,
   );
-  logger.log(`✓ Scratchpad scan worker: ${scratchpadScanWorker.name} (concurrency: 5)`);
-  logger.log(`✓ Case worker: ${caseWorker.name} (concurrency: 5)`);
   logger.log(`✓ Scheduled task scheduler: scheduled-task-queue`);
   logger.log("─".repeat(80));
   logger.log("✅ All BullMQ workers started and listening for jobs");
@@ -169,6 +148,7 @@ export async function shutdownWorkers(): Promise<void> {
   if (metricsInterval) {
     clearInterval(metricsInterval);
   }
+  // closeAllWorkers() covers the always-on three as well.
   await closeAllWorkers();
 }
 
