@@ -1,10 +1,11 @@
 /**
  * Always-on BullMQ workers
  *
- * Three jobs run on BullMQ in every deployment, regardless of
- * QUEUE_PROVIDER: run-agent-turn, scratchpad-scan and case.
+ * Five jobs run on BullMQ in every deployment, regardless of
+ * QUEUE_PROVIDER: run-agent-turn, scratchpad-scan, case, task and
+ * scheduled-task.
  *
- * Why they're pinned here rather than following the provider: all three
+ * Why they're pinned here rather than following the provider: all five
  * write ConversationHistory rows, and `upsertConversationHistory` fires a
  * PUBLISH on the app's Redis so connected SSE clients pick the row up
  * without polling. A trigger.dev worker runs in a separate runtime against
@@ -12,9 +13,13 @@
  * "Working…" until the user refreshes. Running them in-process means the
  * worker shares the webapp's Redis and the live path just works.
  *
+ * task reaches the same write through processTask -> processInboundMessage
+ * -> noStreamProcess, and scheduled-task is what enqueues task, so the two
+ * move together.
+ *
  * Importing this module CONSTRUCTS the workers, which starts them
  * consuming. It's split out of `./workers` for exactly that reason: the
- * trigger.dev deployment needs these three and none of the other eleven.
+ * trigger.dev deployment needs these five and none of the other nine.
  * `./workers` re-exports them, so the BullMQ deployment still gets a
  * single instance of each.
  */
@@ -23,7 +28,13 @@ import { Worker } from "bullmq";
 
 import { logger } from "~/services/logger.service";
 import { getRedisConnection } from "../connection";
-import { agentTurnQueue, caseQueue, scratchpadScanQueue } from "../queues";
+import {
+  agentTurnQueue,
+  caseQueue,
+  scheduledTaskQueue,
+  scratchpadScanQueue,
+  taskQueue,
+} from "../queues";
 import {
   setupWorkerLogging,
   startPeriodicMetricsLogging,
@@ -37,6 +48,12 @@ import {
   processScratchpadScan,
 } from "~/jobs/scratchpad/scratchpad-scan.logic";
 import { type CasePayload, processCase } from "~/jobs/case/case.logic";
+import { type TaskPayload, processTask } from "~/jobs/task/task.logic";
+import {
+  type ScheduledTaskPayload,
+  processScheduledTask,
+} from "~/jobs/task/scheduled-task.logic";
+import { initializeScheduledTaskScheduler } from "~/services/task-scheduler";
 
 /**
  * Agent-turn worker
@@ -89,6 +106,39 @@ export const caseWorker = new Worker(
   },
 );
 
+/**
+ * Task worker
+ * Processes long-running tasks. One task run is a full agent turn, so this
+ * is the heaviest of the always-on set.
+ */
+export const taskWorker = new Worker(
+  "task-queue",
+  async (job) => {
+    const payload = job.data as TaskPayload;
+    return await processTask(payload);
+  },
+  {
+    connection: getRedisConnection(),
+    concurrency: 5,
+  },
+);
+
+/**
+ * Scheduled task worker
+ * Fires recurring tasks at their nextRunAt, which enqueues a task job.
+ */
+export const scheduledTaskWorker = new Worker(
+  "scheduled-task-queue",
+  async (job) => {
+    const payload = job.data as ScheduledTaskPayload;
+    return await processScheduledTask(payload);
+  },
+  {
+    connection: getRedisConnection(),
+    concurrency: 10,
+  },
+);
+
 /** The always-on set, paired with their queues for logging and metrics. */
 export const ALWAYS_ON_WORKERS = [
   { worker: agentTurnWorker, queue: agentTurnQueue, name: "agent-turn" },
@@ -98,6 +148,12 @@ export const ALWAYS_ON_WORKERS = [
     name: "scratchpad-scan",
   },
   { worker: caseWorker, queue: caseQueue, name: "case" },
+  { worker: taskWorker, queue: taskQueue, name: "task" },
+  {
+    worker: scheduledTaskWorker,
+    queue: scheduledTaskQueue,
+    name: "scheduled-task",
+  },
 ];
 
 let metricsInterval: NodeJS.Timeout | null = null;
@@ -117,7 +173,9 @@ let metricsInterval: NodeJS.Timeout | null = null;
  * construct (and therefore start) all eleven of the provider-dependent
  * workers on a trigger.dev deployment.
  */
-export function initAlwaysOnWorkers({ withMetrics = false } = {}): void {
+export async function initAlwaysOnWorkers({
+  withMetrics = false,
+} = {}): Promise<void> {
   for (const { worker, queue, name } of ALWAYS_ON_WORKERS) {
     setupWorkerLogging(worker, queue, name);
   }
@@ -132,6 +190,11 @@ export function initAlwaysOnWorkers({ withMetrics = false } = {}): void {
     logger.log(`✓ ${worker.name} (concurrency: 5)`);
   }
   logger.log("─".repeat(80));
+
+  // Re-enqueue scheduled tasks whose nextRunAt was missed while the process
+  // was down. Lives here rather than in initWorkers because scheduled-task
+  // is now always ours, on both providers.
+  await initializeScheduledTaskScheduler();
 }
 
 /**
@@ -147,5 +210,7 @@ export async function closeAlwaysOnWorkers(): Promise<void> {
     agentTurnWorker.close(),
     scratchpadScanWorker.close(),
     caseWorker.close(),
+    taskWorker.close(),
+    scheduledTaskWorker.close(),
   ]);
 }

@@ -5,20 +5,15 @@
  * Re-enqueues missed or orphaned scheduled tasks on startup.
  */
 
-import { env } from "~/env.server";
 import { logger } from "./logger.service";
 import { prisma } from "../db.server";
 import { enqueueScheduledTask } from "~/lib/queue-adapter.server";
 
 /**
- * Check if a scheduled task job exists and is pending/delayed (BullMQ only)
+ * Check if a scheduled task job exists and is pending/delayed. scheduled-task
+ * is always a BullMQ job now, whatever QUEUE_PROVIDER says.
  */
 async function hasScheduledJob(taskId: string): Promise<boolean> {
-  if (env.QUEUE_PROVIDER === "trigger") {
-    // Trigger.dev handles job idempotency via idempotencyKey
-    return false;
-  }
-
   try {
     const { scheduledTaskQueue } = await import("~/bullmq/queues");
     const delayed = await scheduledTaskQueue.getDelayed();

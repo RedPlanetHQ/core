@@ -9,8 +9,9 @@
  * - Set QUEUE_PROVIDER="trigger" for Trigger.dev (default, good for production scaling)
  * - Set QUEUE_PROVIDER="bullmq" for BullMQ (good for open-source deployments)
  *
- * Three jobs ignore that setting and always go to BullMQ — run-agent-turn,
- * scratchpad-scan and case. All three write ConversationHistory rows, whose
+ * Five jobs ignore that setting and always go to BullMQ — run-agent-turn,
+ * scratchpad-scan, case, task and scheduled-task. All of them write
+ * ConversationHistory rows (scheduled-task by way of task), whose
  * live SSE fan-out is a Redis PUBLISH from the writing process; a trigger.dev
  * worker publishes onto its own Redis, where nobody is listening. See
  * ~/bullmq/workers/always-on.
@@ -28,7 +29,6 @@ import type { CasePayload } from "~/jobs/case/case.logic";
 import type { ScratchpadScanPayload } from "~/jobs/scratchpad/scratchpad-scan.logic";
 import type { CodingDescriptionUpdatePayload } from "~/jobs/coding/description-update.logic";
 import type { RunAgentTurnPayload } from "~/jobs/conversation/run-agent-turn.logic";
-import { runs } from "@trigger.dev/sdk";
 
 export type QueueProvider = "trigger" | "bullmq";
 
@@ -383,67 +383,33 @@ export async function enqueueScheduledTask(
   payload: ScheduledTaskPayload,
   nextRunAt: Date,
 ): Promise<{ id?: string }> {
-  const provider = env.QUEUE_PROVIDER as QueueProvider;
   const delay = Math.max(nextRunAt.getTime() - Date.now(), 0);
-  const jobId = `scheduled-task-${payload.taskId}-${nextRunAt.getTime()}`;
-
-  if (provider === "trigger") {
-    const { scheduledTaskRunner } = await import("~/trigger/task/task");
-    // No idempotencyKey: callers MUST removeScheduledTask first when
-    // re-enqueueing. An idempotency key here causes a stall when a
-    // re-enqueue happens at the same nextRunAt — Trigger.dev's idempotency
-    // cache returns the prior (just-cancelled or already-completed) run id
-    // instead of creating a fresh delayed run.
-    const handler = await scheduledTaskRunner.trigger(payload, {
-      queue: "scheduled-task-queue",
-      delay: delay > 0 ? `${Math.ceil(delay / 1000)}s` : undefined,
-      concurrencyKey: payload.workspaceId,
-      tags: [`scheduledTask:${payload.taskId}`, payload.workspaceId],
-    });
-    return { id: handler.id };
-  } else {
-    const { scheduledTaskQueue } = await import("~/bullmq/queues");
-    const job = await scheduledTaskQueue.add(
-      `scheduled-task-${payload.taskId}`,
-      payload,
-      {
-        delay,
-        jobId,
-      },
-    );
-    return { id: job.id };
-  }
+  const { scheduledTaskQueue } = await import("~/bullmq/queues");
+  const job = await scheduledTaskQueue.add(
+    `scheduled-task-${payload.taskId}`,
+    payload,
+    {
+      delay,
+      // Callers MUST removeScheduledTask before re-enqueueing at the same
+      // nextRunAt — this id is what dedupes, and a stale job under it would
+      // otherwise be kept in preference to the fresh one.
+      jobId: `scheduled-task-${payload.taskId}-${nextRunAt.getTime()}`,
+    },
+  );
+  return { id: job.id };
 }
 
 /**
  * Remove a scheduled task job from the queue
  */
 export async function removeScheduledTask(taskId: string): Promise<void> {
-  const provider = env.QUEUE_PROVIDER as QueueProvider;
+  const { scheduledTaskQueue } = await import("~/bullmq/queues");
+  const delayed = await scheduledTaskQueue.getDelayed();
+  const waiting = await scheduledTaskQueue.getWaiting();
 
-  if (provider === "trigger") {
-    try {
-      const pendingRuns = await runs.list({
-        tag: [`scheduledTask:${taskId}`],
-        status: ["QUEUED", "DELAYED"],
-      });
-
-      for await (const run of pendingRuns) {
-        await runs.cancel(run.id);
-      }
-    } catch {
-      // Silently fail - job may not exist
-    }
-  } else {
-    const { scheduledTaskQueue } = await import("~/bullmq/queues");
-    const delayed = await scheduledTaskQueue.getDelayed();
-    const waiting = await scheduledTaskQueue.getWaiting();
-    const jobs = [...delayed, ...waiting];
-
-    for (const job of jobs) {
-      if (job.data.taskId === taskId) {
-        await job.remove();
-      }
+  for (const job of [...delayed, ...waiting]) {
+    if (job.data.taskId === taskId) {
+      await job.remove();
     }
   }
 }
@@ -504,26 +470,13 @@ export async function enqueueTask(
   payload: TaskPayload,
   delayMs?: number,
 ): Promise<{ id?: string }> {
-  const provider = env.QUEUE_PROVIDER as QueueProvider;
-
-  if (provider === "trigger") {
-    const { taskRunner } = await import("~/trigger/task/task");
-    const handler = await taskRunner.trigger(payload, {
-      queue: "task-queue",
-      concurrencyKey: payload.workspaceId,
-      tags: [`task:${payload.taskId}`, payload.workspaceId],
-      ...(delayMs ? { delay: `${Math.ceil(delayMs / 1000)}s` } : {}),
-    });
-    return { id: handler.id };
-  } else {
-    const { taskQueue } = await import("~/bullmq/queues");
-    const job = await taskQueue.add("task", payload, {
-      jobId: `task-${payload.taskId}-${Date.now()}`,
-      attempts: 1,
-      ...(delayMs ? { delay: delayMs } : {}),
-    });
-    return { id: job.id };
-  }
+  const { taskQueue } = await import("~/bullmq/queues");
+  const job = await taskQueue.add("task", payload, {
+    jobId: `task-${payload.taskId}-${Date.now()}`,
+    attempts: 1,
+    ...(delayMs ? { delay: delayMs } : {}),
+  });
+  return { id: job.id };
 }
 
 /**
@@ -554,31 +507,11 @@ export async function cancelScratchpadScan(pageId: string): Promise<boolean> {
  * Cancel a task job
  */
 export async function cancelTaskJob(taskId: string): Promise<boolean> {
-  const provider = env.QUEUE_PROVIDER as QueueProvider;
-
-  if (provider === "trigger") {
-    try {
-      const pendingRuns = await runs.list({
-        tag: [`task:${taskId}`],
-        status: ["QUEUED", "DELAYED"],
-      });
-
-      let cancelled = false;
-      for await (const run of pendingRuns.data) {
-        await runs.cancel(run.id);
-        cancelled = true;
-      }
-      return cancelled;
-    } catch (error) {
-      return false;
-    }
-  } else {
-    const { taskQueue } = await import("~/bullmq/queues");
-    const job = await taskQueue.getJob(`task-${taskId}`);
-    if (job) {
-      await job.remove();
-      return true;
-    }
-    return false;
+  const { taskQueue } = await import("~/bullmq/queues");
+  const job = await taskQueue.getJob(`task-${taskId}`);
+  if (job) {
+    await job.remove();
+    return true;
   }
+  return false;
 }
