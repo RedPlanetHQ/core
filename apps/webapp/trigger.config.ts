@@ -29,12 +29,11 @@ export default defineConfig({
     external: ["onnxruntime-node"],
     extensions: [
       syncEnvVars(() => ({
-        // Nothing synced from the app process today: everything the
-        // remaining trigger.dev tasks touch (DB, model keys, etc.) is
-        // configured in trigger.dev's own env dashboard, and the tasks
-        // that publish conversation rows over Redis (run-agent-turn,
-        // scratchpad-scan, case) no longer run here at all — they're
-        // pinned to BullMQ in-process. See app/bullmq/workers/always-on.
+        // Nothing synced from the app process: everything the remaining
+        // trigger.dev tasks touch (DB, model keys, etc.) is configured in
+        // trigger.dev's own env dashboard, and no task that runs here
+        // writes ConversationHistory rows — the jobs that do are pinned to
+        // BullMQ in-process. See app/bullmq/workers/always-on.
       })),
       prismaExtension({
         schema: "prisma/schema.prisma",
