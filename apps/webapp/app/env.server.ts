@@ -128,15 +128,6 @@ const EnvironmentSchema = z
     TRIGGER_API_URL: z.string().optional(),
     TRIGGER_DB: z.string().default("trigger"),
 
-    // Shared secret for worker→webapp callbacks on
-    // /api/v1/internal/conversation-events. trigger.dev workers run
-    // against their own Redis, so they hand conversation row events to
-    // the webapp over HTTP and it publishes them onto the Redis the SSE
-    // subscribers are on. Set the SAME value here and in the trigger.dev
-    // env dashboard (alongside APP_ORIGIN). Unset = the bridge is off:
-    // the route 503s and workers log the dropped event.
-    INTERNAL_EVENTS_SECRET: z.string().optional(),
-
     // Model envs
     MODEL: z.string().default(LLMModelEnum.GPT41),
     EMBEDDING_MODEL: z.string().default("mxbai-embed-large"),
