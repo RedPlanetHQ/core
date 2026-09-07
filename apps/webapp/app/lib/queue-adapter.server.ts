@@ -8,6 +8,12 @@
  * Usage:
  * - Set QUEUE_PROVIDER="trigger" for Trigger.dev (default, good for production scaling)
  * - Set QUEUE_PROVIDER="bullmq" for BullMQ (good for open-source deployments)
+ *
+ * Three jobs ignore that setting and always go to BullMQ — run-agent-turn,
+ * scratchpad-scan and case. All three write ConversationHistory rows, whose
+ * live SSE fan-out is a Redis PUBLISH from the writing process; a trigger.dev
+ * worker publishes onto its own Redis, where nobody is listening. See
+ * ~/bullmq/workers/always-on.
  */
 
 import { env } from "~/env.server";
@@ -89,30 +95,46 @@ export async function enqueueIngestEpisode(
 /**
  * Enqueue a specialist agent's turn on an existing conversation.
  * Called by dispatchMentions after a placeholder row has been reserved.
- * Returns the queue's run/job id so dispatchMentions can persist it as
+ * Returns the job id so dispatchMentions can persist it as
  * `ConversationHistory.asyncJobId` — that's what lets a fresh mention of
- * the same agent cancel this run via `jobManager.cancel(id)`.
+ * the same agent cancel this run via `cancelAgentTurn(id)`.
+ *
+ * BullMQ regardless of QUEUE_PROVIDER — see ~/bullmq/workers/always-on.
  */
 export async function enqueueAgentTurn(
   payload: RunAgentTurnPayload,
 ): Promise<{ id?: string }> {
-  const provider = env.QUEUE_PROVIDER as QueueProvider;
+  const { agentTurnQueue } = await import("~/bullmq/queues");
+  const job = await agentTurnQueue.add("run-agent-turn", payload, {
+    // Superseded turns aren't worth retrying — the conversation has
+    // moved on.
+    attempts: 1,
+  });
+  return { id: job.id };
+}
 
-  if (provider === "trigger") {
-    const { runAgentTurn } = await import(
-      "~/trigger/conversation/run-agent-turn"
-    );
-    const handler = await runAgentTurn.trigger(payload);
-    return { id: handler.id };
-  } else {
-    const { agentTurnQueue } = await import("~/bullmq/queues");
-    const job = await agentTurnQueue.add("run-agent-turn", payload, {
-      // Superseded turns aren't worth retrying — the conversation has
-      // moved on. Match trigger.dev's default (attempts: 1).
-      attempts: 1,
-    });
-    return { id: job.id };
+/**
+ * Cancel a superseded agent turn. Always BullMQ, matching enqueueAgentTurn —
+ * routing this through `jobManager.cancelJob` would hand a BullMQ job id to
+ * `runs.cancel()` on a trigger.dev deployment.
+ *
+ * Only removes a job that hasn't started. BullMQ can't kill a job already
+ * executing (`remove()` throws on a locked job), so a turn that's mid-flight
+ * runs to completion and writes into the row dispatchMentions has already
+ * soft-deleted — wasted tokens, but nothing the user sees. Callers treat a
+ * throw as "supersede anyway".
+ */
+export async function cancelAgentTurn(jobId: string): Promise<void> {
+  const { agentTurnQueue } = await import("~/bullmq/queues");
+  const job = await agentTurnQueue.getJob(jobId);
+  if (!job) {
+    return;
   }
+  const state = await job.getState();
+  if (state === "completed" || state === "failed") {
+    return;
+  }
+  await job.remove();
 }
 
 /**
@@ -448,16 +470,12 @@ const MEMORY_INGEST_THROTTLE_MS = 10 * 60_000; // 10 minutes
 export async function enqueueCase(
   payload: CasePayload,
 ): Promise<{ id?: string }> {
-  const provider = env.QUEUE_PROVIDER as QueueProvider;
-
   let dedupKey: string;
-  let tagBits: string[];
   let throttleMs = 0;
 
   if (payload.type === "activity") {
     // No throttle — Date.now() suffix makes every enqueue unique.
     dedupKey = `activity-${payload.integrationAccountId}-${Date.now()}`;
-    tagBits = [payload.workspaceId, "activity", payload.integrationSlug];
   } else {
     // Bucketed dedup keyed on documentId: every event for the same compact
     // Document inside the same 10-minute window collapses to one job.
@@ -468,30 +486,15 @@ export async function enqueueCase(
     throttleMs = MEMORY_INGEST_THROTTLE_MS;
     const bucket = Math.floor(Date.now() / throttleMs);
     dedupKey = `memory-ingest-${payload.documentId}-${bucket}`;
-    tagBits = [payload.workspaceId, "memory_ingest", payload.source];
   }
 
-  if (provider === "trigger") {
-    const { caseTask } = await import("~/trigger/case/case");
-    const handler = await caseTask.trigger(payload, {
-      queue: "case-queue",
-      concurrencyKey: payload.workspaceId,
-      tags: tagBits,
-      ...(throttleMs > 0 && {
-        idempotencyKey: dedupKey,
-        delay: `${Math.ceil(throttleMs / 1000)}s`,
-      }),
-    });
-    return { id: handler.id };
-  } else {
-    const { caseQueue } = await import("~/bullmq/queues");
-    const job = await caseQueue.add("case", payload, {
-      jobId: `case-${dedupKey}`,
-      attempts: 1,
-      ...(throttleMs > 0 && { delay: throttleMs }),
-    });
-    return { id: job.id };
-  }
+  const { caseQueue } = await import("~/bullmq/queues");
+  const job = await caseQueue.add("case", payload, {
+    jobId: `case-${dedupKey}`,
+    attempts: 1,
+    ...(throttleMs > 0 && { delay: throttleMs }),
+  });
+  return { id: job.id };
 }
 
 /**
@@ -530,51 +533,21 @@ export async function enqueueScratchpadScan(
   payload: ScratchpadScanPayload,
   delayMs: number,
 ): Promise<{ id?: string }> {
-  const provider = env.QUEUE_PROVIDER as QueueProvider;
-  const jobId = `scratchpad-${payload.pageId}`;
-
-  if (provider === "trigger") {
-    const { scratchpadScanTask } =
-      await import("~/trigger/scratchpad/scratchpad-scan");
-    const handler = await scratchpadScanTask.trigger(payload, {
-      queue: "scratchpad-scan-queue",
-      delay: delayMs > 0 ? `${Math.ceil(delayMs / 1000)}s` : undefined,
-      tags: [`scratchpad:${payload.pageId}`, payload.workspaceId],
-    });
-    return { id: handler.id };
-  } else {
-    const { scratchpadScanQueue } = await import("~/bullmq/queues");
-    const job = await scratchpadScanQueue.add("scratchpad-scan", payload, {
-      jobId,
-      delay: delayMs,
-    });
-    return { id: job.id };
-  }
+  const { scratchpadScanQueue } = await import("~/bullmq/queues");
+  const job = await scratchpadScanQueue.add("scratchpad-scan", payload, {
+    jobId: `scratchpad-${payload.pageId}`,
+    delay: delayMs,
+  });
+  return { id: job.id };
 }
 
 /**
  * Cancel a pending scratchpad scan job for a page (called before re-enqueuing)
  */
 export async function cancelScratchpadScan(pageId: string): Promise<boolean> {
-  const provider = env.QUEUE_PROVIDER as QueueProvider;
-
-  if (provider === "trigger") {
-    try {
-      const pendingRuns = await runs.list({
-        tag: [`scratchpad:${pageId}`],
-        status: ["QUEUED", "DELAYED"],
-      });
-      return pendingRuns.data.length > 0;
-    } catch {
-      // Silently fail — job may not exist
-    }
-  } else {
-    const { scratchpadScanQueue } = await import("~/bullmq/queues");
-    const job = await scratchpadScanQueue.getJob(`scratchpad-${pageId}`);
-    return !!job;
-  }
-
-  return false;
+  const { scratchpadScanQueue } = await import("~/bullmq/queues");
+  const job = await scratchpadScanQueue.getJob(`scratchpad-${pageId}`);
+  return !!job;
 }
 
 /**

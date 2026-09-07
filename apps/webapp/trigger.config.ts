@@ -29,13 +29,12 @@ export default defineConfig({
     external: ["onnxruntime-node"],
     extensions: [
       syncEnvVars(() => ({
-        // Redis creds for conversation-pubsub. Trigger.dev workers run
-        // in a separate runtime and don't inherit the app's env, so
-        // publishes from run-agent-turn silently no-op without these —
-        // manifesting as "conversation view stuck on Working…, refresh
-        // shows the reply". Only these get synced because everything
-        // else the worker touches (DB, model keys, etc.) is configured
-        // in trigger.dev's own env dashboard.
+        // Nothing synced from the app process today: everything the
+        // remaining trigger.dev tasks touch (DB, model keys, etc.) is
+        // configured in trigger.dev's own env dashboard, and the tasks
+        // that publish conversation rows over Redis (run-agent-turn,
+        // scratchpad-scan, case) no longer run here at all — they're
+        // pinned to BullMQ in-process. See app/bullmq/workers/always-on.
       })),
       prismaExtension({
         schema: "prisma/schema.prisma",

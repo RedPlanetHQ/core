@@ -2,7 +2,10 @@ import { logger } from "~/services/logger.service";
 import { IntegrationRunner } from "~/services/integrations/integration-runner";
 import { ProviderFactory } from "@core/providers";
 import { env } from "~/env.server";
-import { initWorkers, shutdownWorkers } from "~/bullmq/start-workers";
+import {
+  closeAlwaysOnWorkers,
+  initAlwaysOnWorkers,
+} from "~/bullmq/workers/always-on";
 import { trackConfig } from "~/services/telemetry.server";
 import { prisma } from "~/db.server";
 import { migration } from "~/migration";
@@ -96,8 +99,32 @@ export async function initializeStartupServices() {
       }
       await waitForTriggerLogin(triggerApiUrl);
       await addEnvVariablesInTrigger();
+
+      // run-agent-turn, scratchpad-scan and case run on BullMQ even here.
+      // They write ConversationHistory rows, and the SSE fan-out for those
+      // rows is a PUBLISH on this process's Redis — a trigger.dev worker
+      // has its own Redis and would publish into the void. See
+      // ~/bullmq/workers/always-on.
+      initAlwaysOnWorkers({ withMetrics: true });
+
+      process.on("SIGTERM", async () => {
+        await closeAlwaysOnWorkers();
+      });
+      process.on("SIGINT", async () => {
+        await closeAlwaysOnWorkers();
+        process.exit(0);
+      });
     } else {
-      // Start BullMQ workers (they need ProviderFactory to be initialized)
+      // Start BullMQ workers (they need ProviderFactory to be initialized).
+      // Includes the always-on three.
+      //
+      // Imported lazily on purpose: ~/bullmq/start-workers imports
+      // ./workers at module scope, and constructing a Worker starts it
+      // consuming. A static import here would start all eleven
+      // provider-dependent workers on a trigger.dev deployment too.
+      const { initWorkers, shutdownWorkers } = await import(
+        "~/bullmq/start-workers"
+      );
       await initWorkers();
 
       // Handle graceful shutdown
