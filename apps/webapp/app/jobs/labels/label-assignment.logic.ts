@@ -6,7 +6,11 @@
  */
 
 import { z } from "zod";
-import { makeStructuredModelCall, getEmbedding } from "~/lib/model.server";
+import {
+  makeStructuredModelCall,
+  getEmbedding,
+  resolveProfileForCall,
+} from "~/lib/model.server";
 import { logger } from "~/services/logger.service";
 import { prisma } from "~/db.server";
 import { LabelService } from "~/services/label.server";
@@ -15,8 +19,54 @@ import { generateOklchColor } from "~/components/ui/color-utils";
 import { type ModelMessage } from "ai";
 import { ProviderFactory, VECTOR_NAMESPACES } from "@core/providers";
 import { countTokens } from "~/services/search/tokenBudget";
+import {
+  OLLAMA_NUM_CTX,
+  assertPromptWithinBudget,
+  capToTokenBudget,
+  capToTokenBudgetFromEnd,
+} from "~/services/prompts/promptBudget";
+import {
+  type PromptProfile,
+} from "~/services/prompts/normalizeProfile";
 
 const MAX_CONTENT_TOKENS = 20000;
+
+/**
+ * Label extraction budget for small-context providers.
+ *
+ * `sessionContext` here is the ENTIRE document body (see processLabelAssignment,
+ * where it is set from `document.content`). The only previous guard was
+ * MAX_CONTENT_TOKENS at 20000, which is roughly five times a whole Ollama
+ * context window — so against Ollama this prompt was silently truncated rather
+ * than bounded.
+ *
+ * Measured with the o200k_base tokenizer, the static system prompt is 611
+ * tokens and the user-prompt scaffolding is 21. Reserving 512 tokens of output
+ * leaves 4096 - 512 = 3584 for input. Allowing 400 tokens for the existing
+ * labels list:
+ *   611 static + 21 glue + 400 labels + 2400 content = 3432, inside the 3500
+ *   assertion budget, and 3500 + 512 output = 4012 < 4096.
+ * Pinned by test rather than assumed.
+ */
+export const LABEL_OUTPUT_TOKEN_RESERVE = 512;
+export const LABEL_PROMPT_TOKEN_BUDGET = Math.min(
+  3500,
+  OLLAMA_NUM_CTX - LABEL_OUTPUT_TOKEN_RESERVE,
+);
+export const LABEL_CONTENT_TOKEN_BUDGET_OLLAMA = 2400;
+
+/**
+ * Budget for the existing-labels list.
+ *
+ * Previously this was an unenforced claim in a docstring while the list itself
+ * rendered every workspace label. Since this job creates labels, the list only
+ * grows, so the unenforced version fails progressively: measured on Ollama it
+ * threw at ~29 labels with session context (134 without). The hosted budget is
+ * generous because hosted windows are not the constraint; it exists so the list
+ * cannot grow without any bound at all.
+ */
+export const LABEL_LIST_TOKEN_BUDGET_OLLAMA = 400;
+export const LABEL_LIST_TOKEN_BUDGET_HOSTED = 4000;
 
 // Similarity threshold for matching labels (higher = stricter matching)
 const LABEL_SIMILARITY_THRESHOLD = 0.85;
@@ -301,7 +351,17 @@ export async function extractLabelsFromEpisode(
   workspaceId: string,
   sessionContext?: string,
 ): Promise<ExtractedLabel[]> {
-  const messages = buildLabelExtractionMessages(episodeBody, availableLabels, sessionContext);
+  // Resolved from the model this call actually resolves to, not the global env
+  // var: a workspace override can land on Ollama while CHAT_PROVIDER says
+  // otherwise, which would silently select the uncapped hosted profile.
+  const profile = await resolveProfileForCall(workspaceId, "memory", "medium");
+
+  const messages = buildLabelExtractionMessages(
+    episodeBody,
+    availableLabels,
+    sessionContext,
+    profile,
+  );
 
   logger.info("Extracting labels from episode", {
     episodeTokens: countTokens(episodeBody),
@@ -317,6 +377,8 @@ export async function extractLabelsFromEpisode(
     0.3, // Low temperature for consistent label extraction
     workspaceId,
     "memory",
+    undefined,
+    profile === "ollama" ? LABEL_OUTPUT_TOKEN_RESERVE : undefined,
   );
 
   // Create lookup map for existing labels (case-insensitive) for exact matching
@@ -426,43 +488,87 @@ export function buildLabelExtractionMessages(
     description: string | null;
   }>,
   sessionContext?: string,
+  profile: PromptProfile = "hosted",
 ): ModelMessage[] {
+  // Ollama silently drops anything past num_ctx, so the generous hosted budget
+  // has to shrink to something that actually fits the window.
+  const contentBudget =
+    profile === "ollama" ? LABEL_CONTENT_TOKEN_BUDGET_OLLAMA : MAX_CONTENT_TOKENS;
+  const labelListBudget =
+    profile === "ollama" ? LABEL_LIST_TOKEN_BUDGET_OLLAMA : LABEL_LIST_TOKEN_BUDGET_HOSTED;
+
   // Token-aware truncation: prioritise current episode, fill remainder with session context
   const episodeTokens = countTokens(episodeBody);
   let truncatedEpisode = episodeBody;
   let truncatedContext: string | undefined;
 
-  if (episodeTokens > MAX_CONTENT_TOKENS) {
-    // Edge case: episode alone exceeds budget — hard-trim from the end
-    const chars = Math.floor((MAX_CONTENT_TOKENS / episodeTokens) * episodeBody.length);
-    truncatedEpisode = episodeBody.substring(0, chars) + "...[truncated]";
+  if (episodeTokens > contentBudget) {
+    // Edge case: episode alone exceeds budget. This used to scale by character
+    // ratio, which only estimates the resulting token count and can overshoot;
+    // capToTokenBudget converges on the real count, which matters now that
+    // going over the budget throws.
+    truncatedEpisode = capToTokenBudget(episodeBody, contentBudget);
   }
 
   if (sessionContext) {
-    const remaining = MAX_CONTENT_TOKENS - countTokens(truncatedEpisode);
+    const remaining = contentBudget - countTokens(truncatedEpisode);
     if (remaining > 200) {
       const contextTokens = countTokens(sessionContext);
       if (contextTokens <= remaining) {
         truncatedContext = sessionContext;
       } else {
-        // Keep the most recent part of the session (tail), drop oldest
-        const ratio = remaining / contextTokens;
-        const startChar = Math.floor((1 - ratio) * sessionContext.length);
-        truncatedContext =
-          "...[earlier context omitted]\n" + sessionContext.substring(startChar);
+        // Keep the most recent part of the session (tail), drop oldest.
+        // Token-exact rather than scaled by character ratio: the ratio only
+        // estimates the result, and a document with a sparse-ASCII head and a
+        // dense CJK/emoji tail overshoots enough to blow the budget and throw.
+        truncatedContext = capToTokenBudgetFromEnd(sessionContext, remaining);
       }
     }
   }
 
+  // The label list is the one injection that grows on its own: this job creates
+  // labels, so every run can enlarge the next run's prompt. Left unbounded it
+  // does not degrade, it hits the assertion and the job starts failing outright
+  // once a workspace accumulates enough labels. Measured breaking point on
+  // Ollama was ~29 labels with session context.
+  //
+  // KNOWN LIMITATION — the drop order is alphabetical, not by relevance or
+  // recency. LabelService.getWorkspaceLabels orders by `name: "asc"`, so this
+  // truncates from the end of the alphabet: a workspace with 300 labels shows
+  // the model roughly "000".."020" and permanently hides everything later in
+  // the alphabet. Because hidden labels cannot be matched, the model proposes
+  // new ones instead, so those workspaces will accumulate near-duplicate labels
+  // over time.
+  //
+  // This bounds the crash, it does not solve label selection. Doing that
+  // properly means selecting candidates by embedding similarity to the episode
+  // (the machinery already exists here for dedup) rather than taking a
+  // prefix of an alphabetical list. Filed as follow-up rather than folded in,
+  // because it changes which labels the model can see and deserves its own
+  // evaluation.
+  const renderLabel = (l: { name: string; description: string | null }) =>
+    `  <label name="${l.name}"${l.description ? ` description="${l.description}"` : ""} />`;
+
+  const fittedLabels = [...availableLabels];
+  while (
+    fittedLabels.length > 0 &&
+    countTokens(fittedLabels.map(renderLabel).join("\n")) > labelListBudget
+  ) {
+    fittedLabels.pop();
+  }
+
+  if (fittedLabels.length < availableLabels.length) {
+    logger.warn("Label list truncated to fit the prompt budget", {
+      total: availableLabels.length,
+      kept: fittedLabels.length,
+      budget: labelListBudget,
+    });
+  }
+
   const existingLabelsXml =
-    availableLabels.length > 0
+    fittedLabels.length > 0
       ? `<existing_labels>
-${availableLabels
-  .map(
-    (l) =>
-      `  <label name="${l.name}"${l.description ? ` description="${l.description}"` : ""} />`,
-  )
-  .join("\n")}
+${fittedLabels.map(renderLabel).join("\n")}
 </existing_labels>`
       : "<existing_labels />";
 
@@ -476,7 +582,7 @@ ${truncatedContext}
 ${truncatedEpisode}
 </current_episode>`;
 
-  return [
+  const messages: ModelMessage[] = [
     {
       role: "system",
       content: `You extract LABELS from episodes for a USER'S PERSONAL KNOWLEDGE SYSTEM.
@@ -547,4 +653,15 @@ ${sessionContextXml}
 ${currentEpisodeXml}`,
     },
   ];
+
+  if (profile === "ollama") {
+    // Fail loudly rather than let Ollama silently drop the overflow.
+    assertPromptWithinBudget({
+      label: "label extraction prompt (ollama profile)",
+      text: messages.map((m) => m.content as string).join("\n"),
+      budget: LABEL_PROMPT_TOKEN_BUDGET,
+    });
+  }
+
+  return messages;
 }

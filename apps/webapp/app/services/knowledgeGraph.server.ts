@@ -50,8 +50,10 @@ import {
   getEmbedding,
   makeModelCall,
   makeStructuredModelCall,
+  resolveProfileForCall,
 } from "~/lib/model.server";
 import { normalizePrompt, normalizeDocumentPrompt } from "./prompts";
+import { NORMALIZE_OUTPUT_TOKEN_RESERVE } from "./prompts/normalizeProfile";
 import { type EpisodeEmbedding, type PrismaClient } from "@prisma/client";
 import {
   storeEpisodeEmbedding,
@@ -769,11 +771,22 @@ export class KnowledgeGraphService {
       userName, // Pass user name for personalized normalization
     };
 
-    // Route to appropriate normalization prompt based on content type
+    // Route to appropriate normalization prompt based on content type.
+    //
+    // The profile is resolved here rather than inside the prompt module so that
+    // module stays pure and unit-testable without server env. On Ollama it caps
+    // every variable-length injection and drops optional sections to fit the
+    // VRAM-pinned 4096-token window; on hosted providers it is a no-op.
+    //
+    // Resolved from the actual model for THIS call (same useCase/complexity the
+    // makeModelCall below uses), not the global CHAT_PROVIDER env var: a
+    // workspace override can land on Ollama while the env var says otherwise,
+    // and reading the env var there would hand it the uncapped hosted profile.
+    const profile = await resolveProfileForCall(workspaceId, "memory", "medium");
     const messages =
       contentType === EpisodeTypeEnum.DOCUMENT
-        ? normalizeDocumentPrompt(context)
-        : normalizePrompt(context);
+        ? normalizeDocumentPrompt(context, profile)
+        : normalizePrompt(context, profile);
     // Normalization is LOW complexity (text cleaning and standardization)
     let responseText = "";
     await makeModelCall(
@@ -788,7 +801,10 @@ export class KnowledgeGraphService {
           tokenMetrics.high.cached += (usage.cachedInputTokens as number) || 0;
         }
       },
-      undefined,
+      // The budget arithmetic in normalizeProfile.ts reserves this many output
+      // tokens; passing undefined here silently fell back to a different
+      // default, so the declared reserve was never the one actually applied.
+      { maxTokens: NORMALIZE_OUTPUT_TOKEN_RESERVE },
       "medium",
       "normalization",
       undefined,

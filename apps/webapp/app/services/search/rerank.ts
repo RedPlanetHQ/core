@@ -5,9 +5,50 @@ import {
   type StatementNode,
 } from "@core/types";
 import { combineAndDeduplicateStatements } from "./utils";
-import { makeModelCall } from "~/lib/model.server";
+import { makeModelCall, resolveProfileForCall } from "~/lib/model.server";
+import { type PromptProfile } from "../prompts/normalizeProfile";
 import { logger } from "../logger.service";
 import { CohereClientV2 } from "cohere-ai";
+import {
+  OLLAMA_NUM_CTX,
+  capToTokenBudget,
+  assertPromptWithinBudget,
+} from "../prompts/promptBudget";
+
+/**
+ * Rerank prompt budget, derived from measured token costs rather than estimated.
+ *
+ * Ceiling: OLLAMA_NUM_CTX (4096) must cover input AND output. This call reserves
+ * 500 output tokens (see `maxTokens` at the makeModelCall site), so the input
+ * ceiling is 3596.
+ *
+ * Measured costs (o200k_base, via app/services/search/__tests__/rerank-budget.test.ts):
+ *   static template ............................. 209 tokens
+ *   per-episode fixed overhead (metadata/format) . 72 tokens
+ * A batch is at most 10 episodes (BATCH_SIZE in validateEpisodesWithLLMInBatches),
+ * each rendering its content plus up to 5 statement facts.
+ *
+ * Worst case = 209 static
+ *            + 180 query
+ *            + 10 x (140 content + 5 x 16 facts + 72 overhead)   = 2920
+ *            = 3309 tokens, against a 3400 assertion budget (91 spare),
+ * and 3400 + 500 output = 3900 < 4096. Verified by test, not assumed.
+ *
+ * The design tension: these caps apply on every provider, including Gemini, which
+ * is not context-constrained. Content is therefore kept deliberately generous at
+ * 140 tokens — this prompt only asks the model to judge *relevance*, for which the
+ * opening of an episode plus its top facts is sufficient signal, so the cap costs
+ * hosted providers almost nothing on typical episodes while making the 4096 bound
+ * guaranteed rather than hoped for.
+ */
+export const RERANK_EPISODE_CONTENT_TOKEN_BUDGET = 140;
+export const RERANK_STATEMENT_FACT_TOKEN_BUDGET = 16;
+export const RERANK_QUERY_TOKEN_BUDGET = 180;
+export const RERANK_OUTPUT_TOKEN_RESERVE = 500;
+export const RERANK_PROMPT_TOKEN_BUDGET = Math.min(
+  3400,
+  OLLAMA_NUM_CTX - RERANK_OUTPUT_TOKEN_RESERVE,
+);
 
 /**
  * Apply Cohere Rerank 3.5 to search results for improved question-to-fact matching
@@ -441,21 +482,36 @@ export async function applyEpisodeReranking(
  * Validate episodes with LLM for borderline confidence cases
  * Only used when confidence is between 0.3 and 0.7
  */
-async function validateEpisodesWithLLM(
+/**
+ * Assemble the rerank-validation prompt with every variable-length injection
+ * capped to a named token budget.
+ *
+ * Exported so the worst-case budget arithmetic is directly testable — the
+ * `assertPromptWithinBudget` call below turns an over-budget prompt into a
+ * loud failure, so the worst case has to be proven, not assumed.
+ */
+export function buildRerankValidationPrompt(
   query: string,
   episodes: EpisodeWithProvenance[],
-  maxEpisodes: number = 20,
-  workspaceId?: string,
-): Promise<EpisodeWithProvenance[]> {
-  const prompt = `Given user query, validate which episodes are truly relevant.
+  profile: PromptProfile = "hosted",
+): string {
+  // Gate the caps to the provider that actually needs them. These budgets exist
+  // for Ollama's 4096-token window; applying them on hosted providers clipped
+  // episode content and statement facts on a path that was never
+  // context-constrained, which is the mistake the normalize prompts explicitly
+  // avoid by making the hosted profile a no-op.
+  const cap = (text: string, budget: number) =>
+    profile === "ollama" ? capToTokenBudget(text, budget) : text;
 
-Query: "${query}"
+  return `Given user query, validate which episodes are truly relevant.
+
+Query: "${cap(query, RERANK_QUERY_TOKEN_BUDGET)}"
 
 Episodes (showing episode metadata and top statements):
 ${episodes
   .map(
     (ep, i) => `
-${i + 1}. Episode: ${ep.episode.content || "Untitled"} (${new Date(ep.episode.createdAt).toLocaleDateString()})
+${i + 1}. Episode: ${cap(ep.episode.content || "Untitled", RERANK_EPISODE_CONTENT_TOKEN_BUDGET)} (${new Date(ep.episode.createdAt).toLocaleDateString()})
    First-level score: ${ep.firstLevelScore?.toFixed(2)}
    Sources: ${ep.sourceBreakdown.fromEpisodeGraph} EpisodeGraph, ${ep.sourceBreakdown.fromBFS} BFS, ${ep.sourceBreakdown.fromVector} Vector, ${ep.sourceBreakdown.fromBM25} BM25
    Total statements: ${ep.statements.length}
@@ -463,7 +519,10 @@ ${i + 1}. Episode: ${ep.episode.content || "Untitled"} (${new Date(ep.episode.cr
    Top statements:
 ${ep.statements
   .slice(0, 5)
-  .map((s, idx) => `   ${idx + 1}) ${s.statement.fact}`)
+  .map(
+    (s, idx) =>
+      `   ${idx + 1}) ${cap(s.statement.fact, RERANK_STATEMENT_FACT_TOKEN_BUDGET)}`,
+  )
   .join("\n")}
 `,
   )
@@ -495,8 +554,35 @@ If NO episodes are relevant to the query, return:
   "valid_episodes": []
 }
 </output>`;
+}
 
+async function validateEpisodesWithLLM(
+  query: string,
+  episodes: EpisodeWithProvenance[],
+  workspaceId?: string,
+): Promise<EpisodeWithProvenance[]> {
   try {
+    const profile = await resolveProfileForCall(workspaceId, "search", "low");
+    const prompt = buildRerankValidationPrompt(query, episodes, profile);
+
+    // Deliberately inside the try. This assertion used to sit outside it, so a
+    // budget miss threw straight past the fallback below — and because the
+    // caller fans batches out through Promise.all, one over-budget batch failed
+    // the entire search rather than one batch.
+    //
+    // Rerank validation is an advisory filter over results that have already
+    // been retrieved, not the source of truth. Degrading to "keep this batch
+    // unfiltered" costs some relevance; throwing costs the user their search
+    // results entirely. The budget miss is still loud in the logs via the
+    // logger.error below, so the condition is reported rather than swallowed.
+    if (profile === "ollama") {
+      assertPromptWithinBudget({
+        label: "search-rerank",
+        text: prompt,
+        budget: RERANK_PROMPT_TOKEN_BUDGET,
+      });
+    }
+
     let responseText = "";
     await makeModelCall(
       false,
@@ -534,7 +620,21 @@ If NO episodes are relevant to the query, return:
     // Return validated episodes
     return validIndices.map((idx: number) => episodes[idx - 1]).filter(Boolean);
   } catch (error) {
-    logger.error("LLM validation failed:", { error });
+    // Distinguish a budget miss from a genuine model/API failure. Both degrade
+    // to the same unfiltered batch, but they need different responses: a budget
+    // miss means the declared arithmetic is wrong and should be re-measured,
+    // whereas an API error is an operational event. Logging both under one
+    // generic message made the former invisible inside the latter's noise.
+    const message = error instanceof Error ? error.message : String(error);
+    if (message.startsWith("[PromptBudget]")) {
+      logger.error(
+        "Rerank prompt exceeded its token budget — returning this batch unfiltered. " +
+          "The declared budget arithmetic needs re-measuring, not just a bigger number.",
+        { error, episodeCount: episodes.length },
+      );
+    } else {
+      logger.error("LLM validation failed:", { error });
+    }
     // Fallback: return original episodes
     return episodes;
   }
@@ -574,7 +674,7 @@ async function validateEpisodesWithLLMInBatches(
   // Process all batches in parallel
   const batchResults = await Promise.all(
     batches.map((batch, batchIndex) =>
-      validateEpisodesWithLLM(query, batch, batch.length, workspaceId).then((result) => {
+      validateEpisodesWithLLM(query, batch, workspaceId).then((result) => {
         logger.info(
           `Batch ${batchIndex + 1}/${batches.length} completed: ${result.length}/${batch.length} episodes validated`,
         );

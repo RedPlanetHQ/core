@@ -15,6 +15,15 @@ import {
   recordTokenUsage,
   type TokenUsageSource,
 } from "~/services/tokenUsage.server";
+import {
+  OLLAMA_NUM_CTX,
+  OLLAMA_NUM_PREDICT_DEFAULT,
+  checkPromptBoundary,
+} from "~/services/prompts/promptBudget";
+import {
+  resolveProfile,
+  type PromptProfile,
+} from "~/services/prompts/normalizeProfile";
 
 import { createOllama } from "ollama-ai-provider-v2";
 import { createAzure } from "@ai-sdk/azure";
@@ -48,6 +57,11 @@ export interface AvailableModel {
   id: string; // "openai/gpt-5-2025-08-07"
   label: string; // "GPT-5"
   provider: string; // "openai"
+}
+
+export interface ModelCallOptions {
+  temperature?: number;
+  maxTokens?: number;
 }
 
 // ---------------------------------------------------------------------------
@@ -148,7 +162,12 @@ export const getModel = (takeModel?: string) => {
       throw new Error("No chat model configured for Ollama.");
     }
     const ollama = createOllama({ baseURL: toOllamaApiBase(ollamaUrl) });
-    return ollama(modelId);
+    // Pinned at construction, not left to per-call providerOptions: every
+    // consumer of getModel()/createAgent gets this for free, including the
+    // ~13 call sites that build an Agent directly and never pass
+    // buildOllamaProviderOptions — those previously got Ollama's silent
+    // 4096-token default with no pinning at all.
+    return ollama.chat(modelId, { options: { num_ctx: OLLAMA_NUM_CTX } });
   }
 
   // Azure: use direct AI SDK provider (needs base URL + API key)
@@ -198,7 +217,7 @@ function buildOpenAIProviderOptions(
   model: string,
   cacheKey: string,
   reasoningEffort?: ModelComplexity,
-): Record<string, any> | undefined {
+): ProviderOptionsMap | undefined {
   const provider = getProvider(model);
   if (provider !== "openai") return undefined;
 
@@ -229,6 +248,145 @@ function buildOpenAIProviderOptions(
   }
 
   return { openai: options };
+}
+
+/**
+ * Provider-scoped call options, keyed by provider id (e.g. "openai", "ollama").
+ *
+ * Mastra's own ProviderOptions type is not exported from a public entrypoint,
+ * and the per-provider payloads are provider-defined, so the values stay loose
+ * here — the same shape this module already used before provider options were
+ * split per provider.
+ */
+type ProviderOptionsMap = Record<string, any>;
+
+/**
+ * Whether a call against this model string will actually be served by Ollama.
+ *
+ * Single source of truth. Three layers used to re-derive this independently
+ * (provider options, tolerant parsing, prompt profile selection) and disagreed
+ * with each other, which let a call take the Ollama transport while the prompt
+ * builder believed it was talking to a hosted model — no caps, no assertion,
+ * and the silent 4096-token truncation straight back.
+ *
+ * getProvider() alone is the correct test, and an extra
+ * `|| getDefaultChatProviderType() === "ollama"` clause was removed from here
+ * because it produced false positives. Both directions were traced through
+ * createAgent(), which is the path makeModelCall actually takes (it does not go
+ * through getModel):
+ *
+ *   - Bare model id under CHAT_PROVIDER=ollama: getProvider delegates to
+ *     inferProvider, which already returns "ollama" for bare ids in that
+ *     configuration. Still detected, no env clause needed.
+ *   - Explicit "openai/gpt-5" override under CHAT_PROVIDER=ollama: getProvider
+ *     returns "openai", createAgent skips every Ollama branch and falls through
+ *     to the Mastra router, so the call genuinely runs on OpenAI. The env clause
+ *     used to report Ollama here and cap the prompt for a model that never
+ *     needed it.
+ *   - Explicit "ollama/qwen3:8b" override under CHAT_PROVIDER=openai: getProvider
+ *     returns "ollama" from the prefix, which is the direction that actually
+ *     matters, and it is unaffected by dropping the clause.
+ */
+export function isOllamaModel(model: string): boolean {
+  return getProvider(model) === "ollama";
+}
+
+function buildOllamaProviderOptions(
+  model: string,
+  options?: ModelCallOptions,
+): ProviderOptionsMap | undefined {
+  if (!isOllamaModel(model)) {
+    return undefined;
+  }
+
+  return {
+    // Keep Ollama pinned to promptBudget.ts's validated VRAM-safe context window.
+    // AI SDK v6 maps maxOutputTokens to max_output_tokens here, but Ollama /api/chat
+    // ignores that field. providerOptions.ollama.options.num_predict is the channel
+    // Ollama actually honors, so do not "simplify" this away.
+    //
+    // num_predict is opt-in: it is emitted only when the caller actually asked
+    // for a cap. Defaulting it silently hard-capped eight call sites that never
+    // had an output limit before (title generation, description update, session
+    // compaction, graph resolution, integration operations, recurrence) — a new
+    // silent truncation introduced by the very fix meant to remove one. "No cap
+    // requested" must mean "no cap applied". OLLAMA_NUM_PREDICT_DEFAULT remains
+    // the documented reserve that prompt-budget arithmetic subtracts from the
+    // window, not a ceiling applied behind the caller's back.
+    ollama: {
+      options: {
+        num_ctx: OLLAMA_NUM_CTX,
+        ...(options?.maxTokens !== undefined && {
+          num_predict: options.maxTokens,
+        }),
+      },
+    },
+  };
+}
+
+/**
+ * Resolve the prompt profile for a specific call.
+ *
+ * Prompts must be built before the model call, so the caller needs to know the
+ * provider up front. This resolves it through the same path the call itself
+ * will use (resolveModelForWorkspace), rather than reading the global
+ * CHAT_PROVIDER env var — which ignores the per-workspace and per-use-case
+ * overrides getModelForUseCase supports, and so could hand the uncapped hosted
+ * profile to a call that actually lands on Ollama.
+ *
+ * Taking `useCase` is deliberate rather than incidental: a pending routing
+ * change excludes conversation-normalization from Ollama while keeping other
+ * use-cases on it. Because this reads the per-call resolved provider, that
+ * change produces the correct profile here with no further edits.
+ */
+export async function resolveProfileForCall(
+  workspaceId: string | null | undefined,
+  useCase: UseCase = "chat",
+  complexity: ModelComplexity = "medium",
+): Promise<PromptProfile> {
+  const { modelId } = await resolveModelForWorkspace(workspaceId, useCase, complexity);
+  return resolveProfile(isOllamaModel(modelId) ? "ollama" : "hosted");
+}
+
+/**
+ * Best-effort text extraction for the boundary check only — not the actual
+ * payload sent to the model. Message content is either a plain string or an
+ * array of parts (text/image/etc per the AI SDK's ModelMessage shape); only
+ * text parts count toward the token budget the same way Ollama's tokenizer
+ * would see them.
+ */
+function flattenMessagesForBudgetCheck(messages: ModelMessage[]): string {
+  return messages
+    .map((message) => {
+      const content = (message as { content: unknown }).content;
+      if (typeof content === "string") {
+        return content;
+      }
+      if (Array.isArray(content)) {
+        return content
+          .map((part) => (typeof (part as { text?: unknown })?.text === "string" ? (part as { text: string }).text : ""))
+          .join("");
+      }
+      return "";
+    })
+    .join("\n");
+}
+
+function mergeProviderOptions(
+  ...providerOptions: Array<ProviderOptionsMap | undefined>
+): ProviderOptionsMap | undefined {
+  const merged = providerOptions.reduce<ProviderOptionsMap>((acc, option) => {
+    if (!option) {
+      return acc;
+    }
+
+    return {
+      ...acc,
+      ...option,
+    };
+  }, {});
+
+  return Object.keys(merged).length > 0 ? merged : undefined;
 }
 
 // ---------------------------------------------------------------------------
@@ -289,7 +447,9 @@ export function createAgent(
     return new Agent({
       id: `model-call-${modelString}`,
       name: `Model Call (${modelString})`,
-      model: ollama(modelId) as any,
+      // Pinned at construction — see the matching comment in getModel()'s
+      // Ollama branch for why this can't be left to callers.
+      model: ollama.chat(modelId, { options: { num_ctx: OLLAMA_NUM_CTX } }) as any,
       instructions: instructions || "",
       ...(tools && { tools }),
     });
@@ -399,7 +559,7 @@ export async function makeModelCall(
   stream: boolean,
   messages: ModelMessage[],
   onFinish: (text: string, model: string, usage?: TokenUsage) => void,
-  options?: any,
+  options?: ModelCallOptions,
   complexity: ModelComplexity = "medium",
   cacheKey?: string,
   reasoningEffort?: "low" | "medium" | "high",
@@ -410,10 +570,21 @@ export async function makeModelCall(
   const { modelId: model, apiKey, isBYOK, baseUrl } = await resolveModelForWorkspace(workspaceId, useCase, complexity);
   logger.info(`[${useCase}/${complexity}] model: ${model}${isBYOK ? " (BYOK)" : ""}`);
 
-  const providerOptions = buildOpenAIProviderOptions(
-    model,
-    cacheKey || `${useCase}-${complexity}`,
-    reasoningEffort,
+  if (isOllamaModel(model)) {
+    checkPromptBoundary({
+      label: `makeModelCall:${useCase}/${complexity}`,
+      text: flattenMessagesForBudgetCheck(messages),
+      reserved: options?.maxTokens ?? OLLAMA_NUM_PREDICT_DEFAULT,
+    });
+  }
+
+  const providerOptions = mergeProviderOptions(
+    buildOpenAIProviderOptions(
+      model,
+      cacheKey || `${useCase}-${complexity}`,
+      reasoningEffort,
+    ),
+    buildOllamaProviderOptions(model, options),
   );
 
   const agentOptions = apiKey ? { apiKey, ...(baseUrl && { baseUrl }) } : undefined;
@@ -421,6 +592,8 @@ export async function makeModelCall(
 
   if (stream) {
     const result = await agent.stream(messages as any, {
+      ...(options?.temperature !== undefined && { temperature: options.temperature }),
+      ...(options?.maxTokens !== undefined && { maxOutputTokens: options.maxTokens }),
       ...(providerOptions && { providerOptions }),
     });
     const text = await result.text;
@@ -433,6 +606,8 @@ export async function makeModelCall(
   }
 
   const result = await agent.generate(messages as any, {
+    ...(options?.temperature !== undefined && { temperature: options.temperature }),
+    ...(options?.maxTokens !== undefined && { maxOutputTokens: options.maxTokens }),
     ...(providerOptions && { providerOptions }),
   });
 
@@ -487,9 +662,8 @@ function needsTolerantParsing(model: string, workspaceBaseUrl?: string): boolean
   // Per-workspace openai BYOK with a baseUrl is by definition a third-party
   // proxy (CLIProxyAPI, Vercel AI Gateway, etc.) — always tolerant.
   const isWorkspaceProxy = provider === "openai" && !!workspaceBaseUrl;
-  const isOllama = provider === "ollama" || getDefaultChatProviderType() === "ollama";
   const isOpenRouter = provider === "openrouter";
-  return isServerProxyChatMode || isWorkspaceProxy || isOllama || isOpenRouter;
+  return isServerProxyChatMode || isWorkspaceProxy || isOllamaModel(model) || isOpenRouter;
 }
 
 export async function makeStructuredModelCall<T extends z.ZodType>(
@@ -501,6 +675,7 @@ export async function makeStructuredModelCall<T extends z.ZodType>(
   workspaceId?: string,
   useCase: UseCase = "chat",
   userId?: string | null,
+  maxTokens?: number,
 ): Promise<{ object: z.infer<T>; usage: TokenUsage | undefined }> {
   const { modelId: model, apiKey, baseUrl } = await resolveModelForWorkspace(workspaceId, useCase, complexity);
   logger.info(`[Structured/${useCase}/${complexity}] model: ${model}`);
@@ -528,6 +703,7 @@ export async function makeStructuredModelCall<T extends z.ZodType>(
         apiKey!,
         baseUrl!,
         temperature,
+        maxTokens,
       );
       const tokenUsage = toTokenUsage(usage);
       logTokenUsage(`Structured/${complexity.toUpperCase()}`, model, tokenUsage);
@@ -551,6 +727,8 @@ export async function makeStructuredModelCall<T extends z.ZodType>(
       temperature,
       apiKey,
       baseUrl,
+      maxTokens,
+      `makeStructuredModelCall:${useCase}/${complexity}`,
     );
     const tokenUsage = toTokenUsage(usage);
     logTokenUsage(`Structured/${complexity.toUpperCase()}`, model, tokenUsage);
@@ -570,6 +748,7 @@ export async function makeStructuredModelCall<T extends z.ZodType>(
           : undefined,
       },
       ...(temperature !== undefined && { temperature }),
+      ...(maxTokens !== undefined && { maxOutputTokens: maxTokens }),
     });
 
     const tokenUsage = toTokenUsage(result.usage);
@@ -628,6 +807,7 @@ async function structuredCallViaTools<T extends z.ZodType>(
   apiKey: string,
   baseUrl: string,
   temperature?: number,
+  maxTokens?: number,
 ): Promise<{ object: z.infer<T>; usage: any }> {
   const modelId = getModelId(modelString);
   const openaiClient = createOpenAI({ baseURL: baseUrl, apiKey });
@@ -644,6 +824,7 @@ async function structuredCallViaTools<T extends z.ZodType>(
     tools: { return_result: returnResultTool },
     toolChoice: { type: "tool", toolName: "return_result" },
     ...(temperature !== undefined && { temperature }),
+    ...(maxTokens !== undefined && { maxOutputTokens: maxTokens }),
   });
 
   const toolCall = result.toolCalls?.[0];
@@ -670,6 +851,8 @@ async function structuredCallWithTolerantParsing<T extends z.ZodType>(
   temperature?: number,
   apiKey?: string,
   baseUrl?: string,
+  maxTokens?: number,
+  label = "structuredCallWithTolerantParsing",
 ): Promise<{ object: z.infer<T>; usage: any }> {
   const schemaHint = schemaInstruction(schema);
   // Claude (via subscription proxies) is more likely than GPT to respond with
@@ -691,9 +874,31 @@ async function structuredCallWithTolerantParsing<T extends z.ZodType>(
   const agentOpts = apiKey ? { apiKey, ...(baseUrl && { baseUrl }) } : undefined;
   const agent = createAgent(modelString, jsonPreamble, undefined, agentOpts);
 
-  const textResult = await agent.generate(messages as any, {
+  // This path had no Ollama provider options at all, so num_ctx never reached
+  // the heaviest prompts in the system — the six fact/statement-extraction
+  // calls and label extraction all run through here. Without it they inherited
+  // Ollama's silent 4096 default, which is the exact bug the fix was for.
+  const ollamaOptions = buildOllamaProviderOptions(modelString, { maxTokens });
+  const callOptions = {
     ...(temperature !== undefined && { temperature }),
-  } as any);
+    ...(maxTokens !== undefined && { maxOutputTokens: maxTokens }),
+    ...(ollamaOptions && { providerOptions: ollamaOptions }),
+  };
+
+  if (isOllamaModel(modelString)) {
+    checkPromptBoundary({
+      label,
+      // jsonPreamble becomes the agent's system instructions above, so it
+      // reaches the model alongside `messages` — the per-site budget
+      // assertions upstream only measure their own prompt text and don't
+      // know about this preamble, so it must be counted here to reflect
+      // what Ollama actually receives.
+      text: `${jsonPreamble}\n${flattenMessagesForBudgetCheck(messages)}`,
+      reserved: maxTokens ?? OLLAMA_NUM_PREDICT_DEFAULT,
+    });
+  }
+
+  const textResult = await agent.generate(messages as any, callOptions as any);
 
   const parsed = tryParseJsonFromText(textResult.text);
   const validated = parsed ? schema.safeParse(parsed) : undefined;
@@ -702,22 +907,32 @@ async function structuredCallWithTolerantParsing<T extends z.ZodType>(
   }
 
   // Repair attempt (reuse the same agentOpts so proxy baseUrl + key stay applied)
-  const repairAgent = createAgent(
-    modelString,
+  const repairInstructions =
     "You are a strict JSON repair assistant. The user will paste text that was " +
-      "supposed to be JSON matching a schema, but isn't. Convert it into a single " +
-      "valid JSON object matching the schema. If the text is prose saying there " +
-      "is nothing to extract, return the schema with empty arrays, nulls, or " +
-      "empty strings — do not echo the prose. Return ONLY the JSON object, no " +
-      "Markdown fences, no explanation." +
-      schemaHint,
-    undefined,
-    agentOpts,
-  );
+    "supposed to be JSON matching a schema, but isn't. Convert it into a single " +
+    "valid JSON object matching the schema. If the text is prose saying there " +
+    "is nothing to extract, return the schema with empty arrays, nulls, or " +
+    "empty strings — do not echo the prose. Return ONLY the JSON object, no " +
+    "Markdown fences, no explanation." +
+    schemaHint;
+  const repairAgent = createAgent(modelString, repairInstructions, undefined, agentOpts);
+
+  // The repair call needs the same bounds as the first — it's a second,
+  // distinct Ollama call (repair preamble + the first call's raw output as
+  // input), not covered by the check above. An unbounded retry against a
+  // 4096-token window truncates silently in exactly the way the original
+  // call would have.
+  if (isOllamaModel(modelString)) {
+    checkPromptBoundary({
+      label: `${label}:repair`,
+      text: `${repairInstructions}\n${textResult.text}`,
+      reserved: maxTokens ?? OLLAMA_NUM_PREDICT_DEFAULT,
+    });
+  }
 
   const repairResult = await repairAgent.generate(
     [{ role: "user", content: textResult.text }] as any,
-    { temperature: 0 } as any,
+    { ...callOptions, temperature: 0 } as any,
   );
 
   const repairedParsed = tryParseJsonFromText(repairResult.text);
