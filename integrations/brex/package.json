@@ -1,0 +1,55 @@
+{
+  "name": "@core/brex",
+  "version": "0.1.0",
+  "description": "Brex read-only integration for CORE",
+  "main": "./bin/index.js",
+  "module": "./bin/index.mjs",
+  "type": "module",
+  "files": [
+    "brex",
+    "bin",
+    "dist"
+  ],
+  "bin": {
+    "brex": "./bin/index.js"
+  },
+  "scripts": {
+    "build": "rimraf dist && bun build src/index.ts --outfile dist/index.js --target node --minify",
+    "lint": "eslint --ext js,ts,tsx src/ --fix",
+    "prettier": "prettier --config .prettierrc --write .",
+    "register": "tsx scripts/register.ts",
+    "test": "vitest run",
+    "test:watch": "vitest"
+  },
+  "publishConfig": {
+    "access": "public"
+  },
+  "dependencies": {
+    "axios": "^1.7.9",
+    "commander": "^12.0.0",
+    "@redplanethq/sdk": "0.1.9",
+    "zod": "^3.22.4",
+    "zod-to-json-schema": "^3.22.1"
+  },
+  "devDependencies": {
+    "@babel/preset-typescript": "^7.26.0",
+    "@types/node": "^18.0.20",
+    "@types/pg": "^8.10.9",
+    "pg": "^8.11.3",
+    "eslint": "^9.24.0",
+    "eslint-config-prettier": "^10.1.2",
+    "eslint-import-resolver-alias": "^1.1.2",
+    "eslint-plugin-import": "^2.31.0",
+    "eslint-plugin-jest": "^27.9.0",
+    "eslint-plugin-prettier": "^5.2.1",
+    "eslint-plugin-unused-imports": "^2.0.0",
+    "prettier": "^3.4.2",
+    "rimraf": "^3.0.2",
+    "tslib": "^2.8.1",
+    "tsx": "4.20.6",
+    "typescript": "^5.4.0",
+    "typescript-eslint": "^8.20.0",
+    "@eslint/js": "^9.24.0",
+    "vitest": "^3.2.0"
+  }
+}
