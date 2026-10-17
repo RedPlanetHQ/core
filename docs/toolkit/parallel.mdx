@@ -1,0 +1,74 @@
+---
+title: "Parallel Search"
+description: "Search the web and fetch source pages through a custom MCP integration"
+---
+
+[Parallel Search MCP](https://docs.parallel.ai/integrations/mcp/search-mcp) gives CORE web search and page fetching without a Parallel account or API key. Anonymous searches use Fast mode. Connect it as an optional custom integration to gather current information for research and read the source pages behind an answer.
+
+## Enable custom MCP access
+
+This setup requires a self-hosted CORE instance whose administrator enables no-auth MCP servers and custom headers. Both options are disabled by default.
+
+Set these variables in the **CORE webapp process or container**, then restart it:
+
+```dotenv
+CUSTOM_MCP_ALLOW_NO_AUTH=true
+CUSTOM_MCP_ALLOW_CUSTOM_HEADERS=true
+```
+
+For a Docker Compose installation, save this as `compose.parallel.yaml` beside your existing `docker-compose.yaml`:
+
+```yaml
+services:
+  core:
+    environment:
+      CUSTOM_MCP_ALLOW_NO_AUTH: "true"
+      CUSTOM_MCP_ALLOW_CUSTOM_HEADERS: "true"
+```
+
+Apply it from that directory:
+
+```bash
+docker compose -f docker-compose.yaml -f compose.parallel.yaml up -d core
+```
+
+Include both files in subsequent Compose commands to keep the override applied. Adding the variables only to `.env` does not pass them into the container unless your Compose configuration references them.
+
+These flags apply to custom MCP integrations across the instance. If you cannot administer the instance, ask its administrator to enable them before proceeding.
+
+## Connect Parallel
+
+1. Open **Integrations** (`/home/integrations`) in your CORE instance.
+2. Under **Custom Integrations**, click **Add Custom Integration**.
+3. Enter the following settings:
+
+   | Field                                   | Value                                                   |
+   | --------------------------------------- | ------------------------------------------------------- |
+   | Name                                    | `Parallel Search`                                       |
+   | Server URL                              | `https://search.parallel.ai/mcp`                        |
+   | Auth                                    | `OAuth / Access Token`                                  |
+   | Transport                               | `HTTP only`                                             |
+   | Use OAuth if the MCP server supports it | Unchecked                                               |
+   | Access Token (optional)                 | Leave empty                                             |
+   | Additional headers (optional)           | `User-Agent=CORE (https://github.com/RedPlanetHQ/core)` |
+
+4. Click **Add Integration**. Parallel Search appears under **Custom Integrations**.
+
+The header identifies CORE to the service; it is not a credential. The URL uses Streamable HTTP, so use **HTTP only** for this setup. If the OAuth checkbox or headers field is missing, check the webapp environment variables above and restart the webapp.
+
+## Search and read sources
+
+Parallel exposes two tools through the [Toolkit](/toolkit/overview):
+
+| Tool         | Purpose                                                     |
+| ------------ | ----------------------------------------------------------- |
+| `web_search` | Find current web information with source URLs and excerpts. |
+| `web_fetch`  | Read content from specific public URLs.                     |
+
+Try a prompt in CORE chat:
+
+> Use Parallel Search to find the latest stable Node.js release on nodejs.org. Fetch the release page, then summarize the version, release date, and source URL.
+
+For account research, combine web results with CORE's existing memory-first [research lens](/skills/account_research). Ask CORE to use Parallel explicitly when you want this integration. Connecting it does not replace CORE's built-in web search or change your other integrations.
+
+The anonymous service is free for light use and has usage limits. If it reports a limit, wait before trying again. See [Parallel Search MCP](https://docs.parallel.ai/integrations/mcp/search-mcp) for current limits and authenticated options.
