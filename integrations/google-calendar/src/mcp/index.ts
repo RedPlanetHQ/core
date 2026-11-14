@@ -385,9 +385,9 @@ export async function callTool(
         // Merge updates with existing event
         const updatedEvent: calendar_v3.Schema$Event = {
           ...existingEvent.data,
-          summary: validatedArgs.summary || existingEvent.data.summary,
-          description: validatedArgs.description || existingEvent.data.description,
-          location: validatedArgs.location || existingEvent.data.location,
+          summary: validatedArgs.summary ?? existingEvent.data.summary,
+          description: validatedArgs.description ?? existingEvent.data.description,
+          location: validatedArgs.location ?? existingEvent.data.location,
         };
 
         if (validatedArgs.startDateTime) {
