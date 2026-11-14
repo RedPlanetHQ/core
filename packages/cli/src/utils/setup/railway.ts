@@ -1,6 +1,7 @@
 import * as p from '@clack/prompts';
 import chalk from 'chalk';
-import {spawn, exec as execCb} from 'node:child_process';
+import {exec as execCb} from 'node:child_process';
+import spawn from 'cross-spawn';
 import {promisify} from 'node:util';
 import {hostname} from 'node:os';
 import {generateSecurityKey} from '@/server/api/auth';
