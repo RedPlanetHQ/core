@@ -31,10 +31,10 @@
   ],
   "security": [
     {
-      "bearerAuth": [ ]
+      "bearerAuth": []
     },
     {
-      "oauth2": [ ]
+      "oauth2": []
     }
   ],
   "components": {
@@ -232,7 +232,7 @@
             "items": {
               "type": "string"
             },
-            "default": [ ],
+            "default": [],
             "description": "Filter results to specific labels"
           },
           "limit": {
@@ -429,7 +429,8 @@
           },
           "description": {
             "type": "string",
-            "description": "Optional label description"
+            "description": "Optional label description",
+            "nullable": true
           },
           "color": {
             "type": "string",
@@ -449,7 +450,16 @@
             "format": "date-time",
             "description": "Label last update timestamp"
           }
-        }
+        },
+        "required": [
+          "id",
+          "name",
+          "description",
+          "color",
+          "workspaceId",
+          "createdAt",
+          "updatedAt"
+        ]
       },
       "IngestionRule": {
         "type": "object",
@@ -458,7 +468,8 @@
             "type": "string"
           },
           "name": {
-            "type": "string"
+            "type": "string",
+            "nullable": true
           },
           "text": {
             "type": "string"
@@ -477,7 +488,16 @@
             "type": "string",
             "format": "date-time"
           }
-        }
+        },
+        "required": [
+          "id",
+          "name",
+          "text",
+          "source",
+          "isActive",
+          "createdAt",
+          "updatedAt"
+        ]
       },
       "CreateIngestionRuleRequest": {
         "type": "object",
@@ -558,7 +578,8 @@
             "type": "string"
           },
           "title": {
-            "type": "string"
+            "type": "string",
+            "nullable": true
           },
           "createdAt": {
             "type": "string",
@@ -568,7 +589,25 @@
             "type": "string",
             "format": "date-time"
           }
-        }
+        },
+        "required": [
+          "id",
+          "title"
+        ]
+      },
+      "ConversationListItem": {
+        "allOf": [
+          {
+            "$ref": "#/components/schemas/Conversation"
+          },
+          {
+            "type": "object",
+            "required": [
+              "createdAt",
+              "updatedAt"
+            ]
+          }
+        ]
       },
       "Log": {
         "type": "object",
@@ -682,7 +721,7 @@
         "summary": "OAuth2 Authorization Endpoint",
         "description": "OAuth2 authorization endpoint supporting authorization code flow with PKCE.\nRequires user to be logged in via session cookie.\n",
         "security": [
-          { }
+          {}
         ],
         "parameters": [
           {
@@ -777,7 +816,7 @@
         "summary": "OAuth2 Authorization Decision",
         "description": "Handle user's allow/deny decision for OAuth2 authorization",
         "security": [
-          { }
+          {}
         ],
         "requestBody": {
           "content": {
@@ -845,7 +884,7 @@
         "summary": "OAuth2 Token Endpoint",
         "description": "Exchange authorization code for access token, or refresh an existing token.\nSupports both JSON and form-encoded requests.\n",
         "security": [
-          { }
+          {}
         ],
         "requestBody": {
           "content": {
@@ -995,7 +1034,7 @@
         "description": "Get information about the current access token",
         "security": [
           {
-            "oauth2": [ ]
+            "oauth2": []
           }
         ],
         "responses": {
@@ -1083,7 +1122,7 @@
         "description": "Perform advanced semantic search with graph traversal capabilities.\nSupports temporal filtering, entity type filtering, and relevance scoring.\n",
         "security": [
           {
-            "bearerAuth": [ ]
+            "bearerAuth": []
           }
         ],
         "requestBody": {
@@ -1151,7 +1190,7 @@
         "description": "Add data to the ingestion queue for processing. Content will be analyzed\nand facts will be extracted into the knowledge graph.\n",
         "security": [
           {
-            "bearerAuth": [ ]
+            "bearerAuth": []
           }
         ],
         "requestBody": {
@@ -1192,7 +1231,7 @@
         "description": "Create activity and trigger ingestion with webhook notifications.\nUsed for real-time data processing with external integrations.\n",
         "security": [
           {
-            "bearerAuth": [ ]
+            "bearerAuth": []
           }
         ],
         "requestBody": {
@@ -1218,7 +1257,7 @@
         "description": "Get list of all labels in the authenticated user's workspace",
         "security": [
           {
-            "bearerAuth": [ ]
+            "bearerAuth": []
           }
         ],
         "responses": {
@@ -1235,7 +1274,17 @@
               }
             }
           }
-        }
+        },
+        "parameters": [
+          {
+            "name": "search",
+            "in": "query",
+            "schema": {
+              "type": "string"
+            },
+            "description": "Filter labels by name (case-insensitive); returns up to 10 matches"
+          }
+        ]
       }
     },
     "/api/v1/integrations": {
@@ -1294,7 +1343,7 @@
         "description": "Get user's integration accounts",
         "security": [
           {
-            "bearerAuth": [ ]
+            "bearerAuth": []
           }
         ],
         "responses": {
@@ -1308,7 +1357,7 @@
         "description": "Create new integration account",
         "security": [
           {
-            "bearerAuth": [ ]
+            "bearerAuth": []
           }
         ],
         "responses": {
@@ -1324,7 +1373,7 @@
         "description": "Disconnect an integration account",
         "security": [
           {
-            "bearerAuth": [ ]
+            "bearerAuth": []
           }
         ],
         "responses": {
@@ -1340,7 +1389,7 @@
         "description": "Disconnect an MCP integration account",
         "security": [
           {
-            "bearerAuth": [ ]
+            "bearerAuth": []
           }
         ],
         "responses": {
@@ -1356,7 +1405,7 @@
         "description": "Get user's OAuth clients",
         "security": [
           {
-            "bearerAuth": [ ]
+            "bearerAuth": []
           }
         ],
         "responses": {
@@ -1380,7 +1429,7 @@
         "description": "Create new OAuth client application",
         "security": [
           {
-            "bearerAuth": [ ]
+            "bearerAuth": []
           }
         ],
         "requestBody": {
@@ -1438,7 +1487,7 @@
         "description": "Get specific OAuth client details",
         "security": [
           {
-            "bearerAuth": [ ]
+            "bearerAuth": []
           }
         ],
         "responses": {
@@ -1459,7 +1508,7 @@
         "description": "Update OAuth client configuration",
         "security": [
           {
-            "bearerAuth": [ ]
+            "bearerAuth": []
           }
         ],
         "requestBody": {
@@ -1494,7 +1543,7 @@
         "description": "Delete OAuth client application",
         "security": [
           {
-            "bearerAuth": [ ]
+            "bearerAuth": []
           }
         ],
         "responses": {
@@ -1520,7 +1569,7 @@
         "description": "Get facts/statements for a specific episode",
         "security": [
           {
-            "bearerAuth": [ ]
+            "bearerAuth": []
           }
         ],
         "responses": {
@@ -1568,7 +1617,7 @@
         "description": "View ingestion queue status and processing logs",
         "security": [
           {
-            "bearerAuth": [ ]
+            "bearerAuth": []
           }
         ],
         "parameters": [
@@ -1674,7 +1723,7 @@
         "description": "Retrieve detailed information about a specific ingestion log",
         "security": [
           {
-            "bearerAuth": [ ]
+            "bearerAuth": []
           }
         ],
         "responses": {
@@ -1720,7 +1769,7 @@
         "description": "Delete a specific log entry and associated episode if it exists",
         "security": [
           {
-            "bearerAuth": [ ]
+            "bearerAuth": []
           }
         ],
         "requestBody": {
@@ -1783,7 +1832,7 @@
         "description": "Get current status of the ingestion queue",
         "security": [
           {
-            "bearerAuth": [ ]
+            "bearerAuth": []
           }
         ],
         "responses": {
@@ -1823,7 +1872,7 @@
         "description": "Create webhook configuration for real-time notifications",
         "security": [
           {
-            "bearerAuth": [ ]
+            "bearerAuth": []
           }
         ],
         "requestBody": {
@@ -1894,7 +1943,7 @@
         "description": "Get webhook configuration details",
         "security": [
           {
-            "bearerAuth": [ ]
+            "bearerAuth": []
           }
         ],
         "responses": {
@@ -1908,7 +1957,7 @@
         "description": "Update webhook configuration",
         "security": [
           {
-            "bearerAuth": [ ]
+            "bearerAuth": []
           }
         ],
         "requestBody": {
@@ -1940,12 +1989,305 @@
         "description": "Delete webhook configuration",
         "security": [
           {
-            "bearerAuth": [ ]
+            "bearerAuth": []
           }
         ],
         "responses": {
           "204": {
             "description": "Webhook deleted"
+          }
+        }
+      }
+    },
+    "/api/v1/ingestion-rules": {
+      "get": {
+        "summary": "List Ingestion Rules",
+        "description": "Get list of ingestion rules with optional filtering",
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "source",
+            "in": "query",
+            "schema": {
+              "type": "string"
+            },
+            "description": "Filter by source"
+          },
+          {
+            "name": "isActive",
+            "in": "query",
+            "schema": {
+              "type": "boolean"
+            },
+            "description": "Filter by active status"
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "required": [
+                    "success",
+                    "rules"
+                  ],
+                  "properties": {
+                    "success": {
+                      "type": "boolean"
+                    },
+                    "rules": {
+                      "type": "array",
+                      "items": {
+                        "$ref": "#/components/schemas/IngestionRule"
+                      }
+                    }
+                  }
+                }
+              }
+            }
+          }
+        }
+      },
+      "post": {
+        "summary": "Create Ingestion Rule",
+        "description": "Create a new ingestion rule",
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/CreateIngestionRuleRequest"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Successful response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "required": [
+                    "success",
+                    "rule"
+                  ],
+                  "properties": {
+                    "success": {
+                      "type": "boolean"
+                    },
+                    "rule": {
+                      "$ref": "#/components/schemas/IngestionRule"
+                    }
+                  }
+                }
+              }
+            }
+          }
+        }
+      },
+      "put": {
+        "summary": "Update Ingestion Rule",
+        "description": "Update an existing ingestion rule",
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/UpdateIngestionRuleRequest"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Successful response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "required": [
+                    "success",
+                    "rule"
+                  ],
+                  "properties": {
+                    "success": {
+                      "type": "boolean"
+                    },
+                    "rule": {
+                      "$ref": "#/components/schemas/IngestionRule"
+                    }
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/ingestion-rules/{id}": {
+      "parameters": [
+        {
+          "name": "id",
+          "in": "path",
+          "required": true,
+          "schema": {
+            "type": "string"
+          }
+        }
+      ],
+      "get": {
+        "summary": "Get Ingestion Rule",
+        "description": "Retrieve specific ingestion rule details",
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "required": [
+                    "success",
+                    "rule"
+                  ],
+                  "properties": {
+                    "success": {
+                      "type": "boolean"
+                    },
+                    "rule": {
+                      "$ref": "#/components/schemas/IngestionRule"
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Rule not found"
+          }
+        }
+      },
+      "delete": {
+        "summary": "Delete Ingestion Rule",
+        "description": "Delete an ingestion rule",
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "required": [
+                    "success",
+                    "message",
+                    "ruleId"
+                  ],
+                  "properties": {
+                    "success": {
+                      "type": "boolean"
+                    },
+                    "message": {
+                      "type": "string"
+                    },
+                    "ruleId": {
+                      "type": "string"
+                    }
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/conversations": {
+      "get": {
+        "summary": "List Conversations",
+        "description": "Get paginated list of conversations with filtering options",
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "page",
+            "in": "query",
+            "schema": {
+              "type": "integer",
+              "minimum": 1,
+              "default": 1
+            }
+          },
+          {
+            "name": "limit",
+            "in": "query",
+            "schema": {
+              "type": "integer",
+              "minimum": 1,
+              "maximum": 100,
+              "default": 20
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "List of conversations",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "conversations": {
+                      "type": "array",
+                      "items": {
+                        "$ref": "#/components/schemas/ConversationListItem"
+                      }
+                    },
+                    "pagination": {
+                      "type": "object",
+                      "properties": {
+                        "page": {
+                          "type": "integer"
+                        },
+                        "limit": {
+                          "type": "integer"
+                        },
+                        "total": {
+                          "type": "integer"
+                        }
+                      }
+                    }
+                  }
+                }
+              }
+            }
           }
         }
       }
