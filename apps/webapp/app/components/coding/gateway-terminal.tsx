@@ -3,6 +3,7 @@ import { Loader2, AlertCircle, CheckCircle2 } from "lucide-react";
 import { Button } from "~/components/ui/button";
 import { requestCodingSessionXtermWsUrl } from "~/lib/xterm-ws.client";
 import { terminalThemes } from "./terminal-themes";
+import { TerminalPromptInput } from "./terminal-prompt-input";
 import "@xterm/xterm/css/xterm.css";
 
 type TerminalState = "connecting" | "running" | "ended" | "error";
@@ -347,6 +348,21 @@ export function GatewayTerminal({
           overflow: "hidden",
         }}
         onClick={() => termRef.current?.focus()}
+      />
+
+      <TerminalPromptInput
+        key={codingSessionId}
+        disabled={status !== "running"}
+        onSubmit={(prompt) => {
+          const term = termRef.current;
+          const ws = wsRef.current;
+          if (!term || !ws || ws.readyState !== WebSocket.OPEN) return false;
+          // Let xterm honor the agent's bracketed-paste mode so multiline
+          // text is inserted as a single prompt rather than separate commands.
+          term.paste(prompt);
+          ws.send(JSON.stringify({ kind: "input", data: "\r" }));
+          return true;
+        }}
       />
 
       {status === "ended" && (
