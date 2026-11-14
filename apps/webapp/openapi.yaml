@@ -441,8 +441,14 @@ components:
       required:
         - id
         - title
-        - createdAt
-        - updatedAt
+
+    ConversationListItem:
+      allOf:
+        - $ref: "#/components/schemas/Conversation"
+        - type: object
+          required:
+            - createdAt
+            - updatedAt
 
     Log:
       type: object
@@ -978,7 +984,7 @@ paths:
                   conversations:
                     type: array
                     items:
-                      $ref: "#/components/schemas/Conversation"
+                      $ref: "#/components/schemas/ConversationListItem"
                   pagination:
                     type: object
                     properties:
