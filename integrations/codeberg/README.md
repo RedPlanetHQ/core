@@ -11,6 +11,7 @@ The Codeberg integration allows you to interact with your Codeberg repositories,
 ### 🔗 MCP Tools
 - **Repositories**: List your repositories, get repository details.
 - **Issues**: List issues, get issue details, create new issues.
+- **Labels**: List, create, update, and delete repository labels.
 
 ## Authentication
 
