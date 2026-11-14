@@ -138,6 +138,40 @@ components:
 
     UserInfo:
       type: object
+      required:
+        - sub
+        - email
+        - name
+        - display_name
+        - avatar_url
+        - email_verified
+      properties:
+        sub:
+          type: string
+          description: User ID
+        email:
+          type: string
+          format: email
+        name:
+          type: string
+          nullable: true
+        display_name:
+          type: string
+          nullable: true
+        avatar_url:
+          type: string
+          nullable: true
+        email_verified:
+          type: boolean
+
+    ProfileUser:
+      type: object
+      required:
+        - id
+        - email
+        - name
+        - displayName
+        - avatarUrl
       properties:
         id:
           type: string
@@ -146,9 +180,13 @@ components:
           format: email
         name:
           type: string
-        picture:
+          nullable: true
+        displayName:
           type: string
-          format: uri
+          nullable: true
+        avatarUrl:
+          type: string
+          nullable: true
 
     SearchRequest:
       type: object
@@ -777,18 +815,17 @@ paths:
                 type: object
                 properties:
                   user:
-                    $ref: "#/components/schemas/UserInfo"
+                    $ref: "#/components/schemas/ProfileUser"
                   client:
                     type: object
                     properties:
-                      clientId:
+                      id:
                         type: string
                       name:
                         type: string
-                  scopes:
-                    type: array
-                    items:
-                      type: string
+                  scope:
+                    type: string
+                    nullable: true
 
   # Search & Knowledge Graph
   /api/v1/search:
