@@ -1,6 +1,7 @@
 import * as p from '@clack/prompts';
 import chalk from 'chalk';
-import {spawn, exec as execCb} from 'node:child_process';
+import {exec as execCb} from 'node:child_process';
+import spawn from 'cross-spawn';
 import {promisify} from 'node:util';
 import {hostname} from 'node:os';
 import {generateSecurityKey} from '@/server/api/auth';
@@ -15,7 +16,7 @@ const exec = promisify(execCb);
 
 async function commandExists(cmd: string): Promise<boolean> {
 	try {
-		await exec(`command -v ${cmd}`);
+		await exec(`${process.platform === 'win32' ? 'where.exe' : 'command -v'} ${cmd}`);
 		return true;
 	} catch {
 		return false;

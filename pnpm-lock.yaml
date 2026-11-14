@@ -782,6 +782,9 @@ importers:
       chalk:
         specifier: ^5.2.0
         version: 5.4.1
+      cross-spawn:
+        specifier: 7.0.6
+        version: 7.0.6
       diff:
         specifier: ^5.2.0
         version: 5.2.0
@@ -840,6 +843,9 @@ importers:
       '@sindresorhus/tsconfig':
         specifier: ^8.1.0
         version: 8.1.0
+      '@types/cross-spawn':
+        specifier: 6.0.6
+        version: 6.0.6
       '@types/diff':
         specifier: ^5.2.0
         version: 5.2.3
@@ -7335,6 +7341,9 @@ packages:
 
   '@types/cors@2.8.19':
     resolution: {integrity: sha512-mFNylyeyqN93lfe/9CSxOGREz8cpzAhH+E93xJ4xWQf62V8sQ/24reV2nyzUWM6H6Xji+GGHpkbLe7pVoUEskg==}
+
+  '@types/cross-spawn@6.0.6':
+    resolution: {integrity: sha512-fXRhhUkG4H3TQk5dBhQ7m/JDdSNHKwR2BBia62lhwEIq9xGiQKLxd6LymNhn47SjXhsUEPmxi+PKw2OkW4LLjA==}
 
   '@types/d3-array@3.2.1':
     resolution: {integrity: sha512-Y2Jn2idRrLzUfAKV2LyRImR+y4oa2AntrgID95SHJxuMUrkNXmanDSed71sRNZysveJVt1hLLemQZIady0FpEg==}
@@ -24053,6 +24062,10 @@ snapshots:
   '@types/cookie@0.6.0': {}
 
   '@types/cors@2.8.19':
+    dependencies:
+      '@types/node': 20.19.7
+
+  '@types/cross-spawn@6.0.6':
     dependencies:
       '@types/node': 20.19.7
 
