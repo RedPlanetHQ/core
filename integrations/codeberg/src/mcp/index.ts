@@ -378,16 +378,16 @@ export async function getTools() {
       inputSchema: zodToJsonSchema(CreateIssueFromTemplateSchema),
     },
 
-    // Label Tools
+    // Label management
     {
-      name: "list_labels",
-      description: "List labels in a repository",
-      inputSchema: zodToJsonSchema(ListLabelsSchema),
+      name: "update_label",
+      description: "Update a repository label's name, color, or description",
+      inputSchema: zodToJsonSchema(UpdateLabelSchema),
     },
     {
-      name: "create_label",
-      description: "Create a new label",
-      inputSchema: zodToJsonSchema(CreateLabelSchema),
+      name: "delete_label",
+      description: "Delete a repository label",
+      inputSchema: zodToJsonSchema(DeleteLabelSchema),
     },
 
     // Comment Tools
