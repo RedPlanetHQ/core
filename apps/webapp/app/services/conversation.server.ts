@@ -3,6 +3,7 @@ import { UserTypeEnum } from "@core/types";
 import { prisma } from "~/db.server";
 
 import { z } from "zod";
+import type { GetConversationsListDto } from "./conversation-query";
 import { trackFeatureUsage } from "~/services/telemetry.server";
 import { logger } from "./logger.service";
 import { publishRowEvent } from "~/services/conversation-pubsub.server";
@@ -770,18 +771,8 @@ export const upsertConversationHistory = async (
   }
 };
 
-export const GetConversationsListSchema = z.object({
-  page: z.string().optional().default("1"),
-  limit: z.string().optional().default("20"),
-  search: z.string().optional(),
-  source: z.string().optional(),
-  unread: z.string().optional(),
-  asyncJobId: z.string().optional(),
-});
-
-export type GetConversationsListDto = z.infer<
-  typeof GetConversationsListSchema
->;
+export { GetConversationsListSchema } from "./conversation-query";
+export type { GetConversationsListDto } from "./conversation-query";
 
 /**
  * Finds the latest assistant history entry and marks the tool call with the
