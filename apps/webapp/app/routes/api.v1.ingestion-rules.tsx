@@ -1,9 +1,11 @@
-import { json } from "@remix-run/node";
+import { json, type ActionFunctionArgs } from "@remix-run/node";
 import { z } from "zod";
 
-import { createActionApiRoute } from "~/services/routeBuilders/apiBuilder.server";
+import {
+  createActionApiRoute,
+  createLoaderApiRoute,
+} from "~/services/routeBuilders/apiBuilder.server";
 import { prisma } from "~/db.server";
-import { logger } from "~/services/logger.service";
 
 const IngestionRuleCreateSchema = z.object({
   name: z.string().optional(),
@@ -20,125 +22,94 @@ const IngestionRuleUpdateSchema = z.object({
   isActive: z.boolean().optional(),
 });
 
-const { action, loader } = createActionApiRoute(
+const ruleSelect = {
+  id: true,
+  name: true,
+  text: true,
+  source: true,
+  isActive: true,
+  createdAt: true,
+  updatedAt: true,
+} as const;
+
+const loader = createLoaderApiRoute(
   {
-    body: z.union([IngestionRuleCreateSchema, IngestionRuleUpdateSchema]),
     allowJWT: true,
-    authorization: {
-      action: "manage",
-    },
     corsStrategy: "all",
+    searchParams: z.object({
+      source: z.string().optional(),
+      isActive: z.enum(["true", "false"]).optional(),
+    }),
+    findResource: async () => 1,
+    authorization: { action: "manage", resource: () => ({}) },
   },
-  async ({ body, authentication, request }) => {
-    try {
-     
-
-      if (!authentication.workspaceId) {
-        throw new Error("User workspace not found");
-      }
-
-      if (request.method === "POST") {
-        // Create new rule
-        const createData = body as z.infer<typeof IngestionRuleCreateSchema>;
-        
-        logger.log("Creating ingestion rule", { createData, userId: authentication.userId });
-
-        const rule = await prisma.ingestionRule.create({
-          data: {
-            name: createData.name,
-            text: createData.text,
-            source: createData.source,
-            isActive: createData.isActive,
-            workspaceId: authentication.workspaceId,
-            userId: authentication.userId,
-          },
-        });
-
-        return json({
-          success: true,
-          rule: {
-            id: rule.id,
-            name: rule.name,
-            text: rule.text,
-            source: rule.source,
-            isActive: rule.isActive,
-            createdAt: rule.createdAt,
-            updatedAt: rule.updatedAt,
-          },
-        });
-      } else if (request.method === "PUT") {
-        // Update existing rule
-        const updateData = body as z.infer<typeof IngestionRuleUpdateSchema>;
-        
-        logger.log("Updating ingestion rule", { updateData, userId: authentication.userId });
-
-        const rule = await prisma.ingestionRule.update({
-          where: {
-            id: updateData.id,
-            workspaceId: authentication.workspaceId, // Ensure user can only update their workspace rules
-          },
-          data: {
-            ...(updateData.name !== undefined && { name: updateData.name }),
-            ...(updateData.text && { text: updateData.text }),
-            ...(updateData.source && { source: updateData.source }),
-            ...(updateData.isActive !== undefined && { isActive: updateData.isActive }),
-          },
-        });
-
-        return json({
-          success: true,
-          rule: {
-            id: rule.id,
-            name: rule.name,
-            text: rule.text,
-            source: rule.source,
-            isActive: rule.isActive,
-            createdAt: rule.createdAt,
-            updatedAt: rule.updatedAt,
-          },
-        });
-      } else if (request.method === "GET") {
-        // List rules
-        const url = new URL(request.url);
-        const source = url.searchParams.get("source");
-        const isActive = url.searchParams.get("isActive");
-
-        const where: any = {
-          workspaceId: authentication.workspaceId,
-          deleted: null,
-        };
-
-        if (source) {
-          where.source = source;
-        }
-
-        if (isActive !== null) {
-          where.isActive = isActive === "true";
-        }
-
-        const rules = await prisma.ingestionRule.findMany({
-          where,
-          orderBy: { createdAt: "desc" },
-          select: {
-            id: true,
-            name: true,
-            text: true,
-            source: true,
-            isActive: true,
-            createdAt: true,
-            updatedAt: true,
-          },
-        });
-
-        return json({ success: true, rules });
-      }
-
-      return json({ success: false, message: "Method not supported" }, { status: 405 });
-    } catch (error) {
-      logger.error("Failed to manage ingestion rules", { error, body });
-      throw error;
+  async ({ authentication, searchParams }) => {
+    if (!authentication.workspaceId) {
+      return json({ error: "User workspace not found" }, { status: 404 });
     }
+    const rules = await prisma.ingestionRule.findMany({
+      where: {
+        workspaceId: authentication.workspaceId,
+        deleted: null,
+        ...(searchParams.source && { source: searchParams.source }),
+        ...(searchParams.isActive !== undefined && {
+          isActive: searchParams.isActive === "true",
+        }),
+      },
+      orderBy: { createdAt: "desc" },
+      select: ruleSelect,
+    });
+    return json({ success: true, rules });
   },
 );
+
+const { action: createRule } = createActionApiRoute(
+  {
+    body: IngestionRuleCreateSchema,
+    method: "POST",
+    allowJWT: true,
+    authorization: { action: "manage" },
+    corsStrategy: "all",
+  },
+  async ({ body, authentication }) => {
+    if (!authentication.workspaceId) {
+      return json({ error: "User workspace not found" }, { status: 404 });
+    }
+    const rule = await prisma.ingestionRule.create({
+      data: {
+        ...body,
+        workspaceId: authentication.workspaceId,
+        userId: authentication.userId,
+      },
+      select: ruleSelect,
+    });
+    return json({ success: true, rule });
+  },
+);
+
+const { action: updateRule } = createActionApiRoute(
+  {
+    body: IngestionRuleUpdateSchema,
+    method: "PUT",
+    allowJWT: true,
+    authorization: { action: "manage" },
+    corsStrategy: "all",
+  },
+  async ({ body, authentication }) => {
+    if (!authentication.workspaceId) {
+      return json({ error: "User workspace not found" }, { status: 404 });
+    }
+    const { id, ...data } = body;
+    const rule = await prisma.ingestionRule.update({
+      where: { id, workspaceId: authentication.workspaceId },
+      data,
+      select: ruleSelect,
+    });
+    return json({ success: true, rule });
+  },
+);
+
+const action = (args: ActionFunctionArgs) =>
+  args.request.method === "POST" ? createRule(args) : updateRule(args);
 
 export { action, loader };
