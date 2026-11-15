@@ -411,7 +411,7 @@ export async function callTool(
         if (validatedArgs.due !== undefined) requestBody.due = validatedArgs.due;
         if (validatedArgs.completed) requestBody.completed = validatedArgs.completed;
 
-        const response = await tasks.tasks.update({
+        const response = await tasks.tasks.patch({
           tasklist: validatedArgs.taskListId,
           task: validatedArgs.taskId,
           requestBody,
