@@ -5,7 +5,7 @@ import { callTool } from '../index';
 
 beforeEach(() => {
   vi.clearAllMocks();
-  client.get.mockResolvedValue({ data: [{ id: 2, name: 'bug' }] });
+  client.get.mockReset().mockResolvedValue({ data: [] }).mockResolvedValueOnce({ data: [{ id: 2, name: 'bug' }] });
   client.patch.mockResolvedValue({ data: { html_url: 'https://codeberg.org/team/work/issues/42' } });
   client.put.mockResolvedValue({ data: [] });
 });
