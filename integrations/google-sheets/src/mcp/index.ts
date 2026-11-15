@@ -10,28 +10,23 @@ async function loadCredentials(
   callback: string,
   config: Record<string, string>
 ): Promise<{ oauth2Client: OAuth2Client; sheets: sheets_v4.Sheets }> {
-  try {
-    const credentials = {
-      refresh_token: config.refresh_token,
-      expiry_date:
-        typeof config.expires_at === 'string' ? parseInt(config.expires_at) : config.expires_at,
-      expires_in: config.expires_in,
-      expires_at: config.expires_at,
-      access_token: config.access_token,
-      token_type: config.token_type,
-      id_token: config.id_token,
-      scope: config.scope,
-    };
+  const credentials = {
+    refresh_token: config.refresh_token,
+    expiry_date:
+      typeof config.expires_at === 'string' ? parseInt(config.expires_at) : config.expires_at,
+    expires_in: config.expires_in,
+    expires_at: config.expires_at,
+    access_token: config.access_token,
+    token_type: config.token_type,
+    id_token: config.id_token,
+    scope: config.scope,
+  };
 
-    const oauth2Client = new OAuth2Client(client_id, client_secret, callback);
-    oauth2Client.setCredentials(credentials);
-    oauth2Client.refreshAccessToken();
-    const sheets = google.sheets({ version: 'v4', auth: oauth2Client });
-    return { oauth2Client, sheets };
-  } catch (error) {
-    console.error('Error loading credentials:', error);
-    process.exit(1);
-  }
+  const oauth2Client = new OAuth2Client(client_id, client_secret, callback);
+  oauth2Client.setCredentials(credentials);
+  // The SDK refreshes tokens on demand for authenticated API requests.
+  const sheets = google.sheets({ version: 'v4', auth: oauth2Client });
+  return { oauth2Client, sheets };
 }
 
 // Custom tool schemas for common operations

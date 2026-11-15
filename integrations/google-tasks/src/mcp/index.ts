@@ -9,29 +9,24 @@ async function loadCredentials(
   callback: string,
   config: Record<string, string>
 ): Promise<{ oauth2Client: OAuth2Client; tasks: tasks_v1.Tasks }> {
-  try {
-    const oauth2Client = new OAuth2Client(client_id, client_secret, callback);
+  const oauth2Client = new OAuth2Client(client_id, client_secret, callback);
 
-    const credentials = {
-      refresh_token: config.refresh_token,
-      expiry_date:
-        typeof config.expires_at === 'string' ? parseInt(config.expires_at) : config.expires_at,
-      expires_in: config.expires_in,
-      expires_at: config.expires_at,
-      access_token: config.access_token,
-      token_type: config.token_type,
-      id_token: config.id_token,
-      scope: config.scope,
-    };
+  const credentials = {
+    refresh_token: config.refresh_token,
+    expiry_date:
+      typeof config.expires_at === 'string' ? parseInt(config.expires_at) : config.expires_at,
+    expires_in: config.expires_in,
+    expires_at: config.expires_at,
+    access_token: config.access_token,
+    token_type: config.token_type,
+    id_token: config.id_token,
+    scope: config.scope,
+  };
 
-    oauth2Client.setCredentials(credentials);
-    oauth2Client.refreshAccessToken();
-    const tasks = google.tasks({ version: 'v1', auth: oauth2Client });
-    return { oauth2Client, tasks };
-  } catch (error) {
-    console.error('Error loading credentials:', error);
-    process.exit(1);
-  }
+  oauth2Client.setCredentials(credentials);
+  // The SDK refreshes tokens on demand for authenticated API requests.
+  const tasks = google.tasks({ version: 'v1', auth: oauth2Client });
+  return { oauth2Client, tasks };
 }
 
 // Schema definitions for Google Tasks operations
