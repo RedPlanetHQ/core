@@ -629,24 +629,29 @@ URL: ${issue.html_url}`;
 
       case "update_issue": {
         const { owner, repo, issue_number, labels, ...body } = UpdateIssueSchema.parse(args);
+        const issuePath = `/repos/${encodeURIComponent(owner)}/${encodeURIComponent(repo)}/issues/${issue_number}`;
 
-        let labelIds: number[] | undefined;
-        if (labels && labels.length > 0) {
-          labelIds = await resolveLabelIds(codebergClient, owner, repo, labels);
+        // Resolve names before mutating either the issue or its labels.
+        const labelIds = labels === undefined
+          ? undefined
+          : await resolveLabelIds(codebergClient, owner, repo, labels);
+
+        let issueUrl = `https://codeberg.org/${encodeURIComponent(owner)}/${encodeURIComponent(repo)}/issues/${issue_number}`;
+        if (Object.keys(body).length > 0 || labels === undefined) {
+          const response = await codebergClient.patch(issuePath, body);
+          issueUrl = response.data.html_url;
+        }
+        // Forgejo edits issue labels through a separate endpoint. An empty
+        // array explicitly clears them; omission leaves them untouched.
+        if (labelIds !== undefined) {
+          await codebergClient.put(`${issuePath}/labels`, { labels: labelIds });
         }
 
-        const response = await codebergClient.patch(
-          `/repos/${encodeURIComponent(owner)}/${encodeURIComponent(repo)}/issues/${issue_number}`,
-          {
-            ...body,
-            labels: labelIds,
-          }
-        );
         return {
           content: [
             {
               type: "text",
-              text: `Issue #${issue_number} updated successfully\nURL: ${response.data.html_url}`,
+              text: `Issue #${issue_number} updated successfully\nURL: ${issueUrl}`,
             },
           ],
         };
