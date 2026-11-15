@@ -144,9 +144,9 @@ const ScratchpadTaskComponent = ({
         </label>
 
         <NodeViewContent
-          as={"p" as unknown as "div"}
+          as="div"
           className={cn(
-            "min-w-[3px]",
+            "min-w-[1ch]",
             isCompleted &&
               "decoration-muted-foreground line-through decoration-[1px] opacity-60",
           )}
