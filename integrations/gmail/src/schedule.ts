@@ -88,7 +88,8 @@ async function processReceivedEmails(
   emailAddress: string
 ): Promise<{ activities: any[]; lastEmailTime: number }> {
   const activities = [];
-  const afterTimestamp = toGmailTimestamp(lastSyncTime);
+  // Overlap the boundary second; the millisecond check below removes repeats.
+  const afterTimestamp = toGmailTimestamp(lastSyncTime) - 1;
   let lastEmailTime = 0;
 
   try {
@@ -169,7 +170,8 @@ async function processSentEmails(
   emailAddress: string
 ): Promise<{ activities: any[]; lastEmailTime: number }> {
   const activities = [];
-  const afterTimestamp = toGmailTimestamp(lastSyncTime);
+  // Overlap the boundary second; the millisecond check below removes repeats.
+  const afterTimestamp = toGmailTimestamp(lastSyncTime) - 1;
   let lastEmailTime = 0;
 
   try {
@@ -296,7 +298,8 @@ export const handleSchedule = async (
     // Only save state if emails were processed
     const latestEmailTime = Math.max(receivedLastTime, sentLastTime);
     if (latestEmailTime > 0) {
-      const newSyncTime = new Date(latestEmailTime + 20000).toISOString();
+      // Never skip ahead of messages actually observed by this sync.
+      const newSyncTime = new Date(latestEmailTime).toISOString();
       messages.push({
         type: 'state',
         data: {
