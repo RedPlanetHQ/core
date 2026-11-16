@@ -399,7 +399,7 @@ export async function makeModelCall(
   stream: boolean,
   messages: ModelMessage[],
   onFinish: (text: string, model: string, usage?: TokenUsage) => void,
-  options?: any,
+  options?: { temperature?: number; maxTokens?: number },
   complexity: ModelComplexity = "medium",
   cacheKey?: string,
   reasoningEffort?: "low" | "medium" | "high",
@@ -418,11 +418,18 @@ export async function makeModelCall(
 
   const agentOptions = apiKey ? { apiKey, ...(baseUrl && { baseUrl }) } : undefined;
   const agent = createAgent(model, undefined, undefined, agentOptions);
+  const callOptions = {
+    ...(options && {
+      modelSettings: {
+        ...(options.temperature !== undefined && { temperature: options.temperature }),
+        ...(options.maxTokens !== undefined && { maxOutputTokens: options.maxTokens }),
+      },
+    }),
+    ...(providerOptions && { providerOptions }),
+  };
 
   if (stream) {
-    const result = await agent.stream(messages as any, {
-      ...(providerOptions && { providerOptions }),
-    });
+    const result = await agent.stream(messages as any, callOptions);
     const text = await result.text;
     const usage = await result.usage;
     const tokenUsage = toTokenUsage(usage);
@@ -432,9 +439,7 @@ export async function makeModelCall(
     return text;
   }
 
-  const result = await agent.generate(messages as any, {
-    ...(providerOptions && { providerOptions }),
-  });
+  const result = await agent.generate(messages as any, callOptions);
 
   const tokenUsage = toTokenUsage(result.usage);
   logTokenUsage(complexity.toUpperCase(), model, tokenUsage);
