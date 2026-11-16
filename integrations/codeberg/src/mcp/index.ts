@@ -178,20 +178,31 @@ async function resolveLabelIds(
   }
 
   if (namesToResolve.length > 0) {
-    const response = await client.get(
-      `/repos/${encodeURIComponent(owner)}/${encodeURIComponent(repo)}/labels?limit=1000`
-    );
-    const allLabels = response.data;
+    const unresolved = new Set(namesToResolve);
+    const resolved = new Map<string, number>();
+    for (let page = 1; unresolved.size > 0; page++) {
+      const response = await client.get(
+        `/repos/${encodeURIComponent(owner)}/${encodeURIComponent(repo)}/labels`,
+        { params: { limit: 50, page } }
+      );
+      if (response.data.length === 0) break;
+      for (const label of response.data) {
+        if (unresolved.delete(label.name)) resolved.set(label.name, label.id);
+      }
+      // Do not use a short page as the end signal: the server can cap the
+      // requested page size. Stop on an empty page or when all names match.
+    }
 
     for (const name of namesToResolve) {
-      const found = allLabels.find((l: any) => l.name === name);
-      if (found) {
-        ids.push(found.id);
+      const id = resolved.get(name);
+      if (id !== undefined) {
+        ids.push(id);
       } else {
         throw new Error(`Label not found: ${name}`);
       }
     }
   }
+
   return ids;
 }
 
