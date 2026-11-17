@@ -91,7 +91,8 @@ async function processTaskUpdates(
       const tasksResponse = await tasks.tasks.list({
         tasklist: taskList.id,
         showCompleted: true,
-        showHidden: false,
+        // Google hides tasks completed in its own clients.
+        showHidden: true,
         updatedMin: lastSyncTime,
         maxResults: 100,
         pageToken: taskPageToken,

@@ -83,3 +83,29 @@ it.each([startedAt, duringSync])(
     expect(listTasks).toHaveBeenLastCalledWith(expect.objectContaining({ updatedMin: startedAt }));
   }
 );
+
+it('picks up a deferred task after completion hides it in a Google client', async () => {
+  const activeTask = { title: 'Deferred task', updated: duringSync, status: 'needsAction' };
+  listTasks.mockResolvedValueOnce({ data: { items: [activeTask] } });
+
+  const first = await handleSchedule(config, state);
+  expect(first).toEqual([{ type: 'state', data: { lastSyncTime: startedAt } }]);
+
+  const completedAt = '2026-01-01T10:01:00.000Z';
+  const completedTask = {
+    ...activeTask,
+    updated: completedAt,
+    completed: completedAt,
+    hidden: true,
+    status: 'completed',
+  };
+  listTasks.mockImplementationOnce(async ({ showCompleted, showHidden }) => ({
+    data: { items: showCompleted && showHidden ? [completedTask] : [] },
+  }));
+  vi.setSystemTime(new Date('2026-01-01T10:15:00.000Z'));
+
+  const second = await handleSchedule(config, { lastSyncTime: startedAt });
+  expect(second.map(message => message.type)).toEqual(['activity', 'state']);
+  expect(second[0].data).toMatchObject({ text: expect.stringContaining(activeTask.title) });
+  expect(second[0].data).toMatchObject({ text: expect.stringContaining('**Status:** Completed') });
+});
