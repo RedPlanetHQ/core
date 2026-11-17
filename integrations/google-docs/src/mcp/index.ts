@@ -429,22 +429,13 @@ export async function callTool(
       case 'append_text': {
         const validatedArgs = AppendTextSchema.parse(args);
 
-        // First, get the document to find the end index
-        const doc = await docs.documents.get({
-          documentId: validatedArgs.documentId,
-        });
-
-        const endIndex = doc.data.body?.content?.slice(-1)[0]?.endIndex || 1;
-
         await docs.documents.batchUpdate({
           documentId: validatedArgs.documentId,
           requestBody: {
             requests: [
               {
                 insertText: {
-                  location: {
-                    index: endIndex - 1,
-                  },
+                  endOfSegmentLocation: {},
                   text: validatedArgs.text,
                 },
               },
