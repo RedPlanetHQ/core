@@ -226,7 +226,8 @@ export async function callTool(
 
       case 'write_to_cell': {
         const validatedArgs = WriteToCellSchema.parse(args);
-        const range = `${validatedArgs.sheetName}!${validatedArgs.cell}`;
+        const sheetName = validatedArgs.sheetName.replace(/'/g, "''");
+        const range = `'${sheetName}'!${validatedArgs.cell}`;
 
         const response = await sheets.spreadsheets.values.update({
           spreadsheetId: validatedArgs.spreadsheetId,
