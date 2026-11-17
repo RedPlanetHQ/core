@@ -63,104 +63,90 @@ async function getTasksClient(config: GoogleTasksConfig) {
 async function processTaskUpdates(
   tasks: any,
   lastSyncTime: string,
-  userEmail: string
+  syncStartedMs: number
 ): Promise<any[]> {
   const activities = [];
+  const lastSyncMs = Date.parse(lastSyncTime);
 
-  try {
-    // Get all task lists with pagination
-    const allTaskLists = [];
-    let pageToken: string | undefined = undefined;
+  // Get all task lists with pagination
+  const allTaskLists = [];
+  let pageToken: string | undefined = undefined;
+
+  do {
+    const taskListsResponse = await tasks.tasklists.list({
+      maxResults: 100,
+      pageToken,
+    });
+
+    allTaskLists.push(...(taskListsResponse.data.items || []));
+    pageToken = taskListsResponse.data.nextPageToken;
+  } while (pageToken);
+
+  for (const taskList of allTaskLists) {
+    // Get tasks updated since last sync with pagination
+    const allTasks = [];
+    let taskPageToken: string | undefined = undefined;
 
     do {
-      const taskListsResponse = await tasks.tasklists.list({
+      const tasksResponse = await tasks.tasks.list({
+        tasklist: taskList.id,
+        showCompleted: true,
+        // Google hides tasks completed in its own clients.
+        showHidden: true,
+        updatedMin: lastSyncTime,
         maxResults: 100,
-        pageToken,
+        pageToken: taskPageToken,
       });
 
-      allTaskLists.push(...(taskListsResponse.data.items || []));
-      pageToken = taskListsResponse.data.nextPageToken;
-    } while (pageToken);
+      allTasks.push(...(tasksResponse.data.items || []));
+      taskPageToken = tasksResponse.data.nextPageToken;
+    } while (taskPageToken);
 
-    for (const taskList of allTaskLists) {
-      try {
-        // Get tasks updated since last sync with pagination
-        const allTasks = [];
-        let taskPageToken: string | undefined = undefined;
-
-        do {
-          const tasksResponse = await tasks.tasks.list({
-            tasklist: taskList.id,
-            showCompleted: true,
-            showHidden: false,
-            updatedMin: lastSyncTime,
-            maxResults: 100,
-            pageToken: taskPageToken,
-          });
-
-          allTasks.push(...(tasksResponse.data.items || []));
-          taskPageToken = tasksResponse.data.nextPageToken;
-        } while (taskPageToken);
-
-        const taskItems = allTasks;
-
-        for (const task of taskItems) {
-          try {
-            const taskUpdated = new Date(task.updated || '');
-            const lastSync = new Date(lastSyncTime);
-
-            // Skip if not actually updated since last sync
-            if (taskUpdated <= lastSync) {
-              continue;
-            }
-
-            // Determine if this is a new task or an update
-            const taskCreated = new Date(task.updated || '');
-            const isNew = Math.abs(taskCreated.getTime() - taskUpdated.getTime()) < 1000;
-
-            // Format task status
-            const status = task.status === 'completed' ? '✅' : '📝';
-            const statusText = task.status === 'completed' ? 'Completed' : 'Active';
-
-            // Build task details
-            let taskText = `## ${status} Task ${isNew ? 'Created' : 'Updated'}\n\n`;
-            taskText += `**Task List:** ${taskList.title}\n`;
-            taskText += `**Title:** ${task.title}\n`;
-            taskText += `**Status:** ${statusText}\n`;
-
-            if (task.due) {
-              const dueDate = new Date(task.due);
-              taskText += `**Due:** ${dueDate.toLocaleDateString()}\n`;
-            }
-
-            if (task.notes) {
-              taskText += `\n**Notes:**\n${task.notes}\n`;
-            }
-
-            if (task.completed) {
-              const completedDate = new Date(task.completed);
-              taskText += `\n**Completed:** ${completedDate.toLocaleString()}\n`;
-            }
-
-            // Create Google Tasks web URL
-            const sourceURL = `https://tasks.google.com/`;
-
-            activities.push(
-              createActivityMessage({
-                text: taskText,
-                sourceURL,
-              })
-            );
-          } catch (error) {
-            console.error('Error processing task:', error);
-          }
-        }
-      } catch (error) {
-        console.error('Error processing task list:', error);
+    for (const task of allTasks) {
+      const taskUpdated = new Date(task.updated || '');
+      const updatedMs = taskUpdated.getTime();
+      if (!(updatedMs >= lastSyncMs && updatedMs < syncStartedMs)) {
+        continue;
       }
+
+      // Determine if this is a new task or an update
+      const taskCreated = new Date(task.updated || '');
+      const isNew = Math.abs(taskCreated.getTime() - taskUpdated.getTime()) < 1000;
+
+      // Format task status
+      const status = task.status === 'completed' ? '✅' : '📝';
+      const statusText = task.status === 'completed' ? 'Completed' : 'Active';
+
+      // Build task details
+      let taskText = `## ${status} Task ${isNew ? 'Created' : 'Updated'}\n\n`;
+      taskText += `**Task List:** ${taskList.title}\n`;
+      taskText += `**Title:** ${task.title}\n`;
+      taskText += `**Status:** ${statusText}\n`;
+
+      if (task.due) {
+        const dueDate = new Date(task.due);
+        taskText += `**Due:** ${dueDate.toLocaleDateString()}\n`;
+      }
+
+      if (task.notes) {
+        taskText += `\n**Notes:**\n${task.notes}\n`;
+      }
+
+      if (task.completed) {
+        const completedDate = new Date(task.completed);
+        taskText += `\n**Completed:** ${completedDate.toLocaleString()}\n`;
+      }
+
+      // Create Google Tasks web URL
+      const sourceURL = `https://tasks.google.com/`;
+
+      activities.push(
+        createActivityMessage({
+          text: taskText,
+          sourceURL,
+        })
+      );
     }
-  } catch (error) {
-    console.error('Error fetching task lists:', error);
   }
 
   return activities;
@@ -175,6 +161,8 @@ export const handleSchedule = async (
     if (!config?.access_token) {
       return [];
     }
+
+    const syncStartedMs = Date.now();
 
     // Get settings or initialize if not present
     let settings = (state || {}) as GoogleTasksSettings;
@@ -202,22 +190,15 @@ export const handleSchedule = async (
     const messages = [];
 
     // Process task updates
-    const taskActivities = await processTaskUpdates(
-      tasksClient,
-      lastSyncTime,
-      settings.userEmail || 'user'
-    );
+    const taskActivities = await processTaskUpdates(tasksClient, lastSyncTime, syncStartedMs);
     messages.push(...taskActivities);
 
-    // Update last sync time
-    const newSyncTime = new Date().toISOString();
-
-    // Add state message for saving settings
+    // Changes at or after the start of this scan belong to the next run.
     messages.push({
       type: 'state',
       data: {
         ...settings,
-        lastSyncTime: newSyncTime,
+        lastSyncTime: new Date(syncStartedMs).toISOString(),
       },
     });
 
