@@ -76,7 +76,9 @@ const BatchUpdateSchema = z.object({
     .describe('Array of update requests (formatting, sorting, filtering, etc.)'),
 });
 
-const ListSpreadsheetsSchema = z.object({});
+const ListSpreadsheetsSchema = z.object({
+  pageToken: z.string().min(1).optional().describe('Token returned by the previous page'),
+});
 
 const ListSheetsSchema = z.object({
   spreadsheetId: z.string().describe('The ID of the spreadsheet'),
@@ -99,7 +101,8 @@ export async function getTools() {
     // Custom high-level tools
     {
       name: 'list_spreadsheets',
-      description: "List all Google Sheets spreadsheets in the user's Google Drive.",
+      description:
+        "List a page of Google Sheets spreadsheets in the user's Google Drive. Pass the returned page token to continue.",
       inputSchema: zodToJsonSchema(ListSpreadsheetsSchema),
       annotations: { readOnlyHint: true, destructiveHint: false, idempotentHint: true },
     },
@@ -167,17 +170,21 @@ export async function callTool(
   try {
     switch (name) {
       case 'list_spreadsheets': {
-        ListSpreadsheetsSchema.parse(args);
+        const { pageToken } = ListSpreadsheetsSchema.parse(args);
 
         // Use Drive API to list all spreadsheets
         const drive = google.drive({ version: 'v3', auth: oauth2Client });
         const response = await drive.files.list({
           q: "mimeType='application/vnd.google-apps.spreadsheet'",
-          fields: 'files(id, name, createdTime, modifiedTime, webViewLink)',
+          fields: 'nextPageToken, files(id, name, createdTime, modifiedTime, webViewLink)',
+          pageToken,
           orderBy: 'modifiedTime desc',
         });
 
         const files = response.data.files || [];
+        const nextPage = response.data.nextPageToken
+          ? `\n\nNext page token: ${response.data.nextPageToken}`
+          : '';
         return {
           content: [
             {
@@ -187,7 +194,7 @@ export async function callTool(
                   f =>
                     `- ${f.name}\n  ID: ${f.id}\n  Modified: ${f.modifiedTime}\n  URL: ${f.webViewLink}`
                 )
-                .join('\n\n')}`,
+                .join('\n\n')}${nextPage}`,
             },
           ],
         };
