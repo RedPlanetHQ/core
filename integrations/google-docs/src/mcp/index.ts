@@ -73,7 +73,9 @@ async function shareFilePublicly(
 }
 
 // Custom tool schemas for common operations
-const ListDocumentsSchema = z.object({});
+const ListDocumentsSchema = z.object({
+  pageToken: z.string().min(1).optional().describe('Token returned by the previous page'),
+});
 
 const CreateDocumentSchema = z.object({
   title: z.string().describe('Title for the new document'),
@@ -185,7 +187,8 @@ export async function getTools() {
     // Custom high-level tools
     {
       name: 'list_documents',
-      description: "List all Google Docs documents in the user's Google Drive.",
+      description:
+        "List a page of Google Docs documents in the user's Google Drive. Pass the returned page token to continue.",
       inputSchema: zodToJsonSchema(ListDocumentsSchema),
       annotations: { readOnlyHint: true, destructiveHint: false, idempotentHint: true },
     },
@@ -265,17 +268,21 @@ export async function callTool(
   try {
     switch (name) {
       case 'list_documents': {
-        ListDocumentsSchema.parse(args);
+        const { pageToken } = ListDocumentsSchema.parse(args);
 
         // Use Drive API to list all documents
         const drive = google.drive({ version: 'v3', auth: authClient });
         const response = await drive.files.list({
           q: "mimeType='application/vnd.google-apps.document'",
-          fields: 'files(id, name, createdTime, modifiedTime, webViewLink)',
+          fields: 'nextPageToken, files(id, name, createdTime, modifiedTime, webViewLink)',
+          pageToken,
           orderBy: 'modifiedTime desc',
         });
 
         const files = response.data.files || [];
+        const nextPage = response.data.nextPageToken
+          ? `\n\nNext page token: ${response.data.nextPageToken}`
+          : '';
         return {
           content: [
             {
@@ -285,7 +292,7 @@ export async function callTool(
                   f =>
                     `- ${f.name}\n  ID: ${f.id}\n  Modified: ${f.modifiedTime}\n  URL: ${f.webViewLink}`
                 )
-                .join('\n\n')}`,
+                .join('\n\n')}${nextPage}`,
             },
           ],
         };
