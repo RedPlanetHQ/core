@@ -188,9 +188,18 @@ export async function invalidateStatements({
   workspaceId?: string;
 }) {
   const invalidAt = new Date().toISOString();
-  return statementIds.map(
-    async (statementId) =>
-      await invalidateStatement({ statementId, invalidAt, invalidatedBy, userId, workspaceId }),
+  // Wait for every write so callers know the statements are invalidated
+  // (and see any failure) before moving on.
+  await Promise.all(
+    statementIds.map((statementId) =>
+      invalidateStatement({
+        statementId,
+        invalidAt,
+        invalidatedBy,
+        userId,
+        workspaceId,
+      }),
+    ),
   );
 }
 
