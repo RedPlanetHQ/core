@@ -870,6 +870,55 @@ model VoiceAspectEmbedding {
   @@map("voice_aspect_embeddings")
 }
 
+// A user- or agent-initiated change to memory facts, staged for approval.
+// PROPOSED → APPLIED (facts retired, corrected text ingested) or REJECTED;
+// APPLIED → RESTORED (undo). Retired facts carry
+// invalidatedBy = "correction:<id>" so an undo only touches what this
+// correction changed.
+model MemoryCorrection {
+  id        String   @id @default(uuid())
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  status MemoryCorrectionStatus @default(PROPOSED)
+  action MemoryCorrectionAction
+
+  reason        String?
+  correctedText String? // CORRECT only: the replacement fact, ingested on apply
+
+  statementIds   String[] // Neo4j Statement UUIDs to retire
+  voiceAspectIds String[] // VoiceAspect ids to retire
+  facts          Json // Snapshot of the facts at proposal time: [{ id, kind, fact, aspect }]
+
+  proposedBy       String // "user" | "agent" | "mcp"
+  ingestionQueueId String? // Ingestion of correctedText, set on apply
+
+  appliedAt  DateTime?
+  rejectedAt DateTime?
+  restoredAt DateTime?
+
+  userId String
+  user   User   @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  workspaceId String
+  workspace   Workspace @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+
+  @@index([workspaceId, status, createdAt])
+  @@map("memory_corrections")
+}
+
+enum MemoryCorrectionStatus {
+  PROPOSED
+  APPLIED
+  REJECTED
+  RESTORED
+}
+
+enum MemoryCorrectionAction {
+  RETIRE
+  CORRECT
+}
+
 model Subscription {
   id        String   @id @default(uuid())
   createdAt DateTime @default(now())
@@ -956,6 +1005,7 @@ model User {
   Gateway                   Gateway[]
   VoiceAspect               VoiceAspect[]
   VoiceAspectEmbedding      VoiceAspectEmbedding[]
+  MemoryCorrection          MemoryCorrection[]
   VoiceInboxMessage         VoiceInboxMessage[]
   CreditTopup               CreditTopup[]
   DailyTokenUsage           DailyTokenUsage[]
@@ -1207,6 +1257,7 @@ model Workspace {
   butlerComments          ButlerComment[]
   voiceAspects            VoiceAspect[]
   voiceAspectEmbeddings   VoiceAspectEmbedding[]
+  memoryCorrections       MemoryCorrection[]
   llmProviders            LLMProvider[]
   codingSessions          CodingSession[]
   browserSessions         BrowserSession[]
