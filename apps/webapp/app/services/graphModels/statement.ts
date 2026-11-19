@@ -188,9 +188,9 @@ export async function invalidateStatements({
   workspaceId?: string;
 }) {
   const invalidAt = new Date().toISOString();
-  // Wait for every write so callers know the statements are invalidated
-  // (and see any failure) before moving on.
-  await Promise.all(
+  // Wait for every write to settle so callers know the statements are
+  // invalidated before moving on, then surface the first failure (if any).
+  const results = await Promise.allSettled(
     statementIds.map((statementId) =>
       invalidateStatement({
         statementId,
@@ -201,6 +201,12 @@ export async function invalidateStatements({
       }),
     ),
   );
+  const failed = results.find(
+    (result): result is PromiseRejectedResult => result.status === "rejected",
+  );
+  if (failed) {
+    throw failed.reason;
+  }
 }
 
 export async function searchStatementsByEmbedding(params: {

@@ -45,11 +45,43 @@ describe("invalidateStatements", () => {
     });
 
     expect(invalidateStatement).toHaveBeenCalledTimes(2);
-    const [first, second] = invalidateStatement.mock.calls;
-    expect(first[1]).toBe("episode-1");
-    expect(first[2]).toEqual(second[2]);
-    expect(first[3]).toBe("user-1");
-    expect(first[4]).toBe("ws-1");
+    const sharedInvalidAt = invalidateStatement.mock.calls[0][2];
+    expect(sharedInvalidAt).toBeInstanceOf(Date);
+    expect(invalidateStatement).toHaveBeenNthCalledWith(
+      1,
+      "s1",
+      "episode-1",
+      sharedInvalidAt,
+      "user-1",
+      "ws-1",
+    );
+    expect(invalidateStatement).toHaveBeenNthCalledWith(
+      2,
+      "s2",
+      "episode-1",
+      sharedInvalidAt,
+      "user-1",
+      "ws-1",
+    );
+  });
+
+  it("waits for pending writes before reporting a failure", async () => {
+    let slowWriteDone = false;
+    invalidateStatement
+      .mockRejectedValueOnce(new Error("neo4j down"))
+      .mockImplementationOnce(async () => {
+        await new Promise((resolve) => setTimeout(resolve, 5));
+        slowWriteDone = true;
+      });
+
+    await expect(
+      invalidateStatements({
+        statementIds: ["s1", "s2"],
+        invalidatedBy: "episode-1",
+        userId: "user-1",
+      }),
+    ).rejects.toThrow("neo4j down");
+    expect(slowWriteDone).toBe(true);
   });
 
   it("surfaces a failed write to the caller", async () => {
