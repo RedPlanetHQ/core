@@ -279,6 +279,53 @@ export async function getStatements({
 }
 
 /**
+ * Invalidate several current statements in one query.
+ * @returns UUIDs of the statements that were invalidated
+ */
+export async function invalidateStatementsBatch({
+  statementIds,
+  invalidatedBy,
+  userId,
+  workspaceId,
+}: {
+  statementIds: string[];
+  invalidatedBy: string;
+  userId: string;
+  workspaceId?: string;
+}): Promise<string[]> {
+  return getGraphProvider().invalidateStatementsBatch(
+    statementIds,
+    invalidatedBy,
+    new Date(),
+    userId,
+    workspaceId,
+  );
+}
+
+/**
+ * Make statements invalidated by `invalidatedBy` current again.
+ * @returns UUIDs of the statements that were restored
+ */
+export async function restoreInvalidatedStatements({
+  statementIds,
+  invalidatedBy,
+  userId,
+  workspaceId,
+}: {
+  statementIds: string[];
+  invalidatedBy: string;
+  userId: string;
+  workspaceId?: string;
+}): Promise<string[]> {
+  return getGraphProvider().restoreInvalidatedStatements(
+    statementIds,
+    invalidatedBy,
+    userId,
+    workspaceId,
+  );
+}
+
+/**
  * Batch version of findContradictoryStatements - find contradictory statements for multiple subject-predicate pairs
  */
 export async function findContradictoryStatementsBatch({

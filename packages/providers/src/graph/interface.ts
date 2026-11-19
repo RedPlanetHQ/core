@@ -476,6 +476,32 @@ export interface IGraphProvider {
   ): Promise<void>;
 
   /**
+   * Invalidate several statements in one query. Only statements that are
+   * still current (invalidAt IS NULL) are touched.
+   * @returns UUIDs of the statements that were invalidated
+   */
+  invalidateStatementsBatch(
+    uuids: string[],
+    invalidatedBy: string,
+    invalidAt: Date,
+    userId: string,
+    workspaceId?: string
+  ): Promise<string[]>;
+
+  /**
+   * Make statements current again. Only statements whose invalidatedBy
+   * equals the given value are restored, so a later invalidation by a
+   * different episode or correction is never undone by mistake.
+   * @returns UUIDs of the statements that were restored
+   */
+  restoreInvalidatedStatements(
+    uuids: string[],
+    invalidatedBy: string,
+    userId: string,
+    workspaceId?: string
+  ): Promise<string[]>;
+
+  /**
    * Get multiple statements by UUIDs in a single query
    * @param uuids - Array of statement UUIDs to fetch
    * @param userId - User ID for authorization
