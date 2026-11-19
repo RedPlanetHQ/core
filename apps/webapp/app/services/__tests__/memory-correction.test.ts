@@ -1,6 +1,7 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
 const prismaMock = vi.hoisted(() => ({
+  $transaction: vi.fn(async (ops: Promise<unknown>[]) => Promise.all(ops)),
   memoryCorrection: {
     create: vi.fn(),
     updateMany: vi.fn(),
@@ -27,9 +28,12 @@ vi.mock("@core/database", () => ({
   MemoryCorrectionAction: { RETIRE: "RETIRE", CORRECT: "CORRECT" },
   MemoryCorrectionStatus: {
     PROPOSED: "PROPOSED",
+    APPLYING: "APPLYING",
     APPLIED: "APPLIED",
     REJECTED: "REJECTED",
+    RESTORING: "RESTORING",
     RESTORED: "RESTORED",
+    FAILED: "FAILED",
   },
 }));
 vi.mock("~/db.server", () => ({ prisma: prismaMock }));
@@ -43,6 +47,7 @@ vi.mock("~/services/logger.service", () => ({
   logger: { info: vi.fn(), warn: vi.fn(), error: vi.fn() },
 }));
 
+import { getEmbedding } from "~/lib/model.server";
 import {
   applyCorrection,
   correctionTag,
@@ -51,6 +56,7 @@ import {
   proposeCorrection,
   rejectCorrection,
   restoreCorrection,
+  STALE_IN_PROGRESS_MS,
 } from "~/services/memoryCorrection.server";
 
 const scope = { userId: "user-1", workspaceId: "ws-1" };
@@ -83,7 +89,11 @@ function correction(overrides: Record<string, unknown> = {}) {
 }
 
 beforeEach(() => {
-  vi.clearAllMocks();
+  vi.resetAllMocks();
+  prismaMock.$transaction.mockImplementation(async (ops: Promise<unknown>[]) =>
+    Promise.all(ops),
+  );
+  vi.mocked(getEmbedding).mockResolvedValue([0.1, 0.2]);
   statementMock.findSimilarStatements.mockResolvedValue([]);
   aspectMock.findSimilarVoiceAspects.mockResolvedValue([]);
   aspectMock.getVoiceAspectsByIds.mockResolvedValue([]);
@@ -243,23 +253,42 @@ describe("proposeCorrection", () => {
   });
 });
 
+/** Make the claim step (transition) succeed and return `record`. */
+function claimSucceeds(record: Record<string, unknown>) {
+  prismaMock.memoryCorrection.updateMany.mockResolvedValueOnce({ count: 1 });
+  prismaMock.memoryCorrection.findFirst.mockResolvedValueOnce(record);
+}
+
+/** Make the claim step find the record in another state. */
+function claimRefused(record: Record<string, unknown> | null) {
+  prismaMock.memoryCorrection.updateMany.mockResolvedValueOnce({ count: 0 });
+  prismaMock.memoryCorrection.findFirst.mockResolvedValueOnce(record);
+}
+
+function lastStatusWrite() {
+  const calls = prismaMock.memoryCorrection.update.mock.calls;
+  return calls[calls.length - 1]?.[0];
+}
+
 describe("applyCorrection", () => {
-  it("retires the facts tagged with the correction id", async () => {
-    prismaMock.memoryCorrection.updateMany.mockResolvedValue({ count: 1 });
-    prismaMock.memoryCorrection.findFirst.mockResolvedValue(
-      correction({ status: "APPLIED" }),
-    );
+  it("claims PROPOSED → APPLYING atomically, retires, then marks APPLIED", async () => {
+    claimSucceeds(correction({ status: "APPLYING" }));
+    statementMock.invalidateStatementsBatch.mockResolvedValue(["s1"]);
+    aspectMock.invalidateVoiceAspects.mockResolvedValue(1);
     prismaMock.memoryCorrection.update.mockResolvedValue(
       correction({ status: "APPLIED" }),
     );
-    statementMock.invalidateStatementsBatch.mockResolvedValue(["s1"]);
-    aspectMock.invalidateVoiceAspects.mockResolvedValue(1);
 
     const result = await applyCorrection({ ...scope, id: "c-1" });
 
+    expect(prismaMock.$transaction).toHaveBeenCalledTimes(1);
     expect(prismaMock.memoryCorrection.updateMany).toHaveBeenCalledWith({
-      where: { id: "c-1", ...scope, status: "PROPOSED" },
-      data: expect.objectContaining({ status: "APPLIED" }),
+      where: {
+        id: "c-1",
+        ...scope,
+        OR: [{ status: { in: ["PROPOSED"] } }],
+      },
+      data: { status: "APPLYING" },
     });
     expect(statementMock.invalidateStatementsBatch).toHaveBeenCalledWith({
       statementIds: ["s1"],
@@ -272,22 +301,32 @@ describe("applyCorrection", () => {
       ...scope,
     });
     expect(addToQueue).not.toHaveBeenCalled();
+    expect(lastStatusWrite()).toEqual({
+      where: { id: "c-1" },
+      data: {
+        status: "APPLIED",
+        appliedAt: expect.any(Date),
+        ingestionQueueId: null,
+      },
+    });
     expect(result.retiredStatementIds).toEqual(["s1"]);
     expect(result.retiredVoiceAspectCount).toBe(1);
   });
 
-  it("ingests only the corrected text for CORRECT", async () => {
-    const applied = correction({
-      status: "APPLIED",
-      action: "CORRECT",
-      correctedText: "User lives in Pune",
-    });
-    prismaMock.memoryCorrection.updateMany.mockResolvedValue({ count: 1 });
-    prismaMock.memoryCorrection.findFirst.mockResolvedValue(applied);
-    prismaMock.memoryCorrection.update.mockResolvedValue(applied);
+  it("ingests only the corrected text and stores the IngestionQueue row id", async () => {
+    claimSucceeds(
+      correction({
+        status: "APPLYING",
+        action: "CORRECT",
+        correctedText: "User lives in Pune",
+      }),
+    );
     statementMock.invalidateStatementsBatch.mockResolvedValue(["s1"]);
     aspectMock.invalidateVoiceAspects.mockResolvedValue(1);
-    addToQueue.mockResolvedValue({ id: "queue-1" });
+    addToQueue.mockResolvedValue({ id: "run-1", ingestionQueueId: "queue-1" });
+    prismaMock.memoryCorrection.update.mockResolvedValue(
+      correction({ status: "APPLIED" }),
+    );
 
     await applyCorrection({ ...scope, id: "c-1" });
 
@@ -298,22 +337,21 @@ describe("applyCorrection", () => {
       metadata: { correctionId: "c-1" },
     });
     expect([userId, workspaceId]).toEqual(["user-1", "ws-1"]);
-    expect(prismaMock.memoryCorrection.update).toHaveBeenCalledWith({
-      where: { id: "c-1" },
-      data: { ingestionQueueId: "queue-1" },
-    });
+    expect(lastStatusWrite().data.ingestionQueueId).toBe("queue-1");
   });
 
-  it("rolls back retirements and status when ingestion fails", async () => {
-    const applied = correction({
-      status: "APPLIED",
-      action: "CORRECT",
-      correctedText: "User lives in Pune",
-    });
-    prismaMock.memoryCorrection.updateMany.mockResolvedValue({ count: 1 });
-    prismaMock.memoryCorrection.findFirst.mockResolvedValue(applied);
+  it("rolls back and returns to PROPOSED when ingestion fails", async () => {
+    claimSucceeds(
+      correction({
+        status: "APPLYING",
+        action: "CORRECT",
+        correctedText: "User lives in Pune",
+      }),
+    );
     statementMock.invalidateStatementsBatch.mockResolvedValue(["s1"]);
     aspectMock.invalidateVoiceAspects.mockResolvedValue(1);
+    statementMock.restoreInvalidatedStatements.mockResolvedValue(["s1"]);
+    aspectMock.restoreVoiceAspects.mockResolvedValue(1);
     addToQueue.mockRejectedValue(new Error("no credits"));
 
     await expect(applyCorrection({ ...scope, id: "c-1" })).rejects.toThrow(
@@ -330,95 +368,143 @@ describe("applyCorrection", () => {
       invalidatedBy: "correction:c-1",
       ...scope,
     });
-    expect(prismaMock.memoryCorrection.update).toHaveBeenCalledWith({
+    expect(lastStatusWrite()).toEqual({
       where: { id: "c-1" },
-      data: { status: "PROPOSED", appliedAt: null },
+      data: { status: "PROPOSED" },
     });
   });
 
-  it("refuses a correction that is not PROPOSED", async () => {
-    prismaMock.memoryCorrection.updateMany.mockResolvedValue({ count: 0 });
-    prismaMock.memoryCorrection.findFirst.mockResolvedValue(
-      correction({ status: "APPLIED" }),
+  it("attempts every rollback step and marks FAILED when one fails", async () => {
+    claimSucceeds(correction({ status: "APPLYING" }));
+    statementMock.invalidateStatementsBatch.mockResolvedValue(["s1"]);
+    aspectMock.invalidateVoiceAspects.mockRejectedValue(new Error("pg down"));
+    statementMock.restoreInvalidatedStatements.mockRejectedValue(
+      new Error("neo4j down"),
     );
+    aspectMock.restoreVoiceAspects.mockResolvedValue(0);
+
+    await expect(applyCorrection({ ...scope, id: "c-1" })).rejects.toThrow(
+      "pg down",
+    );
+
+    // The voice-aspect undo still runs after the statement undo failed.
+    expect(aspectMock.restoreVoiceAspects).toHaveBeenCalled();
+    expect(lastStatusWrite()).toEqual({
+      where: { id: "c-1" },
+      data: { status: "FAILED" },
+    });
+  });
+
+  it("never rolls back once the corrected text is queued", async () => {
+    claimSucceeds(
+      correction({
+        status: "APPLYING",
+        action: "CORRECT",
+        correctedText: "User lives in Pune",
+      }),
+    );
+    statementMock.invalidateStatementsBatch.mockResolvedValue(["s1"]);
+    aspectMock.invalidateVoiceAspects.mockResolvedValue(1);
+    addToQueue.mockResolvedValue({ id: "run-1", ingestionQueueId: "queue-1" });
+    prismaMock.memoryCorrection.update.mockRejectedValue(new Error("pg blip"));
+
+    await expect(applyCorrection({ ...scope, id: "c-1" })).rejects.toThrow(
+      "pg blip",
+    );
+
+    expect(statementMock.restoreInvalidatedStatements).not.toHaveBeenCalled();
+    expect(aspectMock.restoreVoiceAspects).not.toHaveBeenCalled();
+    expect(addToQueue).toHaveBeenCalledTimes(1);
+  });
+
+  it("refuses a correction that is not PROPOSED (e.g. being restored)", async () => {
+    claimRefused(correction({ status: "RESTORING" }));
 
     await expect(
       applyCorrection({ ...scope, id: "c-1" }),
-    ).rejects.toMatchObject({
-      code: "INVALID_STATE",
-    });
+    ).rejects.toMatchObject({ code: "INVALID_STATE" });
     expect(statementMock.invalidateStatementsBatch).not.toHaveBeenCalled();
   });
 
   it("reports an unknown correction as NOT_FOUND", async () => {
-    prismaMock.memoryCorrection.updateMany.mockResolvedValue({ count: 0 });
-    prismaMock.memoryCorrection.findFirst.mockResolvedValue(null);
+    claimRefused(null);
 
     await expect(
       applyCorrection({ ...scope, id: "nope" }),
-    ).rejects.toMatchObject({
-      code: "NOT_FOUND",
-    });
+    ).rejects.toMatchObject({ code: "NOT_FOUND" });
   });
 });
 
 describe("rejectCorrection", () => {
   it("moves PROPOSED to REJECTED without touching memory", async () => {
-    prismaMock.memoryCorrection.updateMany.mockResolvedValue({ count: 1 });
-    prismaMock.memoryCorrection.findFirst.mockResolvedValue(
-      correction({ status: "REJECTED" }),
-    );
+    claimSucceeds(correction({ status: "REJECTED" }));
 
     const rejected = await rejectCorrection({ ...scope, id: "c-1" });
 
     expect(rejected.status).toBe("REJECTED");
     expect(prismaMock.memoryCorrection.updateMany).toHaveBeenCalledWith({
-      where: { id: "c-1", ...scope, status: "PROPOSED" },
-      data: expect.objectContaining({ status: "REJECTED" }),
+      where: { id: "c-1", ...scope, OR: [{ status: { in: ["PROPOSED"] } }] },
+      data: { status: "REJECTED", rejectedAt: expect.any(Date) },
     });
     expect(statementMock.invalidateStatementsBatch).not.toHaveBeenCalled();
   });
 });
 
 describe("restoreCorrection", () => {
-  it("restores only facts retired by this correction", async () => {
-    prismaMock.memoryCorrection.updateMany.mockResolvedValue({ count: 1 });
-    prismaMock.memoryCorrection.findFirst.mockResolvedValue(
-      correction({ status: "RESTORED" }),
-    );
+  it("claims APPLIED/FAILED (or stale in-progress) → RESTORING, then RESTORED", async () => {
+    claimSucceeds(correction({ status: "RESTORING" }));
     statementMock.restoreInvalidatedStatements.mockResolvedValue(["s1"]);
     aspectMock.restoreVoiceAspects.mockResolvedValue(1);
+    prismaMock.memoryCorrection.update.mockResolvedValue(
+      correction({ status: "RESTORED" }),
+    );
 
     const result = await restoreCorrection({ ...scope, id: "c-1" });
 
-    expect(prismaMock.memoryCorrection.updateMany).toHaveBeenCalledWith({
-      where: { id: "c-1", ...scope, status: "APPLIED" },
-      data: expect.objectContaining({ status: "RESTORED" }),
-    });
+    const where = prismaMock.memoryCorrection.updateMany.mock.calls[0][0].where;
+    expect(where.OR[0]).toEqual({ status: { in: ["APPLIED", "FAILED"] } });
+    expect(where.OR[1].status).toEqual({ in: ["APPLYING", "RESTORING"] });
+    const cutoff = where.OR[1].updatedAt.lt.getTime();
+    expect(Date.now() - cutoff).toBeGreaterThanOrEqual(
+      STALE_IN_PROGRESS_MS - 1000,
+    );
     expect(statementMock.restoreInvalidatedStatements).toHaveBeenCalledWith({
       statementIds: ["s1"],
       invalidatedBy: correctionTag("c-1"),
       ...scope,
     });
+    expect(lastStatusWrite()).toEqual({
+      where: { id: "c-1" },
+      data: { status: "RESTORED", restoredAt: expect.any(Date) },
+    });
     expect(result.restoredStatementIds).toEqual(["s1"]);
     expect(result.restoredVoiceAspectCount).toBe(1);
   });
 
-  it("goes back to APPLIED when the restore fails", async () => {
-    prismaMock.memoryCorrection.updateMany.mockResolvedValue({ count: 1 });
-    prismaMock.memoryCorrection.findFirst.mockResolvedValue(
-      correction({ status: "RESTORED" }),
-    );
+  it("refuses while an apply is in progress", async () => {
+    claimRefused(correction({ status: "APPLYING" }));
+
+    await expect(
+      restoreCorrection({ ...scope, id: "c-1" }),
+    ).rejects.toMatchObject({ code: "INVALID_STATE" });
+    expect(statementMock.restoreInvalidatedStatements).not.toHaveBeenCalled();
+  });
+
+  it("attempts both stores and marks FAILED when one fails", async () => {
+    claimSucceeds(correction({ status: "RESTORING" }));
     statementMock.restoreInvalidatedStatements.mockRejectedValue(
       new Error("neo4j down"),
     );
+    aspectMock.restoreVoiceAspects.mockResolvedValue(1);
 
-    await expect(restoreCorrection({ ...scope, id: "c-1" })).rejects.toThrow(
-      "neo4j down",
-    );
-    expect(prismaMock.memoryCorrection.update).toHaveBeenCalledWith({
+    await expect(
+      restoreCorrection({ ...scope, id: "c-1" }),
+    ).rejects.toMatchObject({ code: "INVALID_STATE" });
+
+    expect(aspectMock.restoreVoiceAspects).toHaveBeenCalled();
+    expect(lastStatusWrite()).toEqual({
       where: { id: "c-1" },
-      data: { status: "APPLIED", restoredAt: null },
+      data: { status: "FAILED" },
     });
   });
 });

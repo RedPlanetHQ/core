@@ -2,7 +2,7 @@
 -- (retire / correct), applied only after approval and reversible via restore.
 
 -- CreateEnum
-CREATE TYPE "MemoryCorrectionStatus" AS ENUM ('PROPOSED', 'APPLIED', 'REJECTED', 'RESTORED');
+CREATE TYPE "MemoryCorrectionStatus" AS ENUM ('PROPOSED', 'APPLYING', 'APPLIED', 'REJECTED', 'RESTORING', 'RESTORED', 'FAILED');
 
 -- CreateEnum
 CREATE TYPE "MemoryCorrectionAction" AS ENUM ('RETIRE', 'CORRECT');

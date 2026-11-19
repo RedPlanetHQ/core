@@ -871,8 +871,8 @@ model VoiceAspectEmbedding {
 }
 
 // A user- or agent-initiated change to memory facts, staged for approval.
-// PROPOSED → APPLIED (facts retired, corrected text ingested) or REJECTED;
-// APPLIED → RESTORED (undo). Retired facts carry
+// PROPOSED → APPLYING → APPLIED (facts retired, corrected text ingested)
+// or REJECTED; APPLIED → RESTORING → RESTORED (undo). Retired facts carry
 // invalidatedBy = "correction:<id>" so an undo only touches what this
 // correction changed.
 model MemoryCorrection {
@@ -909,9 +909,12 @@ model MemoryCorrection {
 
 enum MemoryCorrectionStatus {
   PROPOSED
+  APPLYING // in progress; also locks the correction
   APPLIED
   REJECTED
+  RESTORING // in progress; also locks the correction
   RESTORED
+  FAILED // an undo stopped partway; restore can finish it
 }
 
 enum MemoryCorrectionAction {
