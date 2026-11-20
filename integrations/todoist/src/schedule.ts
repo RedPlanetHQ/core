@@ -3,6 +3,7 @@ import { getTasks, TodoistConfig, formatPriority, formatDueDate } from './utils'
 interface TodoistSettings {
   lastSyncTime?: string;
   userEmail?: string;
+  importedAtOrAfterCheckpoint?: Record<string, number>;
 }
 
 interface TodoistActivityCreateParams {
@@ -31,53 +32,58 @@ function getDefaultSyncTime(): string {
 }
 
 /**
- * Fetch and process tasks created or updated since last sync
+ * Import new active tasks observed during the scan
  */
-async function processNewTasks(config: TodoistConfig, lastSyncTime: string): Promise<any[]> {
+async function processNewTasks(
+  config: TodoistConfig,
+  lastSyncTime: string,
+  syncStartedMs: number,
+  previouslyImported: Record<string, number> = {}
+) {
   const activities = [];
+  const lastSyncMs = Date.parse(lastSyncTime);
+  const importedTasks = new Map(Object.entries(previouslyImported));
 
-  try {
-    // Get all active tasks
-    const tasks = await getTasks(config);
-
-    // Filter tasks created or updated since last sync
-    const lastSyncDate = new Date(lastSyncTime);
-    const newTasks = tasks.filter(task => {
-      const createdDate = new Date(task.created_at);
-      return createdDate > lastSyncDate;
-    });
-
-    for (const task of newTasks) {
-      try {
-        // Format task information
-        const priority = formatPriority(task.priority);
-        const dueDate = formatDueDate(task.due);
-
-        // Create markdown content for the task
-        let text = `## ✅ New Task: ${task.content}\n\n`;
-
-        if (task.description) {
-          text += `**Description:** ${task.description}\n\n`;
-        }
-
-        text += `**Priority:** ${priority}\n`;
-        text += `**${dueDate}**\n`;
-
-        activities.push(
-          createActivityMessage({
-            text,
-            sourceURL: task.url,
-          })
-        );
-      } catch (error) {
-        console.error('Error processing task:', error);
-      }
+  for (const task of await getTasks(config)) {
+    const createdMs = Date.parse(task.added_at ?? task.created_at ?? '');
+    if (!(createdMs >= lastSyncMs) || importedTasks.has(task.id)) {
+      continue;
     }
-  } catch (error) {
-    console.error('Error fetching tasks:', error);
+
+    try {
+      // Format task information
+      const priority = formatPriority(task.priority);
+      const dueDate = formatDueDate(task.due);
+
+      // Create markdown content for the task
+      let text = `## ✅ New Task: ${task.content}\n\n`;
+
+      if (task.description) {
+        text += `**Description:** ${task.description}\n\n`;
+      }
+
+      text += `**Priority:** ${priority}\n`;
+      text += `**${dueDate}**\n`;
+
+      activities.push(
+        createActivityMessage({
+          text,
+          sourceURL: task.url ?? `https://app.todoist.com/app/task/${task.id}`,
+        })
+      );
+      if (createdMs >= syncStartedMs) {
+        importedTasks.set(task.id, createdMs);
+      }
+    } catch (error) {
+      console.error('Error processing task:', error);
+    }
   }
 
-  return activities;
+  // Keep only imported tasks that the next scan could encounter again.
+  const importedAtOrAfterCheckpoint = Object.fromEntries(
+    [...importedTasks].filter(([, createdMs]) => createdMs >= syncStartedMs)
+  );
+  return { activities, importedAtOrAfterCheckpoint };
 }
 
 /**
@@ -102,7 +108,7 @@ async function processCompletedTasks(config: TodoistConfig, lastSyncTime: string
 
 export const handleSchedule = async (
   config?: Record<string, string>,
-  state?: Record<string, string>
+  state?: Record<string, unknown>
 ) => {
   try {
     // Check if we have a valid access token
@@ -110,8 +116,10 @@ export const handleSchedule = async (
       return [];
     }
 
+    const syncStartedMs = Date.now();
+
     // Get settings or initialize if not present
-    let settings = (state || {}) as TodoistSettings;
+    const settings = (state || {}) as TodoistSettings;
 
     // Default to 24 hours ago if no last sync time
     const lastSyncTime = settings.lastSyncTime || getDefaultSyncTime();
@@ -125,22 +133,25 @@ export const handleSchedule = async (
     const messages = [];
 
     // Process new tasks
-    const newTaskActivities = await processNewTasks(todoistConfig, lastSyncTime);
-    messages.push(...newTaskActivities);
+    const { activities, importedAtOrAfterCheckpoint } = await processNewTasks(
+      todoistConfig,
+      lastSyncTime,
+      syncStartedMs,
+      settings.importedAtOrAfterCheckpoint
+    );
+    messages.push(...activities);
 
     // Process completed tasks
     const completedTaskActivities = await processCompletedTasks(todoistConfig, lastSyncTime);
     messages.push(...completedTaskActivities);
 
-    // Update last sync time
-    const newSyncTime = new Date().toISOString();
-
-    // Add state message for saving settings
+    // Revisit the scan window for tasks that were created after an earlier page was read.
     messages.push({
       type: 'state',
       data: {
         ...settings,
-        lastSyncTime: newSyncTime,
+        lastSyncTime: new Date(syncStartedMs).toISOString(),
+        importedAtOrAfterCheckpoint,
       },
     });
 
