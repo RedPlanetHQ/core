@@ -85,7 +85,8 @@ const ListEventsSchema = z.object({
   calendarId: z.string().optional().default('primary').describe('Calendar ID'),
   timeMin: z.string().optional().describe('Lower bound for event start time (ISO 8601)'),
   timeMax: z.string().optional().describe('Upper bound for event start time (ISO 8601)'),
-  maxResults: z.number().optional().default(10).describe('Maximum number of events'),
+  maxResults: z.number().optional().default(10).describe('Maximum number of events per page'),
+  pageToken: z.string().min(1).optional().describe('Token returned by the previous page'),
   q: z.string().optional().describe('Free text search query'),
   orderBy: z.enum(['startTime', 'updated']).optional().describe('Order results by'),
   singleEvents: z
@@ -174,7 +175,8 @@ export async function getTools() {
     },
     {
       name: 'list_events',
-      description: 'Lists calendar events within a time range',
+      description:
+        'Lists a page of calendar events within a time range. To continue, pass the next page token with the same filters.',
       inputSchema: zodToJsonSchema(ListEventsSchema),
       annotations: {
         readOnlyHint: true,
@@ -337,15 +339,20 @@ export async function callTool(
           singleEvents: validatedArgs.singleEvents,
           orderBy: validatedArgs.orderBy,
           q: validatedArgs.q,
+          pageToken: validatedArgs.pageToken,
         });
 
         const events = response.data.items || [];
+        const nextPageToken = response.data.nextPageToken;
+        const nextPage = nextPageToken ? `\n\nNext page token: ${nextPageToken}` : '';
         if (events.length === 0) {
           return {
             content: [
               {
                 type: 'text',
-                text: 'No events found in the specified time range.',
+                text: nextPageToken
+                  ? `No events on this page.${nextPage}`
+                  : 'No events found in the specified time range.',
               },
             ],
           };
@@ -362,7 +369,7 @@ export async function callTool(
           content: [
             {
               type: 'text',
-              text: `Found ${events.length} events:\n\n${eventList}`,
+              text: `Found ${events.length} events:\n\n${eventList}${nextPage}`,
             },
           ],
         };
