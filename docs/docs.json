@@ -176,7 +176,7 @@
           },
           {
             "group": "Knowledge & Documentation",
-            "pages": ["toolkit/notion", "toolkit/google-docs"]
+            "pages": ["toolkit/notion", "toolkit/google-docs", "toolkit/parallel"]
           },
           {
             "group": "Data & Spreadsheets",
