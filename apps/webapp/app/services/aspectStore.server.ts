@@ -153,6 +153,75 @@ export async function invalidateVoiceAspect(
 }
 
 /**
+ * Invalidate several current voice aspects owned by the user. Aspects that
+ * are already invalid keep their original invalidation.
+ *
+ * @returns number of aspects invalidated
+ */
+export async function invalidateVoiceAspects(params: {
+  ids: string[];
+  invalidatedBy: string;
+  userId: string;
+  workspaceId: string;
+}): Promise<number> {
+  if (params.ids.length === 0) return 0;
+  const { count } = await prisma.voiceAspect.updateMany({
+    where: {
+      id: { in: params.ids },
+      userId: params.userId,
+      workspaceId: params.workspaceId,
+      invalidAt: null,
+    },
+    data: { invalidAt: new Date(), invalidatedBy: params.invalidatedBy },
+  });
+  return count;
+}
+
+/**
+ * Make voice aspects current again. Only aspects invalidated by exactly
+ * `invalidatedBy` are restored.
+ *
+ * @returns number of aspects restored
+ */
+export async function restoreVoiceAspects(params: {
+  ids: string[];
+  invalidatedBy: string;
+  userId: string;
+  workspaceId: string;
+}): Promise<number> {
+  if (params.ids.length === 0) return 0;
+  const { count } = await prisma.voiceAspect.updateMany({
+    where: {
+      id: { in: params.ids },
+      userId: params.userId,
+      workspaceId: params.workspaceId,
+      invalidatedBy: params.invalidatedBy,
+    },
+    data: { invalidAt: null, invalidatedBy: null },
+  });
+  return count;
+}
+
+/**
+ * Fetch voice aspects by id, scoped to the user and workspace.
+ */
+export async function getVoiceAspectsByIds(params: {
+  ids: string[];
+  userId: string;
+  workspaceId: string;
+}): Promise<VoiceAspectNode[]> {
+  if (params.ids.length === 0) return [];
+  const records = await prisma.voiceAspect.findMany({
+    where: {
+      id: { in: params.ids },
+      userId: params.userId,
+      workspaceId: params.workspaceId,
+    },
+  });
+  return records.map(toNode);
+}
+
+/**
  * Append an episode UUID to an existing voice aspect (for duplicates)
  */
 export async function appendEpisodeToVoiceAspect(
