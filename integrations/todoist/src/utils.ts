@@ -51,6 +51,7 @@ export async function getTasks(
 ): Promise<TodoistTask[]> {
   const client = getTodoistClient(config);
   const tasks = new Map<string, TodoistTask>();
+  const seenCursors = new Set<string>();
   let cursor: string | undefined;
 
   do {
@@ -62,6 +63,12 @@ export async function getTasks(
       tasks.set(task.id, task);
     }
     cursor = data.next_cursor ?? undefined;
+    if (cursor) {
+      if (seenCursors.has(cursor)) {
+        throw new Error('Todoist returned a repeated task pagination cursor');
+      }
+      seenCursors.add(cursor);
+    }
   } while (cursor);
 
   return [...tasks.values()];

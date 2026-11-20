@@ -3,6 +3,7 @@ import { getTasks, TodoistConfig, formatPriority, formatDueDate } from './utils'
 interface TodoistSettings {
   lastSyncTime?: string;
   userEmail?: string;
+  importedAtOrAfterCheckpoint?: Record<string, number>;
 }
 
 interface TodoistActivityCreateParams {
@@ -31,25 +32,24 @@ function getDefaultSyncTime(): string {
 }
 
 /**
- * Fetch tasks created within the current sync window
+ * Import new active tasks observed during the scan
  */
 async function processNewTasks(
   config: TodoistConfig,
   lastSyncTime: string,
-  syncStartedMs: number
-): Promise<any[]> {
+  syncStartedMs: number,
+  previouslyImported: Record<string, number> = {}
+) {
   const activities = [];
-
-  // Get all active tasks
-  const tasks = await getTasks(config);
-
   const lastSyncMs = Date.parse(lastSyncTime);
-  const newTasks = tasks.filter(task => {
-    const createdMs = Date.parse(task.added_at ?? task.created_at ?? '');
-    return createdMs >= lastSyncMs && createdMs < syncStartedMs;
-  });
+  const importedTasks = new Map(Object.entries(previouslyImported));
 
-  for (const task of newTasks) {
+  for (const task of await getTasks(config)) {
+    const createdMs = Date.parse(task.added_at ?? task.created_at ?? '');
+    if (!(createdMs >= lastSyncMs) || importedTasks.has(task.id)) {
+      continue;
+    }
+
     try {
       // Format task information
       const priority = formatPriority(task.priority);
@@ -71,12 +71,19 @@ async function processNewTasks(
           sourceURL: task.url ?? `https://app.todoist.com/app/task/${task.id}`,
         })
       );
+      if (createdMs >= syncStartedMs) {
+        importedTasks.set(task.id, createdMs);
+      }
     } catch (error) {
       console.error('Error processing task:', error);
     }
   }
 
-  return activities;
+  // Keep only imported tasks that the next scan could encounter again.
+  const importedAtOrAfterCheckpoint = Object.fromEntries(
+    [...importedTasks].filter(([, createdMs]) => createdMs >= syncStartedMs)
+  );
+  return { activities, importedAtOrAfterCheckpoint };
 }
 
 /**
@@ -101,7 +108,7 @@ async function processCompletedTasks(config: TodoistConfig, lastSyncTime: string
 
 export const handleSchedule = async (
   config?: Record<string, string>,
-  state?: Record<string, string>
+  state?: Record<string, unknown>
 ) => {
   try {
     // Check if we have a valid access token
@@ -112,7 +119,7 @@ export const handleSchedule = async (
     const syncStartedMs = Date.now();
 
     // Get settings or initialize if not present
-    let settings = (state || {}) as TodoistSettings;
+    const settings = (state || {}) as TodoistSettings;
 
     // Default to 24 hours ago if no last sync time
     const lastSyncTime = settings.lastSyncTime || getDefaultSyncTime();
@@ -126,19 +133,25 @@ export const handleSchedule = async (
     const messages = [];
 
     // Process new tasks
-    const newTaskActivities = await processNewTasks(todoistConfig, lastSyncTime, syncStartedMs);
-    messages.push(...newTaskActivities);
+    const { activities, importedAtOrAfterCheckpoint } = await processNewTasks(
+      todoistConfig,
+      lastSyncTime,
+      syncStartedMs,
+      settings.importedAtOrAfterCheckpoint
+    );
+    messages.push(...activities);
 
     // Process completed tasks
     const completedTaskActivities = await processCompletedTasks(todoistConfig, lastSyncTime);
     messages.push(...completedTaskActivities);
 
-    // Changes at or after the start of this scan belong to the next run.
+    // Revisit the scan window for tasks that were created after an earlier page was read.
     messages.push({
       type: 'state',
       data: {
         ...settings,
         lastSyncTime: new Date(syncStartedMs).toISOString(),
+        importedAtOrAfterCheckpoint,
       },
     });
 

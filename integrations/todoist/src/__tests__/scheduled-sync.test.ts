@@ -35,7 +35,7 @@ it('imports a v1 task from a later page and keeps its direct link', async () => 
         sourceURL: 'https://app.todoist.com/app/task/new-task',
       },
     },
-    { type: 'state', data: { lastSyncTime: startedAt } },
+    { type: 'state', data: { lastSyncTime: startedAt, importedAtOrAfterCheckpoint: {} } },
   ]);
 });
 
@@ -71,19 +71,48 @@ it('emits neither activities nor a checkpoint after a page request fails', async
   expect(get).toHaveBeenCalledTimes(2);
 });
 
-it('leaves tasks created during the scan for the next run', async () => {
-  const during = { ...task, added_at: startedAt };
-  get.mockImplementationOnce(async () => {
-    vi.setSystemTime(new Date('2026-01-01T10:00:01.000Z'));
-    return { data: { results: [during], next_cursor: null } };
-  });
+it.each(['active', 'completed'])(
+  'imports a task observed during the scan once when it is %s on the next run',
+  async status => {
+    const during = { ...task, added_at: startedAt };
+    const unseen = { id: 'unseen', content: 'Unseen task', added_at: startedAt };
+    get.mockImplementationOnce(async () => {
+      vi.setSystemTime(new Date('2026-01-01T10:00:01.000Z'));
+      return { data: { results: [during], next_cursor: null } };
+    });
 
-  const first = await handleSchedule(config, state);
-  expect(first).toEqual([{ type: 'state', data: { lastSyncTime: startedAt } }]);
+    // This activity must be emitted now even if the task is completed before the next scan.
+    const first = await handleSchedule(config, state);
+    expect(first.map(message => message.type)).toEqual(['activity', 'state']);
+    expect(first[0].data).toMatchObject({ text: expect.stringContaining(during.content) });
+    expect(first[1].data).toMatchObject({ lastSyncTime: startedAt });
 
-  get.mockResolvedValueOnce({ data: { results: [during], next_cursor: null } });
-  const second = await handleSchedule(config, { lastSyncTime: startedAt });
-  expect(second.map(message => message.type)).toEqual(['activity', 'state']);
+    const nextTasks = status === 'active' ? [during, unseen] : [unseen];
+    get.mockResolvedValueOnce({ data: { results: nextTasks, next_cursor: null } });
+    const second = await handleSchedule(config, first[1].data);
+    expect(second.map(message => message.type)).toEqual(['activity', 'state']);
+    expect(second[0].data).toMatchObject({ text: expect.stringContaining(unseen.content) });
+    expect(second[1].data).toMatchObject({ importedAtOrAfterCheckpoint: {} });
+  }
+);
+
+it.each([
+  ['repeated cursor', ['a', 'a']],
+  ['cursor cycle', ['a', 'b', 'a']],
+])('aborts the scan on a %s without advancing the checkpoint', async (_label, cursors) => {
+  const log = vi.spyOn(console, 'error').mockImplementation(() => {});
+  for (const next_cursor of cursors) {
+    get.mockResolvedValueOnce({ data: { results: [task], next_cursor } });
+  }
+  // End the scan if the implementation fails to detect the cycle.
+  get.mockResolvedValueOnce({ data: { results: [], next_cursor: null } });
+
+  expect(await handleSchedule(config, state)).toEqual([]);
+  expect(get).toHaveBeenCalledTimes(cursors.length);
+  expect(log).toHaveBeenCalledWith(
+    'Error in handleSchedule:',
+    expect.objectContaining({ message: 'Todoist returned a repeated task pagination cursor' })
+  );
 });
 
 it('emits a task only once when Todoist repeats it on another page', async () => {
