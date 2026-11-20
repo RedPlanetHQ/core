@@ -109,23 +109,19 @@ async function processTaskUpdates(
         continue;
       }
 
-      // Determine if this is a new task or an update
-      const taskCreated = new Date(task.updated || '');
-      const isNew = Math.abs(taskCreated.getTime() - taskUpdated.getTime()) < 1000;
-
       // Format task status
       const status = task.status === 'completed' ? '✅' : '📝';
       const statusText = task.status === 'completed' ? 'Completed' : 'Active';
 
       // Build task details
-      let taskText = `## ${status} Task ${isNew ? 'Created' : 'Updated'}\n\n`;
+      let taskText = `## ${status} Task changed\n\n`;
       taskText += `**Task List:** ${taskList.title}\n`;
       taskText += `**Title:** ${task.title}\n`;
       taskText += `**Status:** ${statusText}\n`;
 
       if (task.due) {
-        const dueDate = new Date(task.due);
-        taskText += `**Due:** ${dueDate.toLocaleDateString()}\n`;
+        // Google Tasks stores only the calendar date in this RFC 3339 field.
+        taskText += `**Due:** ${task.due.slice(0, 10)}\n`;
       }
 
       if (task.notes) {
