@@ -16,8 +16,9 @@ export interface TodoistTask {
   };
   priority: number;
   is_completed: boolean;
-  created_at: string;
-  url: string;
+  added_at?: string;
+  created_at?: string;
+  url?: string;
 }
 
 export interface TodoistProject {
@@ -49,8 +50,21 @@ export async function getTasks(
   filters?: { project_id?: string }
 ): Promise<TodoistTask[]> {
   const client = getTodoistClient(config);
-  const response = await client.get('/tasks', { params: filters });
-  return response.data.results;
+  const tasks = new Map<string, TodoistTask>();
+  let cursor: string | undefined;
+
+  do {
+    const { data } = await client.get<{ results: TodoistTask[]; next_cursor: string | null }>(
+      '/tasks',
+      { params: { ...filters, cursor } }
+    );
+    for (const task of data.results) {
+      tasks.set(task.id, task);
+    }
+    cursor = data.next_cursor ?? undefined;
+  } while (cursor);
+
+  return [...tasks.values()];
 }
 
 /**

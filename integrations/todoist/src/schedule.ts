@@ -31,50 +31,49 @@ function getDefaultSyncTime(): string {
 }
 
 /**
- * Fetch and process tasks created or updated since last sync
+ * Fetch tasks created within the current sync window
  */
-async function processNewTasks(config: TodoistConfig, lastSyncTime: string): Promise<any[]> {
+async function processNewTasks(
+  config: TodoistConfig,
+  lastSyncTime: string,
+  syncStartedMs: number
+): Promise<any[]> {
   const activities = [];
 
-  try {
-    // Get all active tasks
-    const tasks = await getTasks(config);
+  // Get all active tasks
+  const tasks = await getTasks(config);
 
-    // Filter tasks created or updated since last sync
-    const lastSyncDate = new Date(lastSyncTime);
-    const newTasks = tasks.filter(task => {
-      const createdDate = new Date(task.created_at);
-      return createdDate > lastSyncDate;
-    });
+  const lastSyncMs = Date.parse(lastSyncTime);
+  const newTasks = tasks.filter(task => {
+    const createdMs = Date.parse(task.added_at ?? task.created_at ?? '');
+    return createdMs >= lastSyncMs && createdMs < syncStartedMs;
+  });
 
-    for (const task of newTasks) {
-      try {
-        // Format task information
-        const priority = formatPriority(task.priority);
-        const dueDate = formatDueDate(task.due);
+  for (const task of newTasks) {
+    try {
+      // Format task information
+      const priority = formatPriority(task.priority);
+      const dueDate = formatDueDate(task.due);
 
-        // Create markdown content for the task
-        let text = `## ✅ New Task: ${task.content}\n\n`;
+      // Create markdown content for the task
+      let text = `## ✅ New Task: ${task.content}\n\n`;
 
-        if (task.description) {
-          text += `**Description:** ${task.description}\n\n`;
-        }
-
-        text += `**Priority:** ${priority}\n`;
-        text += `**${dueDate}**\n`;
-
-        activities.push(
-          createActivityMessage({
-            text,
-            sourceURL: task.url,
-          })
-        );
-      } catch (error) {
-        console.error('Error processing task:', error);
+      if (task.description) {
+        text += `**Description:** ${task.description}\n\n`;
       }
+
+      text += `**Priority:** ${priority}\n`;
+      text += `**${dueDate}**\n`;
+
+      activities.push(
+        createActivityMessage({
+          text,
+          sourceURL: task.url ?? `https://app.todoist.com/app/task/${task.id}`,
+        })
+      );
+    } catch (error) {
+      console.error('Error processing task:', error);
     }
-  } catch (error) {
-    console.error('Error fetching tasks:', error);
   }
 
   return activities;
@@ -110,6 +109,8 @@ export const handleSchedule = async (
       return [];
     }
 
+    const syncStartedMs = Date.now();
+
     // Get settings or initialize if not present
     let settings = (state || {}) as TodoistSettings;
 
@@ -125,22 +126,19 @@ export const handleSchedule = async (
     const messages = [];
 
     // Process new tasks
-    const newTaskActivities = await processNewTasks(todoistConfig, lastSyncTime);
+    const newTaskActivities = await processNewTasks(todoistConfig, lastSyncTime, syncStartedMs);
     messages.push(...newTaskActivities);
 
     // Process completed tasks
     const completedTaskActivities = await processCompletedTasks(todoistConfig, lastSyncTime);
     messages.push(...completedTaskActivities);
 
-    // Update last sync time
-    const newSyncTime = new Date().toISOString();
-
-    // Add state message for saving settings
+    // Changes at or after the start of this scan belong to the next run.
     messages.push({
       type: 'state',
       data: {
         ...settings,
-        lastSyncTime: newSyncTime,
+        lastSyncTime: new Date(syncStartedMs).toISOString(),
       },
     });
 
