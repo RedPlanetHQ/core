@@ -88,7 +88,9 @@ const WriteToCellSchema = z.object({
   spreadsheetId: z.string().describe('ID of the spreadsheet'),
   sheetName: z.string().describe('Name of the sheet (e.g., "Sheet1")'),
   cell: z.string().describe('Cell reference in A1 notation (e.g., "A1", "B5")'),
-  value: z.any().describe('Value to write to the cell'),
+  value: z
+    .union([z.string(), z.number().finite(), z.boolean()])
+    .describe('Value to write. Use an empty string to clear the cell.'),
   valueInputOption: z
     .enum(['RAW', 'USER_ENTERED'])
     .optional()
