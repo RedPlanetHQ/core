@@ -93,3 +93,12 @@ it("rejects an invalid cursor before querying documents", async () => {
   expect((await load("bad-date|doc-b")).status).toBe(400);
   expect(mocks.documents).not.toHaveBeenCalled();
 });
+
+it("treats an empty cursor as a first-page request", async () => {
+  expect((await load("")).status).toBe(200);
+  expect(mocks.documents).toHaveBeenCalledWith(
+    expect.objectContaining({
+      where: { workspaceId: "ws-1", type: { not: "skill" } },
+    }),
+  );
+});

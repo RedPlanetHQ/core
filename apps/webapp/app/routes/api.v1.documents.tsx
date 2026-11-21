@@ -5,6 +5,8 @@ import { prisma } from "~/db.server";
 import { createHybridLoaderApiRoute } from "~/services/routeBuilders/apiBuilder.server";
 
 const DocumentCursor = z.string().transform((value, context) => {
+  if (value === "") return undefined;
+
   const [timestamp, id, extra] = value.split("|", 3);
   const createdAt = new Date(timestamp);
   if (Number.isNaN(createdAt.getTime()) || id === "" || extra !== undefined) {
