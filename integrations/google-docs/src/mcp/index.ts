@@ -273,7 +273,7 @@ export async function callTool(
         // Use Drive API to list all documents
         const drive = google.drive({ version: 'v3', auth: authClient });
         const response = await drive.files.list({
-          q: "mimeType='application/vnd.google-apps.document'",
+          q: "mimeType='application/vnd.google-apps.document' and trashed=false",
           fields: 'nextPageToken, files(id, name, createdTime, modifiedTime, webViewLink)',
           pageToken,
           orderBy: 'modifiedTime desc',
