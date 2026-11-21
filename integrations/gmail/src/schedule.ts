@@ -1,3 +1,4 @@
+import type { gmail_v1 } from 'googleapis';
 import { getGmailClient, parseEmailContent, formatEmailSender, GmailConfig } from './utils';
 import TurndownService from 'turndown';
 
@@ -79,6 +80,34 @@ function makeSnippet(content: string, max = 200): string {
   return `${flat.slice(0, max)}…`;
 }
 
+async function listScheduledMessageIds(gmail: gmail_v1.Gmail, q: string) {
+  const ids = new Set<string>();
+  const seenPageTokens = new Set<string>();
+  let pageToken: string | undefined;
+
+  do {
+    const { data } = await gmail.users.messages.list({
+      userId: 'me',
+      q,
+      maxResults: 50,
+      pageToken,
+    });
+    for (const message of data.messages ?? []) {
+      if (message.id) ids.add(message.id);
+    }
+
+    pageToken = data.nextPageToken ?? undefined;
+    if (pageToken) {
+      if (seenPageTokens.has(pageToken)) {
+        throw new Error('Gmail returned a repeated message page token');
+      }
+      seenPageTokens.add(pageToken);
+    }
+  } while (pageToken);
+
+  return ids;
+}
+
 /**
  * Fetch and process received emails
  */
@@ -92,70 +121,62 @@ async function processReceivedEmails(
   const afterTimestamp = toGmailTimestamp(lastSyncTime) - 1;
   let lastEmailTime = 0;
 
-  try {
-    // Query for important received emails after lastSyncTime
-    const response = await gmail.users.messages.list({
-      userId: 'me',
-      q: `in:inbox is:important after:${afterTimestamp}`,
-      maxResults: 50,
-    });
+  const messageIds = await listScheduledMessageIds(
+    gmail,
+    `in:inbox is:important after:${afterTimestamp}`
+  );
 
-    const messages = response.data.messages || [];
+  for (const messageId of messageIds) {
+    try {
+      // Get full message details
+      const fullMessage = await gmail.users.messages.get({
+        userId: 'me',
+        id: messageId,
+        format: 'full',
+      });
 
-    for (const message of messages) {
-      try {
-        // Get full message details
-        const fullMessage = await gmail.users.messages.get({
-          userId: 'me',
-          id: message.id,
-          format: 'full',
-        });
+      const headers = fullMessage.data.payload.headers;
+      const from = headers.find((h: any) => h.name === 'From')?.value || 'Unknown';
+      const subject = headers.find((h: any) => h.name === 'Subject')?.value || '(No subject)';
+      const date = headers.find((h: any) => h.name === 'Date')?.value || '';
 
-        const headers = fullMessage.data.payload.headers;
-        const from = headers.find((h: any) => h.name === 'From')?.value || 'Unknown';
-        const subject = headers.find((h: any) => h.name === 'Subject')?.value || '(No subject)';
-        const date = headers.find((h: any) => h.name === 'Date')?.value || '';
+      const internalDate = parseInt(fullMessage.data.internalDate || '0');
 
-        const internalDate = parseInt(fullMessage.data.internalDate || '0');
-
-        // Skip emails that are at or before lastSyncTime (Gmail after: is not precise at second level)
-        const lastSyncMs = new Date(lastSyncTime).getTime();
-        if (internalDate <= lastSyncMs) {
-          continue;
-        }
-
-        if (internalDate > lastEmailTime) {
-          lastEmailTime = internalDate;
-        }
-
-        const sender = formatEmailSender(from);
-        const threadId = fullMessage.data.threadId || '';
-        const { textContent, htmlContent } = parseEmailContent(fullMessage.data.payload);
-
-        const cleanedContent = cleanEmailContent(htmlContent, textContent);
-
-        if (!cleanedContent || cleanedContent.length < 10) {
-          continue;
-        }
-
-        const sourceURL = `https://mail.google.com/mail/u/0/#inbox/${message.id}`;
-        const snippet = makeSnippet(cleanedContent);
-
-        const text = `Received email from ${sender} (from: ${from}, subject: "${subject}", message_id: ${message.id}, thread_id: ${threadId}) at ${date}. Snippet: "${snippet}"`;
-
-        activities.push(
-          createActivityMessage({
-            text,
-            sourceURL,
-          })
-        );
-      } catch (error) {
-        // Silently ignore errors for individual messages
-        console.error('Error processing received email:', error);
+      // Skip emails that are at or before lastSyncTime (Gmail after: is not precise at second level)
+      const lastSyncMs = new Date(lastSyncTime).getTime();
+      if (internalDate <= lastSyncMs) {
+        continue;
       }
+
+      if (internalDate > lastEmailTime) {
+        lastEmailTime = internalDate;
+      }
+
+      const sender = formatEmailSender(from);
+      const threadId = fullMessage.data.threadId || '';
+      const { textContent, htmlContent } = parseEmailContent(fullMessage.data.payload);
+
+      const cleanedContent = cleanEmailContent(htmlContent, textContent);
+
+      if (!cleanedContent || cleanedContent.length < 10) {
+        continue;
+      }
+
+      const sourceURL = `https://mail.google.com/mail/u/0/#inbox/${messageId}`;
+      const snippet = makeSnippet(cleanedContent);
+
+      const text = `Received email from ${sender} (from: ${from}, subject: "${subject}", message_id: ${messageId}, thread_id: ${threadId}) at ${date}. Snippet: "${snippet}"`;
+
+      activities.push(
+        createActivityMessage({
+          text,
+          sourceURL,
+        })
+      );
+    } catch (error) {
+      // Silently ignore errors for individual messages
+      console.error('Error processing received email:', error);
     }
-  } catch (error) {
-    console.error('Error fetching received emails:', error);
   }
 
   return { activities, lastEmailTime };
@@ -174,69 +195,61 @@ async function processSentEmails(
   const afterTimestamp = toGmailTimestamp(lastSyncTime) - 1;
   let lastEmailTime = 0;
 
-  try {
-    // Query for sent emails after lastSyncTime
-    const response = await gmail.users.messages.list({
-      userId: 'me',
-      q: `in:sent after:${afterTimestamp}`,
-      maxResults: 50,
-    });
+  const messageIds = await listScheduledMessageIds(
+    gmail,
+    `in:sent after:${afterTimestamp}`
+  );
 
-    const messages = response.data.messages || [];
+  for (const messageId of messageIds) {
+    try {
+      // Get full message details
+      const fullMessage = await gmail.users.messages.get({
+        userId: 'me',
+        id: messageId,
+        format: 'full',
+      });
 
-    for (const message of messages) {
-      try {
-        // Get full message details
-        const fullMessage = await gmail.users.messages.get({
-          userId: 'me',
-          id: message.id,
-          format: 'full',
-        });
+      const headers = fullMessage.data.payload.headers;
+      const to = headers.find((h: any) => h.name === 'To')?.value || 'Unknown';
+      const subject = headers.find((h: any) => h.name === 'Subject')?.value || '(No subject)';
+      const date = headers.find((h: any) => h.name === 'Date')?.value || '';
 
-        const headers = fullMessage.data.payload.headers;
-        const to = headers.find((h: any) => h.name === 'To')?.value || 'Unknown';
-        const subject = headers.find((h: any) => h.name === 'Subject')?.value || '(No subject)';
-        const date = headers.find((h: any) => h.name === 'Date')?.value || '';
+      const internalDate = parseInt(fullMessage.data.internalDate || '0');
 
-        const internalDate = parseInt(fullMessage.data.internalDate || '0');
-
-        // Skip emails that are at or before lastSyncTime
-        const lastSyncMs = new Date(lastSyncTime).getTime();
-        if (internalDate <= lastSyncMs) {
-          continue;
-        }
-
-        if (internalDate > lastEmailTime) {
-          lastEmailTime = internalDate;
-        }
-
-        const threadId = fullMessage.data.threadId || message.id;
-        const { textContent, htmlContent } = parseEmailContent(fullMessage.data.payload);
-
-        const cleanedContent = cleanEmailContent(htmlContent, textContent);
-
-        if (!cleanedContent || cleanedContent.length < 10) {
-          continue;
-        }
-
-        const sourceURL = `https://mail.google.com/mail/u/0/#sent/${message.id}`;
-        const snippet = makeSnippet(cleanedContent);
-
-        const text = `Sent email to ${to} (from: ${emailAddress}, subject: "${subject}", message_id: ${message.id}, thread_id: ${threadId}) at ${date}. Snippet: "${snippet}"`;
-
-        activities.push(
-          createActivityMessage({
-            text,
-            sourceURL,
-          })
-        );
-      } catch (error) {
-        // Silently ignore errors for individual messages
-        console.error('Error processing sent email:', error);
+      // Skip emails that are at or before lastSyncTime
+      const lastSyncMs = new Date(lastSyncTime).getTime();
+      if (internalDate <= lastSyncMs) {
+        continue;
       }
+
+      if (internalDate > lastEmailTime) {
+        lastEmailTime = internalDate;
+      }
+
+      const threadId = fullMessage.data.threadId || messageId;
+      const { textContent, htmlContent } = parseEmailContent(fullMessage.data.payload);
+
+      const cleanedContent = cleanEmailContent(htmlContent, textContent);
+
+      if (!cleanedContent || cleanedContent.length < 10) {
+        continue;
+      }
+
+      const sourceURL = `https://mail.google.com/mail/u/0/#sent/${messageId}`;
+      const snippet = makeSnippet(cleanedContent);
+
+      const text = `Sent email to ${to} (from: ${emailAddress}, subject: "${subject}", message_id: ${messageId}, thread_id: ${threadId}) at ${date}. Snippet: "${snippet}"`;
+
+      activities.push(
+        createActivityMessage({
+          text,
+          sourceURL,
+        })
+      );
+    } catch (error) {
+      // Silently ignore errors for individual messages
+      console.error('Error processing sent email:', error);
     }
-  } catch (error) {
-    console.error('Error fetching sent emails:', error);
   }
 
   return { activities, lastEmailTime };
