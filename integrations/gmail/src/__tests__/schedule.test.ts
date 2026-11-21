@@ -108,7 +108,7 @@ it.each(['inbox', 'sent'] as const)('visits later pages in the %s query', async 
   list.mockImplementation(async ({ q, pageToken }) => {
     if (!q.startsWith(`in:${folder}`)) return { data: { messages: [] } };
     return pageToken
-      ? { data: { messages: [{ id: 'older' }] } }
+      ? { data: { messages: [{ id: 'newer' }, { id: 'older' }] } }
       : { data: { messages: [{ id: 'newer' }], nextPageToken: 'older-page' } };
   });
 
@@ -117,6 +117,7 @@ it.each(['inbox', 'sent'] as const)('visits later pages in the %s query', async 
     expect.stringContaining('/newer'),
     expect.stringContaining('/older'),
   ]);
+  expect(gmail.get.mock.calls.filter(([request]) => request.id === 'newer')).toHaveLength(1);
   expect(checkpoint(messages)?.lastSyncTime).toBe(new Date(firstTime + 1000).toISOString());
   expect(gmail.list).toHaveBeenCalledWith(
     expect.objectContaining({ q: expect.stringContaining(`in:${folder}`), pageToken: 'older-page' })
@@ -138,5 +139,53 @@ it('emits no activities or checkpoint when a later list page fails', async () =>
     expect(gmail.list).toHaveBeenCalledTimes(3);
   } finally {
     log.mockRestore();
+  }
+});
+
+it('does not let the sent search skip an inbox arrival after the first search', async () => {
+  const syncStart = firstTime + 500;
+  const now = vi.spyOn(Date, 'now').mockReturnValue(syncStart);
+  inbox.push({ id: 'before-start', time: firstTime });
+  let searchedInbox = false;
+  gmail.list.mockImplementation(async ({ q }: { q: string }) => {
+    const isInbox = q.startsWith('in:inbox');
+    const after = Number(q.match(/after:(\d+)/)?.[1] ?? 0) * 1000;
+    const before = Number(q.match(/before:(\d+)/)?.[1] ?? Infinity) * 1000;
+    const source = isInbox ? inbox : sent;
+    const messages = source
+      .filter(message => message.time > after && message.time < before)
+      .map(({ id }) => ({ id }));
+
+    if (isInbox && !searchedInbox) {
+      searchedInbox = true;
+      inbox.push({ id: 'late-inbox', time: syncStart + 50 });
+      sent.push({ id: 'late-sent', time: syncStart + 100 });
+      now.mockReturnValue(syncStart + 150);
+    }
+    return { data: { messages } };
+  });
+
+  try {
+    const first = await handleSchedule({ access_token: 'test-token' }, definition, initialState);
+    expect(activities(first).map(message => message.data.sourceURL)).toEqual([
+      expect.stringContaining('/before-start'),
+    ]);
+    expect(checkpoint(first)?.lastSyncTime).toBe(new Date(firstTime).toISOString());
+    for (const [request] of gmail.list.mock.calls) {
+      expect(request.q).toContain(`before:${Math.ceil(syncStart / 1000)}`);
+    }
+
+    now.mockReturnValue(syncStart + 2000);
+    const second = await handleSchedule(
+      { access_token: 'test-token' },
+      definition,
+      checkpoint(first)
+    );
+    expect(activities(second).map(message => message.data.sourceURL)).toEqual([
+      expect.stringContaining('/late-inbox'),
+      expect.stringContaining('/late-sent'),
+    ]);
+  } finally {
+    now.mockRestore();
   }
 });

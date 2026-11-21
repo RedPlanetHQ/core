@@ -8,6 +8,12 @@ interface GmailSettings {
   emailAddress?: string;
 }
 
+interface GmailSyncWindow {
+  lastSyncMs: number;
+  syncStartedMs: number;
+  searchBounds: string;
+}
+
 interface GmailActivityCreateParams {
   text: string;
   sourceURL: string;
@@ -63,14 +69,6 @@ function cleanEmailContent(htmlContent: string, textContent: string): string {
 }
 
 /**
- * Convert ISO date to Gmail query format as Unix timestamp in seconds
- * Using timestamp is more precise than YYYY/MM/DD which truncates to day
- */
-function toGmailTimestamp(isoDate: string): number {
-  return Math.floor(new Date(isoDate).getTime() / 1000);
-}
-
-/**
  * Trim cleaned email body to a short single-line preview suitable for the
  * activity feed. Full body is retrievable via the read_email MCP tool.
  */
@@ -113,17 +111,14 @@ async function listScheduledMessageIds(gmail: gmail_v1.Gmail, q: string) {
  */
 async function processReceivedEmails(
   gmail: any,
-  lastSyncTime: string,
-  emailAddress: string
+  window: GmailSyncWindow
 ): Promise<{ activities: any[]; lastEmailTime: number }> {
   const activities = [];
-  // Overlap the boundary second; the millisecond check below removes repeats.
-  const afterTimestamp = toGmailTimestamp(lastSyncTime) - 1;
   let lastEmailTime = 0;
 
   const messageIds = await listScheduledMessageIds(
     gmail,
-    `in:inbox is:important after:${afterTimestamp}`
+    `in:inbox is:important ${window.searchBounds}`
   );
 
   for (const messageId of messageIds) {
@@ -142,9 +137,7 @@ async function processReceivedEmails(
 
       const internalDate = parseInt(fullMessage.data.internalDate || '0');
 
-      // Skip emails that are at or before lastSyncTime (Gmail after: is not precise at second level)
-      const lastSyncMs = new Date(lastSyncTime).getTime();
-      if (internalDate <= lastSyncMs) {
+      if (internalDate <= window.lastSyncMs || internalDate >= window.syncStartedMs) {
         continue;
       }
 
@@ -187,17 +180,15 @@ async function processReceivedEmails(
  */
 async function processSentEmails(
   gmail: any,
-  lastSyncTime: string,
+  window: GmailSyncWindow,
   emailAddress: string
 ): Promise<{ activities: any[]; lastEmailTime: number }> {
   const activities = [];
-  // Overlap the boundary second; the millisecond check below removes repeats.
-  const afterTimestamp = toGmailTimestamp(lastSyncTime) - 1;
   let lastEmailTime = 0;
 
   const messageIds = await listScheduledMessageIds(
     gmail,
-    `in:sent after:${afterTimestamp}`
+    `in:sent ${window.searchBounds}`
   );
 
   for (const messageId of messageIds) {
@@ -216,9 +207,7 @@ async function processSentEmails(
 
       const internalDate = parseInt(fullMessage.data.internalDate || '0');
 
-      // Skip emails that are at or before lastSyncTime
-      const lastSyncMs = new Date(lastSyncTime).getTime();
-      if (internalDate <= lastSyncMs) {
+      if (internalDate <= window.lastSyncMs || internalDate >= window.syncStartedMs) {
         continue;
       }
 
@@ -292,18 +281,30 @@ export const handleSchedule = async (
       }
     }
 
+    // Use the same upper bound for both searches. Gmail queries use seconds,
+    // so expand the search window and enforce its millisecond bounds on each message.
+    const lastSyncMs = new Date(lastSyncTime).getTime();
+    const syncStartedMs = Date.now();
+    const after = Math.floor(lastSyncMs / 1000) - 1;
+    const before = Math.ceil(syncStartedMs / 1000);
+    const window: GmailSyncWindow = {
+      lastSyncMs,
+      syncStartedMs,
+      searchBounds: `after:${after} before:${before}`,
+    };
+
     // Collect all messages
     const messages = [];
 
     // Process received emails
     const { activities: receivedActivities, lastEmailTime: receivedLastTime } =
-      await processReceivedEmails(gmail, lastSyncTime, settings.emailAddress || 'user');
+      await processReceivedEmails(gmail, window);
     messages.push(...receivedActivities);
 
     // Process sent emails
     const { activities: sentActivities, lastEmailTime: sentLastTime } = await processSentEmails(
       gmail,
-      lastSyncTime,
+      window,
       settings.emailAddress || 'user'
     );
     messages.push(...sentActivities);
