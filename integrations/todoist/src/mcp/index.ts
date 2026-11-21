@@ -54,9 +54,24 @@ export async function getTools(config?: Record<string, string>): Promise<MCPTool
 
   try {
     client = await createMCPClient(config.access_token);
-    const { tools } = await client.listTools();
+    const discoveredTools: MCPTool[] = [];
+    const seenCursors = new Set<string>();
+    let cursor: string | undefined;
 
-    return tools.map(tool => ({
+    do {
+      const page = await client.listTools(cursor ? { cursor } : undefined);
+      discoveredTools.push(...page.tools);
+      cursor = page.nextCursor;
+
+      if (cursor) {
+        if (seenCursors.has(cursor)) {
+          throw new Error('Todoist returned a repeated tool discovery cursor');
+        }
+        seenCursors.add(cursor);
+      }
+    } while (cursor);
+
+    return discoveredTools.map(tool => ({
       name: tool.name,
       description: tool.description,
       inputSchema: tool.inputSchema,
