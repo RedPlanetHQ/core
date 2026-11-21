@@ -72,6 +72,28 @@ async function shareFilePublicly(
   });
 }
 
+function readStructuralText(content: docs_v1.Schema$StructuralElement[] = []): string {
+  let text = '';
+
+  for (const element of content) {
+    if (element.paragraph) {
+      for (const part of element.paragraph.elements ?? []) {
+        text += part.textRun?.content ?? '';
+      }
+    } else if (element.table) {
+      for (const row of element.table.tableRows ?? []) {
+        for (const cell of row.tableCells ?? []) {
+          text += readStructuralText(cell.content ?? []);
+        }
+      }
+    } else if (element.tableOfContents) {
+      text += readStructuralText(element.tableOfContents.content ?? []);
+    }
+  }
+
+  return text;
+}
+
 // Custom tool schemas for common operations
 const ListDocumentsSchema = z.object({
   pageToken: z.string().min(1).optional().describe('Token returned by the previous page'),
@@ -381,19 +403,7 @@ export async function callTool(
           suggestionsViewMode: validatedArgs.suggestionsViewMode,
         });
 
-        // Extract text content from the document
-        let textContent = '';
-        if (response.data.body?.content) {
-          for (const element of response.data.body.content) {
-            if (element.paragraph?.elements) {
-              for (const elem of element.paragraph.elements) {
-                if (elem.textRun?.content) {
-                  textContent += elem.textRun.content;
-                }
-              }
-            }
-          }
-        }
+        const textContent = readStructuralText(response.data.body?.content ?? []);
 
         return {
           content: [
