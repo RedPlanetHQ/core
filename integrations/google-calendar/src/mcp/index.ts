@@ -104,7 +104,7 @@ const UpdateEventSchema = z.object({
   location: z.string().optional().describe('New location'),
   startDateTime: z.string().optional().describe('New start date/time (ISO 8601)'),
   endDateTime: z.string().optional().describe('New end date/time (ISO 8601)'),
-  timeZone: z.string().optional().describe('Time zone'),
+  timeZone: z.string().optional().describe('Time zone for the start and end of a timed event'),
   attendees: z
     .array(z.object({ email: z.string() }))
     .optional()
@@ -397,6 +397,8 @@ export async function callTool(
             dateTime: validatedArgs.startDateTime,
             timeZone: validatedArgs.timeZone || existingEvent.data.start?.timeZone,
           };
+        } else if (validatedArgs.timeZone && updatedEvent.start?.dateTime) {
+          updatedEvent.start = { ...updatedEvent.start, timeZone: validatedArgs.timeZone };
         }
 
         if (validatedArgs.endDateTime) {
@@ -404,6 +406,8 @@ export async function callTool(
             dateTime: validatedArgs.endDateTime,
             timeZone: validatedArgs.timeZone || existingEvent.data.end?.timeZone,
           };
+        } else if (validatedArgs.timeZone && updatedEvent.end?.dateTime) {
+          updatedEvent.end = { ...updatedEvent.end, timeZone: validatedArgs.timeZone };
         }
 
         if (validatedArgs.attendees) {

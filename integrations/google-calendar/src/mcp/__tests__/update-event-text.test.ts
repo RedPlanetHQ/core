@@ -65,3 +65,28 @@ describe('Google Calendar optional text updates', () => {
     expect(client.update.mock.calls[0][0].requestBody.description).toBe(' ');
   });
 });
+
+describe('Google Calendar timezone-only updates', () => {
+  it('changes both timezone fields and preserves the stored timestamps', async () => {
+    await update({ timeZone: 'America/New_York' });
+    expect(client.update.mock.calls[0][0].requestBody).toEqual({
+      ...existing,
+      start: { ...existing.start, timeZone: 'America/New_York' },
+      end: { ...existing.end, timeZone: 'America/New_York' },
+    });
+  });
+
+  it('keeps all-day date fields when a timezone accompanies a title edit', async () => {
+    const allDay = {
+      ...existing,
+      start: { date: '2026-11-16' },
+      end: { date: '2026-11-17' },
+    };
+    client.get.mockResolvedValueOnce({ data: allDay });
+    await update({ summary: 'New title', timeZone: 'America/New_York' });
+    expect(client.update.mock.calls[0][0].requestBody).toEqual({
+      ...allDay,
+      summary: 'New title',
+    });
+  });
+});
