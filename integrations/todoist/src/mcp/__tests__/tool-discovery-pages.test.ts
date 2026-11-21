@@ -17,14 +17,14 @@ beforeEach(() => {
   vi.resetAllMocks();
 });
 
-it('discovers tools after an empty first page and closes the client', async () => {
+it.each(['next', ''])('discovers tools after a first page with cursor %j', async nextCursor => {
   const tool = { name: 'find-tasks', inputSchema: { type: 'object' } };
   client.listTools
-    .mockResolvedValueOnce({ tools: [], nextCursor: 'next' })
+    .mockResolvedValueOnce({ tools: [], nextCursor })
     .mockResolvedValueOnce({ tools: [tool] });
 
   expect(await getTools({ access_token: 'test' })).toEqual([expect.objectContaining(tool)]);
-  expect(client.listTools).toHaveBeenLastCalledWith({ cursor: 'next' });
+  expect(client.listTools).toHaveBeenLastCalledWith({ cursor: nextCursor });
   expect(client.close).toHaveBeenCalledOnce();
 });
 
