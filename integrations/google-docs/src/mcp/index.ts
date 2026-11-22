@@ -147,6 +147,7 @@ const AppendTextSchema = z.object({
 
 const ReplaceTextSchema = z.object({
   documentId: z.string().describe('ID of the document'),
+  tabId: z.string().trim().min(1).optional().describe('Target tab ID. Omit to replace in all tabs.'),
   searchText: z.string().describe('Text to search for'),
   replaceText: z.string().describe('Text to replace with'),
   matchCase: z.boolean().optional().default(false).describe('Whether to match case'),
@@ -226,7 +227,7 @@ export async function getTools() {
     },
     {
       name: 'replace_text',
-      description: 'Replaces all occurrences of text in a document',
+      description: 'Replaces all occurrences of text in the selected tab, or throughout the document if omitted',
       inputSchema: zodToJsonSchema(ReplaceTextSchema),
       annotations: { readOnlyHint: false, destructiveHint: true, idempotentHint: true },
     },
@@ -473,6 +474,9 @@ export async function callTool(
                     matchCase: validatedArgs.matchCase,
                   },
                   replaceText: validatedArgs.replaceText,
+                  ...(validatedArgs.tabId && {
+                    tabsCriteria: { tabIds: [validatedArgs.tabId] },
+                  }),
                 },
               },
             ],
