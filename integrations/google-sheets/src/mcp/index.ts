@@ -177,7 +177,7 @@ export async function callTool(
         // Use Drive API to list all spreadsheets
         const drive = google.drive({ version: 'v3', auth: oauth2Client });
         const response = await drive.files.list({
-          q: "mimeType='application/vnd.google-apps.spreadsheet'",
+          q: "mimeType='application/vnd.google-apps.spreadsheet' and trashed=false",
           fields: 'nextPageToken, files(id, name, createdTime, modifiedTime, webViewLink)',
           pageToken,
           orderBy: 'modifiedTime desc',
