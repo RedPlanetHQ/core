@@ -4,6 +4,18 @@ import { prisma } from "~/db.server";
 
 import { createHybridLoaderApiRoute } from "~/services/routeBuilders/apiBuilder.server";
 
+const DocumentCursor = z.string().transform((value, context) => {
+  if (value === "") return undefined;
+
+  const [timestamp, id, extra] = value.split("|", 3);
+  const createdAt = new Date(timestamp);
+  if (Number.isNaN(createdAt.getTime()) || id === "" || extra !== undefined) {
+    context.addIssue({ code: "custom", message: "Invalid document cursor" });
+    return z.NEVER;
+  }
+  return { createdAt, id };
+});
+
 // Schema for logs search parameters
 const DocumentsSearchParams = z.object({
   page: z.string().optional(),
@@ -13,7 +25,7 @@ const DocumentsSearchParams = z.object({
   type: z.string().optional(),
   sessionId: z.string().optional(),
   label: z.string().optional(),
-  cursor: z.string().optional(), // cursor for pagination (createdAt timestamp)
+  cursor: DocumentCursor.optional(),
 });
 
 export const loader = createHybridLoaderApiRoute(
@@ -31,7 +43,7 @@ export const loader = createHybridLoaderApiRoute(
     const type = searchParams.type;
     const sessionId = searchParams.sessionId;
     const label = searchParams.label;
-    const cursor = searchParams.cursor; // Cursor is a createdAt timestamp
+    const cursor = searchParams.cursor;
 
     if (!authentication.workspaceId) {
       throw new Response("Workspace not found", { status: 404 });
@@ -122,20 +134,21 @@ export const loader = createHybridLoaderApiRoute(
       }
     }
 
-    // Add cursor condition for pagination
-    if (cursor) {
-      whereClause.createdAt = {
-        lt: new Date(cursor),
-      };
+    if (cursor?.id) {
+      whereClause.OR = [
+        { createdAt: { lt: cursor.createdAt } },
+        { createdAt: cursor.createdAt, id: { lt: cursor.id } },
+      ];
+    } else if (cursor) {
+      // Accept the timestamp-only cursors returned by older versions.
+      whereClause.createdAt = { lt: cursor.createdAt };
     }
 
     // Fetch Documents with simple pagination - no deduplication
     const [documents, totalCount] = await Promise.all([
       prisma.document.findMany({
         where: whereClause,
-        orderBy: {
-          createdAt: "desc",
-        },
+        orderBy: [{ createdAt: "desc" }, { id: "desc" }],
         take: limit,
       }),
       prisma.document.count({
@@ -146,11 +159,10 @@ export const loader = createHybridLoaderApiRoute(
     // Check if there are more results for hasMore flag
     const hasMore = documents.length === limit && totalCount > limit;
 
-    // Get the cursor for the next page (last item's createdAt)
-    const nextCursor =
-      documents.length > 0
-        ? documents[documents.length - 1].createdAt.toISOString()
-        : null;
+    const lastDocument = documents[documents.length - 1];
+    const nextCursor = lastDocument
+      ? `${lastDocument.createdAt.toISOString()}|${lastDocument.id}`
+      : null;
 
     // Get document IDs for ingestion queue lookups
     const documentIds = documents
