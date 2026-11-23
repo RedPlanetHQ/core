@@ -72,6 +72,15 @@ async function shareFilePublicly(
   });
 }
 
+function findDocumentTab(tabs: docs_v1.Schema$Tab[], tabId: string): docs_v1.Schema$Tab | undefined {
+  for (const tab of tabs) {
+    if (tab.tabProperties?.tabId === tabId) return tab;
+    const child = findDocumentTab(tab.childTabs ?? [], tabId);
+    if (child) return child;
+  }
+  return undefined;
+}
+
 function readStructuralText(content: docs_v1.Schema$StructuralElement[] = []): string {
   let text = '';
 
@@ -141,6 +150,7 @@ const CloneDocumentSchema = z.object({
 
 const ReadDocumentSchema = z.object({
   documentId: z.string().describe('ID of the document to read'),
+  tabId: z.string().trim().min(1).optional().describe('Tab ID. Omit to read the first tab.'),
   suggestionsViewMode: z
     .enum([
       'DEFAULT_FOR_CURRENT_ACCESS',
@@ -231,7 +241,7 @@ export async function getTools() {
     },
     {
       name: 'read_document',
-      description: 'Reads the full content of a Google Doc',
+      description: 'Reads the text of the selected Google Docs tab, or the first tab by default',
       inputSchema: zodToJsonSchema(ReadDocumentSchema),
       annotations: { readOnlyHint: true, destructiveHint: false, idempotentHint: true },
     },
@@ -402,9 +412,16 @@ export async function callTool(
         const response = await docs.documents.get({
           documentId: validatedArgs.documentId,
           suggestionsViewMode: validatedArgs.suggestionsViewMode,
+          ...(validatedArgs.tabId && { includeTabsContent: true }),
         });
 
-        const textContent = readStructuralText(response.data.body?.content ?? []);
+        let body = response.data.body;
+        if (validatedArgs.tabId) {
+          const tab = findDocumentTab(response.data.tabs ?? [], validatedArgs.tabId);
+          if (!tab) throw new Error(`Document tab "${validatedArgs.tabId}" was not found`);
+          body = tab.documentTab?.body;
+        }
+        const textContent = readStructuralText(body?.content ?? []);
 
         return {
           content: [
