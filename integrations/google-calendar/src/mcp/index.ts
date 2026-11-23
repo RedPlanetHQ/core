@@ -126,7 +126,8 @@ const DeleteEventSchema = z.object({
 });
 
 const ListCalendarsSchema = z.object({
-  maxResults: z.number().optional().default(100).describe('Maximum number of calendars'),
+  maxResults: z.number().optional().default(100).describe('Maximum number of calendars per page'),
+  pageToken: z.string().min(1).optional().describe('Token returned by the previous page'),
   showHidden: z.boolean().optional().default(false).describe('Show hidden calendars'),
 });
 
@@ -206,7 +207,8 @@ export async function getTools() {
     },
     {
       name: 'list_calendars',
-      description: 'Lists all calendars accessible to the user',
+      description:
+        'Lists a page of calendars accessible to the user. Pass the next page token with the same filters to continue.',
       inputSchema: zodToJsonSchema(ListCalendarsSchema),
       annotations: {
         readOnlyHint: true,
@@ -457,15 +459,18 @@ export async function callTool(
         const response = await calendar.calendarList.list({
           maxResults: validatedArgs.maxResults,
           showHidden: validatedArgs.showHidden,
+          pageToken: validatedArgs.pageToken,
         });
 
         const calendars = response.data.items || [];
+        const nextPageToken = response.data.nextPageToken;
+        const nextPage = nextPageToken ? `\n\nNext page token: ${nextPageToken}` : '';
         if (calendars.length === 0) {
           return {
             content: [
               {
                 type: 'text',
-                text: 'No calendars found.',
+                text: nextPageToken ? `No calendars on this page.${nextPage}` : 'No calendars found.',
               },
             ],
           };
@@ -482,7 +487,7 @@ export async function callTool(
           content: [
             {
               type: 'text',
-              text: `Found ${calendars.length} calendars:\n\n${calendarList}`,
+              text: `Found ${calendars.length} calendars:\n\n${calendarList}${nextPage}`,
             },
           ],
         };
