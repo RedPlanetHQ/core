@@ -189,3 +189,44 @@ it('does not let the sent search skip an inbox arrival after the first search', 
     now.mockRestore();
   }
 });
+
+it.each(['inbox', 'sent'] as const)(
+  'retries the complete scan after a failed %s message read',
+  async folder => {
+    const source = folder === 'inbox' ? inbox : sent;
+    source.push({ id: 'older', time: firstTime }, { id: 'newer', time: firstTime + 1000 });
+    const log = vi.spyOn(console, 'error').mockImplementation(() => {});
+    gmail.get.mockRejectedValueOnce(
+      Object.assign(new Error('Service unavailable'), { status: 503 })
+    );
+
+    try {
+      expect(
+        await handleSchedule({ access_token: 'test-token' }, definition, initialState)
+      ).toEqual([]);
+      const retried = await handleSchedule(
+        { access_token: 'test-token' },
+        definition,
+        initialState
+      );
+      expect(activities(retried).map(message => message.data.sourceURL)).toEqual([
+        expect.stringContaining('/older'),
+        expect.stringContaining('/newer'),
+      ]);
+      expect(checkpoint(retried)?.lastSyncTime).toBe(new Date(firstTime + 1000).toISOString());
+    } finally {
+      log.mockRestore();
+    }
+  }
+);
+
+it('continues when a listed message has been deleted before its details are fetched', async () => {
+  inbox.push({ id: 'deleted', time: firstTime }, { id: 'remaining', time: firstTime + 1000 });
+  gmail.get.mockRejectedValueOnce(Object.assign(new Error('Not Found'), { status: 404 }));
+
+  const result = await handleSchedule({ access_token: 'test-token' }, definition, initialState);
+  expect(activities(result).map(message => message.data.sourceURL)).toEqual([
+    expect.stringContaining('/remaining'),
+  ]);
+  expect(checkpoint(result)?.lastSyncTime).toBe(new Date(firstTime + 1000).toISOString());
+});

@@ -106,6 +106,23 @@ async function listScheduledMessageIds(gmail: gmail_v1.Gmail, q: string) {
   return ids;
 }
 
+async function getScheduledMessage(gmail: gmail_v1.Gmail, messageId: string) {
+  try {
+    const { data } = await gmail.users.messages.get({
+      userId: 'me',
+      id: messageId,
+      format: 'full',
+    });
+    return data;
+  } catch (error) {
+    // A message can be deleted between listing it and fetching its details.
+    if (error instanceof Error && 'status' in error && error.status === 404) {
+      return null;
+    }
+    throw error;
+  }
+}
+
 /**
  * Fetch and process received emails
  */
@@ -122,20 +139,16 @@ async function processReceivedEmails(
   );
 
   for (const messageId of messageIds) {
-    try {
-      // Get full message details
-      const fullMessage = await gmail.users.messages.get({
-        userId: 'me',
-        id: messageId,
-        format: 'full',
-      });
+    const message = await getScheduledMessage(gmail, messageId);
+    if (!message) continue;
 
-      const headers = fullMessage.data.payload.headers;
+    try {
+      const headers = message.payload?.headers ?? [];
       const from = headers.find((h: any) => h.name === 'From')?.value || 'Unknown';
       const subject = headers.find((h: any) => h.name === 'Subject')?.value || '(No subject)';
       const date = headers.find((h: any) => h.name === 'Date')?.value || '';
 
-      const internalDate = parseInt(fullMessage.data.internalDate || '0');
+      const internalDate = parseInt(message.internalDate || '0');
 
       if (internalDate <= window.lastSyncMs || internalDate >= window.syncStartedMs) {
         continue;
@@ -146,8 +159,8 @@ async function processReceivedEmails(
       }
 
       const sender = formatEmailSender(from);
-      const threadId = fullMessage.data.threadId || '';
-      const { textContent, htmlContent } = parseEmailContent(fullMessage.data.payload);
+      const threadId = message.threadId || '';
+      const { textContent, htmlContent } = parseEmailContent(message.payload);
 
       const cleanedContent = cleanEmailContent(htmlContent, textContent);
 
@@ -192,20 +205,16 @@ async function processSentEmails(
   );
 
   for (const messageId of messageIds) {
-    try {
-      // Get full message details
-      const fullMessage = await gmail.users.messages.get({
-        userId: 'me',
-        id: messageId,
-        format: 'full',
-      });
+    const message = await getScheduledMessage(gmail, messageId);
+    if (!message) continue;
 
-      const headers = fullMessage.data.payload.headers;
+    try {
+      const headers = message.payload?.headers ?? [];
       const to = headers.find((h: any) => h.name === 'To')?.value || 'Unknown';
       const subject = headers.find((h: any) => h.name === 'Subject')?.value || '(No subject)';
       const date = headers.find((h: any) => h.name === 'Date')?.value || '';
 
-      const internalDate = parseInt(fullMessage.data.internalDate || '0');
+      const internalDate = parseInt(message.internalDate || '0');
 
       if (internalDate <= window.lastSyncMs || internalDate >= window.syncStartedMs) {
         continue;
@@ -215,8 +224,8 @@ async function processSentEmails(
         lastEmailTime = internalDate;
       }
 
-      const threadId = fullMessage.data.threadId || messageId;
-      const { textContent, htmlContent } = parseEmailContent(fullMessage.data.payload);
+      const threadId = message.threadId || messageId;
+      const { textContent, htmlContent } = parseEmailContent(message.payload);
 
       const cleanedContent = cleanEmailContent(htmlContent, textContent);
 
