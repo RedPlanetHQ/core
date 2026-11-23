@@ -418,11 +418,15 @@ export async function callTool(
           updatedEvent.recurrence = validatedArgs.recurrence;
         }
 
-        const response = await calendar.events.update({
-          calendarId: validatedArgs.calendarId,
-          eventId: validatedArgs.eventId,
-          requestBody: updatedEvent,
-        });
+        const etag = existingEvent.data.etag;
+        const response = await calendar.events.update(
+          {
+            calendarId: validatedArgs.calendarId,
+            eventId: validatedArgs.eventId,
+            requestBody: updatedEvent,
+          },
+          etag ? { headers: { 'If-Match': etag } } : undefined
+        );
 
         return {
           content: [
