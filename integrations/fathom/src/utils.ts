@@ -13,7 +13,9 @@ export function createFathomClient(apiKey: string) {
 }
 
 export interface FathomPaginatedResponse<T> {
-  data: T[];
+  items?: T[];
+  next_cursor?: string | null;
+  data?: T[];
   cursor?: string;
   has_more?: boolean;
 }
@@ -23,11 +25,13 @@ export async function fetchAllPages<T>(
   path: string,
   params: Record<string, string | number | boolean | undefined> = {},
   maxPages = 5,
+  maxItems = Infinity,
 ): Promise<T[]> {
   const client = createFathomClient(apiKey);
   const results: T[] = [];
   let cursor: string | undefined;
   let pages = 0;
+  const seenCursors = new Set<string>();
 
   do {
     const queryParams: Record<string, string | number | boolean> = {};
@@ -36,7 +40,9 @@ export async function fetchAllPages<T>(
     }
     if (cursor) queryParams.cursor = cursor;
 
-    const response = await client.get(path, { params: queryParams });
+    const response = await client.get<FathomPaginatedResponse<T> | T[]>(path, {
+      params: queryParams,
+    });
     const body = response.data;
 
     if (Array.isArray(body)) {
@@ -44,18 +50,17 @@ export async function fetchAllPages<T>(
       break;
     }
 
-    if (body.data) {
-      results.push(...body.data);
-    }
-
-    cursor = body.cursor;
-    const hasMore: boolean = body.has_more ?? !!cursor;
+    results.push(...(body.items ?? body.data ?? []));
+    const nextCursor = body.next_cursor === undefined ? body.cursor : body.next_cursor;
     pages++;
 
-    if (!hasMore) break;
+    if (!nextCursor || body.has_more === false || results.length >= maxItems) break;
+    if (seenCursors.has(nextCursor)) throw new Error('Fathom returned a repeated page cursor');
+    seenCursors.add(nextCursor);
+    cursor = nextCursor;
   } while (pages < maxPages);
 
-  return results;
+  return results.slice(0, maxItems);
 }
 
 export async function fathomGet(
