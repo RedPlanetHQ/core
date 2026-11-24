@@ -1,6 +1,6 @@
 import axios from 'axios';
 
-const FATHOM_API_BASE = 'https://api.fathom.video/external/v1';
+const FATHOM_API_BASE = 'https://api.fathom.ai/external/v1';
 
 export function createFathomClient(apiKey: string) {
   return axios.create({
