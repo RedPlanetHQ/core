@@ -516,11 +516,21 @@ export async function callTool(
           },
         });
 
+        const unavailable = (errors: calendar_v3.Schema$Error[]) =>
+          `  Availability unavailable (${errors.map(error => error.reason ?? 'unknown').join(', ')})\n`;
+
         let result = `Free/Busy information:\n\n`;
+        for (const [groupId, group] of Object.entries(response.data.groups ?? {})) {
+          if (group.errors?.length) {
+            result += `Group: ${groupId}\n${unavailable(group.errors)}\n`;
+          }
+        }
         for (const [calendarId, calendar] of Object.entries(response.data.calendars || {})) {
           const cal = calendar as calendar_v3.Schema$FreeBusyCalendar;
           result += `Calendar: ${calendarId}\n`;
-          if (cal.busy && cal.busy.length > 0) {
+          if (cal.errors?.length) {
+            result += unavailable(cal.errors);
+          } else if (cal.busy && cal.busy.length > 0) {
             result += `Busy times:\n`;
             cal.busy.forEach(period => {
               result += `  - ${period.start} to ${period.end}\n`;
