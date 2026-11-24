@@ -291,11 +291,13 @@ export async function callTool(
         });
 
         const values = response.data.values || [];
+        const dimension = response.data.majorDimension ?? validatedArgs.majorDimension;
+        const countLabel = dimension === 'COLUMNS' ? 'Columns' : 'Rows';
         return {
           content: [
             {
               type: 'text',
-              text: `Range: ${response.data.range}\nRows: ${values.length}\n\nData:\n${JSON.stringify(values, null, 2)}`,
+              text: `Range: ${response.data.range}\n${countLabel}: ${values.length}\n\nData:\n${JSON.stringify(values, null, 2)}`,
             },
           ],
         };
