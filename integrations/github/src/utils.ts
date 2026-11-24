@@ -12,6 +12,9 @@ export async function getGithubData(url: string, accessToken: string) {
   ).data;
 }
 
+const SEARCH_PAGE_SIZE = 10;
+const SEARCH_RESULT_LIMIT = 1000;
+
 /**
  * Get user events (PRs, issues, comments) and also issues assigned to the user by themselves.
  */
@@ -33,22 +36,22 @@ export async function getUserEvents(
     ] = await Promise.all([
       // Search for PRs created by user
       getGithubData(
-        `https://api.github.com/search/issues?q=author:${username}+type:pr+created:>=${formattedDate}&sort=created&order=desc&page=${page}&per_page=10`,
+        `https://api.github.com/search/issues?q=author:${username}+type:pr+created:>=${formattedDate}&sort=created&order=desc&page=${page}&per_page=${SEARCH_PAGE_SIZE}`,
         accessToken,
       ),
       // Search for issues created by user
       getGithubData(
-        `https://api.github.com/search/issues?q=author:${username}+type:issue+created:>=${formattedDate}&sort=created&order=desc&page=${page}&per_page=10`,
+        `https://api.github.com/search/issues?q=author:${username}+type:issue+created:>=${formattedDate}&sort=created&order=desc&page=${page}&per_page=${SEARCH_PAGE_SIZE}`,
         accessToken,
       ),
       // Search for issues/PRs the user commented on
       getGithubData(
-        `https://api.github.com/search/issues?q=commenter:${username}+updated:>=${formattedDate}&sort=updated&order=desc&page=${page}&per_page=10`,
+        `https://api.github.com/search/issues?q=commenter:${username}+updated:>=${formattedDate}&sort=updated&order=desc&page=${page}&per_page=${SEARCH_PAGE_SIZE}`,
         accessToken,
       ),
       // Search for issues assigned to the user and authored by the user (self-assigned)
       getGithubData(
-        `https://api.github.com/search/issues?q=assignee:${username}+author:${username}+type:issue+updated:>=${formattedDate}&sort=updated&order=desc&page=${page}&per_page=10`,
+        `https://api.github.com/search/issues?q=assignee:${username}+author:${username}+type:issue+updated:>=${formattedDate}&sort=updated&order=desc&page=${page}&per_page=${SEARCH_PAGE_SIZE}`,
         accessToken,
       ),
     ]);
@@ -116,9 +119,18 @@ export async function getUserEvents(
 
     // Sort by created_at descending
     results.sort((a, b) => new Date(b.created_at).getTime() - new Date(a.created_at).getTime());
-    return results;
+    const responses = [prsResponse, issuesResponse, commentsResponse, assignedIssuesResponse];
+    const pageEnd = page * SEARCH_PAGE_SIZE;
+    const hasMore =
+      pageEnd < SEARCH_RESULT_LIMIT &&
+      responses.some(
+        response =>
+          response?.items?.length === SEARCH_PAGE_SIZE &&
+          (response.total_count == null || response.total_count > pageEnd),
+      );
+    return { events: results, hasMore };
   } catch (error) {
     console.error('Error fetching user activity via search:', error);
-    return [];
+    throw error;
   }
 }

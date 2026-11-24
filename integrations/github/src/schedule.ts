@@ -217,63 +217,49 @@ async function processUserEvents(
   let hasMorePages = true;
 
   while (hasMorePages) {
-    try {
-      const userEvents = await getUserEvents(username, page, accessToken, lastUserEventTime);
+    const { events, hasMore } = await getUserEvents(username, page, accessToken, lastUserEventTime);
+    hasMorePages = hasMore;
+    page++;
 
-      if (!userEvents || userEvents.length === 0) {
-        hasMorePages = false;
-        break;
-      }
+    for (const event of events) {
+      try {
+        let title = '';
+        const sourceURL = event.html_url || '';
+        const repo = event.repository?.full_name;
+        const repoStr = repo ? ` in ${repo}` : '';
 
-      if (userEvents.length < 30) {
-        hasMorePages = false;
-      } else {
-        page++;
-      }
-
-      for (const event of userEvents) {
-        try {
-          let title = '';
-          const sourceURL = event.html_url || '';
-          const repo = event.repository?.full_name;
-          const repoStr = repo ? ` in ${repo}` : '';
-
-          switch (event.type) {
-            case 'pr':
-              title = `${username} created PR #${event.number}${repoStr}: ${event.title}`;
-              break;
-            case 'issue':
-              title = `${username} created issue #${event.number}${repoStr}: ${event.title}`;
-              break;
-            case 'pr_comment':
-              title = `${username} commented on PR #${event.number}${repoStr}: ${event.title}`;
-              break;
-            case 'issue_comment':
-              title = `${username} commented on issue #${event.number}${repoStr}: ${event.title}`;
-              break;
-            case 'self_assigned_issue':
-              title = `${username} assigned themselves to issue #${event.number}${repoStr}: ${event.title}`;
-              break;
-            default:
-              title = `GitHub activity: ${event.title || 'Unknown'}`;
-              break;
-          }
-
-          if (title && sourceURL) {
-            activities.push(
-              createActivityMessage({
-                text: title,
-                sourceURL: sourceURL,
-              }),
-            );
-          }
-        } catch (error) {
-          // Silently ignore errors to prevent stdout pollution
+        switch (event.type) {
+          case 'pr':
+            title = `${username} created PR #${event.number}${repoStr}: ${event.title}`;
+            break;
+          case 'issue':
+            title = `${username} created issue #${event.number}${repoStr}: ${event.title}`;
+            break;
+          case 'pr_comment':
+            title = `${username} commented on PR #${event.number}${repoStr}: ${event.title}`;
+            break;
+          case 'issue_comment':
+            title = `${username} commented on issue #${event.number}${repoStr}: ${event.title}`;
+            break;
+          case 'self_assigned_issue':
+            title = `${username} assigned themselves to issue #${event.number}${repoStr}: ${event.title}`;
+            break;
+          default:
+            title = `GitHub activity: ${event.title || 'Unknown'}`;
+            break;
         }
+
+        if (title && sourceURL) {
+          activities.push(
+            createActivityMessage({
+              text: title,
+              sourceURL: sourceURL,
+            }),
+          );
+        }
+      } catch (error) {
+        // Silently ignore errors to prevent stdout pollution
       }
-    } catch (error) {
-      // Silently ignore errors to prevent stdout pollution
-      hasMorePages = false;
     }
   }
 
@@ -333,16 +319,12 @@ export async function handleSchedule(
 
     // Process user events if we have a username
     if (settings.username) {
-      try {
-        const userEventActivities = await processUserEvents(
-          settings.username,
-          integrationConfiguration.access_token,
-          lastUserEventTime,
-        );
-        messages.push(...userEventActivities);
-      } catch (error) {
-        // Silently ignore errors to prevent stdout pollution
-      }
+      const userEventActivities = await processUserEvents(
+        settings.username,
+        integrationConfiguration.access_token,
+        lastUserEventTime,
+      );
+      messages.push(...userEventActivities);
     }
 
     // Update last sync times
