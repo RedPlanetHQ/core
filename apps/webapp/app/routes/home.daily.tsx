@@ -80,6 +80,7 @@ export default function DailyRoute() {
         >
           {() => (
             <DailyPage
+              key={todayPage.date}
               butlerName={butlerName}
               workspaceId={workspaceId}
               userId={userId}
