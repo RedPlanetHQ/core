@@ -154,6 +154,7 @@ const ReadDocumentSchema = z.object({
 
 const InsertTextSchema = z.object({
   documentId: z.string().describe('ID of the document'),
+  tabId: z.string().trim().min(1).optional().describe('Tab ID. Omit to use the first tab.'),
   text: z.string().describe('Text to insert'),
   index: z
     .number()
@@ -164,6 +165,7 @@ const InsertTextSchema = z.object({
 
 const AppendTextSchema = z.object({
   documentId: z.string().describe('ID of the document'),
+  tabId: z.string().trim().min(1).optional().describe('Tab ID. Omit to use the first tab.'),
   text: z.string().describe('Text to append to the end of the document'),
 });
 
@@ -237,13 +239,13 @@ export async function getTools() {
     },
     {
       name: 'insert_text',
-      description: 'Inserts text at a specific location in a document',
+      description: 'Inserts text at a specific location in a document tab',
       inputSchema: zodToJsonSchema(InsertTextSchema),
       annotations: { readOnlyHint: false, destructiveHint: true, idempotentHint: false },
     },
     {
       name: 'append_text',
-      description: 'Appends text to the end of a document',
+      description: 'Appends text to the end of a document tab',
       inputSchema: zodToJsonSchema(AppendTextSchema),
       annotations: { readOnlyHint: false, destructiveHint: true, idempotentHint: false },
     },
@@ -426,6 +428,7 @@ export async function callTool(
                 insertText: {
                   location: {
                     index: validatedArgs.index,
+                    ...(validatedArgs.tabId && { tabId: validatedArgs.tabId }),
                   },
                   text: validatedArgs.text,
                 },
@@ -453,7 +456,7 @@ export async function callTool(
             requests: [
               {
                 insertText: {
-                  endOfSegmentLocation: {},
+                  endOfSegmentLocation: validatedArgs.tabId ? { tabId: validatedArgs.tabId } : {},
                   text: validatedArgs.text,
                 },
               },
