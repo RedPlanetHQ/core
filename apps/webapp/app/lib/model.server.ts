@@ -194,7 +194,7 @@ export const getModel = (takeModel?: string) => {
 // Provider options helpers
 // ---------------------------------------------------------------------------
 
-function buildOpenAIProviderOptions(
+export function buildOpenAIProviderOptions(
   model: string,
   cacheKey: string,
   reasoningEffort?: ModelComplexity,
@@ -222,8 +222,9 @@ function buildOpenAIProviderOptions(
       options.promptCacheRetention = "24h";
       // Lowest-reasoning default differs by family:
       //   gpt-5    → "minimal" | "low" | "medium" | "high"
-      //   gpt-5.2+ → "none" | "low" | "medium" | "high" | "xhigh"
-      const lowestEffort = modelId.startsWith("gpt-5.2") ? "none" : "minimal";
+      //   gpt-5.1+ → "none" | "low" | "medium" | "high" (+ "xhigh" from 5.2)
+      const isOriginalGpt5 = modelId === "gpt-5" || modelId.startsWith("gpt-5-");
+      const lowestEffort = isOriginalGpt5 ? "minimal" : "none";
       options.reasoningEffort = reasoningEffort || (lowestEffort as any);
     }
   }
