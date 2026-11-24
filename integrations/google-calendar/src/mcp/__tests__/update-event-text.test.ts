@@ -38,19 +38,25 @@ const update = (args: Record<string, unknown>) =>
 describe('Google Calendar optional text updates', () => {
   it.each(['summary', 'description', 'location'])('clears an explicitly empty %s', async field => {
     await update({ [field]: '' });
-    expect(client.update).toHaveBeenCalledWith({
-      calendarId: 'primary',
-      eventId: 'event-1',
-      requestBody: { ...existing, [field]: '' },
-    });
+    expect(client.update).toHaveBeenCalledWith(
+      {
+        calendarId: 'primary',
+        eventId: 'event-1',
+        requestBody: { ...existing, [field]: '' },
+      },
+      undefined
+    );
   });
   it('preserves omitted fields and the event time/attendees', async () => {
     await update({ summary: 'Updated title' });
-    expect(client.update).toHaveBeenCalledWith({
-      calendarId: 'primary',
-      eventId: 'event-1',
-      requestBody: { ...existing, summary: 'Updated title' },
-    });
+    expect(client.update).toHaveBeenCalledWith(
+      {
+        calendarId: 'primary',
+        eventId: 'event-1',
+        requestBody: { ...existing, summary: 'Updated title' },
+      },
+      undefined
+    );
   });
   it('clears multiple fields in one update', async () => {
     await update({ description: '', location: '' });
