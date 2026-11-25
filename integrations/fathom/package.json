@@ -14,7 +14,8 @@
   "scripts": {
     "build": "rimraf dist && bun build src/index.ts --outfile dist/index.js --target node --minify",
     "lint": "eslint --ext js,ts,tsx src/ --fix",
-    "prettier": "prettier --config .prettierrc --write ."
+    "prettier": "prettier --config .prettierrc --write .",
+    "test": "vitest run"
   },
   "devDependencies": {
     "@babel/preset-typescript": "^7.26.0",
@@ -32,7 +33,8 @@
     "typescript": "^4.7.2",
     "zod": "^3.22.4",
     "zod-to-json-schema": "^3.22.1",
-    "esbuild": "^0.25.0"
+    "esbuild": "^0.25.0",
+    "vitest": "3.2.4"
   },
   "publishConfig": {
     "access": "public"

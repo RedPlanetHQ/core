@@ -2,20 +2,16 @@
 import { z } from 'zod';
 import { zodToJsonSchema } from 'zod-to-json-schema';
 
-import { fathomDelete, fathomGet, fathomPost, fetchAllPages } from '../utils';
+import {
+  type FathomMeeting,
+  fathomDelete,
+  fathomGet,
+  fathomPost,
+  fathomRecorderName,
+  fetchAllPages,
+} from '../utils';
 
 // ─── Schemas ────────────────────────────────────────────────────────────────
-
-interface FathomMeeting {
-  recording_id?: number;
-  id?: string;
-  title?: string;
-  created_at?: string;
-  duration?: number;
-  recorded_by?: string | { name?: string; email?: string };
-  share_url?: string;
-  url?: string;
-}
 
 const ListMeetingsSchema = z.object({
   limit: z.number().int().positive().optional().describe('Max number of meetings to return (default 50)'),
@@ -179,8 +175,7 @@ export async function callTool(
             const parts = [`ID: ${m.recording_id ?? m.id ?? 'Unavailable'}`, `Title: ${m.title || 'Untitled'}`];
             if (m.created_at) parts.push(`Date: ${m.created_at}`);
             if (m.duration) parts.push(`Duration: ${Math.round(m.duration / 60)} min`);
-            const recorder =
-              typeof m.recorded_by === 'string' ? m.recorded_by : m.recorded_by?.name ?? m.recorded_by?.email;
+            const recorder = fathomRecorderName(m.recorded_by);
             if (recorder) parts.push(`Recorded by: ${recorder}`);
             const url = m.share_url ?? m.url;
             if (url) parts.push(`URL: ${url}`);

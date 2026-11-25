@@ -12,6 +12,23 @@ export function createFathomClient(apiKey: string) {
   });
 }
 
+export type FathomRecorder = string | { name?: string; email?: string };
+
+export interface FathomMeeting {
+  recording_id?: number;
+  id?: string;
+  title?: string;
+  created_at?: string;
+  duration?: number;
+  recorded_by?: FathomRecorder;
+  share_url?: string;
+  url?: string;
+}
+
+export function fathomRecorderName(recorder?: FathomRecorder): string | undefined {
+  return typeof recorder === 'string' ? recorder : (recorder?.name ?? recorder?.email);
+}
+
 export interface FathomPaginatedResponse<T> {
   items?: T[];
   next_cursor?: string | null;
@@ -50,7 +67,9 @@ export async function fetchAllPages<T>(
       break;
     }
 
-    results.push(...(body.items ?? body.data ?? []));
+    const items = body?.items ?? body?.data;
+    if (!Array.isArray(items)) throw new Error('Fathom returned an invalid page');
+    results.push(...items);
     const nextCursor = body.next_cursor === undefined ? body.cursor : body.next_cursor;
     pages++;
 
@@ -79,11 +98,7 @@ export async function fathomGet(
   return response.data;
 }
 
-export async function fathomPost(
-  apiKey: string,
-  path: string,
-  data?: Record<string, unknown>,
-) {
+export async function fathomPost(apiKey: string, path: string, data?: Record<string, unknown>) {
   const client = createFathomClient(apiKey);
   const response = await client.post(path, data);
   return response.data;
