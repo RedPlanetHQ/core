@@ -1,4 +1,4 @@
-import axios from 'axios';
+import axios, { type AxiosError, type AxiosResponse } from 'axios';
 
 const FATHOM_API_BASE = 'https://api.fathom.video/external/v1';
 
@@ -21,6 +21,7 @@ export interface FathomMeeting {
   created_at?: string;
   duration?: number;
   recorded_by?: FathomRecorder;
+  default_summary?: { markdown_formatted?: string | null } | null;
   share_url?: string;
   url?: string;
 }
@@ -35,6 +36,28 @@ export interface FathomPaginatedResponse<T> {
   data?: T[];
   cursor?: string;
   has_more?: boolean;
+}
+
+export function isFathomRateLimited(
+  error: unknown,
+): error is AxiosError & { response: AxiosResponse } {
+  return axios.isAxiosError(error) && error.response?.status === 429;
+}
+
+const MAX_RETRY_DELAY_MS = 65_000;
+
+async function getWithRateLimitRetry<T>(request: () => Promise<T>): Promise<T> {
+  try {
+    return await request();
+  } catch (error) {
+    if (!isFathomRateLimited(error)) throw error;
+    const retryAfter = error.response.headers?.['retry-after'];
+    const delay = retryAfter == null ? 60_000 : Number(retryAfter) * 1_000;
+    if (!Number.isFinite(delay) || delay < 0 || delay > MAX_RETRY_DELAY_MS) throw error;
+
+    await new Promise(resolve => setTimeout(resolve, delay));
+    return request();
+  }
 }
 
 export async function fetchAllPages<T>(
@@ -57,9 +80,9 @@ export async function fetchAllPages<T>(
     }
     if (cursor) queryParams.cursor = cursor;
 
-    const response = await client.get<FathomPaginatedResponse<T> | T[]>(path, {
-      params: queryParams,
-    });
+    const response = await getWithRateLimitRetry(() =>
+      client.get<FathomPaginatedResponse<T> | T[]>(path, { params: queryParams }),
+    );
     const body = response.data;
 
     if (Array.isArray(body)) {
@@ -94,7 +117,7 @@ export async function fathomGet(
       if (v !== undefined) queryParams[k] = v;
     }
   }
-  const response = await client.get(path, { params: queryParams });
+  const response = await getWithRateLimitRetry(() => client.get(path, { params: queryParams }));
   return response.data;
 }
 

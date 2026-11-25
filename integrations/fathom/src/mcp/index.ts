@@ -162,7 +162,7 @@ export async function callTool(
           config.api_key,
           '/meetings',
           { created_after, created_before, 'recorded_by[]': recorded_by, include_transcript },
-          undefined,
+          Infinity,
           limit ?? 50,
         );
 
