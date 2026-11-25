@@ -1,4 +1,4 @@
-import { getUserEvents, getGithubData } from './utils';
+import { type SearchLane, getUserEvents, getGithubData, searchLanes } from './utils';
 
 interface GitHubActivityCreateParams {
   text: string;
@@ -73,12 +73,12 @@ async function processNotifications(
   let hasMorePages = true;
 
   while (hasMorePages) {
-    try {
-      const notifications = await getGithubData(
-        `https://api.github.com/notifications?page=${page}&per_page=50&all=true&since=${lastSyncTime}`,
-        accessToken,
-      );
+    const notifications = await getGithubData(
+      `https://api.github.com/notifications?page=${page}&per_page=50&all=true&since=${lastSyncTime}`,
+      accessToken,
+    );
 
+    try {
       if (!notifications || notifications.length === 0) {
         hasMorePages = false;
         break;
@@ -214,11 +214,17 @@ async function processUserEvents(
 ): Promise<any[]> {
   const activities = [];
   let page = 1;
-  let hasMorePages = true;
+  let activeLanes: readonly SearchLane[] = searchLanes;
 
-  while (hasMorePages) {
-    const { events, hasMore } = await getUserEvents(username, page, accessToken, lastUserEventTime);
-    hasMorePages = hasMore;
+  while (activeLanes.length > 0) {
+    const { events, remainingLanes } = await getUserEvents(
+      username,
+      page,
+      accessToken,
+      lastUserEventTime,
+      activeLanes,
+    );
+    activeLanes = remainingLanes;
     page++;
 
     for (const event of events) {
@@ -279,7 +285,7 @@ export async function handleSchedule(
     }
 
     // Get settings or initialize if not present
-    let settings = (state || {}) as GitHubSettings;
+    const settings: GitHubSettings = { ...state };
 
     // Default to 24 hours ago if no last sync times
     const lastSyncTime = settings.lastSyncTime || getDefaultSyncTime();
@@ -302,10 +308,10 @@ export async function handleSchedule(
       settings.username = user.login;
     }
 
-    // Collect all messages
     const messages = [];
+    const syncStartedAt = new Date().toISOString();
+    let completed = false;
 
-    // Process notifications
     try {
       const notificationActivities = await processNotifications(
         integrationConfiguration.access_token,
@@ -313,32 +319,34 @@ export async function handleSchedule(
         settings.username || 'user',
       );
       messages.push(...notificationActivities);
+      settings.lastSyncTime = syncStartedAt;
+      completed = true;
     } catch (error) {
-      // Silently ignore errors to prevent stdout pollution
-    }
-
-    // Process user events if we have a username
-    if (settings.username) {
-      const userEventActivities = await processUserEvents(
-        settings.username,
-        integrationConfiguration.access_token,
-        lastUserEventTime,
+      console.error(
+        'Error fetching GitHub notifications:',
+        error instanceof Error ? error.message : 'Unknown error',
       );
-      messages.push(...userEventActivities);
     }
 
-    // Update last sync times
-    const newSyncTime = new Date().toISOString();
+    if (settings.username) {
+      try {
+        const userEventActivities = await processUserEvents(
+          settings.username,
+          integrationConfiguration.access_token,
+          lastUserEventTime,
+        );
+        messages.push(...userEventActivities);
+        settings.lastUserEventTime = syncStartedAt;
+        completed = true;
+      } catch (error) {
+        console.error(
+          'Error fetching GitHub search activity:',
+          error instanceof Error ? error.message : 'Unknown error',
+        );
+      }
+    }
 
-    // Add state message for saving settings
-    messages.push({
-      type: 'state',
-      data: {
-        ...settings,
-        lastSyncTime: newSyncTime,
-        lastUserEventTime: newSyncTime,
-      },
-    });
+    if (completed) messages.push({ type: 'state', data: settings });
 
     return messages;
   } catch (error) {
