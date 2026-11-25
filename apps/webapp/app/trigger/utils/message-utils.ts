@@ -1,3 +1,4 @@
+import { createHash } from "node:crypto";
 import { EpisodeTypeEnum, type Message } from "@core/types";
 import { addToQueue } from "./queue";
 import { triggerWebhookDelivery } from "../webhooks/webhook-delivery";
@@ -114,6 +115,14 @@ export const saveIntegrationAccountState = async ({
   );
 };
 
+function fathomActivityId(accountId: string, sourceActivityId: string) {
+  const hash = createHash("sha256")
+    .update(JSON.stringify(["fathom-activity", accountId, sourceActivityId]))
+    .digest("hex");
+  // Keep the UUID format used by Activity IDs (version 8, RFC variant).
+  return `${hash.slice(0, 8)}-${hash.slice(8, 12)}-8${hash.slice(13, 16)}-a${hash.slice(17, 20)}-${hash.slice(20, 32)}`;
+}
+
 export const createActivities = async ({
   integrationAccountId,
   messages,
@@ -137,38 +146,57 @@ export const createActivities = async ({
 
   const results = await Promise.all(
     messages.map(async (message) => {
-      const activity = await prisma.activity.create({
-        data: {
-          text: message.data.text,
-          sourceURL: message.data.sourceURL,
-          integrationAccountId,
-          workspaceId: integrationAccount?.workspaceId,
-        },
-      });
+      const data = {
+        text: message.data.text,
+        sourceURL: message.data.sourceURL,
+        integrationAccountId,
+        workspaceId: integrationAccount.workspaceId,
+      };
+
+      const sourceActivityId = message.data.sourceActivityId;
+      let activityId: string;
+      if (
+        integrationAccount.integrationDefinition.slug === "fathom" &&
+        typeof sourceActivityId === "string" &&
+        sourceActivityId.length > 0
+      ) {
+        activityId = fathomActivityId(integrationAccountId, sourceActivityId);
+        const { count } = await prisma.activity.createMany({
+          data: [{ ...data, id: activityId }],
+          skipDuplicates: true,
+        });
+        if (count === 0) return null;
+      } else {
+        const activity = await prisma.activity.create({ data });
+        activityId = activity.id;
+      }
 
       if (integrationAccount?.workspaceId) {
         try {
           await triggerWebhookDelivery(
-            activity.id,
+            activityId,
             integrationAccount?.workspaceId,
           );
           logger.debug("Webhook delivery triggered for activity", {
-            activityId: activity.id,
+            activityId,
           });
         } catch (error) {
           logger.error("Failed to trigger webhook delivery", {
-            activityId: activity.id,
+            activityId,
             error,
           });
         }
       }
 
       return {
-        activityId: activity.id,
+        activityId,
         text: message.data.text as string,
       };
     }),
   );
+
+  const created = results.filter((result) => result !== null);
+  if (created.length === 0) return [];
 
   // Enqueue CASE pipeline if integration account has autoActivityRead enabled
   try {
@@ -184,7 +212,7 @@ export const createActivities = async ({
       });
 
       if (user?.email) {
-        const activitiesText = results.map((r) => r.text).join("\n\n");
+        const activitiesText = created.map((r) => r.text).join("\n\n");
         await enqueueCase({
           type: "activity",
           integrationAccountId,
@@ -205,5 +233,5 @@ export const createActivities = async ({
     });
   }
 
-  return results;
+  return created;
 };
