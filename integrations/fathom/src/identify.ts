@@ -1,15 +1,18 @@
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-export const identify = async (_integrationDefinition: any, eventBody: any) => {
-  try {
-    // Fathom webhook events include recorded_by (user email) in the event data,
-    // which matches the accountId stored during account creation.
-    const recordedBy =
-      eventBody?.data?.recorded_by || eventBody?.event?.data?.recorded_by;
+import type { FathomRecorder } from './utils';
 
-    if (!recordedBy) return [];
+export function fathomRecorderEmail(recorder?: FathomRecorder): string | undefined {
+  return typeof recorder === 'string' ? recorder : recorder?.email;
+}
 
-    return [{ type: 'identifier', data: recordedBy }];
-  } catch {
-    return [];
-  }
+type FathomWebhook = {
+  recorded_by?: FathomRecorder;
+  data?: { recorded_by?: FathomRecorder };
+  event?: { data?: { recorded_by?: FathomRecorder } };
 };
+
+export async function identify(_integrationDefinition: unknown, eventBody?: FathomWebhook) {
+  const recorder =
+    eventBody?.recorded_by ?? eventBody?.data?.recorded_by ?? eventBody?.event?.data?.recorded_by;
+  const email = fathomRecorderEmail(recorder);
+  return email ? [{ type: 'identifier', data: email }] : [];
+}
