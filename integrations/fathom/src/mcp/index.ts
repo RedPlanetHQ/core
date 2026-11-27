@@ -2,12 +2,19 @@
 import { z } from 'zod';
 import { zodToJsonSchema } from 'zod-to-json-schema';
 
-import { fathomDelete, fathomGet, fathomPost, fetchAllPages } from '../utils';
+import {
+  type FathomMeeting,
+  fathomDelete,
+  fathomGet,
+  fathomPost,
+  fathomRecorderName,
+  fetchAllPages,
+} from '../utils';
 
 // ─── Schemas ────────────────────────────────────────────────────────────────
 
 const ListMeetingsSchema = z.object({
-  limit: z.number().optional().describe('Max number of meetings to return (default 50)'),
+  limit: z.number().int().positive().optional().describe('Max number of meetings to return (default 50)'),
   created_after: z
     .string()
     .optional()
@@ -161,25 +168,27 @@ export async function callTool(
         const { limit, created_after, created_before, recorded_by, include_transcript } =
           ListMeetingsSchema.parse(args);
 
-        const meetings = await fetchAllPages<any>(config.api_key, '/meetings', {
-          limit: limit ?? 50,
-          created_after,
-          created_before,
-          recorded_by,
-          include_transcript,
-        });
+        const meetings = await fetchAllPages<FathomMeeting>(
+          config.api_key,
+          '/meetings',
+          { created_after, created_before, 'recorded_by[]': recorded_by, include_transcript },
+          Infinity,
+          limit ?? 50,
+        );
 
         if (meetings.length === 0) {
           return { content: [{ type: 'text', text: 'No meetings found.' }] };
         }
 
         const list = meetings
-          .map((m: any) => {
-            const parts = [`ID: ${m.id}`, `Title: ${m.title || 'Untitled'}`];
+          .map(m => {
+            const parts = [`ID: ${m.recording_id ?? m.id ?? 'Unavailable'}`, `Title: ${m.title || 'Untitled'}`];
             if (m.created_at) parts.push(`Date: ${m.created_at}`);
             if (m.duration) parts.push(`Duration: ${Math.round(m.duration / 60)} min`);
-            if (m.recorded_by) parts.push(`Recorded by: ${m.recorded_by}`);
-            if (m.share_url) parts.push(`URL: ${m.share_url}`);
+            const recorder = fathomRecorderName(m.recorded_by);
+            if (recorder) parts.push(`Recorded by: ${recorder}`);
+            const url = m.share_url ?? m.url;
+            if (url) parts.push(`URL: ${url}`);
             return parts.join('\n');
           })
           .join('\n\n');
