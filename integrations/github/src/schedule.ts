@@ -1,4 +1,4 @@
-import { getUserEvents, getGithubData } from './utils';
+import { type SearchLane, getUserEvents, getGithubData, searchLanes } from './utils';
 
 interface GitHubActivityCreateParams {
   text: string;
@@ -73,12 +73,12 @@ async function processNotifications(
   let hasMorePages = true;
 
   while (hasMorePages) {
-    try {
-      const notifications = await getGithubData(
-        `https://api.github.com/notifications?page=${page}&per_page=50&all=true&since=${lastSyncTime}`,
-        accessToken,
-      );
+    const notifications = await getGithubData(
+      `https://api.github.com/notifications?page=${page}&per_page=50&all=true&since=${lastSyncTime}`,
+      accessToken,
+    );
 
+    try {
       if (!notifications || notifications.length === 0) {
         hasMorePages = false;
         break;
@@ -214,66 +214,58 @@ async function processUserEvents(
 ): Promise<any[]> {
   const activities = [];
   let page = 1;
-  let hasMorePages = true;
+  let activeLanes: readonly SearchLane[] = searchLanes;
 
-  while (hasMorePages) {
-    try {
-      const userEvents = await getUserEvents(username, page, accessToken, lastUserEventTime);
+  while (activeLanes.length > 0) {
+    const { events, remainingLanes } = await getUserEvents(
+      username,
+      page,
+      accessToken,
+      lastUserEventTime,
+      activeLanes,
+    );
+    activeLanes = remainingLanes;
+    page++;
 
-      if (!userEvents || userEvents.length === 0) {
-        hasMorePages = false;
-        break;
-      }
+    for (const event of events) {
+      try {
+        let title = '';
+        const sourceURL = event.html_url || '';
+        const repo = event.repository?.full_name;
+        const repoStr = repo ? ` in ${repo}` : '';
 
-      if (userEvents.length < 30) {
-        hasMorePages = false;
-      } else {
-        page++;
-      }
-
-      for (const event of userEvents) {
-        try {
-          let title = '';
-          const sourceURL = event.html_url || '';
-          const repo = event.repository?.full_name;
-          const repoStr = repo ? ` in ${repo}` : '';
-
-          switch (event.type) {
-            case 'pr':
-              title = `${username} created PR #${event.number}${repoStr}: ${event.title}`;
-              break;
-            case 'issue':
-              title = `${username} created issue #${event.number}${repoStr}: ${event.title}`;
-              break;
-            case 'pr_comment':
-              title = `${username} commented on PR #${event.number}${repoStr}: ${event.title}`;
-              break;
-            case 'issue_comment':
-              title = `${username} commented on issue #${event.number}${repoStr}: ${event.title}`;
-              break;
-            case 'self_assigned_issue':
-              title = `${username} assigned themselves to issue #${event.number}${repoStr}: ${event.title}`;
-              break;
-            default:
-              title = `GitHub activity: ${event.title || 'Unknown'}`;
-              break;
-          }
-
-          if (title && sourceURL) {
-            activities.push(
-              createActivityMessage({
-                text: title,
-                sourceURL: sourceURL,
-              }),
-            );
-          }
-        } catch (error) {
-          // Silently ignore errors to prevent stdout pollution
+        switch (event.type) {
+          case 'pr':
+            title = `${username} created PR #${event.number}${repoStr}: ${event.title}`;
+            break;
+          case 'issue':
+            title = `${username} created issue #${event.number}${repoStr}: ${event.title}`;
+            break;
+          case 'pr_comment':
+            title = `${username} commented on PR #${event.number}${repoStr}: ${event.title}`;
+            break;
+          case 'issue_comment':
+            title = `${username} commented on issue #${event.number}${repoStr}: ${event.title}`;
+            break;
+          case 'self_assigned_issue':
+            title = `${username} assigned themselves to issue #${event.number}${repoStr}: ${event.title}`;
+            break;
+          default:
+            title = `GitHub activity: ${event.title || 'Unknown'}`;
+            break;
         }
+
+        if (title && sourceURL) {
+          activities.push(
+            createActivityMessage({
+              text: title,
+              sourceURL: sourceURL,
+            }),
+          );
+        }
+      } catch (error) {
+        // Silently ignore errors to prevent stdout pollution
       }
-    } catch (error) {
-      // Silently ignore errors to prevent stdout pollution
-      hasMorePages = false;
     }
   }
 
@@ -293,7 +285,7 @@ export async function handleSchedule(
     }
 
     // Get settings or initialize if not present
-    let settings = (state || {}) as GitHubSettings;
+    const settings: GitHubSettings = { ...state };
 
     // Default to 24 hours ago if no last sync times
     const lastSyncTime = settings.lastSyncTime || getDefaultSyncTime();
@@ -316,10 +308,10 @@ export async function handleSchedule(
       settings.username = user.login;
     }
 
-    // Collect all messages
     const messages = [];
+    const syncStartedAt = new Date().toISOString();
+    let completed = false;
 
-    // Process notifications
     try {
       const notificationActivities = await processNotifications(
         integrationConfiguration.access_token,
@@ -327,11 +319,15 @@ export async function handleSchedule(
         settings.username || 'user',
       );
       messages.push(...notificationActivities);
+      settings.lastSyncTime = syncStartedAt;
+      completed = true;
     } catch (error) {
-      // Silently ignore errors to prevent stdout pollution
+      console.error(
+        'Error fetching GitHub notifications:',
+        error instanceof Error ? error.message : 'Unknown error',
+      );
     }
 
-    // Process user events if we have a username
     if (settings.username) {
       try {
         const userEventActivities = await processUserEvents(
@@ -340,23 +336,17 @@ export async function handleSchedule(
           lastUserEventTime,
         );
         messages.push(...userEventActivities);
+        settings.lastUserEventTime = syncStartedAt;
+        completed = true;
       } catch (error) {
-        // Silently ignore errors to prevent stdout pollution
+        console.error(
+          'Error fetching GitHub search activity:',
+          error instanceof Error ? error.message : 'Unknown error',
+        );
       }
     }
 
-    // Update last sync times
-    const newSyncTime = new Date().toISOString();
-
-    // Add state message for saving settings
-    messages.push({
-      type: 'state',
-      data: {
-        ...settings,
-        lastSyncTime: newSyncTime,
-        lastUserEventTime: newSyncTime,
-      },
-    });
+    if (completed) messages.push({ type: 'state', data: settings });
 
     return messages;
   } catch (error) {
