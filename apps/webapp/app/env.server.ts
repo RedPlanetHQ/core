@@ -226,6 +226,7 @@ const EnvironmentSchema = z
     MODEL_PROVIDER: z.enum(["vercel-ai"]).default("vercel-ai"),
 
     EXA_API_KEY: z.string().optional(),
+    KEENABLE_API_KEY: z.string().optional(),
     CUSTOM_MCP_ALLOW_NO_AUTH: z
       .string()
       .optional()
