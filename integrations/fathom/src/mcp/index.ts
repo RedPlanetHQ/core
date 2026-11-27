@@ -28,11 +28,11 @@ const GetMeetingSchema = z.object({
 });
 
 const GetMeetingTranscriptSchema = z.object({
-  meeting_id: z.string().describe('The meeting ID'),
+  meeting_id: z.string().describe('Recording ID from the meeting list'),
 });
 
 const GetMeetingSummarySchema = z.object({
-  meeting_id: z.string().describe('The meeting ID'),
+  meeting_id: z.string().describe('Recording ID from the meeting list'),
 });
 
 const GetRecordingSchema = z.object({
@@ -95,7 +95,7 @@ export async function getTools() {
     {
       name: 'fathom_get_meeting_summary',
       description:
-        'Get the AI-generated summary of a Fathom meeting including key points and action items.',
+        'Get the AI-generated markdown summary of a Fathom recording.',
       inputSchema: zodToJsonSchema(GetMeetingSummarySchema),
       annotations: { readOnlyHint: true, destructiveHint: false, idempotentHint: true },
     },
@@ -209,22 +209,28 @@ export async function callTool(
         return { content: [{ type: 'text', text: parts.join('\n') }] };
       }
 
-      case 'fathom_get_meeting_transcript': {
-        const { meeting_id } = GetMeetingTranscriptSchema.parse(args);
-        const entries = await fetchAllPages<any>(
+      case 'fathom_get_meeting_transcript':
+      case 'fathom_get_recording_transcript': {
+        const recordingId = name === 'fathom_get_meeting_transcript'
+          ? GetMeetingTranscriptSchema.parse(args).meeting_id
+          : GetRecordingTranscriptSchema.parse(args).recording_id;
+        const response = await fathomGet(
           config.api_key,
-          `/meetings/${meeting_id}/transcript`,
+          `/recordings/${encodeURIComponent(recordingId)}/transcript`,
         );
+        const entries: FathomTranscriptEntry[] = Array.isArray(response)
+          ? response
+          : response?.transcript ?? [];
 
         if (entries.length === 0) {
           return { content: [{ type: 'text', text: 'Transcript is empty.' }] };
         }
 
         const text = entries
-          .map((entry: any) => {
-            const speaker = entry.speaker || 'Unknown';
-            const time = entry.start_time != null ? formatTime(entry.start_time) : '?';
-            return `[${time}] ${speaker}: ${entry.text || ''}`;
+          .map(entry => {
+            const speaker = typeof entry.speaker === 'string' ? entry.speaker : entry.speaker?.display_name;
+            const time = entry.timestamp ?? formatTime(entry.start_time);
+            return `[${time}] ${speaker || 'Unknown'}: ${entry.text || ''}`;
           })
           .join('\n');
 
@@ -233,25 +239,14 @@ export async function callTool(
 
       case 'fathom_get_meeting_summary': {
         const { meeting_id } = GetMeetingSummarySchema.parse(args);
-        const summary = await fathomGet(config.api_key, `/meetings/${meeting_id}/summary`);
-
-        if (!summary) {
-          return {
-            content: [{ type: 'text', text: `Summary for meeting ${meeting_id} not found.` }],
-          };
-        }
-
-        const parts = [];
-        if (summary.key_points) parts.push(`Key points:\n${summary.key_points}`);
-        if (summary.action_items) parts.push(`Action items:\n${summary.action_items}`);
-        if (summary.highlights) parts.push(`Highlights:\n${summary.highlights}`);
-        if (summary.overview) parts.push(`Overview:\n${summary.overview}`);
-
-        if (parts.length === 0) {
-          return { content: [{ type: 'text', text: JSON.stringify(summary, null, 2) }] };
-        }
-
-        return { content: [{ type: 'text', text: parts.join('\n\n') }] };
+        const response = await fathomGet(
+          config.api_key,
+          `/recordings/${encodeURIComponent(meeting_id)}/summary`,
+        );
+        const summary = response?.summary?.markdown_formatted;
+        return {
+          content: [{ type: 'text', text: summary || `Summary for recording ${meeting_id} is unavailable.` }],
+        };
       }
 
       case 'fathom_get_recording': {
@@ -263,28 +258,6 @@ export async function callTool(
         }
 
         return { content: [{ type: 'text', text: JSON.stringify(recording, null, 2) }] };
-      }
-
-      case 'fathom_get_recording_transcript': {
-        const { recording_id } = GetRecordingTranscriptSchema.parse(args);
-        const entries = await fetchAllPages<any>(
-          config.api_key,
-          `/recordings/${recording_id}/transcript`,
-        );
-
-        if (entries.length === 0) {
-          return { content: [{ type: 'text', text: 'Transcript is empty.' }] };
-        }
-
-        const text = entries
-          .map((entry: any) => {
-            const speaker = entry.speaker || 'Unknown';
-            const time = entry.start_time != null ? formatTime(entry.start_time) : '?';
-            return `[${time}] ${speaker}: ${entry.text || ''}`;
-          })
-          .join('\n');
-
-        return { content: [{ type: 'text', text: `Transcript:\n\n${text}` }] };
       }
 
       case 'fathom_list_teams': {
@@ -365,7 +338,14 @@ export async function callTool(
   }
 }
 
-function formatTime(seconds: number): string {
+interface FathomTranscriptEntry {
+  speaker?: string | { display_name?: string };
+  timestamp?: string;
+  start_time?: number;
+  text?: string;
+}
+
+function formatTime(seconds?: number): string {
   if (!seconds && seconds !== 0) return '?';
   const m = Math.floor(seconds / 60);
   const s = Math.floor(seconds % 60);
