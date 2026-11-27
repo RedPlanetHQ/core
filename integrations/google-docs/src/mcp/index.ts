@@ -490,7 +490,7 @@ export async function callTool(
 
       case 'replace_text': {
         const validatedArgs = ReplaceTextSchema.parse(args);
-        await docs.documents.batchUpdate({
+        const response = await docs.documents.batchUpdate({
           documentId: validatedArgs.documentId,
           requestBody: {
             requests: [
@@ -510,11 +510,19 @@ export async function callTool(
           },
         });
 
+        const count = response.data?.replies?.[0]?.replaceAllText?.occurrencesChanged;
+        let result = 'Google Docs did not return a replacement count.';
+        if (count === 0) {
+          result = 'No matching text found. Nothing was replaced.';
+        } else if (count != null) {
+          result = `Replaced ${count} ${count === 1 ? 'occurrence' : 'occurrences'}.`;
+        }
+
         return {
           content: [
             {
               type: 'text',
-              text: `Successfully replaced all occurrences of "${validatedArgs.searchText}" with "${validatedArgs.replaceText}"`,
+              text: result,
             },
           ],
         };
