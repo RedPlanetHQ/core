@@ -235,6 +235,74 @@ export function createStatementMethods(core: Neo4jCore) {
     },
 
     /**
+     * Invalidate several statements in one query.
+     *
+     * Statements that are already invalid are skipped so their original
+     * invalidation (and history) is kept.
+     *
+     * @returns UUIDs of the statements that were invalidated
+     */
+    async invalidateStatementsBatch(
+      uuids: string[],
+      invalidatedBy: string,
+      invalidAt: Date,
+      userId: string,
+      workspaceId?: string
+    ): Promise<string[]> {
+      if (uuids.length === 0) return [];
+      const wsFilter = workspaceId ? ", workspaceId: $workspaceId" : "";
+      const query = `
+        UNWIND $uuids AS uuid
+        MATCH (s:Statement {uuid: uuid, userId: $userId${wsFilter}})
+        WHERE s.invalidAt IS NULL
+        SET s.invalidAt = $invalidAt,
+            s.invalidatedBy = $invalidatedBy
+        RETURN s.uuid AS uuid
+      `;
+
+      const result = await core.runQuery(query, {
+        uuids,
+        invalidAt: invalidAt.toISOString(),
+        invalidatedBy,
+        userId,
+        ...(workspaceId && { workspaceId }),
+      });
+      return result.map((record) => record.get("uuid"));
+    },
+
+    /**
+     * Make statements current again by clearing invalidAt / invalidatedBy.
+     *
+     * Only statements invalidated by exactly `invalidatedBy` are restored.
+     *
+     * @returns UUIDs of the statements that were restored
+     */
+    async restoreInvalidatedStatements(
+      uuids: string[],
+      invalidatedBy: string,
+      userId: string,
+      workspaceId?: string
+    ): Promise<string[]> {
+      if (uuids.length === 0) return [];
+      const wsFilter = workspaceId ? ", workspaceId: $workspaceId" : "";
+      const query = `
+        UNWIND $uuids AS uuid
+        MATCH (s:Statement {uuid: uuid, userId: $userId${wsFilter}})
+        WHERE s.invalidatedBy = $invalidatedBy
+        REMOVE s.invalidAt, s.invalidatedBy
+        RETURN s.uuid AS uuid
+      `;
+
+      const result = await core.runQuery(query, {
+        uuids,
+        invalidatedBy,
+        userId,
+        ...(workspaceId && { workspaceId }),
+      });
+      return result.map((record) => record.get("uuid"));
+    },
+
+    /**
      * Get multiple statements by UUIDs in a single query
      *
      * Bulk fetch optimization using UNWIND pattern.

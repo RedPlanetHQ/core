@@ -63,6 +63,8 @@ export class Neo4jGraphProvider extends Neo4jCore implements IGraphProvider {
   findSimilarStatements!: IGraphProvider["findSimilarStatements"];
   findContradictoryStatements!: IGraphProvider["findContradictoryStatements"];
   invalidateStatement!: IGraphProvider["invalidateStatement"];
+  invalidateStatementsBatch!: IGraphProvider["invalidateStatementsBatch"];
+  restoreInvalidatedStatements!: IGraphProvider["restoreInvalidatedStatements"];
   getStatements!: IGraphProvider["getStatements"];
   findStatementsWithSameSubjectObject!: IGraphProvider["findStatementsWithSameSubjectObject"];
   findContradictoryStatementsBatch!: IGraphProvider["findContradictoryStatementsBatch"];

@@ -188,10 +188,25 @@ export async function invalidateStatements({
   workspaceId?: string;
 }) {
   const invalidAt = new Date().toISOString();
-  return statementIds.map(
-    async (statementId) =>
-      await invalidateStatement({ statementId, invalidAt, invalidatedBy, userId, workspaceId }),
+  // Wait for every write to settle so callers know the statements are
+  // invalidated before moving on, then surface the first failure (if any).
+  const results = await Promise.allSettled(
+    statementIds.map((statementId) =>
+      invalidateStatement({
+        statementId,
+        invalidAt,
+        invalidatedBy,
+        userId,
+        workspaceId,
+      }),
+    ),
   );
+  const failed = results.find(
+    (result): result is PromiseRejectedResult => result.status === "rejected",
+  );
+  if (failed) {
+    throw failed.reason;
+  }
 }
 
 export async function searchStatementsByEmbedding(params: {
@@ -261,6 +276,53 @@ export async function getStatements({
   workspaceId?: string;
 }) {
   return getGraphProvider().getStatements(statementUuids, userId, workspaceId);
+}
+
+/**
+ * Invalidate several current statements in one query.
+ * @returns UUIDs of the statements that were invalidated
+ */
+export async function invalidateStatementsBatch({
+  statementIds,
+  invalidatedBy,
+  userId,
+  workspaceId,
+}: {
+  statementIds: string[];
+  invalidatedBy: string;
+  userId: string;
+  workspaceId?: string;
+}): Promise<string[]> {
+  return getGraphProvider().invalidateStatementsBatch(
+    statementIds,
+    invalidatedBy,
+    new Date(),
+    userId,
+    workspaceId,
+  );
+}
+
+/**
+ * Make statements invalidated by `invalidatedBy` current again.
+ * @returns UUIDs of the statements that were restored
+ */
+export async function restoreInvalidatedStatements({
+  statementIds,
+  invalidatedBy,
+  userId,
+  workspaceId,
+}: {
+  statementIds: string[];
+  invalidatedBy: string;
+  userId: string;
+  workspaceId?: string;
+}): Promise<string[]> {
+  return getGraphProvider().restoreInvalidatedStatements(
+    statementIds,
+    invalidatedBy,
+    userId,
+    workspaceId,
+  );
 }
 
 /**

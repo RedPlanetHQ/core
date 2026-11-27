@@ -142,7 +142,9 @@ export const addToQueue = async (
     trackFeatureUsage("episode_ingested", userId).catch(console.error);
   }
 
-  return { id: handler.id };
+  // `id` is the queue job / task run id; `ingestionQueueId` is the
+  // persistent IngestionQueue row id.
+  return { id: handler.id, ingestionQueueId: queuePersist.id };
 };
 
 export { IngestBodyRequest };
