@@ -53,6 +53,24 @@ class LinearCLI extends IntegrationCLI {
       description:
         'Plan, track, and manage your agile and software development projects in Linear. Customize your workflow, collaborate, and release great software.',
       icon: 'linear',
+      widgets: [
+        {
+          name: 'Current Cycle Issues',
+          slug: 'current-cycle-issues',
+          description:
+            'Shows Linear issues assigned to you in the current cycle. Select a team or choose All teams to aggregate across every team’s active cycle.',
+          support: ['webapp'],
+          configSchema: [
+            {
+              key: 'teamKey',
+              label: 'Team',
+              type: 'input',
+              placeholder: 'Team key (e.g. ENG) — leave blank for All teams',
+              required: false,
+            },
+          ],
+        },
+      ],
       schedule: {
         frequency: '*/5 * * * *',
       },
