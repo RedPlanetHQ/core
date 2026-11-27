@@ -1,12 +1,16 @@
 import { json } from "@remix-run/node";
 import { z } from "zod";
 import { prisma } from "~/db.server";
+import {
+  CreatedAtCursor,
+  encodeCreatedAtCursor,
+} from "~/services/created-at-cursor";
 import { createHybridLoaderApiRoute } from "~/services/routeBuilders/apiBuilder.server";
 
 const ActivitiesSearchParams = z.object({
   limit: z.string().optional(),
   source: z.string().optional(),
-  cursor: z.string().optional(), // ISO date for cursor-based pagination
+  cursor: CreatedAtCursor.optional(),
 });
 
 export const loader = createHybridLoaderApiRoute(
@@ -59,13 +63,18 @@ export const loader = createHybridLoaderApiRoute(
       };
     }
 
-    if (cursor) {
-      whereClause.createdAt = { lt: new Date(cursor) };
+    if (cursor?.id) {
+      whereClause.OR = [
+        { createdAt: { lt: cursor.createdAt } },
+        { createdAt: cursor.createdAt, id: { lt: cursor.id } },
+      ];
+    } else if (cursor) {
+      whereClause.createdAt = { lt: cursor.createdAt };
     }
 
     const activities = await prisma.activity.findMany({
       where: whereClause as any,
-      orderBy: { createdAt: "desc" },
+      orderBy: [{ createdAt: "desc" }, { id: "desc" }],
       take: limit,
       include: {
         integrationAccount: {
@@ -79,10 +88,10 @@ export const loader = createHybridLoaderApiRoute(
     });
 
     const hasMore = activities.length === limit;
-    const nextCursor =
-      activities.length > 0
-        ? activities[activities.length - 1].createdAt.toISOString()
-        : null;
+    const lastActivity = activities[activities.length - 1];
+    const nextCursor = lastActivity
+      ? encodeCreatedAtCursor(lastActivity)
+      : null;
 
     return json({ activities, hasMore, nextCursor, availableSources });
   },

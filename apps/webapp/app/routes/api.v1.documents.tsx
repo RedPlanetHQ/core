@@ -4,17 +4,10 @@ import { prisma } from "~/db.server";
 
 import { createHybridLoaderApiRoute } from "~/services/routeBuilders/apiBuilder.server";
 
-const DocumentCursor = z.string().transform((value, context) => {
-  if (value === "") return undefined;
-
-  const [timestamp, id, extra] = value.split("|", 3);
-  const createdAt = new Date(timestamp);
-  if (Number.isNaN(createdAt.getTime()) || id === "" || extra !== undefined) {
-    context.addIssue({ code: "custom", message: "Invalid document cursor" });
-    return z.NEVER;
-  }
-  return { createdAt, id };
-});
+import {
+  CreatedAtCursor,
+  encodeCreatedAtCursor,
+} from "~/services/created-at-cursor";
 
 // Schema for logs search parameters
 const DocumentsSearchParams = z.object({
@@ -25,7 +18,7 @@ const DocumentsSearchParams = z.object({
   type: z.string().optional(),
   sessionId: z.string().optional(),
   label: z.string().optional(),
-  cursor: DocumentCursor.optional(),
+  cursor: CreatedAtCursor.optional(),
 });
 
 export const loader = createHybridLoaderApiRoute(
@@ -161,7 +154,7 @@ export const loader = createHybridLoaderApiRoute(
 
     const lastDocument = documents[documents.length - 1];
     const nextCursor = lastDocument
-      ? `${lastDocument.createdAt.toISOString()}|${lastDocument.id}`
+      ? encodeCreatedAtCursor(lastDocument)
       : null;
 
     // Get document IDs for ingestion queue lookups
