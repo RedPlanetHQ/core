@@ -1,0 +1,29 @@
+# Dependencies
+node_modules/
+
+# Build output
+dist/
+bin/
+build/
+
+# Environment
+.env
+.env.local
+
+# Logs
+*.log
+
+# TypeScript cache
+*.tsbuildinfo
+
+# Eslint cache
+.eslintcache
+
+# Test / coverage
+coverage/
+.vitest-cache/
+
+# IDE / OS
+.vscode/
+.idea/
+.DS_Store
