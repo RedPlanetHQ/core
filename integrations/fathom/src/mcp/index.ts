@@ -43,10 +43,16 @@ const GetRecordingTranscriptSchema = z.object({
   recording_id: z.string().describe('The recording ID'),
 });
 
-const ListTeamsSchema = z.object({});
+const TeamDirectoryCursor = z
+  .string()
+  .min(1)
+  .optional()
+  .describe('Cursor returned by the previous page');
+const ListTeamsSchema = z.object({ cursor: TeamDirectoryCursor });
 
 const ListTeamMembersSchema = z.object({
-  team_id: z.string().describe('The team ID'),
+  team_id: z.string().describe('Name of the team from fathom_list_teams'),
+  cursor: TeamDirectoryCursor,
 });
 
 const ListWebhooksSchema = z.object({});
@@ -107,13 +113,13 @@ export async function getTools() {
     },
     {
       name: 'fathom_list_teams',
-      description: 'List all teams accessible with the current API key.',
+      description: 'List a page of teams accessible with the current API key.',
       inputSchema: zodToJsonSchema(ListTeamsSchema),
       annotations: { readOnlyHint: true, destructiveHint: false, idempotentHint: true },
     },
     {
       name: 'fathom_list_team_members',
-      description: 'List members of a specific Fathom team.',
+      description: 'List a page of members of a specific Fathom team by name.',
       inputSchema: zodToJsonSchema(ListTeamMembersSchema),
       annotations: { readOnlyHint: true, destructiveHint: false, idempotentHint: true },
     },
@@ -136,6 +142,10 @@ export async function getTools() {
       annotations: { readOnlyHint: false, destructiveHint: true, idempotentHint: true },
     },
   ];
+}
+
+function teamPageSuffix(cursor?: string | null): string {
+  return cursor ? `\n\nNext page cursor: ${cursor}` : '';
 }
 
 // ─── Tool Dispatcher ────────────────────────────────────────────────────────
@@ -278,42 +288,27 @@ export async function callTool(
       }
 
       case 'fathom_list_teams': {
-        const teams = await fathomGet(config.api_key, '/teams');
-        const teamList = Array.isArray(teams) ? teams : teams?.data ?? [];
+        const { cursor } = ListTeamsSchema.parse(args);
+        const teams = await fathomGet(config.api_key, '/teams', { cursor });
+        const teamList: Array<{ name?: string }> = Array.isArray(teams) ? teams : teams?.items ?? teams?.data ?? [];
+        const nextPage = teamPageSuffix(teams?.next_cursor);
+        const list = teamList.map(team => `Name: ${team.name || 'N/A'}`).join('\n\n');
+        const text = list ? `Found ${teamList.length} team(s):\n\n${list}` : 'No teams on this page.';
 
-        if (teamList.length === 0) {
-          return { content: [{ type: 'text', text: 'No teams found.' }] };
-        }
-
-        const list = teamList
-          .map((t: any) => `ID: ${t.id}\nName: ${t.name || 'N/A'}`)
-          .join('\n\n');
-
-        return {
-          content: [{ type: 'text', text: `Found ${teamList.length} team(s):\n\n${list}` }],
-        };
+        return { content: [{ type: 'text', text: text + nextPage }] };
       }
 
       case 'fathom_list_team_members': {
-        const { team_id } = ListTeamMembersSchema.parse(args);
-        const memberList = await fetchAllPages<any>(config.api_key, `/teams/${team_id}/members`);
-
-        if (memberList.length === 0) {
-          return { content: [{ type: 'text', text: 'No team members found.' }] };
-        }
-
+        const { team_id, cursor } = ListTeamMembersSchema.parse(args);
+        const members = await fathomGet(config.api_key, '/team_members', { team: team_id, cursor });
+        const memberList: Array<{ name?: string; email?: string }> = members?.items ?? [];
+        const nextPage = teamPageSuffix(members?.next_cursor);
         const list = memberList
-          .map(
-            (m: any) =>
-              `${m.name || m.email || 'Unknown'} (${m.email || 'no email'}) — ${m.role || 'member'}`,
-          )
+          .map(member => `${member.name || member.email || 'Unknown'} (${member.email || 'no email'})`)
           .join('\n');
+        const text = list ? `Found ${memberList.length} member(s):\n\n${list}` : 'No team members on this page.';
 
-        return {
-          content: [
-            { type: 'text', text: `Found ${memberList.length} member(s):\n\n${list}` },
-          ],
-        };
+        return { content: [{ type: 'text', text: text + nextPage }] };
       }
 
       case 'fathom_list_webhooks': {
