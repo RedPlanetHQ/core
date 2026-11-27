@@ -5,7 +5,7 @@ import React, {
   useEffect,
   useLayoutEffect,
 } from "react";
-import { format, addDays, isToday } from "date-fns";
+import { format, addDays, isSameDay, parseISO } from "date-fns";
 import { DayEditor } from "./day-editor.client";
 import { useTauri } from "~/hooks/use-tauri";
 
@@ -33,12 +33,14 @@ function buildInitialDates(today: Date): Date[] {
 
 function DaySection({
   date,
+  today,
   butlerName,
   collabToken,
   prefetchedPage,
   onRef,
 }: {
   date: Date;
+  today: boolean;
   butlerName: string;
   collabToken: string;
   prefetchedPage?: PageRecord;
@@ -48,7 +50,6 @@ function DaySection({
     prefetchedPage ?? null,
   );
   const [loading, setLoading] = React.useState(!prefetchedPage);
-  const today = isToday(date);
 
   React.useEffect(() => {
     if (prefetchedPage) return;
@@ -101,7 +102,9 @@ export function DailyPage({
   collabToken,
   todayPage,
 }: DailyPageProps) {
-  const todayDate = useRef(new Date()).current;
+  const [todayDate] = useState(() =>
+    todayPage?.date ? parseISO(todayPage.date.slice(0, 10)) : new Date(),
+  );
   const scrollRef = useRef<HTMLDivElement>(null);
   const todayRef = useRef<HTMLDivElement | null>(null);
   const { isDesktop } = useTauri();
@@ -124,22 +127,25 @@ export function DailyPage({
   const prependHeightRef = useRef<number | null>(null);
   const appendTrimHeightRef = useRef<number | null>(null);
 
-  const getRefCallback = useCallback((date: Date) => {
-    const key = date.toISOString();
-    if (!refCallbacks.current.has(key)) {
-      refCallbacks.current.set(key, (el) => {
-        if (el) {
-          sectionEls.current.set(key, el);
-          if (isToday(date)) todayRef.current = el;
-        } else {
-          sectionEls.current.delete(key);
-          refCallbacks.current.delete(key);
-          if (isToday(date)) todayRef.current = null;
-        }
-      });
-    }
-    return refCallbacks.current.get(key)!;
-  }, []);
+  const getRefCallback = useCallback(
+    (date: Date) => {
+      const key = date.toISOString();
+      if (!refCallbacks.current.has(key)) {
+        refCallbacks.current.set(key, (el) => {
+          if (el) {
+            sectionEls.current.set(key, el);
+            if (isSameDay(date, todayDate)) todayRef.current = el;
+          } else {
+            sectionEls.current.delete(key);
+            refCallbacks.current.delete(key);
+            if (isSameDay(date, todayDate)) todayRef.current = null;
+          }
+        });
+      }
+      return refCallbacks.current.get(key)!;
+    },
+    [todayDate],
+  );
 
   // Snap directly to today's real DOM position — no delta math.
   const snapToToday = useCallback(() => {
@@ -302,9 +308,10 @@ export function DailyPage({
           <DaySection
             key={date.toISOString()}
             date={date}
+            today={isSameDay(date, todayDate)}
             butlerName={butlerName}
             collabToken={collabToken}
-            prefetchedPage={isToday(date) ? todayPage : undefined}
+            prefetchedPage={isSameDay(date, todayDate) ? todayPage : undefined}
             onRef={getRefCallback(date)}
           />
         ))}
