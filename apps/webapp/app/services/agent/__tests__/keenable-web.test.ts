@@ -80,6 +80,21 @@ describe("keenableGetContents", () => {
     expect(text).toBe("## A\nURL: https://a.com\n\nxxxx");
   });
 
+  it("sends each URL once, keeping the order", async () => {
+    fetchMock.mockResolvedValue(
+      jsonResponse({ results: [{ url: "https://a.com", title: "A", content: "ok" }] })
+    );
+    await keenableGetContents("kn-test", ["https://a.com", "https://b.com", "https://a.com"]);
+    expect(JSON.parse(fetchMock.mock.calls[0][1].body)).toEqual({
+      urls: ["https://a.com", "https://b.com"],
+    });
+  });
+
+  it("propagates a body that fails to decode on a 200", async () => {
+    fetchMock.mockResolvedValue(new Response("not json", { status: 200 }));
+    await expect(keenableGetContents("kn-test", ["https://a.com"])).rejects.toThrow();
+  });
+
   it("reports when no page could be read", async () => {
     fetchMock.mockResolvedValue(
       jsonResponse({ results: [{ url: "https://b.com", error: { message: "gone" } }] })

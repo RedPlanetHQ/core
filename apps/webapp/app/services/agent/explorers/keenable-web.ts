@@ -35,12 +35,14 @@ async function postKeenable(
     },
     body: JSON.stringify(body),
   });
-  const data = await response.json().catch(() => null);
   if (!response.ok) {
+    // Best-effort decode for the error message only.
+    const data = await response.json().catch(() => null);
     const message = (data && (data.message || data.error)) || `HTTP ${response.status}`;
     throw new Error(`Keenable ${path} failed (${response.status}): ${message}`);
   }
-  return data;
+  // On a 200, a body read or decode failure propagates to the tool's error handler.
+  return response.json();
 }
 
 export async function keenableWebSearch(
@@ -73,7 +75,8 @@ export async function keenableGetContents(
   urls: string[],
   maxCharacters = 3000
 ): Promise<string> {
-  const data = await postKeenable(apiKey, "fetch", { urls });
+  // Keenable rejects duplicate URLs with a 400, so send each URL once (order kept).
+  const data = await postKeenable(apiKey, "fetch", { urls: [...new Set(urls)] });
   const pages: KeenableFetchPage[] = Array.isArray(data?.results) ? data.results : [];
   // A page Keenable can't read comes back with a per-URL `error` inside a 200.
   const readable = pages.filter((p) => p && !p.error && p.content);
