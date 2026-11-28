@@ -7,6 +7,7 @@ import { env } from "~/env.server";
 import { createAgent } from "~/lib/model.server";
 import { resolveModelForWorkspace } from "~/services/llm-provider.server";
 import { ExplorerResult } from "../types";
+import { keenableGetContents, keenableWebSearch } from "./keenable-web";
 
 const WEB_COMPLEXITY = "medium";
 
@@ -54,8 +55,12 @@ export async function runWebExplorer(
   let toolCalls = 0;
 
   const exaApiKey = env.EXA_API_KEY;
-  if (!exaApiKey) {
-    logger.warn("EXA_API_KEY not configured, web search unavailable");
+  // Exa stays the default. Keenable is used only when EXA_API_KEY is unset.
+  const keenableApiKey = exaApiKey ? undefined : env.KEENABLE_API_KEY;
+  if (!exaApiKey && !keenableApiKey) {
+    logger.warn(
+      "EXA_API_KEY (or KEENABLE_API_KEY) not configured, web search unavailable",
+    );
     return {
       success: false,
       data: "",
@@ -64,7 +69,7 @@ export async function runWebExplorer(
     };
   }
 
-  const exa = new Exa(exaApiKey);
+  const exa = exaApiKey ? new Exa(exaApiKey) : null;
 
   const tools = {
     web_search: createTool({
@@ -89,6 +94,9 @@ export async function runWebExplorer(
         toolCalls++;
         logger.info(`WebExplorer: searching - ${query}`);
         try {
+          if (!exa) {
+            return await keenableWebSearch(keenableApiKey!, query, numResults || 5);
+          }
           const results = await exa.searchAndContents(query, {
             numResults: numResults || 5,
             useAutoprompt: useAutoprompt ?? true,
@@ -110,7 +118,7 @@ ${highlights || text}`;
             })
             .join("\n\n");
         } catch (error: any) {
-          logger.error("Exa search failed", error);
+          logger.error(exa ? "Exa search failed" : "Keenable search failed", error);
           return `Search failed: ${error instanceof Error ? error.message : "unknown error"}`;
         }
       },
@@ -132,6 +140,9 @@ ${highlights || text}`;
         toolCalls++;
         logger.info(`WebExplorer: fetching contents - ${urls.join(", ")}`);
         try {
+          if (!exa) {
+            return await keenableGetContents(keenableApiKey!, urls);
+          }
           const results = await exa.getContents(urls, {
             text: { maxCharacters: 3000 },
           });
@@ -149,7 +160,10 @@ ${r.text || "No content available"}`;
             })
             .join("\n\n---\n\n");
         } catch (error: any) {
-          logger.error("Exa getContents failed", error);
+          logger.error(
+            exa ? "Exa getContents failed" : "Keenable fetch failed",
+            error,
+          );
           return `Failed to fetch content: ${error instanceof Error ? error.message : "unknown error"}`;
         }
       },
